@@ -1,0 +1,624 @@
+groups:
+ - name: "@32bit"
+   priority: 0
+   packages:
+    - "*-32bit"
+    - "*-32bit-*"
+
+ - name: "@DevelPackages"
+   priority: 1
+   packages:
+    - "*-devel"
+    - "*-devel-static"
+    - "*-devel-extra"
+
+ - name: "@Development"
+   packages:
+    - gcc*
+    - binutils
+    - bison
+    - cmake
+    - make
+    - flex
+    - autoconf
+    - automake
+    - autogen
+    - imake
+
+ - name: "@Documentation"
+   rpmGroups:
+    - Documentation/*
+   packages:
+    - release-notes-*
+
+ - name: "@Databases"
+   rpmGroups:
+    - Productivity/Databases*
+   packages:
+    - postgresql*
+    - unixODBC
+    - sqlite3
+    - rsyslog-module-mysql
+    - rsyslog-module-pgsql
+    - libmariadb3
+
+ - name: "@Graphics"
+   rpmGroups:
+    - Productivity/Graphics/*
+
+ - name: "@Multimedia"
+   rpmGroups:
+    - Productivity/Multimedia/*
+
+ - name: "@X11"
+   rpmGroups:
+    - System/X11/*
+   packages:
+    - cairo*
+    - Mesa*
+    - mkfontdir
+    - mkfontscale
+    - setxkbmap
+    - wayland*
+    - xauth
+    - xbitmaps
+    - xcb-*
+    - xconsole
+    - xdg-menu
+    - xdg-utils
+    - xdm
+    - xdmbgrd
+    - xdpyinfo
+    - xf86*
+    - xhost
+    - xineramaproto
+    - xinit
+    - xkbcomp
+    - xkeyboard-config
+    - xmessage
+    - xmodmap
+    - xorg-*
+    - xprop
+    - xproto
+    - xrandr
+    - xrdb
+    - xrdp
+    - xrefresh
+    - xscreensaver
+    - xset
+    - xsetroot
+    - xterm
+    - xtermset
+
+ - name: "@Gnome"
+   packages:
+    - gsettings-*
+    - gtk*
+    - at-spi2*
+    - glib2
+    - glib2-branding-SLE
+    - gnome-*
+    - typelib-*
+    - dbus-1-glib-tool*
+    - dbus-1-glib
+    - polkit-gnome*
+
+ - name: "@CoreLibraries"
+   explicitClosure:
+    - "@Core"
+   packages:
+    - glibc
+    - libgcc_s1
+    - libstdc++6
+    - libcom_err2
+    - libext2fs2
+    - libgpgme11
+    - libreiserfscore0
+    - libpci3
+    - libdevmapper*
+    - libopenssl1_1
+    - libldap-*
+    - libsasl2-*
+    - libcrack2
+    - libaudit1
+    - libgobject-*
+    - libglib-*
+    - libtasn1
+    - libfl2
+
+#   - libgio-*
+
+ - name: "@Core"
+   requires:
+    - "@CoreLibraries"
+    - "@Perl/Core"
+   binaries:
+    - openssl
+   packages:
+    - aaa_base
+    - acct
+    - acl
+    - adjtimex
+    - at
+    - attr
+    - bash
+    - bash-*
+    - bc
+    - biosdevname
+    - bridge-utils
+    - brotli
+    - btrfsprogs
+    - bzip2
+    - ca-certificates
+    - coreutils
+    - cpio
+    - cracklib-dict-small
+    - cronie
+    - cryptsetup
+    - dbus-1
+    - dbus-1-x11
+    - delayacct-utils
+    - diffutils
+    - fdupes
+    - file
+    - filesystem
+    - fillup
+    - findutils
+    - gc
+    - gpart
+    - gpg2
+    - gptfdisk
+    - grep
+    - gzip
+    - hardlink
+    - haveged
+    - hostname
+    - kbd
+    - krb5
+    - less
+    - m4
+    - ncurses
+    - pam
+    - pam-*
+    - pam_*
+    - parted
+    - permissions
+    - prctl
+    - procps
+    - psmisc
+    - psutils
+    - rpm
+    - sed
+    - shadow
+    - sharutils
+    - sle-*-release
+    - snapper
+    - sudo
+    - suse-build-key
+    - sysconfig
+    - systemd
+    - systemd-*
+    - system-role-*
+    - system-user-*
+    - system-users
+    - sysuser-tools
+    - tar
+    - tcsh
+    - time
+    - timezone
+    - update-alternatives
+    - utempter
+    - util-linux*
+    - which
+    - zsh
+
+ - name: "@UpdateStack"
+   requires:
+    - "@Core"
+    - "@Network/Core"
+    - "@Python/Core"
+    - "@Ruby"
+   packages: 
+    - deltarpm
+    - SUSEConnect
+    - zypp-*
+    - zypper
+    - zypper-*
+    - snapper-zypp-plugin
+    - python3-zypp-plugin
+
+ - name: "@DirectoryIntegration"
+   packages:
+    - sssd
+
+ - name: "@Legacy"
+   packages:
+    - sysvinit
+    - syslogd
+    - rsyslog
+
+ - name: "@Sysadmin"
+   packages:
+    - vim
+    - emacs
+    - man
+    - apcupsd
+    - btrfsmaintenance
+
+ - name: "@Host/Security"
+   packages:
+    - apparmor*
+    - audit
+    - audit-secondary
+    - checkpolicy
+    - cracklib*
+    - dracut-fips
+    - dracut-ima
+    - fipscheck
+    - gpgme
+    - hmaccalc
+    - ibmswtpm2
+    - ibmtss
+    - ima-evm-utils
+    - ima-inspect
+    - opensc
+    - pam_pkcs11
+    - pam_u2f
+    - pcsc
+    - pcsc-*
+    - policycoreutils
+    - setools
+    - tpm-*
+    - tpm2*
+    - trousers
+    - ykclient
+    - ykpers
+    - yubico-*
+    - yubikey-*
+    - pam_yubico
+
+ - name: "@Host/Storage"
+   packages:
+    - autofs
+    - bcache-tools
+    - cachefilesd
+    - ceph
+    - cifs-utils
+    - device-mapper
+    - dos2unix
+    - dosfstools
+    - dump
+    - duperemove
+    - e2fsprogs
+    - ecryptfs-utils
+    - fcoe-utils
+    - fuse
+    - hdparm
+    - hfsutils
+    - jfsutils
+    - mdadm
+    - multipath-tools
+    - nfs4-acl-tools
+    - nfsidmap
+    - nfs-utils
+    - open-iscsi
+    - open-isns
+    - reiserfs
+    - sg3_utils
+    - smartmontools
+    - squashfs
+    - sysfsutils
+    - target-isns
+    - udisks2
+    - xfsdump
+    - xfsprogs
+    - pam_mount
+
+ - name: "@PublicCloud"
+   expand: no
+   products:
+    - SLE-Module-Public-Cloud
+   packages:
+    - cloud-init
+    - python3-ec2*
+    - python3-azure*
+    - azure-cli*
+    - aws-cli*
+    - cloud-netconfig-*
+    - terraform-provider-aws
+    - amazon-ssm-agent
+    - google-guest-*
+    - google-osconfig-*
+    - google-cloud*
+
+ - name: "@PublicCloud/Alibaba"
+   expand: no
+   packages:
+    - python-aliyun-*
+
+ - name: "@Yast2"
+   expand: no
+   packages:
+    - autoyast2
+    - yast2*
+    - libyui*
+    - libstorage-ng
+
+ - name: "@Fonts"
+   packages:
+    - "*-fonts"
+
+ - name: "@Container"
+   products:
+    - SLE-Module-Containers
+   packages:
+    - skopeo
+    - podman
+    - runc
+    - containerd
+    - cni
+    - cni-*
+    - helm-*
+    - kubernetes*
+    - docker
+    - buildah
+    - libcontainers-common
+    - containerized-data-importer
+    - kubevirt
+    - systemd-container
+
+ - name: "@Kernel"
+   requires:
+    - "@Core"
+    - "@Network/Core"
+    - "@Boot"
+   groups:
+    - System/Kernel
+   packages:
+    - kernel-*
+    - sdparm
+    - cpupower
+    - cpuset
+    - dmidecode
+    - "*-firmware"
+    - FirmwareUpdateKit
+    - fwupdate
+    - mcelog
+    - memcached
+    - numactl
+    - numad
+    - pciutils
+    - pciutils-*
+    - ucode-intel
+    - irqbalance
+    - kdump
+    - kdumpid
+    - kexec-tools
+    - suse-module-tools
+    - alsa
+    - alsa-utils
+    - alsa-plugins
+
+ - name: "@Kernel/Debugging"
+   packages:
+    - acpica
+
+ - name: "@Network/Core"
+   requires:
+    - "@Core"
+   packages:
+    - curl
+    - wget
+    - mailx
+    - openssh
+
+ - name: "@Network/Host"
+   requires:
+    - "@Network/Core"
+   packages:
+    - arptables
+    - ebtables
+    - arpwatch
+    - arpwatch-ethercodes
+    - dapl
+    - dapl-*
+    - dhcp
+    - dnsmasq
+    - ethtool
+    - firewalld
+    - susefirewall2-to-firewalld
+    - ibutils*
+    - infinipath*
+    - iproute2
+    - NetworkManager
+    - strongswan
+    - stunnel
+    - nftables
+    - radvd
+    - tunctl
+    - wicked
+    - wireless-*
+    - wol
+    - wpa_supplicant
+    - vlan
+    - tftp
+    - quagga
+    - qperf
+    - rpcbind
+    - rdma-core
+    - rds-tools
+    - nvme-*
+    - dhcp-tools
+    - firewalld-rpcbind-helper
+    - infiniband-diags
+    - ipsec-tools
+    - ipset
+    - iptables
+    - iputils
+    - ipvsadm
+
+ - name: HPC
+   products:
+    - SLE-Module-HPC
+   packages:
+    - mvapich2*
+    - mpi-selector
+    - mpich
+    - mpitests*
+
+ - name: "@Network/Utils"
+   packages:
+    - hostinfo
+    - rsync
+    - wireshark
+    - tcpdump
+    - traceroute
+    - fetchmail
+    - whois
+    - w3m
+    - telnet
+    - nmap
+    - mutt
+
+ - name: "@Network/Services"
+   packages:
+    - bind
+    - ntp
+    - chrony
+    - nginx
+    - apache2*
+    - squid
+    - dovecot*
+    - postfix*
+    - cyrus-sasl*
+    - krb5-*
+    - openldap
+    - vsftpd
+    - spamassassin
+    - samba
+    - libtcnative*
+    - yp-tools
+    - ypbind
+    - ypserv
+    - tcpd
+    - freeradius-client
+    - freeradius-server
+
+ - name: "@Network/Misc"
+   rpmGroups:
+    - Productivity/Networking/*
+   packages:
+    - rsyslog-module-snmp
+
+ - name: "@Virtualization"
+   packages:
+    - xen
+    - kvm_state
+    - virt_manager
+    - libvirt
+    - virt-*
+    - vm-install
+    - vhostmd
+    - qemu
+    - ovmf
+    - hyper-v
+
+ - name: "@Python"
+   expand: no
+   requires:
+    - "@Python/Core"
+   products:
+    - SLE-Module-Python*
+   rpmGroups:
+    - Development/*/Python
+   packages:
+    - python
+    - python-*
+    - python3*
+
+ - name: "@Python/Core"
+   requires:
+    - "@Core"
+   packages:
+    - python3
+    - python3-base
+
+ - name: "@Ruby"
+   requires:
+    - "@Core"
+   rpmGroups:
+    - Development/*/Ruby
+   packages:
+    - ruby
+    - ruby2.5
+    - ruby-*
+    - rubygem-*
+
+ - name: "@Perl"
+   requires:
+    - "@Perl/Core"
+   rpmGroups:
+    - Development/*/Perl
+   packages:
+    - perl*
+
+ - name: "@Perl/Core"
+   requires:
+    - "@Core"
+   packages:
+    - perl-base
+
+ - name: "@Java"
+   rpmGroups:
+    - Development/*/Java
+   packages:
+    - mx4j
+    - java-*
+    - javapackages-*
+
+ - name: "@Go"
+   rpmGroups:
+    - Development/*/Golang
+
+ - name: "@PHP"
+   rpmGroups:
+    - Development/*/PGP
+   packages:
+    - php*
+
+ - name: "@Rust"
+   rpmGroups:
+    - Development/*/Rust
+
+ - name: "@Boot"
+   requires:
+    - "@Core"
+   packages:
+    - blog
+    - brltty
+    - dracut
+    - efibootmgr
+    - efivar
+    - grub2
+    - grub2-branding*
+    - mokutil
+    - shim
+    - u-boot
+    - rollback-helper
+
+ - name: "@Multimedia/Audio"
+   packages:
+    - gstreamer
+    - gstreamer-*
+ 
+ - name: "@Management"
+   packages:
+    - cmpi-provider-register
+    - cim-schema
+    - salt
+    - sca-*
+    - sblim-*
+    - augeas*
+    - ruby*-rubygem-cfa*
+    - ruby*-rubygem-ruby-augeas
+    - freeipmi

@@ -1,0 +1,69 @@
+baseurl: http://updates.suse.de/SUSE/
+alternateurls:
+ - http://download.suse.de/ibs/SUSE/
+versions:
+ - name: "15"
+   urlpattern: Products/$OBSNAME/$VERSION/$ARCH/product
+ - name: 15-SP1
+   urlpattern: Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
+ - name: 15-SP2
+   urlpattern: Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
+ - name: 15-SP3
+   urlpattern: Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
+ - name: 15-SP4
+   urlpattern: Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
+ - name: 15-SP5
+   urlpattern: Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
+architectures:
+ - x86_64
+ - s390x
+ - ppc64
+
+products:
+ - name:        Server
+   nickname:    sles
+   obsname:     SLE-Product-SLES
+
+ - name:        Basesystem Module
+   nickname:    basesystem
+   obsname:     SLE-Module-Basesystem
+
+ - name:        Server Application Module
+   nickname:    applications
+   obsname:     SLE-Module-Server-Applications
+
+ - name:        SLE Certifications Module
+   nickname:    certifications
+   obsname:     SLE-Module-Certifications
+   versions:
+    - 15-SP3
+    - 15-SP4
+    - 15-SP5
+
+ - name:        SLE Containers
+   nickname:    containers
+   obsname:     SLE-Module-Containers
+
+ - name:        SLE Legacy
+   nickname:    legacy
+   obsname:     SLE-Module-Legacy
+
+ - name:        SLE Public Cloud
+   nickname:    public Cloud
+   obsname:     SLE-Module-Public-Cloud
+
+ - name:        SLE Python2
+   nickname:    python2
+   obsname:     SLE-Module-Python2
+
+ - name:        SLE Python3
+   nickname:    python3
+   obsname:     SLE-Module-Python3
+
+ - name:        SLE Scripting
+   nickname:    scripting
+   obsname:     SLE-Module-Scripting
+
+ - name:        SLE Toolchain
+   nickname:    toolchain
+   obsname:     SLE-Module-Toolchain

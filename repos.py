@@ -202,7 +202,11 @@ class Repo:
 
 		self.name = None
 		self.version = None
+		self.arch = None
+		self.productId = None
 		self.isUpdateRepo = False
+
+		self.unresolvedSources = None
 
 	def clear(self):
 		self._name = None
@@ -332,8 +336,20 @@ class Repo:
 
 		return o.retrieveXML()
 
+	class DelayedSourceAttribution(dict):
+		def add(self, name, binaryPkg):
+			binaries = self.get(name)
+			if binaries is None:
+				binaries = []
+				self[name] = binaries
+			binaries.append(binaryPkg)
+
 	def loadPrimary(self, product):
-		product.setNameAndVersion(self.name, self.version)
+		product.setNameAndVersion(self.name, self.version, self.arch)
+
+		if self.unresolvedSources is None:
+			self.unresolvedSources = self.DelayedSourceAttribution()
+		unresolved = self.unresolvedSources
 
 		root = self.retrieveXML('primary')
 		for node in root.findall(primarySchema.packageTag):
@@ -356,9 +372,8 @@ class Repo:
 
 			pkgid = None
 			for csumNode in node.findall(primarySchema.checksumTag):
-				if csumNode.attrib.get('pkgid') != 'YES':
-					continue
-				pkgid = csumNode.text.strip()
+				if csumNode.attrib.get('pkgid') == 'YES':
+					pkgid = csumNode.text.strip()
 
 			if pkgid is None:
 				print(f"No pkgid for {pkg.fullname()}")
@@ -369,9 +384,8 @@ class Repo:
 			if pkg.arch != 'src' and pkg.arch != 'nosrc':
 				srcNode = fmtNode.find(rpmSchema.sourcerpmTag)
 				if srcNode is not None and srcNode.text is not None:
-					src = product.findSource(srcNode.text.strip(), create = True)
-					pkg.setSourcePackage(src)
-					src.repo = self;
+					pkg.sourceName = srcNode.text.strip()
+					unresolved.add(pkg.sourceName, pkg)
 				else:
 					print("%s: No sourcepackage defined" % pkg.fullname())
 
@@ -389,6 +403,32 @@ class Repo:
 
 			# Add the package after having it fully parsed
 			product.addPackage(pkg)
+
+	def resolveSourcePackages(self, product):
+		unresolved = self.unresolvedSources
+		if unresolved is None:
+			return
+
+		for name, binaries in unresolved.items():
+			src = product.findSource(name)
+			if src is None:
+				# Create a "fake" entry
+				src = product.findSource(name, create = True)
+
+				if src.arch == 'nosrc':
+					continue
+
+				print(f"{product.fullname} does not provide source package {name}; faking it.")
+
+				import hashlib
+
+				h = hashlib.sha256()
+				h.update(name.encode('utf-8'))
+				src.pkgid = "fake:" + h.hexdigest()
+
+			src.repo = self
+			for pkg in binaries:
+				pkg.setSourcePackage(src)
 
 	def loadOther(self, product):
 		root = self.retrieveXML('other')

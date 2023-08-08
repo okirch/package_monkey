@@ -107,22 +107,8 @@ class Classification:
 
 		def edges(self, pkg):
 			result = []
-			if not pkg.requires:
-				self.debugMsg(f"{pkg.fullname()} has no dependencies")
-				return result
-
-			for dep in pkg.requires:
-				self.debugMsg(f"Inspecting {pkg.fullname()} req {dep}")
-				try:
-					found = self.worker.resolveRequires(dep)
-				except Exception as e:
-					print(f"Caught exception {e} while resolving {dep}")
-					found = None
-
-				if found is None:
-					self.handleUnresolvableDependency(pkg, dep)
-				else:
-					result.append(Classification.ReasonRequires(found, pkg, dep))
+			for dep, target in self.worker.resolveDownward(pkg):
+				result.append(Classification.ReasonRequires(target, pkg, dep))
 
 			return result
 
@@ -138,7 +124,7 @@ class Classification:
 				# Return False to tell the caller not not recurse into pkg
 				return False
 
-			print(f"Label {self.label}: classify {edge}")
+			# print(f"Label {self.label}: classify {edge}")
 			pkg.label = self.label
 			pkg.labelReason = edge
 			return True
@@ -295,6 +281,8 @@ class ProductFilterSet(BaseFilterSet):
 		super().__init__('product')
 
 	def apply(self, pkg, product):
+		if product is None:
+			return None
 		return self.applyName(product.name)
 
 class PackageFilterSet(BaseFilterSet):

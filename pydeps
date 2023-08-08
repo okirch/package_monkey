@@ -1,0 +1,136 @@
+#!/usr/bin/python3
+#
+# This is a quick and dirty tool to inspect which SLE15 modules requires which
+# python packages.
+#
+
+
+import sys
+
+from repos import RepoDict, UrlCacheStrategy
+from products import ProductCatalog, CacheLocation
+from packages import Product, Resolver, ResolverWorker, PackageSelector
+from filter import PackageFilter, Classification
+from database import BackingStoreDB
+
+cache = CacheLocation("/work/projects/report/cache")
+
+print("Loading DB")
+store = BackingStoreDB("productinfo.sql")
+print("Successfully loaded DB")
+print()
+
+catalog = ProductCatalog(cacheLocation = cache)
+catalog.updateBackingStore(store)
+print("catalog.updateBackingStore() done")
+print()
+
+classificationScheme = Classification.Scheme()
+
+resolver = Resolver(backingStore = store)
+
+needToResolve = []
+print("=== about to enumerate latest packages ===")
+for pinfo in store.enumerateLatestPackages():
+	if pinfo.name.endswith('-32bit'):
+		continue
+
+	pkg = store.retrievePackage(pinfo)
+	resolver.addPackage(pkg)
+
+	product = pkg.product
+	if product is None:
+		print(f"{pkg.fullname()} product id {pkg.productId} resolves to None")
+	label = classificationScheme.createLabel(product.name)
+
+	pkg.label = label
+
+	if pkg.arch not in ('src', 'nosrc'):
+		needToResolve.append(pkg)
+
+for label in classificationScheme.allLabels:
+	label.requiresPythonPackages = set()
+	label.providesPythonPackages = set()
+
+worker = ResolverWorker(resolver)
+alreadyResolved = set()
+pythonPackages = set()
+
+for pkg in needToResolve:
+	if pkg.name.startswith('python'):
+		pkg.label.providesPythonPackages.add(pkg)
+
+print("=== About to resolve dependencies ===")
+newline = b"\x0d".decode('utf-8')
+counter = 0
+for pkg in needToResolve:
+	if pkg in alreadyResolved:
+		continue
+
+	if pkg.name.startswith('python'):
+		pythonPackages.add(pkg)
+		continue
+
+	label = pkg.label
+
+	alreadyResolved.add(pkg)
+	queue = [pkg]
+	while queue:
+		pkg = queue.pop(0)
+		if pkg.name.startswith('python'):
+			label.requiresPythonPackages.add(pkg)
+
+		counter += 1
+		if counter % 10 == 0:
+			print(f"{counter} ...", end = newline)
+			sys.stdout.flush()
+
+		for dep, target in worker.resolveDownward(pkg):
+			if target not in alreadyResolved:
+				# print(f"{pkg.fullname()} -> {target.name}")
+				queue.append(target)
+				alreadyResolved.add(target)
+
+print(" done.")
+
+print("==============")
+
+requiredPythonPackages = set()
+for label in classificationScheme.allLabels:
+	requiredPythonPackages.update(label.requiresPythonPackages)
+
+print("Summary of python packages per module")
+for label in classificationScheme.allLabels:
+	nProvided = len(label.providesPythonPackages)
+
+	selfRequiredSet = label.requiresPythonPackages.intersection(label.providesPythonPackages)
+	otherRequiredSet = label.providesPythonPackages.intersection(requiredPythonPackages).difference(selfRequiredSet)
+
+	nSelfRequired = len(selfRequiredSet)
+	nOtherRequired = len(otherRequiredSet)
+
+	print(f" {label.name:40} provides {nProvided:3} python packages; {nSelfRequired:3} of which are self-required and {nOtherRequired:3} are required by others")
+print()
+
+for label in classificationScheme.allLabels:
+	if not label.requiresPythonPackages:
+		continue
+	print(f"{label.name} requires the following python packages")
+	for pkg in sorted(label.requiresPythonPackages, key = lambda p: p.name):
+		print(f"  {pkg.fullname()}")
+
+unused = pythonPackages.difference(requiredPythonPackages)
+if unused:
+	print("Python packages not required by any module inspected:")
+	for label in classificationScheme.allLabels:
+		unusedPerProduct = unused.intersection(label.providesPythonPackages)
+		if not unusedPerProduct:
+			continue
+		print(f"{label.name} provides the following python packages but does not use them")
+		for pkg in sorted(unusedPerProduct, key = lambda p: p.name):
+			print(f"  {pkg.fullname()}")
+print("==============")
+
+if worker.problems:
+	print("The resolver flagged the following problems")
+	worker.problems.show()

@@ -1,0 +1,156 @@
+#!/usr/bin/python3
+
+forceRefresh = True
+
+from repos import RepoDict, UrlCacheStrategy
+from products import ProductCatalog, CacheLocation
+from packages import Product, Resolver, ResolverWorker
+from filter import PackageFilter, Classification
+from database import BackingStoreDB
+
+cache = CacheLocation("/work/projects/report/cache")
+
+
+class CountDict:
+	def __init__(self):
+		self._d = dict()
+
+	def add(self, name):
+		try:
+			self._d[name] += 1
+		except:
+			self._d[name] = 1
+
+	def __getitem__(self, name):
+		return self._d[name]
+
+	@property
+	def names(self):
+		return sorted(self._d.keys())
+
+class PackageInfo:
+	def __init__(self, name):
+		self.name = name
+		self.groups = set()
+		self.sawEmptyGroup = False
+
+	def foundGroup(self, groupName):
+		if not groupName:
+			self.sawEmptyGroup = True
+		else:
+			self.groups.add(groupName)
+
+class ProductStats:
+	def __init__(self):
+		self.packages = {}
+
+	def found(self, src, classifiedAs):
+		try:
+			pi = self.packages[src.name]
+		except:
+			pi = PackageInfo(src.name)
+			self.packages[src.name] = pi
+
+		pi.foundGroup(classifiedAs)
+
+class PackageMap(dict):
+	def add(self, pkg, product):
+		self[pkg.name] = (pkg, product)
+
+	def enumerate(self):
+		return iter(self.values())
+
+
+groupUpdateCount = CountDict()
+productInfo = ProductStats()
+
+store = BackingStoreDB("productinfo.sql")
+
+catalog = ProductCatalog(cacheLocation = cache)
+catalog.updateBackingStore(store)
+packageMap = PackageMap()
+
+for release in catalog.enumerate(version = '15-SP5', arch = 'x86_64'):
+	print(f"Found {release}")
+
+	# FIXME: product = release.createEmptyProduct() instead
+	product = Product()
+	product.productId = release.backingStoreId
+
+	# First pass: load relevant info from all repos
+	for repo in release.getRepositories():
+		repo.load(product)
+
+	# Second pass: resolve package sources
+	for repo in release.getRepositories():
+		repo.resolveSourcePackages(product)
+
+	product.updateBackingStore(store)
+
+	for pkg in product.packages.values():
+		packageMap.add(pkg, release)
+
+classificationScheme = Classification.Scheme()
+packageFilter = PackageFilter(scheme = classificationScheme)
+unclassified = packageFilter.makeGroup("Unclassified")
+
+resolver = Resolver()
+for pkg, product in packageMap.enumerate():
+	resolver.addPackage(pkg)
+
+	verdict = packageFilter.apply(pkg, product)
+	if verdict is not None:
+		verdict.labelPackage(pkg)
+		group = verdict.group
+	else:
+		group = unclassified
+
+	productInfo.found(pkg, group.name)
+
+	groupUpdateCount.add(group.name)
+
+def resolveGroup(groupName, worker, alreadyResolved):
+	group = packageFilter.makeGroup(groupName)
+
+	alreadyResolved.add(group.label)
+	for usedLabel in group.label.uses:
+		if usedLabel not in alreadyResolved:
+			resolveGroup(usedLabel.name, worker, alreadyResolved)
+
+	print(f"Classify {groupName} with label {group.label}")
+	classifier = Classification.DownwardClosure(worker, group.label)
+	classifier.classify(group.packages)
+
+worker = ResolverWorker(resolver)
+alreadyResolved = set()
+for groupName in ("@Core", "@Kernel", "@UpdateStack"):
+	resolveGroup(groupName, worker, alreadyResolved)
+
+if worker.problems:
+	print("The resolver flagged the following problems")
+	worker.problems.show()
+
+if False:
+	print("Checking group name issues")
+	for pi in productInfo.packages.values():
+		if len(pi.groups) > 1:
+			print(f"Package {pi.name} found in multiple groups: {pi.groups}")
+			continue
+
+		if pi.sawEmptyGroup:
+			if len(pi.groups) == 0:
+				print(f"Package {pi.name} used with empty group")
+			else:
+				print(f"Package {pi.name} used with empty group, then found in {pi.groups}")
+	print()
+
+if False:
+	print("Updates by rpm group")
+	for group in packageFilter.groups:
+		print(f"{group.name:20}: {group.matchCount}")
+
+		if group.expand:
+			for packageName in sorted(group.packageNames):
+				print(f"    - {packageName}")
+	print()
+

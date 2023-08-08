@@ -38,6 +38,28 @@ class Versiontools:
 				result = self.epoch + ":" + result
 			return result
 
+		def cmp(self, other):
+			assert(isinstance(other, Versiontools.ParsedVersion))
+			return Versiontools.compareParsedVersions(self, other)
+
+		def __eq__(self, other):
+			return self.cmp(other) == 0
+
+		def __ne__(self, other):
+			return self.cmp(other) != 0
+
+		def __lt__(self, other):
+			return self.cmp(other) < 0
+
+		def __gt__(self, other):
+			return self.cmp(other) > 0
+
+		def __le__(self, other):
+			return self.cmp(other) <= 0
+
+		def __ge__(self, other):
+			return self.cmp(other) >= 0
+
 	@staticmethod
 	def test():
 		if Versiontools.tested:
@@ -175,13 +197,18 @@ class Versiontools:
 		return r
 
 class ResolverWorker:
-	class UnexpectedDependency:
+	class Problem(object):
 		def __init__(self, desc):
 			self.desc = desc
 			self.reasons = []
 
 		def add(self, reason):
 			self.reasons.append(reason)
+
+
+	class UnexpectedDependency(Problem):
+		def __init__(self, *args):
+			super().__init__(*args)
 
 		def show(self):
 			print(f"Unexpected dependency {self.desc}:")
@@ -191,28 +218,50 @@ class ResolverWorker:
 					print(f"{indent}{why}")
 					indent += "  "
 
+	class UnresolvedDependency(Problem):
+		def __init__(self, *args):
+			super().__init__(*args)
+
+		def __init__(self, desc):
+			self.desc = desc
+			self.reasons = []
+
+		def show(self):
+			print(f"Unresolved dependency {self.desc}, required by:")
+			for pkg in self.reasons:
+				print(f"   {pkg.fullname()}")
+
 	class Problems:
 		def __init__(self):
-			self._dependencies = {}
+			self._unexpected = {}
+			self._unresolved = {}
 
 		def addUnexpectedDependency(self, fm, to, reason):
 			key = f"{fm}/{to}"
-			ud = self._dependencies.get(key)
+			ud = self._unexpected.get(key)
 			if ud is None:
 				ud = ResolverWorker.UnexpectedDependency(f"{fm} -> {to}")
-				self._dependencies[key] = ud
+				self._unexpected[key] = ud
 			ud.add(reason)
 
 		def addUnableToResolve(self, pkg, dep):
 			print(f"{pkg.fullname()}: cannot resolve dependency {dep}")
-			pass
+
+			key = str(dep)
+			ur = self._unresolved.get(key)
+			if ur is None:
+				ur = ResolverWorker.UnresolvedDependency(key)
+				self._unresolved[key] = ur
+			ur.add(pkg)
 
 		def __bool__(self):
-			return bool(self._dependencies)
+			return bool(self._unexpected)
 
 		def show(self):
-			for key, ud in sorted(self._dependencies.items()):
+			for key, ud in sorted(self._unexpected.items()):
 				ud.show()
+			for key, ur in sorted(self._unresolved.items()):
+				ur.show()
 
 	def __init__(self, resolver, processfn = None):
 		self._resolver = resolver
@@ -251,14 +300,39 @@ class ResolverWorker:
 			if best is None or Versiontools.comparePackages(best, cand) < 0:
 				best = cand
 
+		if best is not None:
+			best = self._resolver.expand(best)
+
 		return best
 
 	def resolveRequires(self, req):
 		candidates = req.enumerateCandidateSolutions(self._resolver)
 		return self.selectPreferredCandidate(candidates)
 
+	def resolveDownward(self, pkg):
+		result = []
+		if not pkg.requires:
+			self.debugMsg(f"{pkg.fullname()} has no dependencies")
+			return result
+
+		for dep in pkg.requires:
+			# self.debugMsg(f"Inspecting {pkg.fullname()} req {dep}")
+			try:
+				found = self.resolveRequires(dep)
+			except Exception as e:
+				print(f"Caught exception while resolving {dep}: {e}")
+				found = None
+
+			if found is None:
+				self.problems.addUnableToResolve(pkg, dep)
+			else:
+				result.append((dep, found))
+
+		return result
+
+
 class Resolver:
-	class NameBucket:
+	class NameBucket(object):
 		class Candidate:
 			def __init__(self, prov, pkg):
 				self.provides = prov
@@ -275,8 +349,10 @@ class Resolver:
 		def candidatePackages(self):
 			return set(_.pkg for _ in self._candidates)
 
-	def __init__(self):
+	def __init__(self, backingStore = None):
 		self._buckets = {}
+		self.backingStore = backingStore
+		self._nullBucket = self.NameBucket(None)
 
 	def addPackage(self, pkg):
 		# print(f"Adding {pkg.name} to resolver")
@@ -294,9 +370,6 @@ class Resolver:
 			self.addFileProvides(path, pkg)
 
 	def addFileProvides(self, path, pkg):
-		if path in ("/sbin/ldconfig", "/bin/sh"):
-			print(f"DEP {pkg.fullname()} provides {path}")
-
 		b = self._createBucket(path)
 		provides = Package.FileDependency(path)
 		b.add(provides, pkg)
@@ -308,23 +381,31 @@ class Resolver:
 			self._buckets[b.name] = b
 		return b
 
-	def enumerateCandidatesFileDependency(self, name):
+	def fetchBucket(self, name):
 		bucket = self._buckets.get(name)
-		if bucket is None:
-			return []
+		if bucket is not None:
+			return bucket
+
+		if self.backingStore is None:
+			print(f"Nothing provides {name}")
+			return self._nullBucket
+
+		b = self._createBucket(name)
+		for dep, pinfo in self.backingStore.enumerateProvidersOfName(name):
+			b.add(dep, pinfo)
+
+		return b
+
+	def enumerateCandidatesFileDependency(self, name):
+		bucket = self.fetchBucket(name)
 		return bucket.candidatePackages
 
 	def enumerateCandidatesUnversionedPackageDependency(self, name):
-		bucket = self._buckets.get(name)
-		if bucket is None:
-			print(f"Nothing provides {name}")
-			return []
+		bucket = self.fetchBucket(name)
 		return bucket.candidatePackages
 
 	def enumerateCandidatesVersionedPackageDependency(self, req):
-		bucket = self._buckets.get(req.name)
-		if bucket is None:
-			return []
+		bucket = self.fetchBucket(req.name)
 
 		candidates = []
 		for cand in bucket._candidates:
@@ -351,6 +432,14 @@ class Resolver:
 
 		return candidates
 
+	def expand(self, candidate):
+		if isinstance(candidate, PackageInfo):
+			if not self.backingStore:
+				raise Exception("Cannot expand PackageInfo object - no database attached")
+			return self.backingStore.retrievePackage(candidate)
+
+		return candidate
+
 	def selectMostRecent(self, candidates):
 		if not candidates:
 			return None
@@ -359,6 +448,10 @@ class Resolver:
 		for cand in candidates:
 			if best is None or Versiontools.comparePackages(best, cand) < 0:
 				best = cand
+
+		if best is not None:
+			best = self.expand(best)
+
 		return best
 
 
@@ -445,18 +538,23 @@ class Package:
 			for c in changes:
 				c.show(indent + " ")
 
-	def __init__(self, name, version, release, arch):
+	def __init__(self, name, version, release, arch, epoch = None):
 		self.name = name
-		self.epoch = None
+		self.epoch = epoch
 		self.version = version
 		self.release = release
 		self.arch = arch
 		self._changes = []
+		self.sourceName = None
 		self.sourcePackage = None
+		self.sourcePackageHash = None
 		self.group = ''
 		self.buildTime = None
 		self.status = None
 		self.pkgid = None
+		self.productId = None
+		self.product = None
+		self.backingStoreId = None
 
 		self.requires = []
 		self.provides = []
@@ -513,8 +611,10 @@ class Package:
 	def fullname(self):
 		return("%s-%s-%s.%s.rpm" % (self.name, self.version, self.release, self.arch))
 
-	def setSourcePackage(self, name):
-		self.sourcePackage = name
+	def setSourcePackage(self, pkg):
+		self.sourcePackage = pkg
+		if pkg:
+			self.sourcePackageHash = pkg.pkgid
 
 	def recordChanges(self, verdict, changes = None):
 		global totalChanges, totalSuseChanges
@@ -570,12 +670,19 @@ class Product:
 
 		self.name = None
 		self.version = None
+		self.arch = None
+		self.productId = None
 
 		self._resolver = None
 
-	def setNameAndVersion(self, name, version):
+	@property
+	def fullname(self):
+		return f"{self.name}-{self.version}-{self.arch}"
+
+	def setNameAndVersion(self, name, version, arch):
 		self.name = name
 		self.version = version
+		self.arch = arch
 
 	def __repoArg(self, repoArg):
 		if type(repoArg) == str:
@@ -613,6 +720,12 @@ class Product:
 		pkgid = pkg.pkgid
 		if pkgid is not None:
 			self._byID[pkgid] = pkg
+
+		pkg.productId = self.productId
+
+	def updateBackingStore(self, backingStore):
+		backingStore.addPackageObjectList(self.sources.values())
+		backingStore.addPackageObjectList(self.packages.values())
 
 	def updatePackageFilesList(self, pkg, files):
 		pkg.files += files
@@ -733,3 +846,55 @@ class Product:
 		if self._resolver and self.packages:
 			for pkg in self.packages.values():
 				self._resolver.addPackage(pkg)
+
+class PackageInfo:
+	def __init__(self, name, epoch, version, release, arch, backingStoreId, productId = None):
+		self.name = name
+		self.epoch = epoch
+		self.version = version
+		self.release = release
+		self.arch = arch
+		self.backingStoreId = backingStoreId
+		self.product = None
+		self.productId = productId
+		self.productName = None
+		self.parsedVersion = Versiontools.ParsedVersion(version, release, epoch)
+
+	@property
+	def key(self):
+		return f"{self.name}/{self.arch}"
+
+	def __str__(self):
+		result = f"{self.name}-{self.version}-{self.release}.{self.arch}"
+		if self.productName:
+			result += f" from {self.productName}"
+		elif self.productId:
+			result += f" from product {self.productId}"
+		return result
+
+	def fullname(self):
+		return f"{self.name}-{self.version}-{self.release}.{self.arch}.rpm"
+
+class PackageSelector(dict):
+	STRATEGY_YOUNGEST = 0
+
+	def __init__(self):
+		self.setStrategy(self.STRATEGY_YOUNGEST)
+
+	def setStrategy(self, st):
+		if st == self.STRATEGY_YOUNGEST:
+			self.strategy = self.selectYoungest
+		else:
+			print(f"ERROR: {self.__class__.__name__}: unsupported strategy {st}")
+			fail()
+
+	def add(self, pinfo):
+		key = pinfo.key
+		existing = self.get(key)
+		if existing is None or self.strategy(existing, pinfo):
+			self[key] = pinfo
+
+	def selectYoungest(self, existing, candidate):
+		if existing is None:
+			return True
+		return (Versiontools.compareParsedVersions(existing.parsedVersion, candidate.parsedVersion) < 0)

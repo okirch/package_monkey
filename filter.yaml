@@ -129,9 +129,10 @@ groups:
 #   - libgio-*
 
  - name: "@Core"
+   explicitClosure:
+    - "@Perl/Core"
    requires:
     - "@CoreLibraries"
-    - "@Perl/Core"
    binaries:
     - openssl
    packages:

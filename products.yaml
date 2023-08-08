@@ -1,19 +1,17 @@
 baseurl: http://updates.suse.de/SUSE/
 alternateurls:
  - http://download.suse.de/ibs/SUSE/
+repositories:
+ - Products/$OBSNAME/$VERSION/$ARCH/product
+ - Products/$OBSNAME/$VERSION/$ARCH/product_source
+ - Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
 versions:
  - name: "15"
-   urlpattern: Products/$OBSNAME/$VERSION/$ARCH/product
  - name: 15-SP1
-   urlpattern: Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
  - name: 15-SP2
-   urlpattern: Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
  - name: 15-SP3
-   urlpattern: Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
  - name: 15-SP4
-   urlpattern: Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
  - name: 15-SP5
-   urlpattern: Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
 architectures:
  - x86_64
  - s390x
@@ -23,6 +21,10 @@ products:
  - name:        Server
    nickname:    sles
    obsname:     SLE-Product-SLES
+
+ - name:        SLES for SAP
+   nickname:    sles-sap
+   obsname:     SLE-SAP
 
  - name:        Basesystem Module
    nickname:    basesystem
@@ -40,17 +42,9 @@ products:
     - 15-SP4
     - 15-SP5
 
- - name:        SLE Containers
-   nickname:    containers
-   obsname:     SLE-Module-Containers
-
  - name:        SLE Legacy
    nickname:    legacy
    obsname:     SLE-Module-Legacy
-
- - name:        SLE Public Cloud
-   nickname:    public Cloud
-   obsname:     SLE-Module-Public-Cloud
 
  - name:        SLE Python2
    nickname:    python2
@@ -62,8 +56,24 @@ products:
 
  - name:        SLE Scripting
    nickname:    scripting
-   obsname:     SLE-Module-Scripting
+   obsname:     SLE-Module-Web-Scripting
 
- - name:        SLE Toolchain
-   nickname:    toolchain
-   obsname:     SLE-Module-Toolchain
+ - name:        SLE Development Tools
+   nickname:    devtools
+   obsname:     SLE-Module-Development-Tools
+
+ - name:        SLE Transactional Server
+   nickname:    transactional
+   obsname:     SLE-Module-Transactional-Server
+
+ - name:        SAP Applications
+   nickname:    sap-applications
+   obsname:     SLE-Module-SAP-Applications
+
+ - name:        SLE Containers
+   nickname:    containers
+   obsname:     SLE-Module-Containers
+
+ - name:        SLE Public Cloud
+   nickname:    public Cloud
+   obsname:     SLE-Module-Public-Cloud

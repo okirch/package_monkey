@@ -58,6 +58,23 @@ class UrlRewriter:
 				return result
 		return url
 
+class RepoCollection:
+	def __init__(self, baseURL, urlpatterns):
+		self.baseURL = baseURL
+		self.urlpatterns = urlpatterns
+
+	def getRepoURLs(self, obsname, version, arch):
+		result = []
+
+		for url in self.urlpatterns:
+			url = url.replace('$OBSNAME', obsname).replace('$VERSION', version).replace('$ARCH', arch)
+
+			if not url.startswith('https:') and not url.startswith('http:'):
+				url = self.baseURL + url
+
+			result.append(url)
+
+		return result
 
 class RepoService:
 	def __init__(self, baseURL, cacheLocation = None):
@@ -72,19 +89,17 @@ class RepoService:
 
 		self.cacheStrategy = cacheStrategy
 
-		self.urlpattern = {}
+		self.repoCollection = {}
 
-	def addVersion(self, version, urlpattern):
-		self.urlpattern[version] = urlpattern
+	def addVersion(self, version, repositories):
+		self.repoCollection[version] = repositories
 
-	def getVersionURL(self, version, arch):
-		url = self.urlpattern[version]
-		url = url.replace('$VERSION', version).replace('$ARCH', arch)
+	def getRepoURLs(self, obsname, version, arch):
+		collection = self.repoCollection.get(version)
+		if collection is None:
+			return []
 
-		if not url.startswith('https:') and not url.startswith('http:'):
-			url = self.baseURL + url
-
-		return url
+		return collection.getRepoURLs(obsname, version, arch)
 
 class ProductCatalog:
 	def __init__(self, filename = "products.yaml", cacheLocation = None):
@@ -94,6 +109,8 @@ class ProductCatalog:
 		baseurl = data['baseurl']
 		if not baseurl.endswith('/'):
 			baseurl += '/'
+		self.baseurl = baseurl
+
 		self.service = RepoService(baseurl, cacheLocation)
 		if 'alternateurls' in data:
 			rewriter = self.service.urlRewriter
@@ -101,16 +118,31 @@ class ProductCatalog:
 				rewriter.addRule(altURL, baseurl)
 
 		self.architectures = data['architectures']
+		self.repositories = self.expandRepositories(data)
 
 		self.versions = []
 		for vd in data['versions']:
 			name = vd['name']
-			self.service.addVersion(name, vd['urlpattern'])
+
+			repositories = self.expandRepositories(data)
+			if repositories is None:
+				repositories = self.repositories
+			if repositories is None:
+				raise Exception("No repositories defined for {name}")
+
+			self.service.addVersion(name, repositories)
 			self.versions.append(name)
 
 		self._products = []
 		for pd in data['products']:
 			self._products.append(Product.fromYAML(pd, self))
+
+	def expandRepositories(self, data):
+		urlpatterns = data.get('repositories')
+		if urlpatterns is None:
+			return None
+
+		return RepoCollection(self.baseurl, urlpatterns)
 
 	def enumerate(self, **args):
 		result = []
@@ -118,6 +150,17 @@ class ProductCatalog:
 			result += prod.enumerate(**args)
 		return result
 
+	def updateBackingStore(self, store):
+		for release in self.enumerate():
+			id = store.mapProduct(release)
+			assert(id is not None)
+			release.backingStoreId = id
+
+##################################################################
+# We should rename this to something less generic, eg ProductVersion
+# ProductRelease -> ProductReleaseArchitecture
+# Product -> ProductRelease
+##################################################################
 class Product:
 	def __init__(self, catalog, name, nickname, urlpattern = None, obsname = None, **ignore):
 		self.name = name
@@ -150,10 +193,9 @@ class Product:
 				rel = self.addRelease(version = version, arch = arch)
 
 	def addRelease(self, version, arch):
-		url = self.service.getVersionURL(version, arch)
-		url = url.replace('$OBSNAME', self.obsname)
+		repoURLs = self.service.getRepoURLs(self.obsname, version, arch)
 
-		release = ProductRelease(self.obsname, version, arch, url, self.service)
+		release = ProductRelease(self.obsname, version, arch, repoURLs, self.service)
 		self._releases.append(release)
 
 		return release
@@ -166,17 +208,28 @@ class Product:
 		return result
 
 class ProductRelease:
-	def __init__(self, name, version, arch, repoURL, service = None):
+	def __init__(self, name, version, arch, repoURLs, service = None):
 		self.name = name
 		self.version = version
 		self.arch = arch
-		self.repoURL = repoURL
+		self.productId = None
+		self.repoURLs = repoURLs
 		self.service = service
 
-		self.cachedRepo = None
+		self.backingStoreId = None
+		self.cachedRepos = None
 
 	def __str__(self):
 		return f"{self.name} {self.version} ({self.arch})"
+
+	def createEmptyProduct(self):
+		from packages import Product
+
+		result = Product()
+		result.setNameAndVersion(self.name, self.version, self.arch)
+		result.productId = self.backingStoreId
+
+		return result
 
 	def match(self, version = None, arch = None):
 		if version is not None and self.version != version:
@@ -185,16 +238,21 @@ class ProductRelease:
 			return False
 		return True
 
-	def getRepository(self):
-		repo = self.cachedRepo
-		if repo is None:
-			repo = Repo(self.repoURL, self.service.cacheStrategy)
-			repo.name = self.name
-			repo.version = self.version
-			self.arch = self.arch
-			self.cachedRepo = repo
+	def getRepositories(self):
+		repoList = self.cachedRepos
+		if repoList is None:
+			repoList = []
+			for url in self.repoURLs:
+				repo = Repo(url, self.service.cacheStrategy)
+				repo.name = self.name
+				repo.version = self.version
+				repo.arch = self.arch
+				repo.productId = self.productId
+				repoList.append(repo)
 
-		return repo
+			self.cachedRepos = repoList
+
+		return repoList
 
 	@property
 	def cachePath(self):

@@ -839,7 +839,12 @@ class BackingStoreDB(DB):
 	def retrieveMultiplePackageInfos(self, pkgIdList):
 		result = []
 		for d in self.packages.selectMultiple([], 'id', pkgIdList):
-			result.append(self.constructPackageInfo(d))
+			pinfo = self.constructPackageInfo(d)
+			if pinfo is None:
+				badPkgId = d.get('id')
+				raise Exception(f"cannot build package info for id {badPkgId}")
+
+			result.append(pinfo)
 		return result
 
 	def constructPackageInfo(self, d):
@@ -891,17 +896,21 @@ class BackingStoreDB(DB):
 
 		result = []
 
-		depList = []
-		pkgIdList = []
-		for dep, pkgId in self.provides.retrieveDependenciesByName(name):
-			depList.append(dep)
-			pkgIdList.append(pkgId)
+		# This list contains pairs of PackageDependency, pkgId
+		providesList = self.provides.retrieveDependenciesByName(name)
 
-		lastGoodIndex = 0
+		pkgIdList = list(pair[1] for pair in providesList)
+
+		relevantPkgs = {}
 		for pinfo in self.retrieveMultiplePackageInfos(pkgIdList):
+			relevantPkgs[pinfo.backingStoreId] = pinfo
+
+		for dep, pkgId in providesList:
+			pinfo = relevantPkgs.get(pkgId)
 			if pinfo is None:
-				badPkgId = pkgIdList[lastGoodIndex + 1]
-				raise Exception(f"cannot get package with id {badPkgId}")
+				print(f" ERROR: {name} {dep} references unknown package {pkgId}")
+				continue
+
 			result.append((dep, pinfo))
 
 		if name.startswith('/'):

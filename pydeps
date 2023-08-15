@@ -36,7 +36,6 @@ for pinfo in store.enumerateLatestPackages():
 		continue
 
 	pkg = store.retrievePackage(pinfo)
-	resolver.addPackage(pkg)
 
 	product = pkg.product
 	if product is None:

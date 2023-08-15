@@ -29,6 +29,15 @@ class Versiontools:
 			self.version = version
 			self.release = release
 			self.epoch = epoch or "0"
+			self.tokens = []
+
+			self.tokens += Versiontools.splitLabel(self.epoch)
+			self.tokens.append(None)
+			self.tokens += Versiontools.splitLabel(self.version)
+			self.tokens.append(None)
+			self.tokens += Versiontools.splitLabel(self.release)
+			while self.tokens[-1] is None:
+				self.tokens.pop()
 
 		def __str__(self):
 			result = self.version
@@ -60,15 +69,49 @@ class Versiontools:
 		def __ge__(self, other):
 			return self.cmp(other) >= 0
 
+	TESTVECTORS = (
+		("python", "EQ", ("2.7", None),		("2.7.1", "6"),		True),
+		("python", "EQ", ("2.7", "12"),		("2.7.1", "6"),		False),
+		("python", "GT", ("2.7.1", None),	("2.7.2", None),	True),
+		("python", "LE", ("2.7", None),		("2.7.1", "6"),		False),
+		("python", "LE", ("2.7", None),		("2.7", "6"),		True),
+		("python", "LE", ("2.7.0", None),	("2.7.1", "6"),		False),
+	)
+
+	class FakeDep:
+		def __init__(self, name, flags, pv):
+			self.name = name
+			self.flags = flags
+			self.parsedVersion = pv
+			self.op = Package.VersionedPackageDependency.compare[flags]
+
+		def __str__(self):
+			return f"{self.name} {self.flags} {self.parsedVersion}"
+
 	@staticmethod
 	def test():
 		if Versiontools.tested:
-			return
+			return True
 
-		Versiontools.tested = True
 		# assert(Versiontools.splitLabel("1.6pre1") == (1, 6, 'pre', 1))
 		assert(Versiontools.compareLabels("1.4", "1.3") == 1)
 		assert(Versiontools.compareLabels("1.6", "1.6pre1") == -1)
+
+		success = True
+		for name, flags, arg1, arg2, expected in Versiontools.TESTVECTORS:
+			pv1 = Versiontools.ParsedVersion(*arg1)
+			pv2 = Versiontools.ParsedVersion(*arg2)
+			dep = Versiontools.FakeDep(name, flags, pv1)
+
+			result = Versiontools.dependencySatisfiedByVersion(dep, pv2)
+			if result != expected:
+				print(f"FAIL: {dep}: {pv2}: expected {expected} but got {result}")
+				success = False
+			else:
+				print(f"OK: {dep}: {pv2}: -> {expected}")
+
+		Versiontools.tested = True
+		return success
 
 	# This is not pretty but hopefully fast
 	@staticmethod
@@ -120,14 +163,21 @@ class Versiontools:
 	@staticmethod
 	def compareToken(t1, t2):
 		if t1 == t2:
-			#print("%s: same" % t1)
+			# print(f"{t1}: same")
 			return 0
 		if type(t1) == type(t2):
 			return Versiontools.cmp(t1, t2)
-		if type(t1) == int:
-			#print("int %d < str %s" % (t1, t2))
+		if t1 is None:
+			# print(f"sepa \"-\" < {t2}")
 			return -1
-		#print("str %s > int %d" % (t1, t2))
+		if t2 is None:
+			# print(f"{t1} < sepa \"-\"")
+			return 1
+		if type(t1) == int:
+			# print(f"int {t1} < other {t2}")
+			return -1
+		# print(f"other {t1} > int {t2}")
+		assert(type(t2) == int)
 		return 1
 
 	@staticmethod
@@ -147,6 +197,10 @@ class Versiontools:
 	def compareLabelsShort(l1, l2):
 		l1 = Versiontools.splitLabel(l1)
 		l2 = Versiontools.splitLabel(l2)
+		return Versiontools.compareTokensShort(l1, l2)
+
+	@staticmethod
+	def compareTokensShort(l1, l2):
 		for (c1, c2) in zip(l1, l2):
 			r = Versiontools.compareToken(c1, c2)
 			if r != 0:
@@ -155,10 +209,13 @@ class Versiontools:
 		# If l1 is less specific than l2, consider them equal
 		# IOW, "Requires: python-abi(2.7)" is expected to match "2.7.14-4.19"
 		d = len(l1) - len(l2)
-		if d <= 0:
+		if d == 0:
 			return 0
 
-		return 1
+		# Same prefix, but one of them is longer
+		if d < 0:
+			return -0.5
+		return 0.5
 
 	@staticmethod
 	def comparePackages(p1, p2):
@@ -191,9 +248,9 @@ class Versiontools:
 		if not pkgVersion:
 			return False
 
-		r = Versiontools.compareParsedVersionsShort(req.parsedVersion, pkgVersion)
+		r = Versiontools.compareTokensShort(req.parsedVersion.tokens, pkgVersion.tokens)
 		r = req.op(-r, 0)
-		debugDependency2(f"  = {req.op} -> {r}")
+		debugDependency2(f"  = {req.flags} -> {r}")
 		return r
 
 class ResolverWorker:
@@ -355,7 +412,7 @@ class Resolver:
 		self._nullBucket = self.NameBucket(None)
 
 	def addPackage(self, pkg):
-		# print(f"Adding {pkg.name} to resolver")
+		# print(f"Adding {pkg.fullname()} to resolver (provides {len(pkg.provides)})")
 
 		b = self._createBucket(pkg.name)
 		provides = Package.VersionedPackageDependency(pkg.name, flags = 'EQ', ver = pkg.version, rel = pkg.release)
@@ -408,6 +465,7 @@ class Resolver:
 		bucket = self.fetchBucket(req.name)
 
 		candidates = []
+		rejected = []
 		for cand in bucket._candidates:
 			provides = cand.provides
 			if isinstance(provides, Package.UnversionedPackageDependency):
@@ -427,8 +485,15 @@ class Resolver:
 					candidates.append(pkg)
 				else:
 					debugDependency(f"    {pkg.parsedVersion} does not match")
+					rejected.append(cand)
 			else:
 				print(f"Don't know how to handle Provides: {provides}")
+
+		if rejected and not candidates:
+			print(f"Warning, it looks like we're not able to satisfy dependency {req}")
+			print(" - Rejected versions:")
+			for bad in rejected:
+				print(f"    {bad.provides} provided by package {bad.pkg.fullname()}")
 
 		return candidates
 
@@ -478,12 +543,12 @@ class Package:
 
 	class VersionedPackageDependency:
 		compare = {
-			"EQ" : int.__eq__,
-			"NE" : int.__ne__,
-			"LT" : int.__lt__,
-			"GT" : int.__gt__,
-			"LE" : int.__le__,
-			"GE" : int.__ge__,
+			"EQ" : lambda a, b: (int(a) == int(b)),
+			"NE" : lambda a, b: (int(a) != int(b)),
+			"LE" : lambda a, b: (a <= b),
+			"GE" : lambda a, b: (a >= b),
+			"LT" : lambda a, b: (a < b),
+			"GT" : lambda a, b: (a > b),
 		}
 
 		def __init__(self, name,  flags = None, epoch = None, ver = None, rel = None, pre = None):
@@ -898,3 +963,9 @@ class PackageSelector(dict):
 		if existing is None:
 			return True
 		return (Versiontools.compareParsedVersions(existing.parsedVersion, candidate.parsedVersion) < 0)
+
+if __name__ == '__main__':
+	if Versiontools.test():
+		print("Version comparison seems to work as expected")
+	else:
+		print("Version comparison is not working as expected")

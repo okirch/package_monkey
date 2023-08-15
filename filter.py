@@ -3,8 +3,9 @@ import fnmatch
 
 class Classification:
 	class Label:
-		def __init__(self, name):
+		def __init__(self, name, id):
 			self.name = name
+			self.id = id
 			self.uses = set()
 			self.explicitClosure = set()
 			self._closure = None
@@ -35,12 +36,14 @@ class Classification:
 	class Scheme:
 		def __init__(self):
 			self._labels = {}
+			self._nextLabelId = 0
 
 		def createLabel(self, name):
 			label = self._labels.get(name)
 			if label is None:
-				label = Classification.Label(name)
+				label = Classification.Label(name, self._nextLabelId)
 				self._labels[name] = label
+				self._nextLabelId += 1
 			return label
 
 		@property

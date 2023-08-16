@@ -57,7 +57,7 @@ class DB(object):
 				self.lock = None
 
 				if count:
-					print(f"Applying {count} deferred commits")
+					# print(f"Applying {count} deferred commits")
 					self.db.commit()
 
 	def __init__(self):
@@ -166,7 +166,8 @@ class Table(object):
 			print(f"Failed to create table {self.name}")
 			return False
 
-		print(f"Created table {self.name}")
+		if optSqlDebug:
+			print(f"Created table {self.name}")
 		return True
 
 	def createIndex(self, name, fields):
@@ -176,7 +177,8 @@ class Table(object):
 			print(f"Failed to create table index {name} for table {self.name}")
 			return False
 
-		print(f"Created table index {name} for table {self.name}")
+		if optSqlDebug:
+			print(f"Created table index {name} for table {self.name}")
 		return True
 
 	def createUniqueIndex(self, name, fields):
@@ -186,7 +188,8 @@ class Table(object):
 			print(f"Failed to create table index {name} for table {self.name}")
 			return False
 
-		print(f"Created table index {name} for table {self.name}")
+		if optSqlDebug:
+			print(f"Created table index {name} for table {self.name}")
 		return True
 
 	def insert(self, **kwargs):
@@ -300,15 +303,33 @@ class Table(object):
 
 		if fields:
 			fieldClause = ",".join(fields)
-			sql = f"SELECT {fieldClause} from {self.name}"
+			sql = f"SELECT {fieldClause} FROM {self.name}"
 		else:
-			sql = f"SELECT * from {self.name}"
+			sql = f"SELECT * FROM {self.name}"
 
 		count = len(values)
 		sql += " WHERE (" + " OR ".join([f"{whereField}=?"] * count) + ")"
 
 		c = self.execute(sql, values)
 		return self.cursorFetchAll(c)
+
+	def deleteMultiple(self, whereField, values):
+		while len(values) > 100:
+			self.deleteMultipleWork(whereField, values[:100])
+			del values[:100]
+
+		self.deleteMultipleWork(whereField, values)
+
+	def deleteMultipleWork(self, whereField, values):
+		if len(values) == 0:
+			return
+
+		sql = f"DELETE FROM {self.name}"
+
+		count = len(values)
+		sql += " WHERE (" + " OR ".join([f"{whereField}=?"] * count) + ")"
+
+		self.execute(sql, values)
 
 	def cursorFetchAll(self, c):
 		if c is None:
@@ -661,9 +682,17 @@ class RequiresTable(DependencyTable):
 class ProvidesTable(DependencyTable):
 	NAME = "provides"
 
-class FakeProduct:
-	def addPackageFromDB(self, **kwargs):
-		print(kwargs)
+class TreeTable(UniqueTable):
+	NAME = "tree"
+	TABLE_FIELDS = """
+			id integer PRIMARY KEY,
+			requiringPkgId integer NOT NULL,
+			requiredPkgId integer NOT NULL,
+			dependencyId integer
+		"""
+
+	def addEdge(self, **kwargs):
+		self.insert(**kwargs)
 
 class PackageCache(dict):
 	def put(self, pkg):
@@ -717,8 +746,14 @@ class BackingStoreDB(DB):
 		self.provides = ProvidesTable.instantiate(self)
 		self.provides.createIndex("idx_prov_package", ['pkgId'])
 
+		self.tree = TreeTable.instantiate(self)
+		self.tree.createIndex("idx_tree_down", ['requiringPkgId'])
+		self.tree.createIndex("idx_tree_up", ['requiredPkgId'])
+
 		self.packageCache = PackageCache()
 		self.providesCache = ProvidesCache()
+
+		self._allowDepTreeLookups = True
 
 	# Complete product cache entry by attaching our in-memory release object to it
 	# This allows us to create ProductInfo objects with a correct pinfo.product pointer
@@ -763,6 +798,14 @@ class BackingStoreDB(DB):
 
 	def addPackageObjectList(self, objList):
 		defer = self.deferCommit()
+
+		pkgIdList = list(_.backingStoreId for _ in objList)
+
+		# Clean out all files and dependencies that belong to this package
+		self.requires.deleteMultiple('pkgId', pkgIdList)
+		self.provides.deleteMultiple('pkgId', pkgIdList)
+		self.files.deleteMultiple('pkgId', pkgIdList)
+
 		for obj in objList:
 			self.addPackageObject(obj)
 		defer.commit()
@@ -925,3 +968,18 @@ class BackingStoreDB(DB):
 		self.providesCache.put(name, result)
 
 		return result
+
+	def disableDependencyTreeLookups(self):
+		self._allowDepTreeLookups = False
+
+	def dependencyTreeExcise(self, pkgIdList):
+		self.tree.deleteMultiple('requiringPkgId', pkgIdList)
+
+	def addEdgeToTree(self, **kwargs):
+		self.tree.addEdge(**kwargs)
+
+	def addEdgeSetToTree(self, edges):
+		defer = self.deferCommit()
+		for (source, target, dep) in edges:
+			self.tree.addEdge(requiringPkgId = source, requiredPkgId = target, dependencyId = dep)
+

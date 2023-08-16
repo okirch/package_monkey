@@ -257,15 +257,14 @@ class ResolverWorker:
 	class Problem(object):
 		def __init__(self, desc):
 			self.desc = desc
-			self.reasons = []
-
-		def add(self, reason):
-			self.reasons.append(reason)
-
 
 	class UnexpectedDependency(Problem):
 		def __init__(self, *args):
 			super().__init__(*args)
+			self.reasons = []
+
+		def add(self, reason):
+			self.reasons.append(reason)
 
 		def show(self):
 			print(f"Unexpected dependency {self.desc}:")
@@ -278,15 +277,47 @@ class ResolverWorker:
 	class UnresolvedDependency(Problem):
 		def __init__(self, *args):
 			super().__init__(*args)
+			self.requiredby = set()
 
-		def __init__(self, desc):
-			self.desc = desc
-			self.reasons = []
+		def add(self, pkg):
+			self.requiredby.add(pkg)
 
 		def show(self):
 			print(f"Unresolved dependency {self.desc}, required by:")
-			for pkg in self.reasons:
+			for pkg in self.requiredby:
 				print(f"   {pkg.fullname()}")
+
+	class Cache(dict):
+		# needs to be different from None
+		NEGATIVE_ENTRY = 42
+
+		def __init__(self):
+			super().__init__()
+			self.numHits = 0
+			self.numLookups = 0
+
+		@property
+		def numEntries(self):
+			return len(self)
+
+		def put(self, dep, pkg):
+			key = str(dep)
+
+			if pkg is None:
+				pkg = self.NEGATIVE_ENTRY
+			self[key] = pkg
+
+		def get(self, dep):
+			key = str(dep)
+			result = super().get(key)
+			if result is not None:
+				self.numHits += 1
+			self.numLookups += 1
+			return result
+
+		def formatStats(self):
+			ratio = int(100 * self.numHits / self.numLookups)
+			return f"{self.numEntries} entries; {self.numLookups} lookups ({ratio}% hit rate)";
 
 	class Problems:
 		def __init__(self):
@@ -302,7 +333,7 @@ class ResolverWorker:
 			ud.add(reason)
 
 		def addUnableToResolve(self, pkg, dep):
-			print(f"{pkg.fullname()}: cannot resolve dependency {dep}")
+			# print(f"{pkg.fullname()}: cannot resolve dependency {dep}")
 
 			key = str(dep)
 			ur = self._unresolved.get(key)
@@ -312,7 +343,7 @@ class ResolverWorker:
 			ur.add(pkg)
 
 		def __bool__(self):
-			return bool(self._unexpected)
+			return bool(self._unexpected) or bool(self._unresolved)
 
 		def show(self):
 			for key, ud in sorted(self._unexpected.items()):
@@ -326,6 +357,7 @@ class ResolverWorker:
 		self._packages = set()
 		self._process = processfn
 		self._problems = self.Problems()
+		self._cache = self.Cache()
 
 		self.debugMsg = debugDependency
 
@@ -348,11 +380,20 @@ class ResolverWorker:
 	def problems(self):
 		return self._problems
 
+	def formatCacheStats(self):
+		return self._cache.formatStats()
+
 	def selectPreferredCandidate(self, candidates):
+		secondBest = None
+
 		best = None
 		for cand in candidates:
 			if cand in self._packages:
 				return cand
+
+			if cand is Package.ExpandedToNothing:
+				secondBest = cand
+				continue
 
 			if best is None or Versiontools.comparePackages(best, cand) < 0:
 				best = cand
@@ -360,11 +401,16 @@ class ResolverWorker:
 		if best is not None:
 			best = self._resolver.expand(best)
 
-		return best
+		return best or secondBest
 
 	def resolveRequires(self, req):
-		candidates = req.enumerateCandidateSolutions(self._resolver)
-		return self.selectPreferredCandidate(candidates)
+		try:
+			candidates = req.enumerateCandidateSolutions(self._resolver)
+			found = self.selectPreferredCandidate(candidates)
+		except Exception as e:
+			print(f"Caught exception while resolving {req}: {e}")
+			found = None
+		return found
 
 	def resolveDownward(self, pkg):
 		result = []
@@ -374,15 +420,21 @@ class ResolverWorker:
 
 		for dep in pkg.requires:
 			# self.debugMsg(f"Inspecting {pkg.fullname()} req {dep}")
-			try:
-				found = self.resolveRequires(dep)
-			except Exception as e:
-				print(f"Caught exception while resolving {dep}: {e}")
-				found = None
+			found = self._cache.get(dep)
 
 			if found is None:
+				# No cache entry found, take the slow path and resolve it
+				found = self.resolveRequires(dep)
+				# ... and stick the result into the cache
+				self._cache.put(dep, found)
+			elif found is self._cache.NEGATIVE_ENTRY:
+				# it's a negative entry, translate to None
+				found = None
+
+			# If it's a valid entry, add it to the result
+			if found is None:
 				self.problems.addUnableToResolve(pkg, dep)
-			else:
+			elif found is not Package.ExpandedToNothing:
 				result.append((dep, found))
 
 		return result
@@ -410,6 +462,7 @@ class Resolver:
 		self._buckets = {}
 		self.backingStore = backingStore
 		self._nullBucket = self.NameBucket(None)
+		self._conditionals = {}
 
 	def addPackage(self, pkg):
 		# print(f"Adding {pkg.fullname()} to resolver (provides {len(pkg.provides)})")
@@ -452,6 +505,12 @@ class Resolver:
 			b.add(dep, pinfo)
 
 		return b
+
+	def declareConditional(self, name, onoff):
+		self._conditionals[name] = onoff
+
+	def checkConditional(self, name):
+		return bool(self._conditionals.get(name))
 
 	def enumerateCandidatesFileDependency(self, name):
 		bucket = self.fetchBucket(name)
@@ -519,27 +578,344 @@ class Resolver:
 
 		return best
 
+class DependencyParser:
+	class Lexer:
+		EOL = 0
+		LEFTB = 1
+		RIGHTB = 2
+		OPERATOR = 3
+		IDENTIFIER = 4
+
+		CHARCLASS_OPERATOR = ('<', '>', '=', '!')
+		CHARCLASS_WORDBREAK = CHARCLASS_OPERATOR
+
+		def __init__(self, string):
+			self.value = list(string)
+			self.pos = 0
+
+		@property
+		def stringValue(self):
+			return "".join(self.value)
+
+		def getc(self):
+			try:
+				cc = self.value[self.pos]
+			except:
+				return None
+
+			self.pos += 1
+			return cc
+
+		def ungetc(self, cc):
+			assert(self.pos > 0)
+			assert(self.value[self.pos - 1] == cc)
+			self.pos -= 1
+
+		def next(self):
+			result = ""
+			while True:
+				cc = self.getc()
+				if cc is None:
+					break
+
+				while cc and cc.isspace():
+					cc = self.getc()
+
+				if cc in self.CHARCLASS_OPERATOR:
+					while cc in self.CHARCLASS_OPERATOR:
+						result += cc
+						cc = self.getc()
+					return (self.OPERATOR, result)
+
+				if cc == '(':
+					return (self.LEFTB, cc)
+				if cc == ')':
+					return (self.RIGHTB, cc)
+
+				processingBracketedArgument = False
+				while cc and not cc.isspace() and not cc in self.CHARCLASS_WORDBREAK:
+					if cc == '(':
+						if processingBracketedArgument:
+							raise Exception("Dependency parser: nested brackets not allowed inside Identifier")
+						processingBracketedArgument = True
+					elif cc == ')':
+						if not processingBracketedArgument:
+							break
+						processingBracketedArgument = False
+
+					result += cc
+					cc = self.getc()
+
+				if cc:
+					self.ungetc(cc)
+
+				if not result:
+					break
+				return (self.IDENTIFIER, result)
+
+			return (self.EOL, result)
+
+	class ProcessedExpression(object):
+		pass
+
+	class DependencySingleton(ProcessedExpression):
+		OPTABLE = {
+			'=':  'EQ',
+			'==': 'EQ',
+			'<=': 'LE',
+			'>=': 'GE',
+			'<':  'GT',
+			'>':  'LT',
+			'!=': 'NE',
+		}
+
+		def __init__(self, name, op = None, version = None):
+			self.name = name
+			self.op = op
+
+			release = None
+			if version and '-' in version:
+				version, release = version.split('-')
+
+			self.version = version
+			self.release = release
+
+			if op is None:
+				self.flags = None
+			else:
+				self.flags = self.OPTABLE[op]
+
+		def print(self, ws = ""):
+			if self.op:
+				print(f"{ws}{self.name} {self.op} {self.version}")
+			else:
+				print(f"{ws}{self.name}")
+
+		def build(self):
+			if self.flags is None:
+				return Package.createDependency(self.name)
+			else:
+				return Package.createDependency(self.name, flags = self.flags, ver = self.version, rel = self.release)
+
+	class BracketedTerm(ProcessedExpression):
+		def __init__(self, term):
+			self.term = term
+
+		def print(self, ws = ""):
+			self.term.print(ws)
+
+		def build(self):
+			return self.term.build()
+
+	class ConditionalExpression(ProcessedExpression):
+		def __init__(self, inner, conditional = None):
+			self.conditional = conditional
+			self.inner = inner
+
+		def add(self, child):
+			assert(self.conditional is None)
+			self.conditional = child
+
+		def print(self, ws = ""):
+			print(f"{ws}IF")
+			if self.conditional:
+				self.conditional.print(ws + "  ")
+			else:
+				print(f"{ws}ALWAYS FALSE")
+			if self.inner:
+				self.inner.print(ws + "  ")
+			else:
+				print(f"{ws}NO INNER TERM")
+
+		def build(self):
+			conditionalTerm = self.conditional.build()
+			innerTerm = self.inner.build()
+			return Package.createConditionalDependency(conditionalTerm, innerTerm)
+
+	class AssociativeExpression(ProcessedExpression):
+		def __init__(self, child):
+			self.children = [child]
+
+		def add(self, child):
+			self.children.append(child)
+
+		def buildTerms(self):
+			result = []
+			for child in self.children:
+				result.append(child.build())
+			return result
+
+	class OrExpression(AssociativeExpression):
+		def print(self, ws = ""):
+			print(f"{ws}OR")
+			for child in self.children:
+				child.print(ws + "  ")
+
+		def build(self):
+			return Package.createOrDependency(self.buildTerms())
+
+	class AndExpression(AssociativeExpression):
+		def print(self, ws = ""):
+			print(f"{ws}AND")
+			for child in self.children:
+				child.print(ws + "  ")
+
+		def build(self):
+			return Package.createAndDepdendency(self.buildTerms())
+
+	def __init__(self, string):
+		# print(f"## Parsing \"{string}\"")
+		self.lex = self.Lexer(string)
+
+		self.lookahead = None
+
+	def __str__(self):
+		return self.lex.stringValue
+
+	def nextToken(self):
+		lookahead = self.lookahead
+		if lookahead is not None:
+			self.lookahead = None
+			return lookahead
+
+		type, value = self.lex.next()
+		# print(f"## -> type={type} value=\"{value}\"")
+		return type, value
+
+	def pushBackToken(self, *args):
+		assert(self.lookahead is None)
+		self.lookahead = args
+
+	class BadExpressionException(Exception):
+		def __init__(self, lexer):
+			value = "".join(lexer.value)
+			ws = " " * lexer.pos
+			msg = f"Bad expression:\n{value}\n{ws}^--- HERE"
+			super().__init__(msg)
+
+	def BadExpression(self):
+		return self.BadExpressionException(self.lex)
+
+	def process(self, endToken = None):
+		if endToken is None:
+			endToken = self.Lexer.EOL
+
+		leftTerm = None
+		while True:
+			type, value = self.nextToken()
+			if type == endToken:
+				break
+
+			# print("# About to process next term")
+			if type == self.Lexer.RIGHTB or type == self.Lexer.EOL:
+				print(f"endToken={endToken}")
+				raise self.BadExpression()
+
+			groupClass = None
+
+			if type == self.Lexer.IDENTIFIER:
+				if value == "or":
+					groupClass = self.OrExpression
+				elif value == "and":
+					groupClass = self.AndExpression
+				elif value == "if":
+					groupClass = self.ConditionalExpression
+
+			if groupClass:
+				if leftTerm is None:
+					raise self.BadExpression()
+
+				if not isinstance(leftTerm, self.AssociativeExpression):
+					leftTerm = groupClass(leftTerm)
+				elif leftTerm.__class__ != groupClass:
+					print("Cannot mix terms with different precendence")
+					raise self.BadExpression()
+
+				type, value = self.nextToken()
+
+			if type == self.Lexer.LEFTB:
+				term = self.process(endToken = self.Lexer.RIGHTB)
+				term = self.BracketedTerm(term)
+			else:
+				if type != self.Lexer.IDENTIFIER:
+					raise self.BadExpression()
+
+				args = [value]
+
+				type, value = self.nextToken()
+				if type == self.Lexer.OPERATOR:
+					args.append(value)
+
+					type, value = self.nextToken()
+					if type != self.Lexer.IDENTIFIER:
+						raise self.BadExpression()
+
+					args.append(value)
+				else:
+					self.pushBackToken(type, value)
+
+				term = self.DependencySingleton(*args)
+
+			if leftTerm:
+				leftTerm.add(term)
+			else:
+				leftTerm = term
+
+		return leftTerm
+
+	@staticmethod
+	def test():
+		p = DependencyParser("(foobar == 1.0 if kernel)")
+		while True:
+			type, value = p.nextToken()
+			if type is DependencyParser.Lexer.EOL:
+				break
+
+		inputs = (
+			"(foobar == 1.0 if kernel)",
+			"(foo or alternative(foo))",
+			"((foo or bar))",
+			"salt-transactional-update = 3006.0-150500.4.12.2 if read-only-root-fs",
+		)
+
+		resolver = Resolver()
+
+		for s in inputs:
+			print(f"Processing {s}")
+			p = DependencyParser(s)
+			tree = p.process()
+			tree.print("   ")
+
+			dep = tree.build()
+			print(f" => {dep}")
+			print()
 
 class Package:
-	class FileDependency:
+	# This special value is returned when we encounter a conditional
+	# dependency, and its condition evaluated to False.
+	class Nothing:
+		pass
+
+	ExpandedToNothing = Nothing()
+
+	class SingleStringDependency(object):
 		def __init__(self, name):
 			self.name = name
 
 		def __str__(self):
 			return self.name
 
+	class FileDependency(SingleStringDependency):
 		def enumerateCandidateSolutions(self, resolver):
 			return resolver.enumerateCandidatesFileDependency(self.name)
 
-	class UnversionedPackageDependency:
-		def __init__(self, name):
-			self.name = name
-
-		def __str__(self):
-			return self.name
-
+	class UnversionedPackageDependency(SingleStringDependency):
 		def enumerateCandidateSolutions(self, resolver):
 			return resolver.enumerateCandidatesUnversionedPackageDependency(self.name)
+
+	class FailingDependency(SingleStringDependency):
+		def enumerateCandidateSolutions(self, resolver):
+			return []
 
 	class VersionedPackageDependency:
 		compare = {
@@ -564,6 +940,39 @@ class Package:
 
 		def enumerateCandidateSolutions(self, resolver):
 			return resolver.enumerateCandidatesVersionedPackageDependency(self)
+
+	class ConditionalDependency:
+		def __init__(self, condition, inner):
+			self.condition = condition
+			self.inner = inner
+
+		def __str__(self):
+			return f"({self.inner} if {self.condition})";
+
+		def enumerateCandidateSolutions(self, resolver):
+			if isinstance(self.condition, Package.UnversionedPackageDependency) and \
+			   resolver.checkConditional(self.condition.name):
+				# A conditional we defined earlier is True
+				pass
+			elif not self.condition.enumerateCandidateSolutions(resolver):
+				return [Package.ExpandedToNothing]
+
+			return self.inner.enumerateCandidateSolutions(resolver)
+
+	class OrDependency:
+		def __init__(self, children):
+			self.children = children
+
+		def __str__(self):
+			return "(" + " or ".join(str(_) for _ in self.children) + ")"
+
+		def enumerateCandidateSolutions(self, resolver):
+			result = []
+
+			# Not quite right... but we'd have to change the algorithm to accomodate this
+			for child in self.children:
+				result += list(child.enumerateCandidateSolutions(resolver))
+			return result
 
 	class Change:
 		def __init__(self, date, author, text):
@@ -647,11 +1056,38 @@ class Package:
 	def createDependency(name, **kwd):
 		assert(name is not None)
 
+		if name.startswith('(') and name.endswith(')'):
+			return Package.processComplexDependency(name, **kwd)
+
 		if name.startswith("/"):
 			return Package.FileDependency(name)
 		if 'flags' not in kwd:
 			return Package.UnversionedPackageDependency(name)
 		return Package.VersionedPackageDependency(name, **kwd)
+
+	@staticmethod
+	def createConditionalDependency(condition, inner):
+		return Package.ConditionalDependency(condition, inner)
+
+	@staticmethod
+	def createOrDependency(children):
+			return Package.OrDependency(children)
+
+	@staticmethod
+	def processComplexDependency(name, **kwd):
+		if kwd:
+			print(f"Cannot handle dependency {name} with {kwd}")
+			return Package.FailingDependency(name)
+
+		parser = DependencyParser(name)
+
+		try:
+			tree = parser.process()
+		except:
+			print(f"Failed to parse dependency expression: {name}")
+			return Package.FailingDependency(name)
+
+		return tree.build()
 
 	def sourceID(self):
 		if self.arch == 'src' or self.arch == 'nosrc':
@@ -969,3 +1405,5 @@ if __name__ == '__main__':
 		print("Version comparison seems to work as expected")
 	else:
 		print("Version comparison is not working as expected")
+
+	DependencyParser.test()

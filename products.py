@@ -104,7 +104,7 @@ class RepoService:
 class ProductCatalog:
 	def __init__(self, filename = "products.yaml", cacheLocation = None):
 		with open(filename) as f:
-			data = yaml.load(f)
+			data = yaml.full_load(f)
 
 		baseurl = data['baseurl']
 		if not baseurl.endswith('/'):
@@ -149,6 +149,9 @@ class ProductCatalog:
 		for prod in self._products:
 			result += prod.enumerate(**args)
 		return result
+
+	def enumerateLatest(self, **args):
+		return self.enumerate(version = self.versions[-1], **args)
 
 	def updateBackingStore(self, store):
 		for release in self.enumerate():

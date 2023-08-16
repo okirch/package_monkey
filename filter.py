@@ -397,7 +397,7 @@ class PackageFilter:
 		self.defaultFilterGroup = self.makeFilterGroup(self.PRIORITY_DEFAULT)
 
 		with open(filename) as f:
-			data = yaml.load(f)
+			data = yaml.full_load(f)
 
 		for gd in data['groups']:
 			group = self.makeGroup(gd['name'])

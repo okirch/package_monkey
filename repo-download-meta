@@ -90,6 +90,10 @@ for release in catalog.enumerate(version = '15-SP5', arch = 'x86_64'):
 	for pkg in product.packages.values():
 		packageMap.add(pkg, release)
 
+exit(0)
+
+# CRUFT THAT WILL GO ELSEWHERE BELOW
+
 classificationScheme = Classification.Scheme()
 packageFilter = PackageFilter(scheme = classificationScheme)
 unclassified = packageFilter.makeGroup("Unclassified")
@@ -129,28 +133,3 @@ for groupName in ("@Core", "@Kernel", "@UpdateStack"):
 if worker.problems:
 	print("The resolver flagged the following problems")
 	worker.problems.show()
-
-if False:
-	print("Checking group name issues")
-	for pi in productInfo.packages.values():
-		if len(pi.groups) > 1:
-			print(f"Package {pi.name} found in multiple groups: {pi.groups}")
-			continue
-
-		if pi.sawEmptyGroup:
-			if len(pi.groups) == 0:
-				print(f"Package {pi.name} used with empty group")
-			else:
-				print(f"Package {pi.name} used with empty group, then found in {pi.groups}")
-	print()
-
-if False:
-	print("Updates by rpm group")
-	for group in packageFilter.groups:
-		print(f"{group.name:20}: {group.matchCount}")
-
-		if group.expand:
-			for packageName in sorted(group.packageNames):
-				print(f"    - {packageName}")
-	print()
-

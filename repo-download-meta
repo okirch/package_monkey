@@ -64,7 +64,7 @@ class PackageMap(dict):
 groupUpdateCount = CountDict()
 productInfo = ProductStats()
 
-store = BackingStoreDB("productinfo.sql")
+store = BackingStoreDB("productinfo.db")
 
 catalog = ProductCatalog(cacheLocation = cache)
 catalog.updateBackingStore(store)

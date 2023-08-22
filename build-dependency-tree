@@ -6,13 +6,15 @@ from filter import PackageFilter, Classification
 from database import BackingStoreDB
 import sys
 
-store = BackingStoreDB("productinfo.sql")
+store = BackingStoreDB("productinfo.db")
 
 cache = CacheLocation("/work/projects/report/cache")
 catalog = ProductCatalog(cacheLocation = cache)
 catalog.updateBackingStore(store)
 
-packageSelector = PackageSelector()
+# Load the default package filter and labelling
+# We need this for package preferences
+packageFilter = PackageFilter()
 
 needToResolve = []
 numInspected = 0
@@ -47,6 +49,7 @@ resolver.declareConditional('python38-gobject', True)
 resolver.declareConditional('python39-gobject', True)
 
 worker = ResolverWorker(resolver)
+worker.setPackagePreferences(packageFilter.packagePreferences)
 alreadyResolved = set()
 
 print("=== About to resolve dependencies ===")
@@ -77,8 +80,11 @@ for pkg in needToResolve:
 
 			edges.add((pkg.backingStoreId, target.backingStoreId, dep.backingStoreId))
 
-print(" done.")
+if edges:
+	store.addEdgeSetToTree(edges)
+	del edges
 
+print(f"\r{counter} packages; lookup cache: {worker.formatCacheStats()} ... done.")
 print("==============")
 
 if worker.problems:

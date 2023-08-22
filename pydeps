@@ -16,7 +16,8 @@ from database import BackingStoreDB
 cache = CacheLocation("/work/projects/report/cache")
 
 print("Loading DB")
-store = BackingStoreDB("productinfo.sql")
+store = BackingStoreDB("productinfo.db")
+store.enableDependencyTreeLookups()
 print("Successfully loaded DB")
 print()
 
@@ -87,6 +88,10 @@ for pkg in needToResolve:
 			sys.stdout.flush()
 
 		for dep, target in worker.resolveDownward(pkg):
+			if target is None or dep is None:
+				print(f"BUG: resolveDownward of {pkg.fullname()} returns {dep}, {target}")
+				continue
+
 			if target not in alreadyResolved:
 				# print(f"{pkg.fullname()} -> {target.name}")
 				queue.append(target)

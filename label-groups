@@ -1,0 +1,117 @@
+#!/usr/bin/python3
+
+forceRefresh = True
+
+from repos import RepoDict, UrlCacheStrategy
+from products import ProductCatalog, CacheLocation
+from packages import Product, Resolver, ResolverWorker, PackageSelector
+from filter import PackageFilter, Classification
+from database import BackingStoreDB
+
+cache = CacheLocation("/work/projects/report/cache")
+
+class PackageMap(dict):
+	def add(self, pkg, product):
+		self[pkg.name] = (pkg, product)
+
+	def enumerate(self):
+		return iter(self.values())
+
+
+store = BackingStoreDB("productinfo.db")
+store.enableDependencyTreeLookups()
+
+catalog = ProductCatalog(cacheLocation = cache)
+catalog.updateBackingStore(store)
+
+classificationScheme = Classification.Scheme()
+packageFilter = PackageFilter(scheme = classificationScheme)
+unclassified = packageFilter.makeGroup("Unclassified")
+
+packageSelector = PackageSelector()
+
+resolver = Resolver(backingStore = store)
+for pinfo in store.enumerateLatestPackages():
+	pkg = store.retrievePackage(pinfo)
+	# print(len(pkg.resolvedRequires))
+
+	if False:
+		if "-32bit" not in pkg.name and not pkg.resolvedRequires:
+			print(f"{pkg.fullname()} doesn't require anything")
+
+	verdict = packageFilter.apply(pkg, pinfo.product)
+	if verdict is not None:
+		verdict.labelPackage(pkg)
+		group = verdict.group
+	else:
+		group = unclassified
+
+def flattenLabelTree(label, alreadySeen):
+	alreadySeen.add(label)
+	result = []
+
+	for child in label.uses:
+		if child not in alreadySeen:
+			result += flattenLabelTree(child, alreadySeen)
+
+	result.append(label)
+	return result
+
+def flattenGroup(groupName, alreadySeen):
+	group = packageFilter.makeGroup(groupName)
+	label = group.label
+
+	assert(label not in alreadySeen)
+	return flattenLabelTree(label, alreadySeen)
+
+labelSequence = []
+alreadySeen = set()
+for groupName in ("@Core", "@HostCore", "@Kernel", "@UpdateStack"):
+	labelSequence += flattenGroup(groupName, alreadySeen)
+
+worker = ResolverWorker(resolver)
+
+class Inventory(dict):
+	def update(self, packages):
+		for pkg in packages:
+			self.add(pkg)
+
+	def add(self, pkg):
+		assert(pkg.backingStoreId)
+
+		id = pkg.backingStoreId
+		conflict = self.get(id)
+		if conflict is not None and conflict is not pkg:
+			print(f"Duplicate package objects for pkgId {id}")
+			print(f"  - {pkg} {pkg.fullname()}")
+			print(f"  - {conflict} {conflict.fullname()}")
+		else:
+			self[id] = pkg
+
+inventory = Inventory()
+
+closure = {}
+for label in labelSequence:
+	group = packageFilter.makeGroup(label.name)
+
+	print(f"Classify packages belonging to {group.label}")
+	classifier = Classification.DownwardClosure(worker, label)
+	classifier.classify(group.packages)
+
+	closure[label.name] = classifier.result
+
+	inventory.update(group.packages)
+	inventory.update(classifier.result)
+
+for label in labelSequence:
+	print()
+	print(label)
+
+	for pkg in sorted(closure[label.name], key = lambda p: p.name):
+		print(f"  {pkg.name} id={pkg.backingStoreId}")
+
+if worker.problems:
+	print()
+	print("==================================================================")
+	print("The resolver flagged the following problems")
+	worker.problems.show()

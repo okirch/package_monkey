@@ -1,3 +1,46 @@
+preferences:
+ - over:
+    - "*-32bit"
+    - "*-32bit-*"
+ - prefer: typelib-1_0-Gtk-4_0
+   over:
+    - typelib-1_0-Gtk-3_0
+    - typelib-1_0-Gtk-2_0
+ - prefer: kernel-default
+   over: kernel-default-base
+ - prefer: libopenssl-3-devel
+   over: libopenssl-1_1-devel
+ - prefer: icewm-lite
+   over: icewm-default
+ - prefer: java-17-openjdk-headless
+   over: java-11-openjdk-headless
+ - prefer: java-17-openjdk
+   over: java-11-openjdk
+ - prefer: cracklib-dict-small
+   over: cracklib-dict-full
+ - prefer: chrony-pool-suse
+   over: chrony-pool-empty
+ - prefer: libjpeg8-devel
+   over: libjpeg62-devel
+ - prefer: dbus-1
+   over: dbus-1-x11
+ - prefer: iputils
+   over: wicked
+ - prefer: shadow
+   over: busybox
+ - prefer: cracklib-dict-small
+   over: cracklib-dict-full
+ - prefer: ocaml-compiler-libs-devel
+   over: ocaml-compiler-libs
+ - prefer: mvapich2-psm2
+   over: mvapich2-psm
+ - prefer: mvapich2-psm
+   over:
+    - mpich
+    - mpich-ofi
+# libOpenIPMI0 and OpenIPMI
+# icu.691-devel and libicu-devel
+
 groups:
  - name: "@32bit"
    priority: 0
@@ -37,7 +80,6 @@ groups:
    packages:
     - postgresql*
     - unixODBC
-    - sqlite3
     - rsyslog-module-mysql
     - rsyslog-module-pgsql
     - libmariadb3
@@ -103,28 +145,50 @@ groups:
     - dbus-1-glib
     - polkit-gnome*
 
+ - name: "@CryptoLibraries"
+   explicitClosure:
+    - "@Core"
+    - "@CoreLibraries"
+   binaries:
+    - openssl
+    - openssl-1_1
+    - mozilla-nss
+    - p11-kit-nss-trust
+    - crypto-policies
+    - libgobject-*
+    - libtasn1
+
  - name: "@CoreLibraries"
    explicitClosure:
     - "@Core"
+   binaries:
+    - perl
+    - perl-base
    packages:
+    - cracklib
+    - cracklib-dict-small
     - glibc
-    - libgcc_s1
-    - libstdc++6
-    - libcom_err2
-    - libext2fs2
-    - libgpgme11
-    - libreiserfscore0
-    - libpci3
-    - libdevmapper*
-    - libopenssl1_1
-    - libldap-*
-    - libsasl2-*
-    - libcrack2
     - libaudit1
-    - libgobject-*
-    - libglib-*
-    - libtasn1
+    - libcom_err2
+    - libcrack2
+    - libcurl4
+    - libdevmapper*
+    - libext2fs2
     - libfl2
+    - libgcc_s1
+    - libglib-*
+    - libgpgme11
+    - libldap-*
+    - libnl3-200
+    - libnl-config
+    - libopenssl1_1
+    - libpci3
+    - libreiserfscore0
+    - libsasl2-*
+    - libssh4
+    - libssh-config
+    - libstdc++6
+    - libsqlite3*
 
 #   - libgio-*
 
@@ -133,8 +197,7 @@ groups:
     - "@Perl/Core"
    requires:
     - "@CoreLibraries"
-   binaries:
-    - openssl
+    - "@CryptoLibraries"
    packages:
     - aaa_base
     - acct
@@ -151,13 +214,13 @@ groups:
     - btrfsprogs
     - bzip2
     - ca-certificates
+    - ca-certificates-mozilla
     - coreutils
     - cpio
-    - cracklib-dict-small
     - cronie
     - cryptsetup
     - dbus-1
-    - dbus-1-x11
+#   - dbus-1-x11
     - delayacct-utils
     - diffutils
     - fdupes
@@ -194,6 +257,7 @@ groups:
     - sharutils
     - sle-*-release
     - snapper
+    - sqlite3
     - sudo
     - suse-build-key
     - sysconfig
@@ -212,6 +276,20 @@ groups:
     - util-linux*
     - which
     - zsh
+    - curl
+    - wget
+    - mailx
+    - openssh-clients
+    - openssh-common
+    - mkisofs
+
+ - name: "@HostCore"
+   requires:
+    - "@Core"
+    - "@Perl/Core"
+   packages:
+    - iputils
+    - rpm-ndb
 
  - name: "@UpdateStack"
    requires:
@@ -255,7 +333,6 @@ groups:
     - cracklib*
     - dracut-fips
     - dracut-ima
-    - fipscheck
     - gpgme
     - hmaccalc
     - ibmswtpm2
@@ -277,6 +354,7 @@ groups:
     - yubico-*
     - yubikey-*
     - pam_yubico
+    - pam_krb5
 
  - name: "@Host/Storage"
    packages:
@@ -287,7 +365,6 @@ groups:
     - cifs-utils
     - device-mapper
     - dos2unix
-    - dosfstools
     - dump
     - duperemove
     - e2fsprogs
@@ -399,6 +476,8 @@ groups:
     - alsa
     - alsa-utils
     - alsa-plugins
+    - dosfstools
+    - fipscheck
 
  - name: "@Kernel/Debugging"
    packages:
@@ -408,10 +487,7 @@ groups:
    requires:
     - "@Core"
    packages:
-    - curl
-    - wget
-    - mailx
-    - openssh
+    - none
 
  - name: "@Network/Host"
    requires:
@@ -455,7 +531,6 @@ groups:
     - ipsec-tools
     - ipset
     - iptables
-    - iputils
     - ipvsadm
 
  - name: HPC
@@ -492,6 +567,7 @@ groups:
     - dovecot*
     - postfix*
     - cyrus-sasl*
+    - pam_saslauthd
     - krb5-*
     - openldap
     - vsftpd
@@ -543,6 +619,7 @@ groups:
    packages:
     - python3
     - python3-base
+    - python3-future
 
  - name: "@Ruby"
    requires:
@@ -554,6 +631,15 @@ groups:
     - ruby2.5
     - ruby-*
     - rubygem-*
+
+ - name: "@Ruby/Stuff"
+   requires:
+    - "@Ruby"
+    - "@Boot"
+    - "@UpdateStack"
+   packages:
+    - rubygem-libguestfs
+    - ruby-solv
 
  - name: "@Perl"
    requires:
@@ -567,7 +653,7 @@ groups:
    requires:
     - "@Core"
    packages:
-    - perl-base
+    - perl-Bootloader
 
  - name: "@Java"
    rpmGroups:

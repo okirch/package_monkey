@@ -622,6 +622,14 @@ class DependencyTable(UniqueTable):
 			release text
 		"""
 
+	class Cache(dict):
+		def put(self, id, dep):
+			self[id] = dep
+
+	def __init__(self, *args):
+		super().__init__(*args)
+		self._cache = self.Cache()
+
 	def addDependency(self, dep, pkgId):
 		d = dict()
 		d['pkgId'] = pkgId
@@ -644,26 +652,35 @@ class DependencyTable(UniqueTable):
 		for dep in depList:
 			self.addDependency(dep, pkgId)
 
-	def retrieveDependenciesById(self, pkgId):
+	def retrieveDependencyById(self, id):
+		d = self.fetchOne(id = id)
+		if d is None:
+			return None
+		return self.constructDependency(d)
+
+	def retrieveDependenciesByPkgId(self, pkgId):
 		result = []
 
-		fields = ('name', 'op', 'epoch', 'version', 'release',)
-		for d in self.fetchAll(fields = fields, pkgId = pkgId):
+		for d in self.fetchAll(pkgId = pkgId):
 			result.append(self.constructDependency(d))
 		return result
 
-	def retrieveDependenciesByName(self, name):
+	def retrieveDependenciesByPkgName(self, name):
 		result = []
 
-		fields = ('name', 'op', 'epoch', 'version', 'release', 'pkgId',)
-		for d in self.fetchAll(fields = fields, name = name):
+		for d in self.fetchAll(name = name):
 			result.append((self.constructDependency(d), d['pkgId']))
 		return result
 
-	@classmethod
-	def constructDependency(klass, d):
+	def constructDependency(self, d):
+		id = d['id']
+
+		dep = self._cache.get(id)
+		if dep is not None:
+			return dep
+
 		# translate the fields
-		args = {'name' : d['name']}
+		args = {'name' : d['name'], 'backingStoreId' : id}
 
 		op = d['op']
 		if op is not None:
@@ -674,7 +691,9 @@ class DependencyTable(UniqueTable):
 			# args['epoch'] = d['epoch']
 
 		# print(args)
-		return Package.createDependency(**args)
+		dep = Package.createDependency(**args)
+		self._cache.put(id, dep)
+		return dep
 
 class RequiresTable(DependencyTable):
 	NAME = "requires"
@@ -693,6 +712,18 @@ class TreeTable(UniqueTable):
 
 	def addEdge(self, **kwargs):
 		self.insert(**kwargs)
+
+	def retrieveRequired(self, pkgId):
+		c = self.selectFrom(fields = ('dependencyId', 'requiredPkgId'), selector = {'requiringPkgId':  pkgId})
+		if c is None:
+			return None
+
+		result = []
+		for row in c.fetchall():
+			result.append((row[0], row[1]))
+
+		return result
+		return self.fetchAll(fields = ('requiredPkgId', 'dependencyId'), requiringPkgId = pkgId)
 
 class PackageCache(dict):
 	def put(self, pkg):
@@ -753,7 +784,7 @@ class BackingStoreDB(DB):
 		self.packageCache = PackageCache()
 		self.providesCache = ProvidesCache()
 
-		self._allowDepTreeLookups = True
+		self._allowDepTreeLookups = False
 
 	# Complete product cache entry by attaching our in-memory release object to it
 	# This allows us to create ProductInfo objects with a correct pinfo.product pointer
@@ -793,7 +824,8 @@ class BackingStoreDB(DB):
 		self.requires.addDependencies(obj.requires, obj.backingStoreId)
 		self.provides.addDependencies(obj.provides, obj.backingStoreId)
 
-		self.latest.update(obj)
+		if obj.arch != 'src':
+			self.latest.update(obj)
 		return obj.backingStoreId
 
 	def addPackageObjectList(self, objList):
@@ -834,20 +866,68 @@ class BackingStoreDB(DB):
 		if d is None:
 			return None
 
+		return self.constructPackage(pinfo.backingStoreId, d, pinfo.product)
+
+	def constructPackage(self, pkgId, d, product = None):
 		src = self.retrieveSourcePackage(d)
 
+		assert(d['id'] == pkgId)
+
+		# As we're recursing below in the case of self._allowDepTreeLookups,
+		# it can happen that we've already created an object for this ID.
+		# Return that if it exists.
+		pkg = self.packageCache.get(pkgId)
+		if pkg is not None:
+			return pkg
+
 		pkg = self.packages.constructObject(Package, d)
+		self.packageCache.put(pkg)
+
 		pkg.sourcePackage = src
-		pkg.product = pinfo.product
+
+		if product is None:
+			product = self.getCachedProductInfo(d.get('productId'))
+		pkg.product = product
 
 		# now do the files
-		pkg.files = self.retrievePackageFiles(pinfo.backingStoreId)
+		pkg.files = self.retrievePackageFiles(pkgId)
 
 		# and dependencies
-		pkg.requires = self.requires.retrieveDependenciesById(pinfo.backingStoreId)
-		pkg.provides = self.provides.retrieveDependenciesById(pinfo.backingStoreId)
+		pkg.requires = self.requires.retrieveDependenciesByPkgId(pkgId)
+		pkg.provides = self.provides.retrieveDependenciesByPkgId(pkgId)
 
-		self.packageCache.put(pkg)
+		if self._allowDepTreeLookups:
+			resolved = set()
+
+			# this returns a list of (dependencyId, packageId) pairs
+			rawRequired = self.tree.retrieveRequired(pkgId)
+
+			missing = set()
+			found = dict()
+
+			for depId, targetId in rawRequired:
+				target = self.packageCache.get(targetId)
+				if target is None:
+					missing.add(targetId)
+
+			if missing:
+				for d in self.packages.selectMultiple([], 'id', list(missing)):
+					t = self.constructPackage(d['id'], d)
+					assert(t)
+
+			for depId, targetId in rawRequired:
+				# workaround
+				if depId is None:
+					continue
+
+				target = self.packageCache.get(targetId)
+				dep = self.requires.retrieveDependencyById(depId)
+				assert(dep)
+
+				resolved.add((dep, target))
+
+			pkg.resolvedRequires = list(resolved)
+
 		return pkg
 
 	def retrieveSourcePackage(self, d):
@@ -901,15 +981,21 @@ class BackingStoreDB(DB):
 			backingStoreId = d['id'],
 			productId = productId)
 
-		if productId is not None:
-			entry = self.productCache.entryById(productId)
-			if entry is not None:
-				pinfo.product = entry.object
-
+		pinfo.product = self.getCachedProductInfo(productId)
 		if pinfo.product is None:
 			self.packageInfoLacksProduct(pinfo)
 
 		return pinfo
+
+	def getCachedProductInfo(self, productId):
+		if productId is None:
+			return None
+
+		entry = self.productCache.entryById(productId)
+		if entry is not None:
+			return entry.object
+
+		return None
 
 	def packageInfoLacksProduct(self, pinfo):
 		productId = pinfo.productId
@@ -940,7 +1026,7 @@ class BackingStoreDB(DB):
 		result = []
 
 		# This list contains pairs of PackageDependency, pkgId
-		providesList = self.provides.retrieveDependenciesByName(name)
+		providesList = self.provides.retrieveDependenciesByPkgName(name)
 
 		pkgIdList = list(pair[1] for pair in providesList)
 
@@ -968,6 +1054,9 @@ class BackingStoreDB(DB):
 		self.providesCache.put(name, result)
 
 		return result
+
+	def enableDependencyTreeLookups(self):
+		self._allowDepTreeLookups = True
 
 	def disableDependencyTreeLookups(self):
 		self._allowDepTreeLookups = False

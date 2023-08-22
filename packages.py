@@ -261,18 +261,23 @@ class ResolverWorker:
 	class UnexpectedDependency(Problem):
 		def __init__(self, *args):
 			super().__init__(*args)
-			self.reasons = []
+			self.conflicts = []
 
-		def add(self, reason):
-			self.reasons.append(reason)
+		def add(self, conflict):
+			self.conflicts.append(conflict)
 
 		def show(self):
 			print(f"Unexpected dependency {self.desc}:")
-			for reason in self.reasons:
+			for (wantedReason, precedingReason) in self.conflicts:
 				indent = "   "
-				for why in reason.chain():
-					print(f"{indent}{why}")
-					indent += "  "
+				self.showProof(wantedReason)
+				print("   The package was labeled due to:")
+				self.showProof(precedingReason, indent = "    ")
+
+		def showProof(self, reason, indent = "  "):
+			for why in reason.chain():
+				print(f"{indent}{why}")
+				indent += "  "
 
 	class UnresolvedDependency(Problem):
 		def __init__(self, *args):
@@ -316,7 +321,10 @@ class ResolverWorker:
 			return result
 
 		def formatStats(self):
-			ratio = int(100 * self.numHits / self.numLookups)
+			if self.numLookups != 0:
+				ratio = int(100 * self.numHits / self.numLookups)
+			else:
+				ratio = 0
 			return f"{self.numEntries} entries; {self.numLookups} lookups ({ratio}% hit rate)";
 
 	class Problems:
@@ -324,13 +332,13 @@ class ResolverWorker:
 			self._unexpected = {}
 			self._unresolved = {}
 
-		def addUnexpectedDependency(self, fm, to, reason):
-			key = f"{fm}/{to}"
+		def addUnexpectedDependency(self, fromLabel, fromReason, toLabel, conflictingReason):
+			key = f"{fromLabel}/{toLabel}"
 			ud = self._unexpected.get(key)
 			if ud is None:
-				ud = ResolverWorker.UnexpectedDependency(f"{fm} -> {to}")
+				ud = ResolverWorker.UnexpectedDependency(f"{fromLabel} -> {toLabel}")
 				self._unexpected[key] = ud
-			ud.add(reason)
+			ud.add((fromReason, conflictingReason))
 
 		def addUnableToResolve(self, pkg, dep):
 			# print(f"{pkg.fullname()}: cannot resolve dependency {dep}")
@@ -358,8 +366,12 @@ class ResolverWorker:
 		self._process = processfn
 		self._problems = self.Problems()
 		self._cache = self.Cache()
+		self._preferences = None
 
 		self.debugMsg = debugDependency
+
+	def setPackagePreferences(self, preferences):
+		self._preferences = preferences
 
 	def add(self, pkg):
 		if not pkg in self._packages:
@@ -383,7 +395,33 @@ class ResolverWorker:
 	def formatCacheStats(self):
 		return self._cache.formatStats()
 
-	def selectPreferredCandidate(self, candidates):
+	def selectPreferredCandidate(self, candidates, preferProduct = None):
+		def preferCandidate(cand):
+			if best is None:
+				return True
+
+			if cand.name == best.name:
+				return Versiontools.comparePackages(best, cand) < 0
+
+			if self._preferences:
+				r = self._preferences.compare(cand.name, best.name)
+				# print(f"Prefer {cand.name} over {best.name}? result={r}")
+				if r > 0:
+					return True
+				elif r < 0:
+					return False
+				# We haven't recorded a preference one way or the other
+
+			if preferProduct:
+				# print(f"Comparing best {best.name}({best.product}) vs cand {cand.name}({cand.product})")
+				if best.product is preferProduct and cand.product is not preferProduct:
+					return False
+				if best.product is not preferProduct and cand.product is preferProduct:
+					return True
+
+			print(f"Ambiguous resolution: {cand.name} and {best.name}")
+			return False
+
 		secondBest = None
 
 		best = None
@@ -393,9 +431,7 @@ class ResolverWorker:
 
 			if cand is Package.ExpandedToNothing:
 				secondBest = cand
-				continue
-
-			if best is None or Versiontools.comparePackages(best, cand) < 0:
+			elif preferCandidate(cand):
 				best = cand
 
 		if best is not None:
@@ -403,10 +439,10 @@ class ResolverWorker:
 
 		return best or secondBest
 
-	def resolveRequires(self, req):
+	def resolveRequires(self, req, preferProduct = None):
 		try:
 			candidates = req.enumerateCandidateSolutions(self._resolver)
-			found = self.selectPreferredCandidate(candidates)
+			found = self.selectPreferredCandidate(candidates, preferProduct)
 		except Exception as e:
 			print(f"Caught exception while resolving {req}: {e}")
 			found = None
@@ -414,9 +450,17 @@ class ResolverWorker:
 
 	def resolveDownward(self, pkg):
 		result = []
+
+		if pkg.resolvedRequires is not None:
+			return pkg.resolvedRequires
+
 		if not pkg.requires:
 			self.debugMsg(f"{pkg.fullname()} has no dependencies")
+			pkg.resolvedRequires = result
 			return result
+
+		# When resolving a depedency, always prefer those from the same module.
+		preferProduct = pkg.product
 
 		for dep in pkg.requires:
 			# self.debugMsg(f"Inspecting {pkg.fullname()} req {dep}")
@@ -424,7 +468,7 @@ class ResolverWorker:
 
 			if found is None:
 				# No cache entry found, take the slow path and resolve it
-				found = self.resolveRequires(dep)
+				found = self.resolveRequires(dep, preferProduct)
 				# ... and stick the result into the cache
 				self._cache.put(dep, found)
 			elif found is self._cache.NEGATIVE_ENTRY:
@@ -437,6 +481,7 @@ class ResolverWorker:
 			elif found is not Package.ExpandedToNothing:
 				result.append((dep, found))
 
+		pkg.resolvedRequires = result
 		return result
 
 
@@ -589,6 +634,18 @@ class DependencyParser:
 		CHARCLASS_OPERATOR = ('<', '>', '=', '!')
 		CHARCLASS_WORDBREAK = CHARCLASS_OPERATOR
 
+		OPERATOR_IDENTIFIERS = ('EQ', 'NE', 'LT', 'GT', 'LE', 'GE')
+		OPERATOR_TABLE = {
+			'=':  'EQ',
+			'==': 'EQ',
+			'<=': 'LE',
+			'>=': 'GE',
+			'<':  'GT',
+			'>':  'LT',
+			'!=': 'NE',
+		}
+
+
 		def __init__(self, string):
 			self.value = list(string)
 			self.pos = 0
@@ -625,6 +682,8 @@ class DependencyParser:
 					while cc in self.CHARCLASS_OPERATOR:
 						result += cc
 						cc = self.getc()
+					# translate operator "<=" to "LE" and so on
+					result = self.OPERATOR_TABLE[result]
 					return (self.OPERATOR, result)
 
 				if cc == '(':
@@ -651,27 +710,26 @@ class DependencyParser:
 
 				if not result:
 					break
+
+				if result in self.OPERATOR_IDENTIFIERS:
+					return (self.OPERATOR, result)
+
 				return (self.IDENTIFIER, result)
 
 			return (self.EOL, result)
+
+		def symbolicToStringOperator(self, op):
+			return self.OPERATOR_TABLE[op]
 
 	class ProcessedExpression(object):
 		pass
 
 	class DependencySingleton(ProcessedExpression):
-		OPTABLE = {
-			'=':  'EQ',
-			'==': 'EQ',
-			'<=': 'LE',
-			'>=': 'GE',
-			'<':  'GT',
-			'>':  'LT',
-			'!=': 'NE',
-		}
 
-		def __init__(self, name, op = None, version = None):
+		# The flags argument is a symbolic operator like EQ, LE etc
+		def __init__(self, name, flags = None, version = None):
 			self.name = name
-			self.op = op
+			self.flags = flags
 
 			release = None
 			if version and '-' in version:
@@ -679,11 +737,6 @@ class DependencyParser:
 
 			self.version = version
 			self.release = release
-
-			if op is None:
-				self.flags = None
-			else:
-				self.flags = self.OPTABLE[op]
 
 		def print(self, ws = ""):
 			if self.op:
@@ -876,6 +929,7 @@ class DependencyParser:
 			"(foo or alternative(foo))",
 			"((foo or bar))",
 			"salt-transactional-update = 3006.0-150500.4.12.2 if read-only-root-fs",
+			"(systemd GE 238 if systemd)",
 		)
 
 		resolver = Resolver()
@@ -898,8 +952,13 @@ class Package:
 
 	ExpandedToNothing = Nothing()
 
-	class SingleStringDependency(object):
+	class BaseDependency(object):
+		def __init__(self):
+			self.backingStoreId = None
+
+	class SingleStringDependency(BaseDependency):
 		def __init__(self, name):
+			super().__init__()
 			self.name = name
 
 		def __str__(self):
@@ -917,7 +976,7 @@ class Package:
 		def enumerateCandidateSolutions(self, resolver):
 			return []
 
-	class VersionedPackageDependency:
+	class VersionedPackageDependency(BaseDependency):
 		compare = {
 			"EQ" : lambda a, b: (int(a) == int(b)),
 			"NE" : lambda a, b: (int(a) != int(b)),
@@ -928,6 +987,8 @@ class Package:
 		}
 
 		def __init__(self, name,  flags = None, epoch = None, ver = None, rel = None, pre = None):
+			super().__init__()
+
 			self.name = name
 			self.flags = flags
 			self.parsedVersion = Versiontools.ParsedVersion(ver, rel, epoch)
@@ -949,6 +1010,10 @@ class Package:
 		def __str__(self):
 			return f"({self.inner} if {self.condition})";
 
+		@property
+		def name(self):
+			return str(self)
+
 		def enumerateCandidateSolutions(self, resolver):
 			if isinstance(self.condition, Package.UnversionedPackageDependency) and \
 			   resolver.checkConditional(self.condition.name):
@@ -965,6 +1030,10 @@ class Package:
 
 		def __str__(self):
 			return "(" + " or ".join(str(_) for _ in self.children) + ")"
+
+		@property
+		def name(self):
+			return str(self)
 
 		def enumerateCandidateSolutions(self, resolver):
 			result = []
@@ -1035,6 +1104,7 @@ class Package:
 		self.recommends = []
 		self.suggests = []
 		self.conflicts = []
+		self.resolvedRequires = None
 
 		self.files = []
 
@@ -1053,17 +1123,20 @@ class Package:
 		return name, version, release, arch
 
 	@staticmethod
-	def createDependency(name, **kwd):
+	def createDependency(name, backingStoreId = None, **kwd):
 		assert(name is not None)
 
 		if name.startswith('(') and name.endswith(')'):
-			return Package.processComplexDependency(name, **kwd)
+			dep = Package.processComplexDependency(name, **kwd)
+		elif name.startswith("/"):
+			dep = Package.FileDependency(name)
+		elif 'flags' not in kwd:
+			dep = Package.UnversionedPackageDependency(name)
+		else:
+			dep = Package.VersionedPackageDependency(name, **kwd)
 
-		if name.startswith("/"):
-			return Package.FileDependency(name)
-		if 'flags' not in kwd:
-			return Package.UnversionedPackageDependency(name)
-		return Package.VersionedPackageDependency(name, **kwd)
+		dep.backingStoreId = backingStoreId
+		return dep
 
 	@staticmethod
 	def createConditionalDependency(condition, inner):
@@ -1075,6 +1148,9 @@ class Package:
 
 	@staticmethod
 	def processComplexDependency(name, **kwd):
+		if 'pre' in kwd:
+			del kwd['pre']
+
 		if kwd:
 			print(f"Cannot handle dependency {name} with {kwd}")
 			return Package.FailingDependency(name)
@@ -1083,8 +1159,9 @@ class Package:
 
 		try:
 			tree = parser.process()
-		except:
+		except Exception as e:
 			print(f"Failed to parse dependency expression: {name}")
+			print(f"  -> {e}")
 			return Package.FailingDependency(name)
 
 		return tree.build()

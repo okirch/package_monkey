@@ -102,7 +102,7 @@ class RepoService:
 		return collection.getRepoURLs(obsname, version, arch)
 
 class ProductCatalog:
-	def __init__(self, filename = "products.yaml", cacheLocation = None):
+	def __init__(self, filename = "sle15-repos.yaml", cacheLocation = None):
 		with open(filename) as f:
 			data = yaml.full_load(f)
 

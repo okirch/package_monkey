@@ -268,11 +268,13 @@ class ResolverWorker:
 
 		def show(self):
 			print(f"Unexpected dependency {self.desc}:")
-			for (wantedReason, precedingReason) in self.conflicts:
+			for (wantedReason, badPackage) in self.conflicts:
+				origin = wantedReason.originPackage
+				print(f"   {origin.fullname()} -> {badPackage.fullname()}")
 				indent = "   "
-				self.showProof(wantedReason)
-				print("   The package was labeled due to:")
-				self.showProof(precedingReason, indent = "    ")
+				self.showProof(wantedReason, indent = "      ")
+				print(f"      Package {badPackage.fullname()} was labeled as {badPackage.label} due to:")
+				self.showProof(badPackage.labelReason, indent = "         ")
 
 		def showProof(self, reason, indent = "  "):
 			for why in reason.chain():
@@ -332,13 +334,15 @@ class ResolverWorker:
 			self._unexpected = {}
 			self._unresolved = {}
 
-		def addUnexpectedDependency(self, fromLabel, fromReason, toLabel, conflictingReason):
+		def addUnexpectedDependency(self, fromLabel, fromReason, toPackage):
+			toLabel = toPackage.label.name
+
 			key = f"{fromLabel}/{toLabel}"
 			ud = self._unexpected.get(key)
 			if ud is None:
 				ud = ResolverWorker.UnexpectedDependency(f"{fromLabel} -> {toLabel}")
 				self._unexpected[key] = ud
-			ud.add((fromReason, conflictingReason))
+			ud.add((fromReason, toPackage))
 
 		def addUnableToResolve(self, pkg, dep):
 			# print(f"{pkg.fullname()}: cannot resolve dependency {dep}")

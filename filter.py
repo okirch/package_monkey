@@ -54,6 +54,17 @@ class Classification:
 		def __init__(self, pkg):
 			self.package = pkg
 
+		def reasonChain(self, package):
+			if package is None or package.labelReason is None:
+				result = ["<divine intervention>"]
+			else:
+				result = package.labelReason.chain()
+			return result + [self]
+
+		@property
+		def originPackage(self):
+			return self.package
+
 	class ReasonFilter(Reason):
 		def __init__(self, pkg, filterDesc):
 			super().__init__(pkg)
@@ -80,15 +91,29 @@ class Classification:
 			return 'dependency'
 
 		def chain(self):
-			parent = self.dependant
-			if parent is None or parent.labelReason is None:
-				result = ["<divine intervention>"]
-			else:
-				result = parent.labelReason.chain()
-			return result + [self]
+			return self.reasonChain(self.dependant)
+
+		@property
+		def originPackage(self):
+			return self.dependant.labelReason.originPackage
 
 		def __str__(self):
 			return f"{self.package.fullname()} required by {self.dependant.fullname()} via {self.req}"
+
+	class ReasonSourceClosure(Reason):
+		def __init__(self, pkg, sibling):
+			super().__init__(pkg)
+			self.sibling = sibling
+
+		@property
+		def type(self):
+			return 'source'
+
+		def chain(self):
+			return self.reasonChain(self.sibling)
+
+		def __str__(self):
+			return f"{self.package.fullname()} built from the same source as {self.sibling.fullname()}"
 
 	class Classifier(object):
 		def __init__(self, worker):
@@ -98,7 +123,7 @@ class Classification:
 			self.worker.problems.addUnableToResolve(pkg, dep)
 
 		def handleUnexpectedDependency(self, pkg, reason):
-			self.worker.problems.addUnexpectedDependency(self.label.name, reason, pkg.label.name, pkg.labelReason)
+			self.worker.problems.addUnexpectedDependency(self.label.name, reason, pkg)
 
 		def debugMsg(self, msg):
 			self.worker.debugMsg(msg)

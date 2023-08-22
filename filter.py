@@ -131,6 +131,18 @@ class Classification:
 			# print(f"Label {self.label}: classify {edge}")
 			pkg.label = self.label
 			pkg.labelReason = edge
+
+			src = pkg.sourcePackage
+			if src is None or src.label is self.label:
+				pass
+			elif src.label is None:
+				src.label = self.label
+				src.labelReason = pkg.name
+			else:
+				print(f"Source with divergent labels {src.label} and {self.label}")
+				print(f"  labeled  {src.label} due to {src.labelReason}")
+				print(f"  should also be labeled {self.label} because of {pkg.name}")
+
 			self.result.add(pkg)
 			return True
 

@@ -1194,6 +1194,12 @@ class Package:
 		if pkg:
 			self.sourcePackageHash = pkg.pkgid
 
+	@property
+	def sourceBackingStoreId(self):
+		if self.sourcePackage is None:
+			return None
+		return self.sourcePackage.backingStoreId
+
 	def recordChanges(self, verdict, changes = None):
 		global totalChanges, totalSuseChanges
 

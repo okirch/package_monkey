@@ -20,6 +20,7 @@ class PackageMap(dict):
 
 store = BackingStoreDB("productinfo.db")
 store.enableDependencyTreeLookups()
+store.enableSourceLookups()
 
 catalog = ProductCatalog(cacheLocation = cache)
 catalog.updateBackingStore(store)

@@ -16,6 +16,8 @@ preferences:
    over: java-11-openjdk-headless
  - prefer: java-17-openjdk
    over: java-11-openjdk
+ - prefer: java-17-openjdk
+   over: java-1_8_0-ibm
  - prefer: cracklib-dict-small
    over: cracklib-dict-full
  - prefer: chrony-pool-suse
@@ -32,6 +34,10 @@ preferences:
    over: cracklib-dict-full
  - prefer: ocaml-compiler-libs-devel
    over: ocaml-compiler-libs
+ - prefer: cross-nvptx-newlib12-devel
+   over: 
+    - cross-nvptx-newlib7-devel
+    - cross-nvptx-newlib11-devel
  - prefer: mvapich2-psm2
    over: mvapich2-psm
  - prefer: mvapich2-psm
@@ -54,6 +60,7 @@ groups:
     - "*-devel"
     - "*-devel-static"
     - "*-devel-extra"
+    - rpm-build
 
  - name: "@Development"
    packages:
@@ -237,6 +244,7 @@ groups:
     - hardlink
     - haveged
     - hostname
+    - info
     - kbd
     - krb5
     - less
@@ -620,6 +628,7 @@ groups:
     - python3
     - python3-base
     - python3-future
+    - libpython*
 
  - name: "@Ruby"
    requires:

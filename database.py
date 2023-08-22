@@ -468,6 +468,7 @@ class PackageTable(UniqueTable):
 				'group' : 'rpmGroup',
 				'sourceName' : 'sourceName',
 				'sourcePackageHash' : 'sourceHash',
+				'sourceBackingStoreId' : 'sourceId',
 				'productId' : 'productId',
 				},
 				ctorArgs = (
@@ -484,6 +485,7 @@ class PackageTable(UniqueTable):
 				arch text NOT NULL,
 				sourceName text,
 				sourceHash text,
+				sourceId integer,
 				repoPackageID text,
 				rpmGroup text NOT NULL
 			);"""
@@ -785,6 +787,7 @@ class BackingStoreDB(DB):
 		self.providesCache = ProvidesCache()
 
 		self._allowDepTreeLookups = False
+		self._requireSourceLookups = False
 
 	# Complete product cache entry by attaching our in-memory release object to it
 	# This allows us to create ProductInfo objects with a correct pinfo.product pointer
@@ -858,15 +861,18 @@ class BackingStoreDB(DB):
 		return self.retrieveMultiplePackageInfos(latestPkgIds)
 
 	def retrievePackage(self, pinfo):
-		pkg = self.packageCache.get(pinfo.backingStoreId)
+		return self.retrievePackageById(pinfo.backingStoreId, pinfo.product)
+
+	def retrievePackageById(self, pkgId, product = None):
+		pkg = self.packageCache.get(pkgId)
 		if pkg is not None:
 			return pkg
 
-		d = self.packages.fetchOne(id = pinfo.backingStoreId)
+		d = self.packages.fetchOne(id = pkgId)
 		if d is None:
 			return None
 
-		return self.constructPackage(pinfo.backingStoreId, d, pinfo.product)
+		return self.constructPackage(pkgId, d, product)
 
 	def constructPackage(self, pkgId, d, product = None):
 		src = self.retrieveSourcePackage(d)
@@ -927,6 +933,11 @@ class BackingStoreDB(DB):
 				resolved.add((dep, target))
 
 			pkg.resolvedRequires = list(resolved)
+
+		if self._requireSourceLookups and pkg.sourceBackingStoreId is not None:
+			src = self.retrievePackageById(pkg.sourceBackingStoreId, product)
+			if src:
+				pkg.setSourcePackage(src)
 
 		return pkg
 
@@ -1060,6 +1071,12 @@ class BackingStoreDB(DB):
 
 	def disableDependencyTreeLookups(self):
 		self._allowDepTreeLookups = False
+
+	def enableSourceLookups(self):
+		self._requireSourceLookups = True
+
+	def disableSourceLookups(self):
+		self._requireSourceLookups = False
 
 	def dependencyTreeExcise(self, pkgIdList):
 		self.tree.deleteMultiple('requiringPkgId', pkgIdList)

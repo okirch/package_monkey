@@ -101,9 +101,20 @@ class RepoService:
 
 		return collection.getRepoURLs(obsname, version, arch)
 
-class ProductCatalog:
-	def __init__(self, filename = "sle15-repos.yaml", cacheLocation = None):
-		with open(filename) as f:
+class ProductFamily:
+	def __init__(self, name, cacheLocation):
+		self.name = name
+		self.cacheLocation = cacheLocation
+		self.repoDef = None
+		self.database = None
+		self.loaded = False
+
+	def load(self):
+		if self.loaded:
+			return
+
+		assert(self.repoDef)
+		with open(self.repoDef) as f:
 			data = yaml.full_load(f)
 
 		baseurl = data['baseurl']
@@ -111,7 +122,7 @@ class ProductCatalog:
 			baseurl += '/'
 		self.baseurl = baseurl
 
-		self.service = RepoService(baseurl, cacheLocation)
+		self.service = RepoService(baseurl, self.cacheLocation)
 		if 'alternateurls' in data:
 			rewriter = self.service.urlRewriter
 			for altURL in data['alternateurls']:
@@ -137,6 +148,8 @@ class ProductCatalog:
 		for pd in data['products']:
 			self._products.append(Product.fromYAML(pd, self))
 
+		self.loaded = True
+
 	def expandRepositories(self, data):
 		urlpatterns = data.get('repositories')
 		if urlpatterns is None:
@@ -145,6 +158,9 @@ class ProductCatalog:
 		return RepoCollection(self.baseurl, urlpatterns)
 
 	def enumerate(self, **args):
+		if args.get('version') == 'latest':
+			args['version'] = self.versions[-1]
+
 		result = []
 		for prod in self._products:
 			result += prod.enumerate(**args)
@@ -154,10 +170,53 @@ class ProductCatalog:
 		return self.enumerate(version = self.versions[-1], **args)
 
 	def updateBackingStore(self, store):
+		# Ensure we've loaded the product versions etc
+		self.load()
+
 		for release in self.enumerate():
 			id = store.mapProduct(release)
 			assert(id is not None)
 			release.backingStoreId = id
+
+class ProductCatalog:
+	def __init__(self, filename = "catalog.yaml", cacheLocation = None):
+		with open(filename) as f:
+			data = yaml.full_load(f)
+
+		self.families = []
+		for fe in data['product_families']:
+			family = ProductFamily(fe['family'], cacheLocation)
+			family.repoDef = fe.get('repos')
+			family.database = fe.get('database')
+			self.families.append(family)
+
+	def enumerate(self, family = None, **args):
+		familyName = family
+
+		if familyName:
+			family = self.select(familyName)
+			if family is None:
+				raise Exception(f"Unknown product family {familyName}")
+			return family.enumerate(**args)
+
+		result = []
+		for family in self.families:
+			family.load()
+			result += family.enumerate(**args)
+		return result
+
+	def select(self, familyName):
+		familyName = familyName.casefold()
+		for family in self.families:
+			if family.name.casefold() == familyName:
+				family.load()
+				return family
+
+		return None
+
+	def updateBackingStore(self, store):
+		for family in self.families:
+			family.updateBackingStore(store)
 
 ##################################################################
 # We should rename this to something less generic, eg ProductVersion

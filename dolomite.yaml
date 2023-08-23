@@ -1,0 +1,15 @@
+baseurl: https://download.suse.de/ibs/SUSE:/
+alternateurls:
+ - http://download.suse.de/ibs/SUSE:/
+repositories:
+ - https://download.suse.de/ibs/SUSE:/ALP:/Products:/Dolomite:/$VERSION/images/repo/ALP-Dolomite-1.0-x86_64-Media1/
+ - https://download.suse.de/ibs/SUSE:/ALP:/Products:/Dolomite:/$VERSION/images/repo/ALP-Dolomite-1.0-x86_64-Media2/
+versions:
+ - name: "1.0"
+architectures:
+ - x86_64
+
+products:
+ - name:        Dolomite
+   nickname:    dolomite
+   obsname:     Dolomite

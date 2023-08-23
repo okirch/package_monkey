@@ -6,24 +6,14 @@ from repos import RepoDict, UrlCacheStrategy
 from products import ProductCatalog, CacheLocation
 from packages import Product, Resolver, ResolverWorker, PackageSelector
 from filter import PackageFilter, Classification
-from database import BackingStoreDB
+from options import Application
 
-cache = CacheLocation("/work/projects/report/cache")
+application = Application('build-dependency-tree')
+dummy = application.catalog
 
-class PackageMap(dict):
-	def add(self, pkg, product):
-		self[pkg.name] = (pkg, product)
-
-	def enumerate(self):
-		return iter(self.values())
-
-
-store = BackingStoreDB("productinfo.db")
+store = application.backingStore
 store.enableDependencyTreeLookups()
 store.enableSourceLookups()
-
-catalog = ProductCatalog(cacheLocation = cache)
-catalog.updateBackingStore(store)
 
 classificationScheme = Classification.Scheme()
 packageFilter = PackageFilter(scheme = classificationScheme)
@@ -109,7 +99,7 @@ for label in labelSequence:
 	print(label)
 
 	for pkg in sorted(closure[label.name], key = lambda p: p.name):
-		print(f"  {pkg.name} id={pkg.backingStoreId}")
+		print(f"  {pkg.name}")
 
 if worker.problems:
 	print()

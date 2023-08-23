@@ -5,12 +5,13 @@ from packages import Product, Resolver, ResolverWorker, PackageSelector
 from filter import PackageFilter, Classification
 from database import BackingStoreDB
 import sys
+from options import Application
 
-store = BackingStoreDB("productinfo.db")
+application = Application('build-dependency-tree')
 
-cache = CacheLocation("/work/projects/report/cache")
-catalog = ProductCatalog(cacheLocation = cache)
-catalog.updateBackingStore(store)
+dummy = application.catalog
+
+store = application.backingStore
 
 # Load the default package filter and labelling
 # We need this for package preferences
@@ -30,7 +31,7 @@ for pinfo in store.enumerateLatestPackages():
 
 	product = pkg.product
 	if product is None:
-		raise Exception(f"{pkg.fullname()} product id {pkg.productId} resolves to None")
+		raise Exception(f"{pkg.fullname()} cannot determine product (product id {pkg.productId}")
 
 	if pkg.arch not in ('src', 'nosrc'):
 		needToResolve.append(pkg)

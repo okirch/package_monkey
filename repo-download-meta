@@ -2,14 +2,16 @@
 
 forceRefresh = True
 
+import argparse
 from repos import RepoDict, UrlCacheStrategy
 from products import ProductCatalog, CacheLocation
 from packages import Product, Resolver, ResolverWorker
 from filter import PackageFilter, Classification
 from database import BackingStoreDB
 
-cache = CacheLocation("/work/projects/report/cache")
+from options import Application
 
+application = Application('repo-download')
 
 class CountDict:
 	def __init__(self):
@@ -64,13 +66,9 @@ class PackageMap(dict):
 groupUpdateCount = CountDict()
 productInfo = ProductStats()
 
-store = BackingStoreDB("productinfo.db")
-
-catalog = ProductCatalog(cacheLocation = cache)
-catalog.updateBackingStore(store)
 packageMap = PackageMap()
 
-for release in catalog.enumerate(version = '15-SP5', arch = 'x86_64'):
+for release in application.enumerateProducts():
 	print(f"Found {release}")
 
 	# FIXME: product = release.createEmptyProduct() instead
@@ -79,13 +77,13 @@ for release in catalog.enumerate(version = '15-SP5', arch = 'x86_64'):
 
 	# First pass: load relevant info from all repos
 	for repo in release.getRepositories():
-		repo.load(product)
+		repo.load(product, refresh = repo.REFRESH_MAYBE)
 
 	# Second pass: resolve package sources
 	for repo in release.getRepositories():
 		repo.resolveSourcePackages(product)
 
-	product.updateBackingStore(store)
+	product.updateBackingStore(application.backingStore)
 
 	for pkg in product.packages.values():
 		packageMap.add(pkg, release)

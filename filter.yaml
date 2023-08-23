@@ -196,6 +196,9 @@ groups:
     - libssh-config
     - libstdc++6
     - libsqlite3*
+    - libseccomp*
+    - libsystemd0
+    - libudev1
 
 #   - libgio-*
 
@@ -207,7 +210,6 @@ groups:
     - "@CryptoLibraries"
    packages:
     - aaa_base
-    - acct
     - acl
     - adjtimex
     - at
@@ -215,7 +217,6 @@ groups:
     - bash
     - bash-*
     - bc
-    - biosdevname
     - bridge-utils
     - brotli
     - btrfsprogs
@@ -224,7 +225,7 @@ groups:
     - ca-certificates-mozilla
     - coreutils
     - cpio
-    - cronie
+#   - cronie
     - cryptsetup
     - dbus-1
 #   - dbus-1-x11
@@ -242,13 +243,13 @@ groups:
     - grep
     - gzip
     - hardlink
-    - haveged
     - hostname
     - info
     - kbd
     - krb5
     - less
     - m4
+    - mozilla-nss-tools
     - ncurses
     - pam
     - pam-*
@@ -268,9 +269,6 @@ groups:
     - sqlite3
     - sudo
     - suse-build-key
-    - sysconfig
-    - systemd
-    - systemd-*
     - system-role-*
     - system-user-*
     - system-users
@@ -291,13 +289,38 @@ groups:
     - openssh-common
     - mkisofs
 
+ - name: "@MinimalSystemd"
+   requires:
+    - "@Core"
+   packages:
+    - acct
+    - biosdevname
+    - blog
+    - brltty
+    - haveged
+    - iptables
+    - iputils
+    - nscd
+    - sysconfig
+    - sysconfig-netconfig
+    - systemd
+    - systemd-*
+    - udev
+    - util-linux-systemd
+#   - btrfsprogs-udev-rules
+
  - name: "@HostCore"
    requires:
     - "@Core"
     - "@Perl/Core"
    packages:
-    - iputils
-    - rpm-ndb
+#   - rpm-ndb
+
+ - name: "@MinimalManagement"
+   requires:
+    - "@Core"
+   packages:
+    - augeas
 
  - name: "@UpdateStack"
    requires:
@@ -305,6 +328,8 @@ groups:
     - "@Network/Core"
     - "@Python/Core"
     - "@Ruby"
+    - "@MinimalSystemd"
+    - "@MinimalManagement"
    packages: 
     - deltarpm
     - SUSEConnect
@@ -313,6 +338,7 @@ groups:
     - zypper-*
     - snapper-zypp-plugin
     - python3-zypp-plugin
+    - permissions-zypp-plugin
 
  - name: "@DirectoryIntegration"
    packages:
@@ -378,7 +404,6 @@ groups:
     - e2fsprogs
     - ecryptfs-utils
     - fcoe-utils
-    - fuse
     - hdparm
     - hfsutils
     - jfsutils
@@ -390,7 +415,6 @@ groups:
     - open-iscsi
     - open-isns
     - reiserfs
-    - sg3_utils
     - smartmontools
     - squashfs
     - sysfsutils
@@ -468,6 +492,7 @@ groups:
     - dmidecode
     - "*-firmware"
     - FirmwareUpdateKit
+    - fuse
     - fwupdate
     - mcelog
     - memcached
@@ -486,6 +511,7 @@ groups:
     - alsa-plugins
     - dosfstools
     - fipscheck
+    - sg3_utils
 
  - name: "@Kernel/Debugging"
    packages:
@@ -538,7 +564,6 @@ groups:
     - infiniband-diags
     - ipsec-tools
     - ipset
-    - iptables
     - ipvsadm
 
  - name: HPC
@@ -620,6 +645,7 @@ groups:
     - python
     - python-*
     - python3*
+    - sudo-plugin-python
 
  - name: "@Python/Core"
    requires:
@@ -689,9 +715,8 @@ groups:
  - name: "@Boot"
    requires:
     - "@Core"
+    - "@MinimalSystemd"
    packages:
-    - blog
-    - brltty
     - dracut
     - efibootmgr
     - efivar

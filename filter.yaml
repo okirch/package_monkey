@@ -2,6 +2,8 @@ preferences:
  - over:
     - "*-32bit"
     - "*-32bit-*"
+ - prefer: grub2-x86_64-efi
+   over: grub2-i386-efi
  - prefer: typelib-1_0-Gtk-4_0
    over:
     - typelib-1_0-Gtk-3_0
@@ -168,6 +170,7 @@ groups:
  - name: "@CoreLibraries"
    explicitClosure:
     - "@Core"
+    - "@CryptoLibraries"
    binaries:
     - perl
     - perl-base
@@ -199,6 +202,9 @@ groups:
     - libseccomp*
     - libsystemd0
     - libudev1
+    - libgomp1
+    - openldap2
+    - libz1
 
 #   - libgio-*
 
@@ -288,6 +294,8 @@ groups:
     - openssh-clients
     - openssh-common
     - mkisofs
+    - zstd
+    - libxml2
 
  - name: "@MinimalSystemd"
    requires:

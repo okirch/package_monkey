@@ -389,11 +389,11 @@ class Repo:
 				else:
 					print("%s: No sourcepackage defined" % pkg.fullname())
 
-				depNode = fmtNode.find(rpmSchema.requiresTag)
-				pkg.requires = Repo.processDepNode(pkg, depNode)
+			depNode = fmtNode.find(rpmSchema.requiresTag)
+			pkg.requires = Repo.processDepNode(pkg, depNode)
 
-				depNode = fmtNode.find(rpmSchema.providesTag)
-				pkg.provides = Repo.processDepNode(pkg, depNode)
+			depNode = fmtNode.find(rpmSchema.providesTag)
+			pkg.provides = Repo.processDepNode(pkg, depNode)
 
 			groupNode = fmtNode.find(rpmSchema.groupTag)
 			if groupNode is not None and groupNode.text is not None:

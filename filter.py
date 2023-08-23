@@ -116,8 +116,10 @@ class Classification:
 			return f"{self.package.fullname()} built from the same source as {self.sibling.fullname()}"
 
 	class Classifier(object):
-		def __init__(self, worker):
+		def __init__(self, worker, arch, preferences):
 			self.worker = worker
+			self.context = worker.contextForArch(arch)
+			self.preferences = preferences
 
 		def handleUnresolvableDependency(self, pkg, dep):
 			self.worker.problems.addUnableToResolve(pkg, dep)
@@ -129,14 +131,14 @@ class Classification:
 			self.worker.debugMsg(msg)
 
 	class DownwardClosure(Classifier):
-		def __init__(self, worker, label):
-			super().__init__(worker)
+		def __init__(self, worker, arch, preferences, label):
+			super().__init__(worker, arch, preferences)
 			self.label = label
 			self.result = set()
 
 		def edges(self, pkg):
 			result = []
-			for dep, target in self.worker.resolveDownward(pkg):
+			for dep, target in self.context.resolveDownward(self.preferences, pkg):
 				result.append(Classification.ReasonRequires(target, pkg, dep))
 
 			return result
@@ -164,7 +166,7 @@ class Classification:
 				src.label = self.label
 				src.labelReason = pkg.name
 			else:
-				print(f"Source with divergent labels {src.label} and {self.label}")
+				print(f"Source package {src.name} has divergent labels {src.label} and {self.label}")
 				print(f"  labeled  {src.label} due to {src.labelReason}")
 				print(f"  should also be labeled {self.label} because of {pkg.name}")
 

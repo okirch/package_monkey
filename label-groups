@@ -4,7 +4,7 @@ forceRefresh = True
 
 from repos import RepoDict, UrlCacheStrategy
 from products import ProductCatalog, CacheLocation
-from packages import Product, Resolver, ResolverWorker, PackageSelector
+from packages import Product, Resolver, ResolverWorker, ResolverPreferences, PackageSelector, PackageCollection
 from filter import PackageFilter, Classification
 from options import Application
 
@@ -20,15 +20,11 @@ packageFilter = PackageFilter(scheme = classificationScheme)
 unclassified = packageFilter.makeGroup("Unclassified")
 
 packageSelector = PackageSelector()
+collection = PackageCollection()
 
 resolver = Resolver(backingStore = store)
 for pinfo in store.enumerateLatestPackages():
 	pkg = store.retrievePackage(pinfo)
-	# print(len(pkg.resolvedRequires))
-
-	if False:
-		if "-32bit" not in pkg.name and not pkg.resolvedRequires:
-			print(f"{pkg.fullname()} doesn't require anything")
 
 	verdict = packageFilter.apply(pkg, pinfo.product)
 	if verdict is not None:
@@ -36,6 +32,8 @@ for pinfo in store.enumerateLatestPackages():
 		group = verdict.group
 	else:
 		group = unclassified
+
+	collection.add(pkg)
 
 def flattenLabelTree(label, alreadySeen):
 	alreadySeen.add(label)
@@ -81,12 +79,15 @@ class Inventory(dict):
 
 inventory = Inventory()
 
+resolverContext = worker.contextForArch(collection.uniqueArch)
+preferences = ResolverPreferences()
+
 closure = {}
 for label in labelSequence:
 	group = packageFilter.makeGroup(label.name)
 
 	print(f"Classify packages belonging to {group.label}")
-	classifier = Classification.DownwardClosure(worker, label)
+	classifier = Classification.DownwardClosure(worker, collection.uniqueArch, preferences, label)
 	classifier.classify(group.packages)
 
 	closure[label.name] = classifier.result

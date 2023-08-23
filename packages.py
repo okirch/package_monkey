@@ -253,6 +253,196 @@ class Versiontools:
 		debugDependency2(f"  = {req.flags} -> {r}")
 		return r
 
+class ResolverCache(dict):
+	# needs to be different from None
+	NEGATIVE_ENTRY = 42
+
+	class Stats:
+		def __init__(self):
+			self.numHits = 0
+			self.numLookups = 0
+
+		def record(self, result):
+			if result is not None:
+				self.numHits += 1
+			self.numLookups += 1
+
+		def format(self):
+			if self.numLookups != 0:
+				ratio = int(100 * self.numHits / self.numLookups)
+			else:
+				ratio = 0
+			return f"{self.numLookups} lookups ({ratio}% hit rate)";
+
+	# all instances share a common stats object
+	stats = Stats()
+
+	def __init__(self):
+		super().__init__()
+
+	def put(self, dep, pkg):
+		key = str(dep)
+
+		if pkg is None:
+			pkg = self.NEGATIVE_ENTRY
+		self[key] = pkg
+
+	def get(self, dep):
+		key = str(dep)
+		result = super().get(key)
+		self.stats.record(result)
+		return result
+
+	def formatStats(self):
+		return self.stats.format()
+
+class ResolverChoice:
+	def __init__(self):
+		self.bestPackage = None
+		self.bestProductRating = -1
+		self.secondBest = None
+
+	@property
+	def result(self):
+		return self.bestPackage or self.secondBest
+
+	def update(self, preferences, cand):
+		if cand is Package.ExpandedToNothing:
+			self.secondBest = cand
+			return False
+
+		productRating = preferences.rateProduct(cand.product)
+		if self.preferCandidate(preferences, cand, productRating):
+			self.bestPackage = cand
+			self.bestProductRating = productRating
+			return True
+
+		return False
+
+	def preferCandidate(self, preferences, cand, productRating):
+		best = self.bestPackage
+		if best is None:
+			return True
+
+		if cand.name == best.name:
+			return Versiontools.comparePackages(best, cand) < 0
+
+		r = preferences.comparePackages(cand.name, best.name)
+		# print(f"Prefer {cand.name} over {best.name}? result={r}")
+		if r == 0:
+			r = preferences.preferProductRating(productRating, self.bestProductRating)
+
+		if r > 0:
+			return True
+		if r < 0:
+			return False
+
+		# We haven't recorded a preference one way or the other
+		print(f"Ambiguous resolution: {cand.name} and {best.name}")
+		return False
+
+class ResolverPreferences:
+	def __init__(self):
+		self._packagePreferences = None
+
+	def setPackagePreferences(self, preferences):
+		self._packagePreferences = preferences
+
+	def comparePackages(self, candidateName, bestName):
+		if self._packagePreferences is None:
+			return 0
+
+		return self._packagePreferences.compare(candidateName, bestName)
+
+	def rateProduct(self, candidateProduct):
+		# for now
+		return -1
+
+	def preferProductRating(self, candidateRating, bestRating):
+		# in particular, if neither product is preferred, we return 0
+		return bestRating - candidateRating
+
+class ResolverContext:
+	def __init__(self, resolver, arch, problems):
+		self._resolver = resolver
+
+		if arch in ('src', 'nosrc'):
+			altArch = 'nosrc'
+		else:
+			altArch = 'noarch'
+		self.arch = [arch, altArch]
+
+		self._problems = problems
+		self._cache = ResolverCache()
+
+		self.debugMsg = debugDependency
+
+	def acceptable(self, pkg):
+		if pkg.arch not in self.arch:
+			return False
+
+		return True
+
+	def selectPreferredCandidate(self, preferences, candidates):
+		choice = ResolverChoice()
+		for cand in candidates:
+			#if cand in self._packages:
+			#	return cand
+
+			if cand is Package.ExpandedToNothing:
+				choice.update(preferences, cand)
+				continue
+
+			if self.acceptable(cand):
+				choice.update(preferences, cand)
+
+		# Expand PackageInfo to full-blown Package object
+		found = self._resolver.expand(choice.result)
+		return found
+
+	def resolveRequires(self, preferences, req):
+		try:
+			candidates = req.enumerateCandidateSolutions(self._resolver)
+			found = self.selectPreferredCandidate(preferences, candidates)
+		except Exception as e:
+			print(f"Caught exception while resolving {req}: {e}")
+			found = None
+		return found
+
+	def resolveDownward(self, preferences, pkg):
+		result = []
+
+		if pkg.resolvedRequires is not None:
+			return pkg.resolvedRequires
+
+		if not pkg.requires:
+			self.debugMsg(f"{pkg.fullname()} has no dependencies")
+			pkg.resolvedRequires = result
+			return result
+
+		for dep in pkg.requires:
+			self.debugMsg(f"Inspecting {pkg.fullname()} req {dep}")
+			found = self._cache.get(dep)
+
+			if found is None:
+				# No cache entry found, take the slow path and resolve it
+				found = self.resolveRequires(preferences, dep)
+				# ... and stick the result into the cache
+				self._cache.put(dep, found)
+			elif found is ResolverCache.NEGATIVE_ENTRY:
+				# it's a negative entry, translate to None
+				found = None
+
+			# If it's a valid entry, add it to the result
+			if found is None:
+				self._problems.addUnableToResolve(pkg, dep)
+			elif found is not Package.ExpandedToNothing:
+				result.append((dep, found))
+
+		pkg.resolvedRequires = result
+		return result
+
+
 class ResolverWorker:
 	class Problem(object):
 		def __init__(self, desc):
@@ -294,41 +484,6 @@ class ResolverWorker:
 			for pkg in self.requiredby:
 				print(f"   {pkg.fullname()}")
 
-	class Cache(dict):
-		# needs to be different from None
-		NEGATIVE_ENTRY = 42
-
-		def __init__(self):
-			super().__init__()
-			self.numHits = 0
-			self.numLookups = 0
-
-		@property
-		def numEntries(self):
-			return len(self)
-
-		def put(self, dep, pkg):
-			key = str(dep)
-
-			if pkg is None:
-				pkg = self.NEGATIVE_ENTRY
-			self[key] = pkg
-
-		def get(self, dep):
-			key = str(dep)
-			result = super().get(key)
-			if result is not None:
-				self.numHits += 1
-			self.numLookups += 1
-			return result
-
-		def formatStats(self):
-			if self.numLookups != 0:
-				ratio = int(100 * self.numHits / self.numLookups)
-			else:
-				ratio = 0
-			return f"{self.numEntries} entries; {self.numLookups} lookups ({ratio}% hit rate)";
-
 	class Problems:
 		def __init__(self):
 			self._unexpected = {}
@@ -369,13 +524,19 @@ class ResolverWorker:
 		self._packages = set()
 		self._process = processfn
 		self._problems = self.Problems()
-		self._cache = self.Cache()
-		self._preferences = None
+		self._contexts = {}
 
 		self.debugMsg = debugDependency
 
-	def setPackagePreferences(self, preferences):
-		self._preferences = preferences
+	def contextForArch(self, arch):
+		if arch == 'nosrc' or arch == 'noarch':
+			raise Exception(f"Invalid architecture {arch} in ResolverWorker.contextForArch()")
+
+		ctx = self._contexts.get(arch)
+		if ctx is None:
+			ctx = ResolverContext(self._resolver, arch, self._problems)
+			self._contexts[arch] = ctx
+		return ctx
 
 	def add(self, pkg):
 		if not pkg in self._packages:
@@ -397,97 +558,7 @@ class ResolverWorker:
 		return self._problems
 
 	def formatCacheStats(self):
-		return self._cache.formatStats()
-
-	def selectPreferredCandidate(self, candidates, preferProduct = None):
-		def preferCandidate(cand):
-			if best is None:
-				return True
-
-			if cand.name == best.name:
-				return Versiontools.comparePackages(best, cand) < 0
-
-			if self._preferences:
-				r = self._preferences.compare(cand.name, best.name)
-				# print(f"Prefer {cand.name} over {best.name}? result={r}")
-				if r > 0:
-					return True
-				elif r < 0:
-					return False
-				# We haven't recorded a preference one way or the other
-
-			if preferProduct:
-				# print(f"Comparing best {best.name}({best.product}) vs cand {cand.name}({cand.product})")
-				if best.product is preferProduct and cand.product is not preferProduct:
-					return False
-				if best.product is not preferProduct and cand.product is preferProduct:
-					return True
-
-			print(f"Ambiguous resolution: {cand.name} and {best.name}")
-			return False
-
-		secondBest = None
-
-		best = None
-		for cand in candidates:
-			if cand in self._packages:
-				return cand
-
-			if cand is Package.ExpandedToNothing:
-				secondBest = cand
-			elif preferCandidate(cand):
-				best = cand
-
-		if best is not None:
-			best = self._resolver.expand(best)
-
-		return best or secondBest
-
-	def resolveRequires(self, req, preferProduct = None):
-		try:
-			candidates = req.enumerateCandidateSolutions(self._resolver)
-			found = self.selectPreferredCandidate(candidates, preferProduct)
-		except Exception as e:
-			print(f"Caught exception while resolving {req}: {e}")
-			found = None
-		return found
-
-	def resolveDownward(self, pkg):
-		result = []
-
-		if pkg.resolvedRequires is not None:
-			return pkg.resolvedRequires
-
-		if not pkg.requires:
-			self.debugMsg(f"{pkg.fullname()} has no dependencies")
-			pkg.resolvedRequires = result
-			return result
-
-		# When resolving a depedency, always prefer those from the same module.
-		preferProduct = pkg.product
-
-		for dep in pkg.requires:
-			# self.debugMsg(f"Inspecting {pkg.fullname()} req {dep}")
-			found = self._cache.get(dep)
-
-			if found is None:
-				# No cache entry found, take the slow path and resolve it
-				found = self.resolveRequires(dep, preferProduct)
-				# ... and stick the result into the cache
-				self._cache.put(dep, found)
-			elif found is self._cache.NEGATIVE_ENTRY:
-				# it's a negative entry, translate to None
-				found = None
-
-			# If it's a valid entry, add it to the result
-			if found is None:
-				self.problems.addUnableToResolve(pkg, dep)
-			elif found is not Package.ExpandedToNothing:
-				result.append((dep, found))
-
-		pkg.resolvedRequires = result
-		return result
-
+		return ResolverCache.stats.format()
 
 class Resolver:
 	class NameBucket(object):
@@ -818,7 +889,7 @@ class DependencyParser:
 				child.print(ws + "  ")
 
 		def build(self):
-			return Package.createAndDepdendency(self.buildTerms())
+			return Package.createAndDependency(self.buildTerms())
 
 	def __init__(self, string):
 		# print(f"## Parsing \"{string}\"")
@@ -873,7 +944,7 @@ class DependencyParser:
 			if type == self.Lexer.IDENTIFIER:
 				if value == "or":
 					groupClass = self.OrExpression
-				elif value == "and":
+				elif value == "and" or value == "with":
 					groupClass = self.AndExpression
 				elif value == "if":
 					groupClass = self.ConditionalExpression
@@ -951,10 +1022,10 @@ class DependencyParser:
 class Package:
 	# This special value is returned when we encounter a conditional
 	# dependency, and its condition evaluated to False.
-	class Nothing:
+	class EmptyExpansion:
 		pass
 
-	ExpandedToNothing = Nothing()
+	ExpandedToNothing = EmptyExpansion()
 
 	class BaseDependency(object):
 		def __init__(self):
@@ -1045,6 +1116,28 @@ class Package:
 			# Not quite right... but we'd have to change the algorithm to accomodate this
 			for child in self.children:
 				result += list(child.enumerateCandidateSolutions(resolver))
+			return result
+
+	class AndDependency:
+		def __init__(self, children):
+			self.children = children
+
+		def __str__(self):
+			return "(" + " with ".join(str(_) for _ in self.children) + ")"
+
+		@property
+		def name(self):
+			return str(self)
+
+		def enumerateCandidateSolutions(self, resolver):
+			result = []
+
+			# Not quite right... but we'd have to change the algorithm to accomodate this
+			for child in self.children:
+				term = list(child.enumerateCandidateSolutions(resolver))
+				if not term:
+					return []
+				result += term
 			return result
 
 	class Change:
@@ -1148,7 +1241,11 @@ class Package:
 
 	@staticmethod
 	def createOrDependency(children):
-			return Package.OrDependency(children)
+		return Package.OrDependency(children)
+
+	@staticmethod
+	def createAndDependency(children):
+		return Package.AndDependency(children)
 
 	@staticmethod
 	def processComplexDependency(name, **kwd):
@@ -1486,6 +1583,30 @@ class PackageSelector(dict):
 		if existing is None:
 			return True
 		return (Versiontools.compareParsedVersions(existing.parsedVersion, candidate.parsedVersion) < 0)
+
+class PackageCollection:
+	def __init__(self):
+		self._packages = []
+		self._arches = set()
+
+	def add(self, pkg):
+		self._packages.append(pkg)
+		if pkg.arch not in ('src', 'nosrc', 'noarch'):
+			self._arches.add(pkg.arch)
+
+	def __iter__(self):
+		return iter(self._packages)
+
+	def __len__(self):
+		return len(self._packages)
+
+	@property
+	def uniqueArch(self):
+		if not self._arches:
+			return None
+		if len(self._arches) > 1:
+			raise Exception(f"Unable to determine architecture - found {self._arches}")
+		return next(iter(self._arches))
 
 if __name__ == '__main__':
 	if Versiontools.test():

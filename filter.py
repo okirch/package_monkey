@@ -7,12 +7,16 @@ class Classification:
 			self.name = name
 			self.id = id
 			self.uses = set()
+			self.builds = set()
 			self.explicitClosure = set()
 			self._closure = None
 
-		def addDependency(self, other):
+		def addRuntimeDependency(self, other):
 			self._closure = None
 			self.uses.add(other)
+
+		def addBuildDependency(self, other):
+			self.builds.add(other)
 
 		def addToClosure(self, other):
 			self.explicitClosure.add(other)
@@ -100,6 +104,36 @@ class Classification:
 		def __str__(self):
 			return f"{self.package.fullname()} required by {self.dependant.fullname()} via {self.req}"
 
+	class ReasonSourcePackage(Reason):
+		def __init__(self, pkg, binary):
+			super().__init__(pkg)
+			self.binary = binary
+
+		@property
+		def type(self):
+			return 'source package'
+
+		def chain(self):
+			return self.reasonChain(self.binary)
+
+		def __str__(self):
+			return f"{self.package.fullname()} is the source of {self.binary.fullname()}"
+
+	class ReasonBuildDependency(Reason):
+		def __init__(self, pkg, dependant):
+			super().__init__(pkg)
+			self.dependant = dependant
+
+		@property
+		def type(self):
+			return 'build requirement'
+
+		def chain(self):
+			return self.reasonChain(self.dependant)
+
+		def __str__(self):
+			return f"{self.package.fullname()} builds {self.dependent.package.fullname()}"
+
 	class ReasonSourceClosure(Reason):
 		def __init__(self, pkg, sibling):
 			super().__init__(pkg)
@@ -116,7 +150,40 @@ class Classification:
 			return f"{self.package.fullname()} built from the same source as {self.sibling.fullname()}"
 
 	class Classifier(object):
-		def __init__(self, worker, arch, preferences):
+		def __init__(self, label):
+			self.label = label
+			self.result = set()
+
+	class XXXSourceClassifier(Classifier):
+		def classify(self, packages):
+			label = self.label
+
+			result = set()
+			for binary in packages:
+				src = binary.sourcePackage
+				if src is None:
+					# add problem to worker
+					print(f"Warning, no source for {binary.fullname()}")
+					continue
+
+				if src.label and src.label is not label:
+					print(f"Problem with {src.fullname()}: label {label} vs {src.label}")
+					continue
+
+				# print(f"label {src.name} as {label}")
+				src.label = label
+				src.labelReason = Classification.ReasonSourcePackage(src, binary)
+
+				result.add(src)
+
+			self.result.update(result)
+			return result
+
+
+	class DependencyClassifier(Classifier):
+		def __init__(self, worker, arch, preferences, label):
+			super().__init__(label)
+
 			self.worker = worker
 			self.context = worker.contextForArch(arch)
 			self.preferences = preferences
@@ -130,11 +197,10 @@ class Classification:
 		def debugMsg(self, msg):
 			self.worker.debugMsg(msg)
 
-	class DownwardClosure(Classifier):
-		def __init__(self, worker, arch, preferences, label):
-			super().__init__(worker, arch, preferences)
-			self.label = label
-			self.result = set()
+	class DownwardClosure(DependencyClassifier):
+		def __init__(self, *args):
+			super().__init__(*args)
+			self.transform = None
 
 		def edges(self, pkg):
 			result = []
@@ -143,35 +209,29 @@ class Classification:
 
 			return result
 
-		def apply(self, edge):
+		def followEdge(self, edge):
+			if self.transform:
+				edge = self.transform(edge)
+				if edge is None:
+					return None
+
 			pkg = edge.package
 			if pkg.label is self.label:
-				return False
+				return None
 
 			if pkg.label is not None:
 				if not self.label.isKnownDependency(pkg.label):
 					self.handleUnexpectedDependency(pkg, edge)
 
-				# Return False to tell the caller not not recurse into pkg
-				return False
+				# Do not recurse into this package
+				return None
 
 			# print(f"Label {self.label}: classify {edge}")
 			pkg.label = self.label
 			pkg.labelReason = edge
 
-			src = pkg.sourcePackage
-			if src is None or src.label is self.label:
-				pass
-			elif src.label is None:
-				src.label = self.label
-				src.labelReason = pkg.name
-			else:
-				print(f"Source package {src.name} has divergent labels {src.label} and {self.label}")
-				print(f"  labeled  {src.label} due to {src.labelReason}")
-				print(f"  should also be labeled {self.label} because of {pkg.name}")
-
 			self.result.add(pkg)
-			return True
+			return pkg
 
 		def classify(self, packages):
 			for pkg in packages:
@@ -188,10 +248,70 @@ class Classification:
 
 				edges = self.edges(pkg)
 				for e in edges:
-					if self.apply(e):
-						worker.add(e.package)
+					tgt = self.followEdge(e)
+					if tgt is not None:
+						worker.add(tgt)
 
 			return True
+
+	class BuildRequireClosure(DownwardClosure):
+		def __init__(self, *args):
+			super().__init__(*args)
+			self.transform = self.transformSource
+
+		def classify(self, packages):
+			label = self.label
+
+			sources = set()
+			for binary in packages:
+				assert(binary.arch != 'src')
+				src = binary.sourcePackage
+				if src is None:
+					# add problem to worker
+					print(f"Warning, no source for {binary.fullname()} {binary.arch}")
+					continue
+
+				if src.label and src.label is not label:
+					# add problem to worker
+					print(f"Problem with {src.fullname()}: label {label} vs {src.label}")
+					continue
+
+				# print(f"label {src.name} as {label}")
+				src.label = label
+				src.labelReason = Classification.ReasonSourcePackage(src, binary)
+
+				sources.add(src)
+
+			return super().classify(sources)
+
+		def transformSource(self, arg):
+			if isinstance(arg, Classification.Reason):
+				binary = arg.package
+				src = binary.sourcePackage
+				if src is None:
+					print(f"No source for {binary.fullname()}")
+					indent = "   "
+					for why in arg.chain():
+						print(f"{indent}{why}")
+						indent += "  "
+					print(self.context.arch)
+					fail
+					return None
+				src.label = self.label
+				src.labelReason = Classification.ReasonBuildDependency(src, arg)
+				return src.labelReason
+
+			raise Exception()
+			result = set()
+			for pkg in arg:
+				src = pkg.sourcePackage
+				if src is None:
+					print(f"Warning, no source for {pkg.fullname()}")
+				elif src.label and src.label is not self.label:
+					print(f"Cannot label {src.fullname()} as {self.label}; it is already labeled {src.label}")
+				else:
+					result.add(src)
+			return result
 
 class PackagePreferences:
 	def __init__(self):
@@ -234,8 +354,17 @@ class PackagePreferences:
 
 
 class PackageGroup:
-	def __init__(self, name):
+	TYPE_BINARY = 'binary'
+	TYPE_SOURCE = 'source'
+
+	def __init__(self, name, type = None):
+		if type is None:
+			type = self.TYPE_BINARY
+
 		self.name = name
+		self.type = type
+
+		self.defined = False
 		self.matchCount = 0
 		self.expand = True
 		self.label = None
@@ -263,6 +392,16 @@ class PackageGroup:
 	@property
 	def groupNames(self):
 		return set(_.group for _ in self._packages)
+
+	def addRequires(self, otherGroup):
+		if self.type == self.TYPE_BINARY:
+			self.label.addRuntimeDependency(otherGroup.label)
+		else:
+			self.label.addBuildDependency(otherGroup.label)
+
+	def addBuildRequires(self, otherGroup):
+		assert(self.type == self.TYPE_SOURCE)
+		self.label.addBuildDependency(otherGroup.label)
 
 class NameFNMatch:
 	def __init__(self, type, value, group):
@@ -484,49 +623,10 @@ class PackageFilter:
 			data = yaml.full_load(f)
 
 		for gd in data['groups']:
-			group = self.makeGroup(gd['name'])
+			self.parseGroup(PackageGroup.TYPE_BINARY, gd)
 
-			value = gd.get('expand')
-			if type(value) == bool:
-				group.expand = value
-
-			value = gd.get('priority')
-			if value is not None:
-				assert(type(value) == int)
-				filterGroup = self.makeFilterGroup(value)
-			else:
-				filterGroup = self.defaultFilterGroup
-
-			if group.label:
-				nameList = gd.get('requires') or []
-				for name in nameList:
-					otherGroup = self.makeGroup(name)
-					group.label.addDependency(otherGroup.label)
-
-				nameList = gd.get('explicitClosure') or []
-				for name in nameList:
-					group.label.addToClosure(self.classificationScheme.createLabel(name))
-
-			nameList = gd.get('products') or []
-			for name in nameList:
-				filterGroup.addProductFilter(name, group)
-
-			nameList = gd.get('packages') or []
-			for name in nameList:
-				filterGroup.addBinaryPackageFilter(name, group)
-				filterGroup.addSourcePackageFilter(name, group)
-
-			nameList = gd.get('sources') or []
-			for name in nameList:
-				filterGroup.addSourcePackageFilter(name, group)
-
-			nameList = gd.get('binaries') or []
-			for name in nameList:
-				filterGroup.addBinaryPackageFilter(name, group)
-
-			nameList = gd.get('rpmGroups') or []
-			for name in nameList:
-				filterGroup.addRpmGroupFilter(name, group)
+		for gd in data.get('build_groups') or []:
+			self.parseGroup(PackageGroup.TYPE_SOURCE, gd)
 
 		for pref in data.get('preferences') or []:
 			preferred = pref.get('prefer')
@@ -563,18 +663,27 @@ class PackageFilter:
 
 		return filterGroup
 
-	def makeGroup(self, name):
+	def makeGroup(self, name, type = None):
+		return self.makeGroupInternal(name, type)
+
+	def makeSourceGroup(self, name):
+		return self.makeGroupInternal(name, PackageGroup.TYPE_SOURCE)
+
+	def makeGroupInternal(self, name, type):
 		try:
-			return self._groups[name]
+			group = self._groups[name]
 		except:
-			pass
+			group = None
 
-		group = PackageGroup(name)
+		if group is None:
+			group = PackageGroup(name, type)
 
-		if self.classificationScheme:
-			group.label = self.classificationScheme.createLabel(name)
+			if self.classificationScheme:
+				group.label = self.classificationScheme.createLabel(name)
 
-		self._groups[name] = group
+			self._groups[name] = group
+		elif type and group.type != type:
+			raise Exception(f"Group {name} does not match expected type ({group.type} vs {type})")
 		return group
 
 	@property
@@ -584,3 +693,57 @@ class PackageFilter:
 	@property
 	def packagePreferences(self):
 		return self._preferences
+
+	def parseGroup(self, groupType, gd):
+		group = self.makeGroupInternal(gd['name'], groupType)
+
+		if group.defined:
+			raise Exception(f"Duplicate definition of group \"{group.name}\" in filter yaml")
+		group.defined = True
+
+		value = gd.get('expand')
+		if type(value) == bool:
+			group.expand = value
+
+		value = gd.get('priority')
+		if value is not None:
+			assert(type(value) == int)
+			filterGroup = self.makeFilterGroup(value)
+		else:
+			filterGroup = self.defaultFilterGroup
+
+		if group.label:
+			nameList = gd.get('requires') or []
+			for name in nameList:
+				otherGroup = self.makeGroupInternal(name, groupType)
+				group.addRequires(otherGroup)
+
+			nameList = gd.get('explicitClosure') or []
+			for name in nameList:
+				group.label.addToClosure(self.classificationScheme.createLabel(name))
+
+			nameList = gd.get('builds') or []
+			for name in nameList:
+				otherGroup = self.makeGroupInternal(name, PackageGroup.TYPE_BINARY)
+				group.addBuildRequires(otherGroup)
+
+		nameList = gd.get('products') or []
+		for name in nameList:
+			filterGroup.addProductFilter(name, group)
+
+		nameList = gd.get('packages') or []
+		for name in nameList:
+			filterGroup.addBinaryPackageFilter(name, group)
+			filterGroup.addSourcePackageFilter(name, group)
+
+		nameList = gd.get('sources') or []
+		for name in nameList:
+			filterGroup.addSourcePackageFilter(name, group)
+
+		nameList = gd.get('binaries') or []
+		for name in nameList:
+			filterGroup.addBinaryPackageFilter(name, group)
+
+		nameList = gd.get('rpmGroups') or []
+		for name in nameList:
+			filterGroup.addRpmGroupFilter(name, group)

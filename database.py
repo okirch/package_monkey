@@ -226,6 +226,10 @@ class Table(object):
 		keys, values = splitDictKeyValues(d)
 		return self.updateKeysAndValues(keys, values, **selector)
 
+	def updateDict(self, d, **selector):
+		keys, values = splitDictKeyValues(d)
+		return self.updateKeysAndValues(keys, values, **selector)
+
 	def updateKeysAndValues(self, keys, values, **selector):
 		setFmt = ", ".join([f"{name}=?" for name in keys])
 
@@ -236,6 +240,28 @@ class Table(object):
 		self.db.commit()
 
 		return ObjectHandle(self.db, self.name, c.lastrowid)
+
+	def replaceObject(self, obj):
+		assert(self.objectTemplate)
+
+		d = self.objectTemplate.mapObjectToDB(obj)
+		return self.replaceDict(d)
+
+	def replaceDict(self, d):
+		keys, values = splitDictKeyValues(d)
+		return self.replaceKeysAndValues(keys, values)
+
+	def replaceKeysAndValues(self, keys, values):
+		db = self.db
+
+		c = db.conn.cursor()
+		nameFmt = ",".join(keys)
+		valueFmt = ",".join(["?"] * len(values))
+		sql = f"REPLACE INTO {self.name}({nameFmt}) VALUES ({valueFmt})"
+		c.execute(sql, values)
+		db.commit()
+
+		return ObjectHandle(db, self.name, c.lastrowid)
 
 	def fetchAll(self, fields = None, **selector):
 		c = self.selectFrom(fields, selector)
@@ -464,12 +490,14 @@ class PackageTable(UniqueTable):
 				'version' : 'version',
 				'release' : 'release',
 				'arch' : 'arch',
+				'buildTime' : 'buildTime',
 				'pkgid' : 'repoPackageID',
 				'group' : 'rpmGroup',
 				'sourceName' : 'sourceName',
 				'sourcePackageHash' : 'sourceHash',
 				'sourceBackingStoreId' : 'sourceId',
 				'productId' : 'productId',
+				'obsBuildId' : 'buildId',
 				},
 				ctorArgs = (
 					'name', 'epoch', 'version', 'release', 'arch',
@@ -483,6 +511,8 @@ class PackageTable(UniqueTable):
 				version text NOT NULL,
 				release text NOT NULL,
 				arch text NOT NULL,
+				buildId integer,
+				buildTime integer,
 				sourceName text,
 				sourceHash text,
 				sourceId integer,
@@ -495,23 +525,29 @@ class PackageTable(UniqueTable):
 
 		self.knownPackageIDs = dict()
 
+	@staticmethod
+	def makeKey(name, version, release, arch):
+		return f"{name}-{version}-{release}.{arch}"
+
 	def updateKnownIDs(self):
 		c = self.db.conn.cursor()
-		c.execute("SELECT id, repoPackageID FROM packages;")
+		c.execute("SELECT id, name, version, release, arch FROM packages;")
 		for row in c.fetchall():
-			self.knownPackageIDs[row[1]] = row[0]
+			(id, name, version, release, arch) = row
+			key = self.makeKey(name, version, release, arch)
+			self.knownPackageIDs[key] = id
 		print(f"Found {len(self.knownPackageIDs)} packages in database")
 
-	def addPackageObject(self, obj):
-		if obj.pkgid is None:
-			print(f"addPackageObject: {obj.fullname()} has no pkgid")
-			if obj.arch != 'nosrc':
-				print(f"Error: cannot add package {obj.fullname()} without pkgid")
-			return obj.backingStoreId
+	def isKnownPackageObject(self, obj):
+		key = self.makeKey(obj.name, obj.version, obj.release, obj.arch)
+		return self.knownPackageIDs.get(key)
 
-		id = self.knownPackageIDs.get(obj.pkgid)
+	def addPackageObject(self, obj):
+		key = self.makeKey(obj.name, obj.version, obj.release, obj.arch)
+
+		id = self.knownPackageIDs.get(key)
 		if id is not None:
-			# print(f"{obj.pkgid}: already known as {id}")
+			# print(f"{key}: already known as {id}")
 			return id
 
 		h = self.insertObject(obj)
@@ -519,8 +555,8 @@ class PackageTable(UniqueTable):
 			print(f"Failed to insert {obj.fullname()} into database")
 			return None
 
-		self.knownPackageIDs[obj.pkgid] = h.id
-		# print(f"{obj.pkgid}: {obj.fullname()} -> {h.id}")
+		self.knownPackageIDs[key] = h.id
+		# print(f"{key}: {obj.fullname()} -> {h.id}")
 		return h.id
 
 class LatestPackageTable(UniqueTable):
@@ -577,6 +613,12 @@ class LatestPackageTable(UniqueTable):
 			bucket = self.getBucket(pinfo.name)
 			bucket.pinfo = pinfo
 
+	def getPackageByName(self, name):
+		b = self._buckets.get(name)
+		if b is None:
+			return None
+		return b.pinfo
+
 	def update(self, pkg):
 		assert(pkg.backingStoreId)
 
@@ -597,6 +639,74 @@ class LatestPackageTable(UniqueTable):
 			b = self.Latest(name)
 			self._buckets[name] = b
 		return b
+
+class BuildTable(UniqueTable):
+	NAME = "builds"
+	TABLE_FIELDS = """
+			id integer PRIMARY KEY,
+			name text NOT NULL,
+			sourcePackageId integer,
+			buildTime integer
+		"""
+
+	class Entry:
+		def __init__(self, name, id = None):
+			self.id = id
+			self.name = name
+			self.buildTime = None
+
+		def update(self, buildTime):
+			if self.buildTime == buildTime:
+				return False
+			self.buildTime = buildTime
+			return True
+
+	def __init__(self, db):
+		super().__init__(db)
+		self._entries = {}
+
+	def fetchKnownPackages(self, store):
+		for d in self.fetchAll():
+			entry = self.addEntry(d['name'])
+			entry.id = d['id']
+			entry.buildTime = d['buildTime']
+
+	def hasChanged(self, name, buildTime):
+		entry = self._entries.get(name)
+		if entry is None:
+			return True
+		return (entry.buildTime != buildTime)
+
+	def nameToId(self, name):
+		entry = self.addEntry(name)
+		if not entry.id:
+			h = self.replaceDict({'name': name})
+			if h is None:
+				return None
+
+			entry.id = h.id
+
+		return entry.id
+
+	def update(self, name, buildTime):
+		entry = self.addEntry(name)
+		if not entry.update(buildTime):
+			return entry.id
+
+		if entry.id is not None:
+			self.updateDict({'name': name, 'buildTime': buildTime}, id = entry.id)
+		else:
+			h = self.insertDict({'name': name, 'buildTime': buildTime})
+			entry.id = h.id
+
+		return entry.id
+
+	def addEntry(self, name):
+		entry = self._entries.get(name)
+		if entry is None:
+			entry = self.Entry(name)
+			self._entries[entry.name] = entry
+		return entry
 
 
 class FilesTable(UniqueTable):
@@ -631,6 +741,11 @@ class DependencyTable(UniqueTable):
 	def __init__(self, *args):
 		super().__init__(*args)
 		self._cache = self.Cache()
+		self._knownPackages = []
+
+	def fetchKnownPackages(self):
+		self._knownPackages = set(self.fetchColumn('pkgId'))
+		print(f"We have dependencies for {len(self._knownPackages)} packages")
 
 	def addDependency(self, dep, pkgId):
 		d = dict()
@@ -653,6 +768,15 @@ class DependencyTable(UniqueTable):
 		assert(pkgId is not None)
 		for dep in depList:
 			self.addDependency(dep, pkgId)
+		self._knownPackages.add(pkgId)
+
+	def removeDependenciesForList(self, idList):
+		self.deleteMultiple('pkgId', idList)
+		self._knownPackages.difference_update(set(idList))
+
+	def haveDependencies(self, pkgId):
+		assert(pkgId is not None)
+		return pkgId in self._knownPackages
 
 	def retrieveDependencyById(self, id):
 		d = self.fetchOne(id = id)
@@ -703,14 +827,29 @@ class RequiresTable(DependencyTable):
 class ProvidesTable(DependencyTable):
 	NAME = "provides"
 
-class TreeTable(UniqueTable):
-	NAME = "tree"
+class DirectedGraphTable(UniqueTable):
 	TABLE_FIELDS = """
 			id integer PRIMARY KEY,
 			requiringPkgId integer NOT NULL,
 			requiredPkgId integer NOT NULL,
 			dependencyId integer
 		"""
+
+	def __init__(self, *args):
+		super().__init__(*args)
+		self._knownPackages = []
+
+	def fetchKnownPackages(self):
+		self._knownPackages = set(self.fetchColumn('requiringPkgId'))
+		print(f"{self.name}: we have dependencies for {len(self._knownPackages)} packages")
+
+	def removeDependenciesForList(self, idList):
+		self.deleteMultiple('requiringPkgId', idList)
+		self._knownPackages.difference_update(set(idList))
+
+	def haveDependencies(self, pkgId):
+		assert(pkgId is not None)
+		return pkgId in self._knownPackages
 
 	def addEdge(self, **kwargs):
 		self.insert(**kwargs)
@@ -726,6 +865,12 @@ class TreeTable(UniqueTable):
 
 		return result
 		return self.fetchAll(fields = ('requiredPkgId', 'dependencyId'), requiringPkgId = pkgId)
+
+class TreeTable(DirectedGraphTable):
+	NAME = "tree"
+
+class BuildTreeTable(DirectedGraphTable):
+	NAME = "builddep"
 
 class PackageCache(dict):
 	def put(self, pkg):
@@ -764,6 +909,10 @@ class BackingStoreDB(DB):
 		self.latest.createIndex("idx_latest_name", ["name"])
 		self.latest.fetchKnownPackages(self)
 
+		self.builds = BuildTable.instantiate(self)
+		self.builds.createUniqueIndex("idx_build_name", ["name"])
+		self.builds.fetchKnownPackages(self)
+
 		# FIXME:
 		# Instead of mapping strings to package ids, it might be
 		# more compact if we create tables to map file names
@@ -775,13 +924,19 @@ class BackingStoreDB(DB):
 
 		self.requires = RequiresTable.instantiate(self)
 		self.requires.createIndex("idx_req_package", ['pkgId'])
+		self.requires.fetchKnownPackages()
 
 		self.provides = ProvidesTable.instantiate(self)
 		self.provides.createIndex("idx_prov_package", ['pkgId'])
+		self.provides.fetchKnownPackages()
 
 		self.tree = TreeTable.instantiate(self)
 		self.tree.createIndex("idx_tree_down", ['requiringPkgId'])
 		self.tree.createIndex("idx_tree_up", ['requiredPkgId'])
+		self.tree.fetchKnownPackages()
+
+		self.buildDep = BuildTreeTable.instantiate(self)
+		self.buildDep.createIndex("idx_bdep_down", ['requiringPkgId'])
 
 		self.packageCache = PackageCache()
 		self.providesCache = ProvidesCache()
@@ -813,37 +968,145 @@ class BackingStoreDB(DB):
 		assert('id' not in kwargs)
 		return self.packages.insert(**kwargs)
 
-	def addPackageObject(self, obj):
-		# Never try to add nosrc packages
-		if obj.arch == 'nosrc':
-			return
+	def isKnownPackageObject(self, obj):
+		id = self.packages.isKnownPackageObject(obj)
+		if id is not None:
+			obj.backingStoreId = id
+			return True
+		return False
 
+	def havePackageDependencies(self, obj):
+		return self.provides.haveDependencies(obj.backingStoreId) or \
+			self.tree.haveDependencies(obj.backingStoreId)
+
+	def addPackageObject(self, obj):
 		obj.backingStoreId = self.packages.addPackageObject(obj)
 		if obj.backingStoreId is None:
 			print(f"ALERT: {obj.fullname()} has no database id")
 			return
 
-		self.files.addFiles(obj.files, obj.backingStoreId)
-		self.requires.addDependencies(obj.requires, obj.backingStoreId)
-		self.provides.addDependencies(obj.provides, obj.backingStoreId)
-
-		if obj.arch != 'src':
+		if obj.arch not in ('src', 'nosrc'):
 			self.latest.update(obj)
+
 		return obj.backingStoreId
 
-	def addPackageObjectList(self, objList):
-		defer = self.deferCommit()
+	def updatePackageDependencies(self, obj):
+		self.requires.addDependencies(obj.requires, obj.backingStoreId)
+		self.provides.addDependencies(obj.provides, obj.backingStoreId)
+		self.files.addFiles(obj.files, obj.backingStoreId)
 
-		pkgIdList = list(_.backingStoreId for _ in objList)
+		if obj.resolvedRequires is not None:
+			edges = set()
+			for required in obj.resolvedRequires:
+				if required.backingStoreId is None:
+					print(f"Cannot add dependency to DB: {obj.fullname()} requires {required.fullname()}, but the latter has no ID set")
+					continue
 
+				# print(f"{obj.fullname()} -> {required.fullname()}")
+				edges.add((obj.backingStoreId, required.backingStoreId, None))
+
+			for source, target, depId in edges:
+				self.tree.addEdge(requiringPkgId = source, requiredPkgId = target, dependencyId = depId)
+
+	def updatePackageDependenciesWork(self, objList):
 		# Clean out all files and dependencies that belong to this package
-		self.requires.deleteMultiple('pkgId', pkgIdList)
-		self.provides.deleteMultiple('pkgId', pkgIdList)
+		pkgIdList = list(set(_.backingStoreId for _ in objList))
+
+		self.requires.removeDependenciesForList(pkgIdList)
+		self.provides.removeDependenciesForList(pkgIdList)
+		self.tree.removeDependenciesForList(pkgIdList)
 		self.files.deleteMultiple('pkgId', pkgIdList)
 
 		for obj in objList:
+			if obj.backingStoreId:
+				self.updatePackageDependencies(obj)
+
+	def addPackageObjectList(self, objList, updateDependencies = True):
+		defer = self.deferCommit()
+
+		for obj in objList:
 			self.addPackageObject(obj)
+
+		self.updatePackageDependenciesWork(objList)
 		defer.commit()
+
+	def updatePackageDependenciesObjectList(self, objList):
+		defer = self.deferCommit()
+		self.updatePackageDependenciesWork(objList)
+		defer.commit()
+
+	def obsPackageWasRebuilt(self, obsPackage):
+		if obsPackage.buildTime is None:
+			return False
+		return self.builds.hasChanged(obsPackage.name, obsPackage.buildTime)
+
+	def lookupBuildId(self, name):
+		return self.builds.nameToId(name)
+
+	def lookupBuildIdsForList(self, obsPackageList):
+		defer = self.deferCommit()
+
+		success = True
+
+		for obsPackage in obsPackageList:
+			obsPackage.backingStoreId = self.lookupBuildId(obsPackage.name)
+			if obsPackage.backingStoreId is None:
+				print(f"Unable to add OBS Build {obsPackage.name} to DB")
+				success = False
+
+		defer.commit()
+		return success
+
+	def updateBuilds(self, obsPackageList):
+		defer = self.deferCommit()
+
+		# Update build dependencies, first
+		edges = set()
+		for obsPackage in obsPackageList:
+			for other in obsPackage.buildRequires:
+				edges.add((obsPackage.backingStoreId, other.backingStoreId))
+
+		for source, target in edges:
+			self.buildDep.addEdge(requiringPkgId = source, requiredPkgId = target)
+
+		updated = []
+		for obsPackage in sorted(obsPackageList, key = lambda p: p.name):
+			sourceId = None
+			if obsPackage.sourcePackage:
+				sourceId = obsPackage.sourcePackage.backingStoreId
+
+			id = self.builds.update(obsPackage.name, obsPackage.buildTime)
+			if id is None:
+				print(f"Unable to update table {self.builds.name} for OBS package {obsPackage.name}")
+				continue
+
+			obsPackage.backingStoreId = id
+			updated.append(obsPackage)
+
+		defer.commit()
+		return updated
+
+	def xxx_updateBuildDependencies(self, obsPackageList):
+		defer = self.deferCommit()
+
+		for obsPackage in obsPackageList:
+			requiringPackage = obsPackage.sourcePackage
+			if requiringPackage.backingStoreId is None:
+				print(f"Warning: obs package {obsPackage.name} refers to {requiringPackage.fullname()} which has no DB ID")
+
+			for used in obsPackage._usedForBuild:
+				requiredPackage = used.sourcePackage
+				self.addBuildDependency(requiringPackage, requiredPackage)
+
+			# then update build times
+			self.builds.update(obsPackage.name, obsPackage.buildTime)
+
+		defer.commit()
+
+	def addBuildDependency(self, requiringPkg, requiredPkg):
+		# print(f"build of {requiringPkg.name} uses {requiredPkg.name}")
+		self.buildDep.add(requiringPkgId = requiringPkg.backingStoreId,
+				requiredPkgId = requiredPkg.backingStoreId)
 
 	def enumeratePackages(self, product):
 		for d in self.packages.fetchAll(('id', 'name', 'version', 'release', 'epoch', 'arch'), productId = product.productId):
@@ -860,6 +1123,9 @@ class BackingStoreDB(DB):
 		latestPkgIds = list(self.latest.fetchColumn('pkgId'))
 		return self.retrieveMultiplePackageInfos(latestPkgIds)
 
+	def getLatestPackageByName(self, name):
+		return self.latest.getPackageByName(name)
+
 	def retrievePackage(self, pinfo):
 		return self.retrievePackageById(pinfo.backingStoreId, pinfo.product)
 
@@ -875,7 +1141,8 @@ class BackingStoreDB(DB):
 		return self.constructPackage(pkgId, d, product)
 
 	def constructPackage(self, pkgId, d, product = None):
-		src = self.retrieveSourcePackage(d)
+		if product is None:
+			product = self.getCachedProductInfo(d.get('productId'))
 
 		assert(d['id'] == pkgId)
 
@@ -889,10 +1156,9 @@ class BackingStoreDB(DB):
 		pkg = self.packages.constructObject(Package, d)
 		self.packageCache.put(pkg)
 
-		pkg.sourcePackage = src
+		if d['arch'] not in ('src', 'nosrc'):
+			pkg.sourcePackage = self.retrieveSourcePackage(d, product)
 
-		if product is None:
-			product = self.getCachedProductInfo(d.get('productId'))
 		pkg.product = product
 
 		# now do the files
@@ -903,36 +1169,7 @@ class BackingStoreDB(DB):
 		pkg.provides = self.provides.retrieveDependenciesByPkgId(pkgId)
 
 		if self._allowDepTreeLookups:
-			resolved = set()
-
-			# this returns a list of (dependencyId, packageId) pairs
-			rawRequired = self.tree.retrieveRequired(pkgId)
-
-			missing = set()
-			found = dict()
-
-			for depId, targetId in rawRequired:
-				target = self.packageCache.get(targetId)
-				if target is None:
-					missing.add(targetId)
-
-			if missing:
-				for d in self.packages.selectMultiple([], 'id', list(missing)):
-					t = self.constructPackage(d['id'], d)
-					assert(t)
-
-			for depId, targetId in rawRequired:
-				# workaround
-				if depId is None:
-					continue
-
-				target = self.packageCache.get(targetId)
-				dep = self.requires.retrieveDependencyById(depId)
-				assert(dep)
-
-				resolved.add((dep, target))
-
-			pkg.resolvedRequires = list(resolved)
+			self.chasePackageDependencies(pkg)
 
 		if self._requireSourceLookups and pkg.sourceBackingStoreId is not None:
 			src = self.retrievePackageById(pkg.sourceBackingStoreId, product)
@@ -941,7 +1178,40 @@ class BackingStoreDB(DB):
 
 		return pkg
 
-	def retrieveSourcePackage(self, d):
+	def chasePackageDependencies(self, pkg):
+		resolved = set()
+
+		# this returns a list of (dependencyId, packageId) pairs
+		rawRequired = self.tree.retrieveRequired(pkgId)
+
+		missing = set()
+		found = dict()
+
+		for depId, targetId in rawRequired:
+			target = self.packageCache.get(targetId)
+			if target is None:
+				missing.add(targetId)
+
+		if missing:
+			for d in self.packages.selectMultiple([], 'id', list(missing)):
+				t = self.constructPackage(d['id'], d)
+				assert(t)
+
+		for depId, targetId in rawRequired:
+			# workaround
+			if depId is None:
+				continue
+
+			target = self.packageCache.get(targetId)
+			dep = self.requires.retrieveDependencyById(depId)
+			assert(dep)
+
+			resolved.add((dep, target))
+
+		# really list? or better set?
+		pkg.resolvedRequires = list(resolved)
+
+	def retrieveSourcePackage(self, d, product = None):
 		src = None
 
 		sourceId = d.get('sourceId')
@@ -949,7 +1219,7 @@ class BackingStoreDB(DB):
 			del d['sourceId']
 			sd = self.packages.fetchOne(id = sourceId)
 			if sd is not None:
-				src = self.packages.constructObject(Package, sd)
+				src = self.constructPackage(sourceId, sd, product)
 
 		if src is None:
 			pass
@@ -1088,4 +1358,5 @@ class BackingStoreDB(DB):
 		defer = self.deferCommit()
 		for (source, target, dep) in edges:
 			self.tree.addEdge(requiringPkgId = source, requiredPkgId = target, dependencyId = dep)
+		defer.commit()
 

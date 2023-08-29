@@ -49,6 +49,19 @@ preferences:
 # libOpenIPMI0 and OpenIPMI
 # icu.691-devel and libicu-devel
 
+build_groups:
+ - name: "Core"
+   builds:
+    - "@Core"
+    - "@CoreLibraries"
+    - "@CryptoLibraries"
+ - name: "KernelPlus"
+   requires:
+    - "Core"
+   builds:
+    - "@Kernel"
+    - "@Boot"
+
 groups:
  - name: "@32bit"
    priority: 0

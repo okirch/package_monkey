@@ -40,6 +40,10 @@ class Application:
 			self._store = BackingStoreDB(self.opts.db)
 		return self._store
 
+	@property
+	def architecture(self):
+		return self.opts.arch
+
 	def enumerateProducts(self):
 		args = {}
 		if self.opts.family:

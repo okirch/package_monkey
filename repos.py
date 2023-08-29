@@ -367,7 +367,7 @@ class Repo:
 			if timeNode is not None:
 				pkg.buildTime = int(timeNode.attrib['build'])
 			else:
-				print("WARNING: %s: build time defined" % pkg.fullname())
+				print("WARNING: %s: build time not defined" % pkg.fullname())
 				pkg.buildTime = 0
 
 			pkgid = None

@@ -8,6 +8,11 @@ versions:
  - name: "1.0"
 architectures:
  - x86_64
+buildservice:
+ source:
+  - SUSE:ALP:Source:Standard:$VERSION
+ build:
+  - SUSE:ALP:Source:Standard:Core:$VERSION:Build
 
 products:
  - name:        Dolomite

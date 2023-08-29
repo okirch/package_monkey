@@ -32,8 +32,11 @@ for pinfo in store.enumerateLatestPackages():
 	if product is None:
 		raise Exception(f"{pkg.fullname()} cannot determine product (product id {pkg.productId}")
 
-	if pkg.arch not in ('src', 'nosrc'):
-		needToResolve.add(pkg)
+	# Due to the way we build the "latest" table in the database, we
+	# will only ever encounter binary packages
+	assert(pkg.arch not in ('src', 'nosrc'))
+
+	needToResolve.add(pkg)
 
 arch = needToResolve.uniqueArch
 
@@ -71,8 +74,6 @@ for pkg in needToResolve:
 	while queue:
 		pkg = queue.pop(0)
 
-		assert(pkg.arch != 'src')
-
 		counter += 1
 		if counter % 10 == 0:
 			store.addEdgeSetToTree(edges)
@@ -83,7 +84,8 @@ for pkg in needToResolve:
 
 		for dep, target in context.resolveDownward(preferences, pkg):
 			if target not in alreadyResolved:
-				# print(f"{pkg.fullname()} -> {target.name}")
+				print(f"{pkg.fullname()} -> {target.fullname()}")
+				assert(target.arch != 'src')
 				queue.append(target)
 				alreadyResolved.add(target)
 

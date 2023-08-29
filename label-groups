@@ -53,10 +53,15 @@ def flattenGroup(groupName, alreadySeen):
 	assert(label not in alreadySeen)
 	return flattenLabelTree(label, alreadySeen)
 
-labelSequence = []
-alreadySeen = set()
-for groupName in ("@Core", "@HostCore", "@Kernel", "@UpdateStack"):
-	labelSequence += flattenGroup(groupName, alreadySeen)
+def flattenGroupList(*names):
+	labelSequence = []
+	alreadySeen = set()
+	for groupName in names:
+		labelSequence += flattenGroup(groupName, alreadySeen)
+	return labelSequence
+
+binaryLabels = flattenGroupList("@Core", "@HostCore", "@Kernel", "@UpdateStack")
+sourceLabels = flattenGroupList("Core", "KernelPlus")
 
 worker = ResolverWorker(resolver)
 
@@ -83,7 +88,7 @@ resolverContext = worker.contextForArch(collection.uniqueArch)
 preferences = ResolverPreferences()
 
 closure = {}
-for label in labelSequence:
+for label in binaryLabels:
 	group = packageFilter.makeGroup(label.name)
 
 	print(f"Classify packages belonging to {group.label}")
@@ -95,9 +100,30 @@ for label in labelSequence:
 	inventory.update(group.packages)
 	inventory.update(classifier.result)
 
-for label in labelSequence:
+for label in sourceLabels:
+	group = packageFilter.makeSourceGroup(label.name)
+
+	print(f"Classify packages belonging to {group.label}")
+
+	classifier = Classification.BuildRequireClosure(worker, collection.uniqueArch, preferences, label)
+	assert(classifier)
+	for component in label.builds:
+		componentGroup = packageFilter.makeGroup(component.name)
+		assert(componentGroup)
+		classifier.classify(componentGroup.packages)
+
+	closure[label.name] = classifier.result
+
+for label in binaryLabels:
 	print()
 	print(label)
+
+	for pkg in sorted(closure[label.name], key = lambda p: p.name):
+		print(f"  {pkg.name}")
+
+for label in sourceLabels:
+	print()
+	print(f"Source project {label}")
 
 	for pkg in sorted(closure[label.name], key = lambda p: p.name):
 		print(f"  {pkg.name}")

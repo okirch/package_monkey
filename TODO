@@ -1,0 +1,4 @@
+
+- Move fileinfo_ext cavhe file to cache/obs
+- get rid of "explicit closure" stuff - upward/sideways dependencies are okay if
+  the packages come from the same build project

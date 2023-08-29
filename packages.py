@@ -21,6 +21,9 @@ def debugDependency2(*args, **kwargs):
 	if optDebugDependency >= 2:
 		print(*args, **kwargs)
 
+def isSourceArchitecture(arch):
+	return arch in ('src', 'nosrc')
+
 class Versiontools:
 	tested = False
 
@@ -394,7 +397,11 @@ class ResolverContext:
 				continue
 
 			if self.acceptable(cand):
+				# print(f"  {cand.fullname()}")
 				choice.update(preferences, cand)
+			else:
+				# print(f"  {cand.fullname()} not acceptable")
+				pass
 
 		# Expand PackageInfo to full-blown Package object
 		found = self._resolver.expand(choice.result)
@@ -411,6 +418,10 @@ class ResolverContext:
 
 	def resolveDownward(self, preferences, pkg):
 		result = []
+
+		print(f"resolveDownward({pkg.fullname()})")
+#		if pkg.name == "openldap2" and pkg.arch == "src":
+#			print(pkg.requires)
 
 		if pkg.resolvedRequires is not None:
 			return pkg.resolvedRequires
@@ -529,7 +540,7 @@ class ResolverWorker:
 		self.debugMsg = debugDependency
 
 	def contextForArch(self, arch):
-		if arch == 'nosrc' or arch == 'noarch':
+		if isSourceArchitecture(arch):
 			raise Exception(f"Invalid architecture {arch} in ResolverWorker.contextForArch()")
 
 		ctx = self._contexts.get(arch)
@@ -1195,6 +1206,7 @@ class Package:
 		self.productId = None
 		self.product = None
 		self.backingStoreId = None
+		self.obsBuildId = None
 
 		self.requires = []
 		self.provides = []
@@ -1202,6 +1214,7 @@ class Package:
 		self.suggests = []
 		self.conflicts = []
 		self.resolvedRequires = None
+		self.resolvedProvides = None
 
 		self.files = []
 
@@ -1218,6 +1231,16 @@ class Package:
 		(s, release) = s.rsplit('-', 1)
 		(name, version) = s.rsplit('-', 1)
 		return name, version, release, arch
+
+	@staticmethod
+	def fromPackageInfo(pinfo):
+		pkg = Package(pinfo.name, pinfo.version, pinfo.release, pinfo.arch, pinfo.epoch)
+		pkg.backingStoreId = pinfo.backingStoreId
+		pkg._parsedVersion = pinfo.parsedVersion
+		pkg.product = pinfo.product
+		pkg.productId = pinfo.productId
+		pkg.buildTime = pinfo.buildTime
+		return pkg
 
 	@staticmethod
 	def createDependency(name, backingStoreId = None, **kwd):
@@ -1268,7 +1291,7 @@ class Package:
 		return tree.build()
 
 	def sourceID(self):
-		if self.arch == 'src' or self.arch == 'nosrc':
+		if isSourceArchitecture(self.arch):
 			return self.fullname()
 		if self.sourcePackage:
 			return self.sourcePackage.sourceID()
@@ -1287,6 +1310,10 @@ class Package:
 	def setChanges(self, changes):
 		self._changes = sorted(changes, key = lambda c : int(c.date))
 
+	@property
+	def shortname(self):
+		return f"{self.name}.{self.arch}"
+
 	def fullname(self):
 		return("%s-%s-%s.%s.rpm" % (self.name, self.version, self.release, self.arch))
 
@@ -1300,6 +1327,20 @@ class Package:
 		if self.sourcePackage is None:
 			return None
 		return self.sourcePackage.backingStoreId
+
+	@sourceBackingStoreId.setter
+	def sourceBackingStoreId(self, value):
+		pass
+
+	def updateResolvedRequires(self, toAdd):
+		if self.resolvedRequires is None:
+			self.resolvedRequires = set()
+		self.resolvedRequires.update(toAdd)
+
+	def updateResolvedProvides(self, toAdd):
+		if self.resolvedProvides is None:
+			self.resolvedProvides = set()
+		self.resolvedProvides.update(toAdd)
 
 	def recordChanges(self, verdict, changes = None):
 		global totalChanges, totalSuseChanges
@@ -1394,13 +1435,14 @@ class Product:
 
 		return pkg
 
+	def packageTableForArch(self, arch):
+		if isSourceArchitecture(arch):
+			return self.sources
+		return self.packages
+
 	def addPackage(self, pkg):
-		if pkg.arch == 'src':
-			self.sources[pkg.fullname()] = pkg
-		else:
-			self.packages[pkg.fullname()] = pkg
-			if self._resolver:
-				self._resolver.addPackage(pkg)
+		packageTable = self.packageTableForArch(pkg.arch)
+		packageTable[pkg.fullname()] = pkg
 
 		pkgid = pkg.pkgid
 		if pkgid is not None:
@@ -1419,16 +1461,14 @@ class Product:
 				self._resolver.addFileProvides(path, pkg)
 
 	def findPackage(self, name, version = None, release = None, arch = None):
-		pkgdict = self.packages
-		if arch == 'src':
-			pkgdict = self.sources
+		packageTable = self.packageTableForArch(arch)
 
 		if name and version and release and arch:
 			fullname = "%s-%s-%s.%s.rpm" % (name, version, release, arch)
-			return pkgdict.get(fullname)
+			return packageTable.get(fullname)
 
 		# slow path
-		for p in pkgdict.values():
+		for p in packageTable.values():
 			if p.name != name:
 				continue
 			if version is not None and p.version != version:
@@ -1450,12 +1490,10 @@ class Product:
 			print("ERROR %s has no build time" % refPackage.fullname())
 			die
 
-		pkgdict = self.packages
-		if refPackage.arch == 'src':
-			pkgdict = self.sources
+		packageTable = self.packageTableForArch(refPackage.arch)
 
 		result = []
-		for p in pkgdict.values():
+		for p in packageTable.values():
 			if p.name == refPackage.name and p.arch == refPackage.arch and p.builtNoLaterThan(refPackage.buildTime):
 				result.append(p)
 
@@ -1466,14 +1504,12 @@ class Product:
 			if False:
 				print(msg)
 
-		pkgdict = self.packages
-		if before.arch == 'src':
-			pkgdict = self.sources
+		packageTable = self.packageTableForArch(before.arch)
 
 		debug("Looking for most recent update before %s" % (before.fullname()))
 		best = None
 		earliest = None
-		for p in pkgdict.values():
+		for p in packageTable.values():
 			if p.name != before.name or p.arch != before.arch:
 				continue
 
@@ -1505,7 +1541,7 @@ class Product:
 		if not src and create:
 			(name, version, release, arch) = Package.parseName(name)
 			src = Package(name, version, release, arch)
-			assert(src.arch == 'src' or src.arch == 'nosrc')
+			assert(isSourceArchitecture(src.arch))
 			self.addPackage(src)
 		return src
 
@@ -1533,17 +1569,37 @@ class Product:
 				self._resolver.addPackage(pkg)
 
 class PackageInfo:
-	def __init__(self, name, epoch, version, release, arch, backingStoreId, productId = None):
+	def __init__(self, name, epoch, version, release, arch, backingStoreId, productId = None, parsedVersion = None):
+		if parsedVersion is None:
+			parsedVersion = Versiontools.ParsedVersion(version, release, epoch)
+
 		self.name = name
 		self.epoch = epoch
 		self.version = version
 		self.release = release
 		self.arch = arch
+		self.buildTime = None
 		self.backingStoreId = backingStoreId
 		self.product = None
 		self.productId = productId
 		self.productName = None
-		self.parsedVersion = Versiontools.ParsedVersion(version, release, epoch)
+		self.parsedVersion = parsedVersion
+
+	@staticmethod
+	def fromNameAndParsedVersion(name, arch, parsedVersion, **kwd):
+		return PackageInfo(name, parsedVersion.epoch, parsedVersion.version, parsedVersion.release, arch, None, **kwd)
+
+	@staticmethod
+	def parsePackageName(pkgName):
+		assert(pkgName.endswith('.rpm'))
+
+		try:
+			(n, arch, suffix) = pkgName.rsplit(".", maxsplit = 2)
+			(name, version, release) = n.rsplit("-", maxsplit = 2)
+		except:
+			raise ValueError(f"Unable to parse RPM package name {pkgName}")
+
+		return PackageInfo(name, None, version, release, arch, None)
 
 	@property
 	def key(self):
@@ -1559,6 +1615,18 @@ class PackageInfo:
 
 	def fullname(self):
 		return f"{self.name}-{self.version}-{self.release}.{self.arch}.rpm"
+
+class PackageInfoFactory:
+	def __init__(self):
+		self._map = dict()
+
+	def create(self, name, version, release, arch):
+		key = f"{name}-{version}-{release}.{arch}"
+		pinfo = self._map.get(jey)
+		if pinfo is None:
+			pinfo = PackageInfo(name, None, version, release, arch, None)
+			self._map[key] = pinfo
+		return pinfo
 
 class PackageSelector(dict):
 	STRATEGY_YOUNGEST = 0
@@ -1587,6 +1655,7 @@ class PackageSelector(dict):
 class PackageCollection:
 	def __init__(self):
 		self._packages = []
+		self._sources = set()
 		self._arches = set()
 
 	def add(self, pkg):
@@ -1594,11 +1663,15 @@ class PackageCollection:
 		if pkg.arch not in ('src', 'nosrc', 'noarch'):
 			self._arches.add(pkg.arch)
 
+			src = pkg.sourcePackage
+			if src:
+				self._sources.add(src)
+
 	def __iter__(self):
-		return iter(self._packages)
+		return iter(self._packages + list(self._sources))
 
 	def __len__(self):
-		return len(self._packages)
+		return len(self._packages) + len(self._sources)
 
 	@property
 	def uniqueArch(self):

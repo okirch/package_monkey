@@ -8,6 +8,7 @@ from products import ProductCatalog, CacheLocation
 from packages import Product, Resolver, ResolverWorker
 from filter import PackageFilter, Classification
 from database import BackingStoreDB
+from obsclnt import OBSClient, OBSProject
 
 from options import Application
 
@@ -67,6 +68,26 @@ groupUpdateCount = CountDict()
 productInfo = ProductStats()
 
 packageMap = PackageMap()
+
+obsInstanceHostname = "api.suse.de"
+
+obs = OBSClient(f"https://{obsInstanceHostname}")
+obs.setCachePath("cache/http")
+
+if True:
+	for release in application.enumerateProducts():
+
+		product = release.createEmptyProduct()
+
+		print(f"Release {release}")
+		for bp in release.buildProjects:
+			print(f"  {bp}")
+
+			project = OBSProject(bp, product)
+			project.setCachePath(f"cache/obs/{obsInstanceHostname}")
+			project.updateBinaryList(obs)
+			project.updateBackingStore(application.backingStore, obs)
+			continue
 
 for release in application.enumerateProducts():
 	print(f"Found {release}")

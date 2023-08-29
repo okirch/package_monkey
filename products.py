@@ -76,6 +76,19 @@ class RepoCollection:
 
 		return result
 
+class BuildServiceCollection:
+	def __init__(self):
+		self.sourceProjects = []
+		self.buildProjects = []
+
+	def expand(self, version):
+		fn = lambda name: name.replace('$VERSION', version)
+
+		result = BuildServiceCollection()
+		result.sourceProjects = map(fn, self.sourceProjects)
+		result.buildProjects = map(fn, self.buildProjects)
+		return result
+
 class RepoService:
 	def __init__(self, baseURL, cacheLocation = None):
 		self.baseURL = baseURL
@@ -90,9 +103,11 @@ class RepoService:
 		self.cacheStrategy = cacheStrategy
 
 		self.repoCollection = {}
+		self.obsCollection = {}
 
-	def addVersion(self, version, repositories):
+	def addVersion(self, version, repositories, projects):
 		self.repoCollection[version] = repositories
+		self.obsCollection[version] = projects
 
 	def getRepoURLs(self, obsname, version, arch):
 		collection = self.repoCollection.get(version)
@@ -100,6 +115,13 @@ class RepoService:
 			return []
 
 		return collection.getRepoURLs(obsname, version, arch)
+
+	def getOBSProjects(self, obsname, version, arch):
+		obs = self.obsCollection.get(version)
+		if obs is None:
+			return BuildServiceCollection()
+
+		return obs.expand(version)
 
 class ProductFamily:
 	def __init__(self, name, cacheLocation):
@@ -130,6 +152,7 @@ class ProductFamily:
 
 		self.architectures = data['architectures']
 		self.repositories = self.expandRepositories(data)
+		self.projects = self.expandProjects(data)
 
 		self.versions = []
 		for vd in data['versions']:
@@ -139,9 +162,15 @@ class ProductFamily:
 			if repositories is None:
 				repositories = self.repositories
 			if repositories is None:
-				raise Exception("No repositories defined for {name}")
+				raise Exception(f"No repositories defined for {name}")
 
-			self.service.addVersion(name, repositories)
+			projects = self.expandProjects(data)
+			if projects is None:
+				projects = self.projects
+			if projects is None:
+				print(f"Warning: No repositories defined for {name}")
+
+			self.service.addVersion(name, repositories, projects)
 			self.versions.append(name)
 
 		self._products = []
@@ -156,6 +185,16 @@ class ProductFamily:
 			return None
 
 		return RepoCollection(self.baseurl, urlpatterns)
+
+	def expandProjects(self, data):
+		data = data.get('buildservice')
+		if data is None:
+			return None
+
+		info = BuildServiceCollection()
+		info.ourceProjects = data.get('source') or []
+		info.buildProjects = data.get('build') or []
+		return info
 
 	def enumerate(self, **args):
 		if args.get('version') == 'latest':
@@ -260,6 +299,8 @@ class Product:
 		release = ProductRelease(self.obsname, version, arch, repoURLs, self.service)
 		self._releases.append(release)
 
+		release.obsProjects = self.service.getOBSProjects(self.obsname, version, arch)
+
 		return release
 
 	def enumerate(self, **args):
@@ -276,6 +317,7 @@ class ProductRelease:
 		self.arch = arch
 		self.productId = None
 		self.repoURLs = repoURLs
+		self.obsProjects = None
 		self.service = service
 
 		self.backingStoreId = None
@@ -322,6 +364,18 @@ class ProductRelease:
 			return None
 
 		return self.service.cacheStrategy.cachePath(self.repoURL)
+
+	@property
+	def sourceProjects(self):
+		if self.obsProjects is None:
+			return []
+		return self.obsProjects.sourceProjects
+
+	@property
+	def buildProjects(self):
+		if self.obsProjects is None:
+			return []
+		return self.obsProjects.buildProjects
 
 if False:
 	cat = ProductCatalog()

@@ -67,6 +67,12 @@ class PackageMap(dict):
 groupUpdateCount = CountDict()
 productInfo = ProductStats()
 
+store = application.backingStore
+
+# remember the arch we're asked to look at, so that we don't
+# have to play guessing games later on
+store.putProperty("arch", application.architecture)
+
 packageMap = PackageMap()
 
 obsInstanceHostname = "api.suse.de"

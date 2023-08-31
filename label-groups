@@ -84,7 +84,11 @@ class Inventory(dict):
 
 inventory = Inventory()
 
-resolverContext = worker.contextForArch(collection.uniqueArch)
+productArchitecture = store.getProperty("arch")
+if productArchitecture is None:
+	raise Exception("database does not record architecture of original query")
+
+resolverContext = worker.contextForArch(productArchitecture)
 preferences = ResolverPreferences()
 
 closure = {}
@@ -92,7 +96,7 @@ for label in binaryLabels:
 	group = packageFilter.makeGroup(label.name)
 
 	print(f"Classify packages belonging to {group.label}")
-	classifier = Classification.DownwardClosure(worker, collection.uniqueArch, preferences, label)
+	classifier = Classification.DownwardClosure(worker, productArchitecture, preferences, label)
 	classifier.classify(group.packages)
 
 	closure[label.name] = classifier.result
@@ -105,7 +109,7 @@ for label in sourceLabels:
 
 	print(f"Classify packages belonging to {group.label}")
 
-	classifier = Classification.BuildRequireClosure(worker, collection.uniqueArch, preferences, label)
+	classifier = Classification.BuildRequireClosure(worker, productArchitecture, preferences, label)
 	assert(classifier)
 	for component in label.builds:
 		componentGroup = packageFilter.makeGroup(component.name)

@@ -872,6 +872,30 @@ class TreeTable(DirectedGraphTable):
 class BuildTreeTable(DirectedGraphTable):
 	NAME = "builddep"
 
+class KeyValueTable(UniqueTable):
+	NAME = "keyvalue"
+
+	TABLE_FIELDS = """
+			key string NOT NULL,
+			value string
+		"""
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self._data = {}
+
+	def onLoad(self):
+		for d in self.fetchAll():
+			key = d['key']
+			self._data[key] = d['value']
+
+	def set(self, key, value):
+		self.replaceDict({'key': key, 'value': value})
+		self._data[key] = value
+
+	def get(self, key):
+		return self._data.get(key)
+
 class PackageCache(dict):
 	def put(self, pkg):
 		assert(pkg.backingStoreId is not None)
@@ -938,11 +962,20 @@ class BackingStoreDB(DB):
 		self.buildDep = BuildTreeTable.instantiate(self)
 		self.buildDep.createIndex("idx_bdep_down", ['requiringPkgId'])
 
+		self.keyValueStore = KeyValueTable.instantiate(self)
+		self.keyValueStore.onLoad()
+
 		self.packageCache = PackageCache()
 		self.providesCache = ProvidesCache()
 
 		self._allowDepTreeLookups = False
 		self._requireSourceLookups = False
+
+	def putProperty(self, name, value):
+		self.keyValueStore.set(name, value)
+
+	def getProperty(self, name):
+		return self.keyValueStore.get(name)
 
 	# Complete product cache entry by attaching our in-memory release object to it
 	# This allows us to create ProductInfo objects with a correct pinfo.product pointer
@@ -1182,7 +1215,7 @@ class BackingStoreDB(DB):
 		resolved = set()
 
 		# this returns a list of (dependencyId, packageId) pairs
-		rawRequired = self.tree.retrieveRequired(pkgId)
+		rawRequired = self.tree.retrieveRequired(pkg.backingStoreId)
 
 		missing = set()
 		found = dict()

@@ -198,6 +198,7 @@ groups:
     - libdevmapper*
     - libext2fs2
     - libfl2
+    - libfreetype6
     - libgcc_s1
     - libglib-*
     - libgpgme11
@@ -506,33 +507,35 @@ groups:
    groups:
     - System/Kernel
    packages:
-    - kernel-*
-    - sdparm
+    - alsa
+    - alsa-plugins
+    - alsa-utils
     - cpupower
     - cpuset
     - dmidecode
+    - dosfstools
+    - fipscheck
     - "*-firmware"
     - FirmwareUpdateKit
     - fuse
     - fwupdate
+    - irqbalance
+    - kdump
+    - kdumpid
+    - kernel-*
+    - kernel-*-devel
+    - kexec-tools
+    - kmod
     - mcelog
     - memcached
     - numactl
     - numad
     - pciutils
     - pciutils-*
-    - ucode-intel
-    - irqbalance
-    - kdump
-    - kdumpid
-    - kexec-tools
-    - suse-module-tools
-    - alsa
-    - alsa-utils
-    - alsa-plugins
-    - dosfstools
-    - fipscheck
+    - sdparm
     - sg3_utils
+    - suse-module-tools
+    - ucode-intel
 
  - name: "@Kernel/Debugging"
    packages:

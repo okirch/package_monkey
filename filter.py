@@ -120,19 +120,19 @@ class Classification:
 			return f"{self.package.fullname()} is the source of {self.binary.fullname()}"
 
 	class ReasonBuildDependency(Reason):
-		def __init__(self, pkg, dependant):
+		def __init__(self, pkg, parentReason):
 			super().__init__(pkg)
-			self.dependant = dependant
+			self.parentReason = parentReason
 
 		@property
 		def type(self):
 			return 'build requirement'
 
 		def chain(self):
-			return self.reasonChain(self.dependant)
+			return [self.parentReason]
 
 		def __str__(self):
-			return f"{self.package.fullname()} builds {self.dependent.package.fullname()}"
+			return f"{self.package.fullname()} builds {self.parentReason.package.fullname()}"
 
 	class ReasonSourceClosure(Reason):
 		def __init__(self, pkg, sibling):
@@ -193,6 +193,9 @@ class Classification:
 
 		def handleUnexpectedDependency(self, pkg, reason):
 			self.worker.problems.addUnexpectedDependency(self.label.name, reason, pkg)
+
+		def handleMissingSource(self, pkg, reason):
+			self.worker.problems.addMissingSource(pkg, reason)
 
 		def debugMsg(self, msg):
 			self.worker.debugMsg(msg)
@@ -286,19 +289,17 @@ class Classification:
 
 		def transformSource(self, arg):
 			if isinstance(arg, Classification.Reason):
-				binary = arg.package
+				reason = arg
+
+				binary = reason.package
 				src = binary.sourcePackage
 				if src is None:
 					print(f"No source for {binary.fullname()}")
-					indent = "   "
-					for why in arg.chain():
-						print(f"{indent}{why}")
-						indent += "  "
-					print(self.context.arch)
-					fail
+					self.handleMissingSource(binary, reason)
 					return None
+
 				src.label = self.label
-				src.labelReason = Classification.ReasonBuildDependency(src, arg)
+				src.labelReason = Classification.ReasonBuildDependency(src, reason)
 				return src.labelReason
 
 			raise Exception()

@@ -457,6 +457,11 @@ class ResolverWorker:
 		def __init__(self, desc):
 			self.desc = desc
 
+		def showProof(self, reason, indent = "  "):
+			for why in reason.chain():
+				print(f"{indent}{why}")
+				indent += "  "
+
 	class UnexpectedDependency(Problem):
 		def __init__(self, *args):
 			super().__init__(*args)
@@ -475,11 +480,6 @@ class ResolverWorker:
 				print(f"      Package {badPackage.fullname()} was labeled as {badPackage.label} due to:")
 				self.showProof(badPackage.labelReason, indent = "         ")
 
-		def showProof(self, reason, indent = "  "):
-			for why in reason.chain():
-				print(f"{indent}{why}")
-				indent += "  "
-
 	class UnresolvedDependency(Problem):
 		def __init__(self, *args):
 			super().__init__(*args)
@@ -493,10 +493,25 @@ class ResolverWorker:
 			for pkg in self.requiredby:
 				print(f"   {pkg.fullname()}")
 
+	class MissingSource(Problem):
+		def __init__(self, *args):
+			super().__init__(*args)
+			self.requiredby = set()
+
+		def add(self, pkg, reason):
+			self.requiredby.add((pkg, reason))
+
+		def show(self):
+			print(f"Missing source package {self.desc}, required by:")
+			for (pkg, reason) in self.requiredby:
+				print(f"   {pkg.fullname()}")
+				self.showProof(reason, indent = "      ")
+
 	class Problems:
 		def __init__(self):
 			self._unexpected = {}
 			self._unresolved = {}
+			self._nosource = {}
 
 		def addUnexpectedDependency(self, fromLabel, fromReason, toPackage):
 			toLabel = toPackage.label.name
@@ -518,14 +533,24 @@ class ResolverWorker:
 				self._unresolved[key] = ur
 			ur.add(pkg)
 
+		def addMissingSource(self, pkg, reason):
+			key = f"{pkg.fullname()}"
+			problem = self._nosource.get(key)
+			if problem is None:
+				problem = ResolverWorker.MissingSource(key)
+				self._nosource[key] = problem
+			problem.add(pkg, reason)
+
 		def __bool__(self):
 			return bool(self._unexpected) or bool(self._unresolved)
 
 		def show(self):
-			for key, ud in sorted(self._unexpected.items()):
-				ud.show()
-			for key, ur in sorted(self._unresolved.items()):
-				ur.show()
+			for key, problem in sorted(self._unexpected.items()):
+				problem.show()
+			for key, problem in sorted(self._unresolved.items()):
+				problem.show()
+			for key, problem in sorted(self._nosource.items()):
+				problem.show()
 
 	def __init__(self, resolver, processfn = None):
 		self._resolver = resolver

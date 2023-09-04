@@ -751,14 +751,8 @@ class OBSProject:
 	def resolveAllSources(self):
 		sourceMap = {}
 		needToResolveSource = []
+		validPackages = []
 		for pkg in self.packages:
-			sourcePackage = pkg.sourcePackage
-			if sourcePackage is not None:
-				sourceMap[pkg.basePackageName] = sourcePackage
-			else:
-				needToResolveSource.append(pkg)
-
-		for pkg in needToResolveSource:
 			if pkg.buildStatus == OBSPackage.STATUS_EXCLUDED:
 				continue
 
@@ -770,29 +764,55 @@ class OBSProject:
 				print(f"Unable to process {pkg.name} - unexpected build status {pkg.buildStatusString}")
 				continue
 
+			validPackages.append(pkg)
+
+			sourcePackage = pkg.sourcePackage
+			if sourcePackage is not None:
+				sourceMap[pkg.basePackageName] = sourcePackage
+			else:
+				needToResolveSource.append(pkg)
+
+		for pkg in needToResolveSource:
 			sourcePackage = sourceMap.get(pkg.basePackageName)
 			if sourcePackage is None:
 				print(f"Warning: unable to determine source package version for {pkg.basePackageName}")
 			else:
 				pkg.sourcePackage = sourcePackage
 
+		return set(pkg.sourcePackage for pkg in validPackages)
+
 	def updateBackingStore(self, store, client, chunkSize = 20):
 		toBeAdded = []
 		binariesToBeAdded = []
 
-		self.resolveAllSources()
+		sourcePackages = self.resolveAllSources()
+
+		# Make sure all the source packages are in the DB so that we can later refer to them
+		# by backingStoreId
+		sourcesToBeAdded = list(sorted(sourcePackages, key = lambda p: p.name))
+		store.addPackageObjectList(sourcesToBeAdded, updateDependencies = False)
 
 		# Make sure each of these packages is in the database and has a backingStoreId
 		if not store.lookupBuildIdsForList(self.packages):
 			raise Exception("Unable to insert all OBS packages into DB")
 
+		needToUpdateSourcesFor = []
 		for pkg in self.packages:
+			if pkg.buildStatus != OBSPackage.STATUS_SUCCEEDED:
+				continue
+
 			sourcePackage = pkg.sourcePackage
+			if sourcePackage.backingStoreId is None:
+				print(f"Source package {sourcePackage.shortname} is not in DB")
+				fail
+
 			for rpm in pkg.binaries:
 				rpm.obsBuildId = pkg.backingStoreId
 
-				if rpm is not sourcePackage:
+				if rpm.sourceBackingStoreId is None and rpm is not sourcePackage:
 					rpm.setSourcePackage(sourcePackage)
+					needToUpdateSourcesFor.append(rpm)
+
 				assert(rpm.resolvedRequires is None)
 
 			binariesToBeAdded += pkg.binaries
@@ -801,6 +821,7 @@ class OBSProject:
 
 		print(f"About to update {len(binariesToBeAdded)} packages")
 		store.addPackageObjectList(binariesToBeAdded, updateDependencies = False)
+		store.updatePackageSourceObjectList(needToUpdateSourcesFor)
 		print("Done.")
 
 		print(f"About to update depdendencies for packages")

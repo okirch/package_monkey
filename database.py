@@ -1041,6 +1041,23 @@ class BackingStoreDB(DB):
 			for source, target, depId in edges:
 				self.tree.addEdge(requiringPkgId = source, requiredPkgId = target, dependencyId = depId)
 
+	def updatePackageSource(self, obj):
+		sourceId = obj.sourceBackingStoreId
+		if sourceId is None:
+			fail
+
+		if obj.backingStoreId is None:
+			raise Exception(f"Cannot update sourceId for {obj.fullname()} - backingStoreId is not set")
+
+		if obj.name == "yelp-tools":
+			print(f"Updating {obj.name} source id {sourceId}")
+			global optSqlDebug
+			optSqlDebug = 1
+		keys = ['sourceId']
+		values = [sourceId]
+		self.packages.updateKeysAndValues(keys, values, id = obj.backingStoreId)
+		optSqlDebug = 0
+
 	def updatePackageDependenciesWork(self, objList):
 		# Clean out all files and dependencies that belong to this package
 		pkgIdList = list(set(_.backingStoreId for _ in objList))
@@ -1066,6 +1083,13 @@ class BackingStoreDB(DB):
 	def updatePackageDependenciesObjectList(self, objList):
 		defer = self.deferCommit()
 		self.updatePackageDependenciesWork(objList)
+		defer.commit()
+
+	def updatePackageSourceObjectList(self, objList):
+		defer = self.deferCommit()
+		for obj in objList:
+			print(f"Updating source for {obj.shortname}")
+			self.updatePackageSource(obj)
 		defer.commit()
 
 	def obsPackageWasRebuilt(self, obsPackage):
@@ -1231,13 +1255,14 @@ class BackingStoreDB(DB):
 				assert(t)
 
 		for depId, targetId in rawRequired:
-			# workaround
-			if depId is None:
-				continue
+			if False:
+				# workaround - for what?!
+				if depId is None:
+					continue
 
 			target = self.packageCache.get(targetId)
 			dep = self.requires.retrieveDependencyById(depId)
-			assert(dep)
+			assert(depId is None or dep)
 
 			resolved.add((dep, target))
 

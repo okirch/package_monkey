@@ -419,11 +419,8 @@ class ResolverContext:
 	def resolveDownward(self, preferences, pkg):
 		result = []
 
-		print(f"resolveDownward({pkg.fullname()})")
-#		if pkg.name == "openldap2" and pkg.arch == "src":
-#			print(pkg.requires)
-
 		if pkg.resolvedRequires is not None:
+			self.debugMsg(f"{pkg.fullname()} - {len(pkg.resolvedRequires)} dependencies already resolved")
 			return pkg.resolvedRequires
 
 		if not pkg.requires:
@@ -431,8 +428,9 @@ class ResolverContext:
 			pkg.resolvedRequires = result
 			return result
 
+		self.debugMsg(f"{pkg.fullname()} - resolving requirements")
 		for dep in pkg.requires:
-			self.debugMsg(f"Inspecting {pkg.fullname()} req {dep}")
+			self.debugMsg(f"  inspecting {pkg.fullname()} req {dep}")
 			found = self._cache.get(dep)
 
 			if found is None:

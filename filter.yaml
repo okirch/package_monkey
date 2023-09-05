@@ -57,6 +57,7 @@ build_groups:
     - "@Core"
     - "@CoreLibraries"
     - "@CryptoLibraries"
+    - "@Perl/Core"
  - name: "KernelPlus"
    buildrequires:
     - "Core"
@@ -67,7 +68,7 @@ build_groups:
    buildrequires:
     - "Core"
    requires:
-    - "@Perl/Core"
+    - "@Perl/Core_NONONONO"
  - name: Databases
    buildrequires:
     - "Core"
@@ -76,6 +77,19 @@ build_groups:
  - name: BaseBuildEnv
    requires:
     - "@GCC"
+ - name: Systemd
+   requires:
+    - "@MinimalSystemd"
+ - name: Python
+   requires:
+    - "@Python"
+ - name: Apache
+   requires:
+    - "@Apache"
+ - name: X11
+   requires:
+    - "@X11Libraries"
+    - "@X11"
 
 groups:
  - name: "@32bit"
@@ -119,12 +133,26 @@ groups:
  - name: "@Databases"
    rpmGroups:
     - Productivity/Databases*
+   requires:
+    - "@Core"
+    - "@Network/Services"
+    - "@FancyLibraries"
    packages:
     - postgresql*
     - unixODBC
     - rsyslog-module-mysql
     - rsyslog-module-pgsql
     - libmariadb3
+   buildflavors:
+    - name: devel
+      binaries:
+       - postgresql*-devel-mini
+    - name: python
+      requires:
+       - "@Python"
+      binaries:
+       - postgresql15-plpython
+       - postgresql15-contrib
 
  - name: "@Graphics"
    rpmGroups:
@@ -134,9 +162,34 @@ groups:
    rpmGroups:
     - Productivity/Multimedia/*
 
+ - name: "@X11Libraries"
+   packages:
+    - libICE6
+    - libSM6
+    - libX11-6
+    - libXau6
+    - libXaw3d6
+    - libXaw3d7
+    - libXaw3d8
+    - libXaw7
+    - libXcomposite1
+    - libXft2
+    - libXi6
+    - libXmu6
+    - libXpm4
+    - libXrender1
+    - libXt
+    - libXt6
+    - libXtst
+    - libxcb1
+    - libcairo*
+    - xaw3dd
+
  - name: "@X11"
    rpmGroups:
     - System/X11/*
+   requires:
+    - "@X11Libraries"
    packages:
     - cairo*
     - Mesa*
@@ -175,12 +228,14 @@ groups:
     - xtermset
 
  - name: "@Gnome"
+   requires:
+    - "@Core"
+    - "@X11Libraries"
+    - "@FancyLibraries"
    packages:
     - gsettings-*
     - gtk*
     - at-spi2*
-    - glib2
-    - glib2-branding-SLE
     - gnome-*
     - typelib-*
     - dbus-1-glib-tool*
@@ -191,13 +246,15 @@ groups:
    buildrequires:
     - Core
    binaries:
-    - openssl
+    - openssl-3
     - openssl-1_1
     - mozilla-nss
     - p11-kit-nss-trust
+    - p11-kit-tools
     - crypto-policies
-    - libgobject-*
     - libtasn1
+    - gpgme
+    - libgpgme11
 
  - name: "@CoreLibraries"
    buildrequires:
@@ -205,28 +262,42 @@ groups:
    binaries:
     - perl
     - perl-base
+    - perl-doc
    packages:
     - cracklib
     - cracklib-dict-small
+    - cracklib-dict-full
     - glibc
+    - glib2
+    - glib2-branding-SLE
     - libaudit1
+    - libauparse0
+    - libboost_thread1*
     - libcom_err2
     - libcrack2
     - libcurl4
     - libdevmapper*
+    - libedit0
     - libext2fs2
     - libfl2
     - libfreetype6
     - libgcc_s1
     - libglib-*
-    - libgpgme11
     - libldap-*
+    - liblzma5
+    - liblzo2*
     - libnl3-200
     - libnl-config
     - libopenssl1_1
+    - libopenssl3
     - libpci3
+    - libpcre2*
     - libreiserfscore0
     - libsasl2-*
+    - cyrus-sasl
+    - cyrus-sasl-scram
+    - cyrus-sasl-plain
+    - cyrus-sasl-digestmd5
     - libssh4
     - libssh-config
     - libstdc++6
@@ -237,6 +308,7 @@ groups:
     - libgomp1
     - openldap2
     - libz1
+    - libyaml
    buildflavors:
     - name: odbc
       binaries:
@@ -265,7 +337,7 @@ groups:
     - bc
     - bridge-utils
     - brotli
-    - btrfsprogs
+    - libbtrfs*
     - bzip2
     - ca-certificates
     - ca-certificates-mozilla
@@ -277,12 +349,15 @@ groups:
 #   - dbus-1-x11
     - delayacct-utils
     - diffutils
+    - e2fsprogs
+    - elfutils
     - fdupes
     - file
     - filesystem
     - fillup
     - findutils
     - gc
+    - gettext-runtime
     - gpart
     - gpg2
     - gptfdisk
@@ -293,6 +368,8 @@ groups:
     - info
     - kbd
     - krb5
+    - krb5-mini
+    - keyutils
     - less
     - m4
     - mozilla-nss-tools
@@ -301,9 +378,10 @@ groups:
     - pam-*
     - pam_*
     - parted
+    - pciutils
+    - pciutils-*
     - permissions
     - prctl
-    - procps
     - psmisc
     - psutils
     - rpm
@@ -311,7 +389,6 @@ groups:
     - shadow
     - sharutils
     - sle-*-release
-    - snapper
     - sqlite3
     - sudo
     - suse-build-key
@@ -331,24 +408,144 @@ groups:
     - curl
     - wget
     - mailx
-    - openssh-clients
     - openssh-common
     - mkisofs
+    - xz
     - zstd
     - libxml2
+    - libxslt1
+    - libxslt-tools
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@MinimalSystemd"
+      binaries:
+       - nscd
+       - cyrus-sasl-saslauthd
+       - snapper
+       - libsnapper7
+       - pam_snapper
+    - name: systemdlibs
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - procps
+       - btrfsprogs
+       - btrfsprogs-udev-rules
+       - openssh-clients
+       - libusb*
+       - brltty
+       - libbrlapi*
+    - name: glib
+      requires:
+       - "@SystemdLibraries"
+       - "@X11Libraries"
+      binaries:
+       - libgio-*
+       - gio-branding-*
+       - libglib-testing
+    - name: networkServices
+      requires:
+       - "@Network/Services"
+       - "@Host/Storage"
+      binaries:
+       - cyrus-sasl-*
+       - e2fsprogs-scrub
+    - name: postgres
+      requires:
+       - "@Databases"
+       - "@Core+networkServices"
+      binaries:
+       - cyrus-sasl-sql*
+    - name: python
+      buildrequires:
+       - Python
+      requires:
+       - "@Core+systemdlibs"
+      binaries:
+       - python-btrfsutil
+       - python3-brlapi
+    - name: x11
+      buildrequires:
+       - X11
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - brltty-driver-xwindow
+    - name: gnome
+      buildrequires:
+       - Gnome
+      requires:
+       - "@Gnome"
+      binaries:
+       - brltty-driver-at-spi2
+    - name: java
+      buildrequires:
+       - Java
+      requires:
+       - "@Java"
+      binaries:
+       - brlapi-java
+
+ - name: "@FancyLibraries"
+   requires:
+    - "@Core"
+    - "@Core+systemdlibs"
+   packages:
+#   - libgspell*
+    - libicu*
+    - geoclue2
+    - libpulse0
+
+ - name: "@AppArmor"
+   requires:
+    - "@Core"
+   packages:
+    - apparmor*
+    - pam_apparmor*
+   buildflavors:
+    - name: python
+      buildrequires:
+       - Python
+      binaries:
+       - python3-apparmor
+    - name: ruby
+      buildrequires:
+       - Ruby
+      binaries:
+       - ruby-apparmor
+    - name: perl
+      buildrequires:
+       - Perl
+      binaries:
+       - perl-apparmor
+    - name: apache
+      buildrequires:
+       - Apache
+      binaries:
+       - apache2-mod_apparmor
+
+ - name: "@SystemdLibraries"
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - libsystemd0-mini
+    - libudev-mini1
+    - libdbus*
 
  - name: "@MinimalSystemd"
    requires:
     - "@Core"
+    - "@SystemdLibraries"
+    - "@Kernel/Core"
    packages:
     - acct
     - biosdevname
     - blog
-    - brltty
+#   - brltty
     - haveged
     - iptables
     - iputils
-    - nscd
     - sysconfig
     - sysconfig-netconfig
     - systemd
@@ -356,6 +553,10 @@ groups:
     - udev
     - util-linux-systemd
 #   - btrfsprogs-udev-rules
+   buildflavors:
+    - name: test
+      packages:
+       - systemd-testsuite
 
  - name: "@HostCore"
    requires:
@@ -387,6 +588,7 @@ groups:
     - snapper-zypp-plugin
     - python3-zypp-plugin
     - permissions-zypp-plugin
+    - libsolv
 
  - name: "@DirectoryIntegration"
    packages:
@@ -415,7 +617,6 @@ groups:
     - cracklib*
     - dracut-fips
     - dracut-ima
-    - gpgme
     - hmaccalc
     - ibmswtpm2
     - ibmtss
@@ -445,6 +646,7 @@ groups:
     - cachefilesd
     - ceph
     - cifs-utils
+    - pam_cifscreds
     - device-mapper
     - dos2unix
     - dump
@@ -527,12 +729,21 @@ groups:
     - kubevirt
     - systemd-container
 
+ - name: "@Kernel/Core"
+   buildrequires:
+    - KernelPlus
+   requires:
+    - "@Core"
+   packages:
+    - kmod
+
 # some pieces of Kernel require perl-Bootloader which needs perl
  - name: "@Kernel"
    buildrequires:
     - KernelPlus
    requires:
     - "@Core"
+    - "@Kernel/Core"
     - "@Network/Core"
     - "@Perl/Core"
     - "@Boot"
@@ -555,16 +766,13 @@ groups:
     - kdump
     - kdumpid
     - kernel-*
-    - kernel-*-devel
-    - kernel-devel
+#   - kernel-*-devel
+#   - kernel-devel
     - kexec-tools
-    - kmod
     - mcelog
     - memcached
     - numactl
     - numad
-    - pciutils
-    - pciutils-*
     - sdparm
     - sg3_utils
     - suse-module-tools
@@ -647,16 +855,15 @@ groups:
     - mutt
 
  - name: "@Network/Services"
+   requires:
+    - "@MinimalSystemd"
    packages:
     - bind
     - ntp
     - chrony
-    - nginx
-    - apache2*
     - squid
     - dovecot*
     - postfix*
-    - cyrus-sasl*
     - pam_saslauthd
     - krb5-*
     - openldap
@@ -670,6 +877,19 @@ groups:
     - tcpd
     - freeradius-client
     - freeradius-server
+
+ - name: "@Nginx"
+   requires:
+    - "@Network/Services"
+    - "@X11"
+   packages:
+    - nginx
+
+ - name: "@Apache"
+   requires:
+    - "@Network/Services"
+   packages:
+    - apache2*
 
  - name: "@Network/Misc"
    rpmGroups:
@@ -746,6 +966,7 @@ groups:
     - "@Core"
    packages:
     - perl-Bootloader
+    - perl-IPC-Run3
 
  - name: "@Java"
    rpmGroups:
@@ -789,6 +1010,8 @@ groups:
  - name: "@Stuff"
    rpmGroups:
     - Productivity/Scientific/*
+   packages:
+    - rrdtool
 
  - name: "@Multimedia/Audio"
    packages:

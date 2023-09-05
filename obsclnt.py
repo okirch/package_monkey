@@ -3,7 +3,9 @@ import os
 import xmltree
 import posix
 import time
+
 from packages import Package, PackageInfo, PackageInfoFactory
+from util import ChunkingQueue
 
 default_obs_apiurl = "https://api.opensuse.org"
 
@@ -723,25 +725,6 @@ class OBSProject:
 			self._packages[pkg.name] = pkg
 		return pkg
 
-	class ChunkingQueue:
-		def __init__(self, processingFunction, chunkSize = 20):
-			self.processingFunction = processingFunction
-			self.chunkSize = chunkSize
-			self.processed = []
-
-		def __del__(self):
-			self.flush()
-
-		def add(self, object):
-			self.processed.append(object)
-			if len(self.processed) >= self.chunkSize:
-				self.flush()
-
-		def flush(self):
-			if self.processed:
-				self.processingFunction(self.processed)
-				self.processed = []
-
 	# In the face of a multibuild configuration, we are producing
 	# a bunch of different rpms that belong to "package:build" 
 	# style names.
@@ -825,7 +808,7 @@ class OBSProject:
 		print("Done.")
 
 		print(f"About to update depdendencies for packages")
-		queue = self.ChunkingQueue(lambda p: self.storeDependencies(store, p))
+		queue = ChunkingQueue(lambda p: self.storeDependencies(store, p))
 		for obsPackage in toBeAdded:
 			rpmNames = ", ".join(_.shortname for _ in obsPackage.binaries)
 			print(f"+ {obsPackage.name}: {rpmNames}")
@@ -847,7 +830,7 @@ class OBSProject:
 				assert(rpm.backingStoreId)
 				rpmToPackage[rpm.backingStoreId] = obsPackage
 
-		queue = self.ChunkingQueue(lambda p: self.storeBuilds(store, p))
+		queue = ChunkingQueue(lambda p: self.storeBuilds(store, p))
 		for obsPackage in toBeAdded:
 			self.updateBuildInfo(client, obsPackage)
 			for rpm in obsPackage._usedForBuild:

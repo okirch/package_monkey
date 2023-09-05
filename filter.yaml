@@ -51,16 +51,31 @@ preferences:
 
 build_groups:
  - name: "Core"
-   builds:
+   buildrequires:
+    - BaseBuildEnv
+   requires:
     - "@Core"
     - "@CoreLibraries"
     - "@CryptoLibraries"
  - name: "KernelPlus"
-   requires:
+   buildrequires:
     - "Core"
-   builds:
+   requires:
     - "@Kernel"
     - "@Boot"
+ - name: "PerlCore"
+   buildrequires:
+    - "Core"
+   requires:
+    - "@Perl/Core"
+ - name: Databases
+   buildrequires:
+    - "Core"
+   requires: 
+    - "@Databases"
+ - name: BaseBuildEnv
+   requires:
+    - "@GCC"
 
 groups:
  - name: "@32bit"
@@ -77,10 +92,15 @@ groups:
     - "*-devel-extra"
     - rpm-build
 
- - name: "@Development"
+ - name: "@GCC"
    packages:
     - gcc*
     - binutils
+
+ - name: "@Development"
+   requires:
+    - "@GCC"
+   packages:
     - bison
     - cmake
     - make
@@ -168,9 +188,8 @@ groups:
     - polkit-gnome*
 
  - name: "@CryptoLibraries"
-   explicitClosure:
-    - "@Core"
-    - "@CoreLibraries"
+   buildrequires:
+    - Core
    binaries:
     - openssl
     - openssl-1_1
@@ -181,9 +200,8 @@ groups:
     - libtasn1
 
  - name: "@CoreLibraries"
-   explicitClosure:
-    - "@Core"
-    - "@CryptoLibraries"
+   buildrequires:
+    - Core
    binaries:
     - perl
     - perl-base
@@ -219,10 +237,18 @@ groups:
     - libgomp1
     - openldap2
     - libz1
+   buildflavors:
+    - name: odbc
+      binaries:
+       - openldap2-back-sql
+      buildrequires:
+       - Databases
 
 #   - libgio-*
 
  - name: "@Core"
+   buildrequires:
+    - Core
    explicitClosure:
     - "@Perl/Core"
    requires:
@@ -247,7 +273,7 @@ groups:
     - cpio
 #   - cronie
     - cryptsetup
-    - dbus-1
+#   - dbus-1
 #   - dbus-1-x11
     - delayacct-utils
     - diffutils
@@ -475,6 +501,8 @@ groups:
     - yast2*
     - libyui*
     - libstorage-ng
+    - ruby3.2-rubygem-agama
+    - ruby-yui
 
  - name: "@Fonts"
    packages:
@@ -499,10 +527,14 @@ groups:
     - kubevirt
     - systemd-container
 
+# some pieces of Kernel require perl-Bootloader which needs perl
  - name: "@Kernel"
+   buildrequires:
+    - KernelPlus
    requires:
     - "@Core"
     - "@Network/Core"
+    - "@Perl/Core"
     - "@Boot"
    groups:
     - System/Kernel
@@ -524,6 +556,7 @@ groups:
     - kdumpid
     - kernel-*
     - kernel-*-devel
+    - kernel-devel
     - kexec-tools
     - kmod
     - mcelog
@@ -737,6 +770,8 @@ groups:
     - Development/*/Rust
 
  - name: "@Boot"
+   buildrequires:
+    - KernelPlus
    requires:
     - "@Core"
     - "@MinimalSystemd"
@@ -750,6 +785,10 @@ groups:
     - shim
     - u-boot
     - rollback-helper
+
+ - name: "@Stuff"
+   rpmGroups:
+    - Productivity/Scientific/*
 
  - name: "@Multimedia/Audio"
    packages:

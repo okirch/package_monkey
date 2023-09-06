@@ -507,11 +507,41 @@ class ResolverWorker:
 				print(f"   {pkg.fullname()}")
 				self.showProof(reason, indent = "      ")
 
+	class SourceProjectConflict(Problem):
+		def __init__(self, label, build, *args):
+			super().__init__(label, *args)
+			self.build = build
+
+		def show(self):
+			map = {}
+			for rpm in self.build.binaries:
+				if not rpm.isSourcePackage:
+					label = rpm.label
+					if label is None:
+						key = "unclassified"
+					elif not label.isBuiltBy:
+						key = f"{label} (no build project)"
+					else:
+						key = label.isBuiltBy.name
+
+					dest = map.get(key)
+					if dest is None:
+						map[key] = []
+						dest = map[key]
+					dest.append(rpm)
+
+			print(f"Conflicting source projects for OBS package {self.desc}")
+			for key, packages in sorted(map.items()):
+				names = (rpm.shortname for rpm in packages)
+				print(f"   {key}: {', '.join(names)}")
+				# FIXME: if we want to be verbose, we could display the label reason for each rpm
+
 	class Problems:
 		def __init__(self):
 			self._unexpected = {}
 			self._unresolved = {}
 			self._nosource = {}
+			self._projectconf = {}
 
 		def addUnexpectedDependency(self, fromLabel, fromReason, toPackage):
 			toLabel = toPackage.label.name
@@ -541,6 +571,13 @@ class ResolverWorker:
 				self._nosource[key] = problem
 			problem.add(pkg, reason)
 
+		def addSourceProjectConflict(self, build):
+			key = build.name
+			problem = self._projectconf.get(key)
+			if problem is None:
+				problem = ResolverWorker.SourceProjectConflict(key, build)
+				self._projectconf[key] = problem
+
 		def __bool__(self):
 			return bool(self._unexpected) or bool(self._unresolved)
 
@@ -550,6 +587,8 @@ class ResolverWorker:
 			for key, problem in sorted(self._unresolved.items()):
 				problem.show()
 			for key, problem in sorted(self._nosource.items()):
+				problem.show()
+			for key, problem in sorted(self._projectconf.items()):
 				problem.show()
 
 	def __init__(self, resolver, processfn = None):
@@ -1230,6 +1269,8 @@ class Package:
 		self.product = None
 		self.backingStoreId = None
 		self.obsBuildId = None
+
+		self.isSourcePackage = isSourceArchitecture(arch)
 
 		self.requires = []
 		self.provides = []

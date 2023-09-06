@@ -17,21 +17,23 @@ store.enableSourceLookups()
 
 classificationScheme = Classification.Scheme()
 packageFilter = PackageFilter(scheme = classificationScheme)
-unclassified = packageFilter.makeGroup("Unclassified")
+unclassified = packageFilter.makeGroup("Unclassified", Classification.TYPE_BINARY)
 
 packageSelector = PackageSelector()
 collection = PackageCollection()
 
 resolver = Resolver(backingStore = store)
+
 for pinfo in store.enumerateLatestPackages():
 	pkg = store.retrievePackage(pinfo)
 
 	verdict = packageFilter.apply(pkg, pinfo.product)
 	if verdict is not None:
 		verdict.labelPackage(pkg)
-		group = verdict.group
 	else:
-		group = unclassified
+		# we currently have no good way to properly mark unclassified packages
+		# group = unclassified
+		pass
 
 	collection.add(pkg)
 
@@ -39,7 +41,12 @@ def flattenLabelTree(label, alreadySeen):
 	alreadySeen.add(label)
 	result = []
 
-	for child in label.uses:
+	if label.type == Classification.TYPE_BINARY:
+		children = label.uses
+	else:
+		children = label.buildRequires
+
+	for child in children:
 		if child not in alreadySeen:
 			result += flattenLabelTree(child, alreadySeen)
 
@@ -50,8 +57,17 @@ def flattenGroup(groupName, alreadySeen):
 	group = packageFilter.makeGroup(groupName)
 	label = group.label
 
-	assert(label not in alreadySeen)
-	return flattenLabelTree(label, alreadySeen)
+	if label in alreadySeen:
+		return set()
+
+	result = flattenLabelTree(label, alreadySeen)
+
+	for flavor in group.flavors:
+		label = flavor.label
+		if label not in alreadySeen:
+			result += flattenLabelTree(label, alreadySeen)
+
+	return result
 
 def flattenGroupList(*names):
 	labelSequence = []
@@ -60,29 +76,11 @@ def flattenGroupList(*names):
 		labelSequence += flattenGroup(groupName, alreadySeen)
 	return labelSequence
 
-binaryLabels = flattenGroupList("@Core", "@HostCore", "@Kernel", "@UpdateStack")
+binaryLabels = flattenGroupList("@Core", "@HostCore", "@Kernel", "@UpdateStack", "@CoreLibraries+odbc", "@MinimalSystemd")
 sourceLabels = flattenGroupList("Core", "KernelPlus")
 
 worker = ResolverWorker(resolver)
-
-class Inventory(dict):
-	def update(self, packages):
-		for pkg in packages:
-			self.add(pkg)
-
-	def add(self, pkg):
-		assert(pkg.backingStoreId)
-
-		id = pkg.backingStoreId
-		conflict = self.get(id)
-		if conflict is not None and conflict is not pkg:
-			print(f"Duplicate package objects for pkgId {id}")
-			print(f"  - {pkg} {pkg.fullname()}")
-			print(f"  - {conflict} {conflict.fullname()}")
-		else:
-			self[id] = pkg
-
-inventory = Inventory()
+problemLog = worker.problems
 
 productArchitecture = store.getProperty("arch")
 if productArchitecture is None:
@@ -94,15 +92,36 @@ preferences = ResolverPreferences()
 closure = {}
 for label in binaryLabels:
 	group = packageFilter.makeGroup(label.name)
+	labelledPackages = group.packages
 
 	print(f"Classify packages belonging to {group.label}")
+
+	# Step 1: build the runtime dependency closure
 	classifier = Classification.DownwardClosure(worker, productArchitecture, preferences, label)
-	classifier.classify(group.packages)
+	classifier.classify(labelledPackages)
+	labelledPackages = classifier.result
 
-	closure[label.name] = classifier.result
+	# FIXME:
+	# Maybe we should do this the other way round and assign all flavor packages
+	# to the group flavor of a sibling as soon as we have that one labelled
+	classifier = Classification.AutoflavorPackageClosure(problemLog, store)
+	classifier.classify(labelledPackages)
+	for flavorDef in packageFilter.autoFlavors:
+		found = classifier.getFlavor(flavorDef.name)
+		if found is None:
+			continue
 
-	inventory.update(group.packages)
-	inventory.update(classifier.result)
+		flavor = packageFilter.instantiateAutoFlavor(group, flavorDef)
+		relabeled = classifier.labelFlavoredPackages(flavorDef.name, flavor.label)
+		closure[flavor.name] = relabeled
+
+	# Step N: sort all other sibling packages into $Group-unused
+	siblingGroup = packageFilter.makeFlavorGroup(group, "unused")
+	classifier = Classification.SiblingPackageClosure(problemLog, siblingGroup.label, store)
+	classifier.classify(labelledPackages)
+	closure[siblingGroup.name] = classifier.result
+
+	closure[label.name] = labelledPackages
 
 for label in sourceLabels:
 	group = packageFilter.makeSourceGroup(label.name)
@@ -111,7 +130,7 @@ for label in sourceLabels:
 
 	classifier = Classification.BuildRequireClosure(worker, productArchitecture, preferences, label)
 	assert(classifier)
-	for component in label.builds:
+	for component in label.buildRequires:
 		componentGroup = packageFilter.makeGroup(component.name)
 		assert(componentGroup)
 		classifier.classify(componentGroup.packages)
@@ -132,8 +151,8 @@ for label in sourceLabels:
 	for pkg in sorted(closure[label.name], key = lambda p: p.name):
 		print(f"  {pkg.name}")
 
-if worker.problems:
+if problemLog:
 	print()
 	print("==================================================================")
 	print("The resolver flagged the following problems")
-	worker.problems.show()
+	problemLog.show()

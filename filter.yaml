@@ -49,47 +49,57 @@ preferences:
 # libOpenIPMI0 and OpenIPMI
 # icu.691-devel and libicu-devel
 
+autoflavors:
+ - name: python
+   requires:
+    - "@Python"
+   packages:
+    - python3-*
+    - python39-*
+    - python310-*
+    - python311-*
+ - name: devel
+   priority: 1
+   packages:
+    - "*-devel"
+    - "*-devel-static"
+    - "*-devel-extra"
+    - "*-devel-doc"
+ - name: ruby
+   requires:
+    - "@Ruby"
+   packages:
+    - ruby-*
+ - name: typelib
+   packages:
+    - typelib-*
+ - name: accounts
+   priority: 9
+   # these shouldn't really end up in a different multibuild flavor
+   packages:
+    - system-user-*
+
 build_groups:
  - name: "Core"
    buildrequires:
     - BaseBuildEnv
-   requires:
-    - "@Core"
-    - "@CoreLibraries"
-    - "@CryptoLibraries"
-    - "@Perl/Core"
  - name: "KernelPlus"
    buildrequires:
     - "Core"
-   requires:
-    - "@Kernel"
-    - "@Boot"
  - name: "PerlCore"
    buildrequires:
     - "Core"
-   requires:
-    - "@Perl/Core_NONONONO"
  - name: Databases
    buildrequires:
     - "Core"
-   requires: 
-    - "@Databases"
  - name: BaseBuildEnv
    requires:
     - "@GCC"
+    - "@BaseDevTools"
  - name: Systemd
-   requires:
-    - "@MinimalSystemd"
  - name: Python
-   requires:
-    - "@Python"
  - name: Apache
-   requires:
-    - "@Apache"
  - name: X11
-   requires:
-    - "@X11Libraries"
-    - "@X11"
 
 groups:
  - name: "@32bit"
@@ -98,27 +108,25 @@ groups:
     - "*-32bit"
     - "*-32bit-*"
 
- - name: "@DevelPackages"
-   priority: 1
-   packages:
-    - "*-devel"
-    - "*-devel-static"
-    - "*-devel-extra"
-    - rpm-build
-
  - name: "@GCC"
+   sourceproject: GCC
    packages:
     - gcc*
     - binutils
+
+ - name: "@BaseDevTools"
+   requires:
+    - "@CoreBuild"
+   packages:
+    - make
+    - bison
+    - systemd-rpm-macros
 
  - name: "@Development"
    requires:
     - "@GCC"
    packages:
-    - bison
     - cmake
-    - make
-    - flex
     - autoconf
     - automake
     - autogen
@@ -131,14 +139,16 @@ groups:
     - release-notes-*
 
  - name: "@Databases"
+   sourceproject: Databases
    rpmGroups:
     - Productivity/Databases*
    requires:
     - "@Core"
-    - "@Network/Services"
-    - "@FancyLibraries"
+    - "@NetworkServices"
+    - "@ApplicationLibraries"
    packages:
-    - postgresql*
+    - postgresql-*
+    - libpq5
     - unixODBC
     - rsyslog-module-mysql
     - rsyslog-module-pgsql
@@ -153,6 +163,12 @@ groups:
       binaries:
        - postgresql15-plpython
        - postgresql15-contrib
+    - name: doc
+      binaries:
+       - postgresql-docs
+    - name: test
+      binaries:
+       - postgresql-test
 
  - name: "@Graphics"
    rpmGroups:
@@ -163,6 +179,9 @@ groups:
     - Productivity/Multimedia/*
 
  - name: "@X11Libraries"
+   sourceproject: X11
+   requires:
+    - "@Core"
    packages:
     - libICE6
     - libSM6
@@ -186,6 +205,7 @@ groups:
     - xaw3dd
 
  - name: "@X11"
+   sourceproject: X11
    rpmGroups:
     - System/X11/*
    requires:
@@ -228,21 +248,25 @@ groups:
     - xtermset
 
  - name: "@Gnome"
+   sourceproject: Gnome
    requires:
     - "@Core"
     - "@X11Libraries"
-    - "@FancyLibraries"
+    - "@ApplicationLibraries"
+    - "@Flatpak"
    packages:
+    - geoclue2
+    - system-user-srvGeoClue
     - gsettings-*
     - gtk*
     - at-spi2*
     - gnome-*
-    - typelib-*
     - dbus-1-glib-tool*
     - dbus-1-glib
     - polkit-gnome*
 
  - name: "@CryptoLibraries"
+   sourceproject: Core
    buildrequires:
     - Core
    binaries:
@@ -255,8 +279,11 @@ groups:
     - libtasn1
     - gpgme
     - libgpgme11
+    - libgcrypt20
+    - libgcrypt20-hmac
 
  - name: "@CoreLibraries"
+   sourceproject: Core
    buildrequires:
     - Core
    binaries:
@@ -273,13 +300,16 @@ groups:
     - libaudit1
     - libauparse0
     - libboost_thread1*
+    - libcap-ng0
     - libcom_err2
     - libcrack2
     - libcurl4
-    - libdevmapper*
+#   - libdevmapper*
     - libedit0
+    - libevent-2*
     - libext2fs2
     - libfl2
+    - libfftw3*
     - libfreetype6
     - libgcc_s1
     - libglib-*
@@ -292,6 +322,7 @@ groups:
     - libopenssl3
     - libpci3
     - libpcre2*
+    - libprotobuf-lite20
     - libreiserfscore0
     - libsasl2-*
     - cyrus-sasl
@@ -313,19 +344,25 @@ groups:
     - name: odbc
       binaries:
        - openldap2-back-sql
+      requires:
+       - "@Databases"
       buildrequires:
        - Databases
+    - name: test
+      packages:
+       - libglib-testing
 
 #   - libgio-*
 
  - name: "@Core"
+   sourceproject: Core
    buildrequires:
     - Core
-   explicitClosure:
-    - "@Perl/Core"
    requires:
     - "@CoreLibraries"
     - "@CryptoLibraries"
+   sources:
+    - system-user-*
    packages:
     - aaa_base
     - acl
@@ -344,7 +381,7 @@ groups:
     - coreutils
     - cpio
 #   - cronie
-    - cryptsetup
+#   - cryptsetup
 #   - dbus-1
 #   - dbus-1-x11
     - delayacct-utils
@@ -371,13 +408,13 @@ groups:
     - krb5-mini
     - keyutils
     - less
+    - logrotate
     - m4
     - mozilla-nss-tools
     - ncurses
     - pam
     - pam-*
     - pam_*
-    - parted
     - pciutils
     - pciutils-*
     - permissions
@@ -393,7 +430,6 @@ groups:
     - sudo
     - suse-build-key
     - system-role-*
-    - system-user-*
     - system-users
     - sysuser-tools
     - tar
@@ -415,6 +451,7 @@ groups:
     - libxml2
     - libxslt1
     - libxslt-tools
+    - libexpat1
    buildflavors:
     - name: systemd
       requires:
@@ -444,11 +481,14 @@ groups:
        - libglib-testing
     - name: networkServices
       requires:
-       - "@Network/Services"
-       - "@Host/Storage"
+       - "@NetworkServices"
+       - "@HostStorage"
+       - "@Core+systemdlibs"
       binaries:
        - cyrus-sasl-*
        - e2fsprogs-scrub
+       - openssh-server
+       - openssh
     - name: postgres
       requires:
        - "@Databases"
@@ -462,23 +502,37 @@ groups:
        - "@Core+systemdlibs"
       binaries:
        - python-btrfsutil
+       - sudo-plugin-python
+    - name: zypp
+      requires:
+       - "@UpdateStack"
+      binaries:
+       - snapper-zypp-plugin
+       - permissions-zypp-plugin
 
- - name: "@FancyLibraries"
+ - name: "@CoreBuild"
+   sourceproject: Core
+   packages:
+    - rpm-build
+    - flex
+
+ - name: "@ApplicationLibraries"
    requires:
     - "@Core"
     - "@Core+systemdlibs"
+    - "@X11Libraries"
    packages:
 #   - libgspell*
     - libicu*
-    - geoclue2
     - libpulse0
 
  - name: "@AppArmor"
+   sourceproject: AppArmor
    requires:
     - "@Core"
    packages:
     - apparmor*
-    - pam_apparmor*
+    - pam_apparmor
    buildflavors:
     - name: python
       buildrequires:
@@ -502,26 +556,32 @@ groups:
        - apache2-mod_apparmor
 
  - name: "@SystemdLibraries"
+   sourceproject: Systemd
    requires:
-    - "@CoreLibraries"
+    - "@Core"
    packages:
     - libsystemd0-mini
     - libudev-mini1
-    - libdbus*
+    - libdbus-1-*
+    - dbus-1
 
  - name: "@MinimalSystemd"
+   sourceproject: Systemd
    requires:
     - "@Core"
+    - "@Core+glib"
     - "@SystemdLibraries"
-    - "@Kernel/Core"
+    - "@KernelCore"
    packages:
     - acct
     - biosdevname
     - blog
 #   - brltty
+    - dbus
     - haveged
     - iptables
     - iputils
+    - libudisks2
     - sysconfig
     - sysconfig-netconfig
     - systemd
@@ -534,49 +594,61 @@ groups:
       packages:
        - systemd-testsuite
 
+ - name: "@FullSystemd"
+   sourceproject: Systemd
+   requires:
+    - "@MinimalSystemd"
+   packages:
+    - udisks2
+
  - name: "@HostCore"
+   sourceproject: Host
    requires:
     - "@Core"
-    - "@Perl/Core"
+    - "@PerlCore"
    packages:
 #   - rpm-ndb
 
  - name: "@MinimalManagement"
+   sourceproject: Management
    requires:
     - "@Core"
    packages:
     - augeas
 
  - name: "@UpdateStack"
+   sourceproject: UpdateStack
    requires:
     - "@Core"
-    - "@Network/Core"
-    - "@Python/Core"
+    - "@NetworkCore"
+    - "@PythonCore"
     - "@Ruby"
     - "@MinimalSystemd"
     - "@MinimalManagement"
    packages: 
     - deltarpm
     - SUSEConnect
+    - libzypp
     - zypp-*
     - zypper
     - zypper-*
-    - snapper-zypp-plugin
-    - python3-zypp-plugin
-    - permissions-zypp-plugin
     - libsolv
+    - perl-solv
 
  - name: "@DirectoryIntegration"
+   sourceproject: DirectoryIntegration
    packages:
     - sssd
 
  - name: "@Legacy"
+   sourceproject: Legacy
    packages:
     - sysvinit
     - syslogd
     - rsyslog
 
  - name: "@Sysadmin"
+   sourceproject: Tools
    packages:
     - vim
     - emacs
@@ -584,15 +656,13 @@ groups:
     - apcupsd
     - btrfsmaintenance
 
- - name: "@Host/Security"
+ - name: "@HostSecurity"
+   sourceproject: Host
    packages:
-    - apparmor*
     - audit
     - audit-secondary
     - checkpolicy
     - cracklib*
-    - dracut-fips
-    - dracut-ima
     - hmaccalc
     - ibmswtpm2
     - ibmtss
@@ -615,39 +685,59 @@ groups:
     - pam_yubico
     - pam_krb5
 
- - name: "@Host/Storage"
+ - name: "@HostStorage"
+   sourceproject: Host
+   requires:
+    - "@Core"
+    - "@Core+glib"
+    - "@MinimalSystemd"
    packages:
     - autofs
     - bcache-tools
-    - cachefilesd
-    - ceph
-    - cifs-utils
-    - pam_cifscreds
     - device-mapper
+    - libdevmapper*
     - dos2unix
     - dump
     - duperemove
-    - e2fsprogs
     - ecryptfs-utils
-    - fcoe-utils
     - hdparm
     - hfsutils
     - jfsutils
+    - lvm2
     - mdadm
     - multipath-tools
+    - parted
+    - reiserfs
+    - smartmontools
+    - squashfs
+    - sysfsutils
+    - xfsdump
+    - xfsprogs
+    - pam_mount
+
+ - name: "@NetworkStorage"
+   sourceproject: Host
+   requires:
+    - "@HostStorage"
+    - "@NetworkServices"
+   packages:
+    - cachefilesd
+    - cifs-utils
+    - fcoe-utils
     - nfs4-acl-tools
     - nfsidmap
     - nfs-utils
     - open-iscsi
     - open-isns
-    - reiserfs
-    - smartmontools
-    - squashfs
-    - sysfsutils
+    - pam_cifscreds
     - target-isns
-    - xfsdump
-    - xfsprogs
-    - pam_mount
+
+ - name: "@Rados"
+   sourceproject: Rados
+   requires:
+    - "@HostStorage"
+   packages:
+    - ceph
 
  - name: "@PublicCloud"
    expand: no
@@ -702,9 +792,15 @@ groups:
     - libcontainers-common
     - containerized-data-importer
     - kubevirt
-    - systemd-container
+#   - systemd-container
 
- - name: "@Kernel/Core"
+ - name: "@Flatpak"
+   sourceproject: Flatpak
+   sources:
+    - flatpak
+
+ - name: "@KernelCore"
+   sourceproject: KernelPlus
    buildrequires:
     - KernelPlus
    requires:
@@ -714,22 +810,22 @@ groups:
 
 # some pieces of Kernel require perl-Bootloader which needs perl
  - name: "@Kernel"
+   sourceproject: KernelPlus
    buildrequires:
     - KernelPlus
    requires:
     - "@Core"
-    - "@Kernel/Core"
-    - "@Network/Core"
-    - "@Perl/Core"
+    - "@KernelCore"
+    - "@NetworkCore"
+    - "@PerlCore"
     - "@Boot"
-   groups:
+   rpmGroups:
     - System/Kernel
    packages:
     - alsa
     - alsa-plugins
     - alsa-utils
     - cpupower
-    - cpuset
     - dmidecode
     - dosfstools
     - fipscheck
@@ -752,20 +848,25 @@ groups:
     - sg3_utils
     - suse-module-tools
     - ucode-intel
+   buildflavors:
+    - name: python
+      packages:
+       - cpuset
 
- - name: "@Kernel/Debugging"
+ - name: "@KernelDebugging"
+   sourceproject: KernelPlus
    packages:
     - acpica
 
- - name: "@Network/Core"
+ - name: "@NetworkCore"
    requires:
     - "@Core"
    packages:
     - none
 
- - name: "@Network/Host"
+ - name: "@HostNetworking"
    requires:
-    - "@Network/Core"
+    - "@NetworkCore"
    packages:
     - arptables
     - ebtables
@@ -815,7 +916,7 @@ groups:
     - mpich
     - mpitests*
 
- - name: "@Network/Utils"
+ - name: "@NetworkUtils"
    packages:
     - hostinfo
     - rsync
@@ -829,9 +930,12 @@ groups:
     - nmap
     - mutt
 
- - name: "@Network/Services"
+ - name: "@NetworkServices"
+   sourceproject: NetworkServices
    requires:
     - "@MinimalSystemd"
+   binaries:
+    - freeradius-server
    packages:
     - bind
     - ntp
@@ -844,29 +948,56 @@ groups:
     - openldap
     - vsftpd
     - spamassassin
-    - samba
     - libtcnative*
     - yp-tools
     - ypbind
     - ypserv
     - tcpd
     - freeradius-client
-    - freeradius-server
+   buildflavors:
+    - name: mysql
+      requires:
+       - "@Databases"
+      binaries:
+       - freeradius-server-mysql
+       - freeradius-server-postgresql
+       - postfix-mysql
+       - postfix-postgresql
+       - bind-modules-mysql
+
+ - name: "@Samba"
+   requires:
+    - "@NetworkServices"
+   packages:
+    - samba
+   buildflavors:
+    - name: python
+      requires:
+       - "@Python"
+      binaries:
+       - samba-libs-python3
+       - samba-python3
+    - name: rados
+      requires:
+       - "@Rados"
+      binaries:
+       - samba-ceph
 
  - name: "@Nginx"
    requires:
-    - "@Network/Services"
+    - "@NetworkServices"
     - "@X11"
    packages:
     - nginx
 
  - name: "@Apache"
+   sourceproject: Apache
    requires:
-    - "@Network/Services"
+    - "@NetworkServices"
    packages:
     - apache2*
 
- - name: "@Network/Misc"
+ - name: "@NetworkMisc"
    rpmGroups:
     - Productivity/Networking/*
    packages:
@@ -888,27 +1019,42 @@ groups:
  - name: "@Python"
    expand: no
    requires:
-    - "@Python/Core"
-   products:
-    - SLE-Module-Python*
+    - "@PythonCore"
    rpmGroups:
     - Development/*/Python
    packages:
     - python
-    - python-*
-    - python3*
-    - sudo-plugin-python
 
- - name: "@Python/Core"
+ - name: "@PythonModules"
+   expand: no
+   requires:
+    - "@Python"
+   products:
+    - SLE-Module-Python*
+   rpmGroups:
+    - Development/*/Python
+   binaries:
+    - python-*
+#   - python3*
+
+ - name: "@PythonCore"
    requires:
     - "@Core"
+   sources:
+    - python39-core
+    - python310-core
+    - python311-core
    packages:
     - python3
+    - python310
+    - python311
     - python3-base
     - python3-future
     - libpython*
+    - python*-base
 
  - name: "@Ruby"
+   sourceproject: Ruby
    requires:
     - "@Core"
    rpmGroups:
@@ -916,10 +1062,11 @@ groups:
    packages:
     - ruby
     - ruby2.5
-    - ruby-*
     - rubygem-*
+    - ruby-common
 
- - name: "@Ruby/Stuff"
+ - name: "@RubyStuff"
+   priority: 10
    requires:
     - "@Ruby"
     - "@Boot"
@@ -929,19 +1076,24 @@ groups:
     - ruby-solv
 
  - name: "@Perl"
+   sourceproject: Perl
    requires:
-    - "@Perl/Core"
+    - "@PerlCore"
    rpmGroups:
     - Development/*/Perl
    packages:
     - perl*
 
- - name: "@Perl/Core"
+ - name: "@PerlCore"
+   sourceproject: Core
    requires:
     - "@Core"
    packages:
     - perl-Bootloader
     - perl-IPC-Run3
+    - perl-Date-Calc
+    - perl-Carp-Clan
+    - perl-Bit-Vector
 
  - name: "@Java"
    rpmGroups:
@@ -966,10 +1118,12 @@ groups:
     - Development/*/Rust
 
  - name: "@Boot"
+   sourceproject: KernelPlus
    buildrequires:
     - KernelPlus
    requires:
     - "@Core"
+    - "@PerlCore"
     - "@MinimalSystemd"
    packages:
     - dracut
@@ -981,6 +1135,13 @@ groups:
     - shim
     - u-boot
     - rollback-helper
+   buildflavors:
+    - name: security
+      requires:
+       - "@HostSecurity"
+      binaries:
+       - dracut-fips
+       - dracut-ima
 
  - name: "@Stuff"
    rpmGroups:
@@ -988,12 +1149,13 @@ groups:
    packages:
     - rrdtool
 
- - name: "@Multimedia/Audio"
+ - name: "@MultimediaAudio"
    packages:
     - gstreamer
     - gstreamer-*
  
  - name: "@Management"
+   sourceproject: Management
    packages:
     - cmpi-provider-register
     - cim-schema

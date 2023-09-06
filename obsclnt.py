@@ -464,11 +464,10 @@ class OBSPackage:
 	def __init__(self, name):
 		self.name = name
 		self.buildStatus = None
-		self._pinfo = None
 		self.backingStoreId = None
 		self.buildTime = None
+		self.rpmsUsedForBuild = None
 		self._buildRequires = set()
-		self._usedForBuild = set()
 		self._source = None
 		self._binaries = []
 
@@ -681,7 +680,7 @@ class OBSProject:
 
 		return True
 
-	def updateBuildInfo(self, client, obsPackage):
+	def getRpmsUsedForBuild(self, client, obsPackage):
 		sourceVersion = obsPackage.sourceVersion
 		if sourceVersion is None:
 			print(f"Cannot retrieve buildinfo for {obsPackage.name}: unable to identify version")
@@ -698,16 +697,18 @@ class OBSProject:
 		if data is None:
 			return
 
-		obsPackage._usedForBuild = set()
+		result = set()
 		for used in data.builddeps:
 			required = self.product.findPackage(used.name, used.version, used.release, used.arch)
 			if required is None:
-				print(f"WARNING: building {obsPackage.name} uses {used.name}, but I cannot find it")
+				print(f"WARNING: building {obsPackage.name} uses {used.shortname}, but I cannot find it")
 				if False:
 					raise Exception()
 				continue
 
-			obsPackage._usedForBuild.add(required)
+			result.add(required)
+
+		return result
 
 	def updateBuildDependenciesOld(self, client, arch):
 		for buildInfo in client.getBuildDepInfo(self.name, self.buildRepository, arch):
@@ -832,8 +833,8 @@ class OBSProject:
 
 		queue = ChunkingQueue(lambda p: self.storeBuilds(store, p))
 		for obsPackage in toBeAdded:
-			self.updateBuildInfo(client, obsPackage)
-			for rpm in obsPackage._usedForBuild:
+			obsPackage.rpmsUsedForBuild = self.getRpmsUsedForBuild(client, obsPackage)
+			for rpm in obsPackage.rpmsUsedForBuild:
 				assert(rpm.backingStoreId)
 
 				requiredPackage = rpmToPackage.get(rpm.backingStoreId)

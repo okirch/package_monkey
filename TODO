@@ -1,4 +1,5 @@
 
-- Move fileinfo_ext cavhe file to cache/obs
+- Move fileinfo_ext cache file to cache/obs
 - get rid of "explicit closure" stuff - upward/sideways dependencies are okay if
   the packages come from the same build project
+- make Package.fullname() method a @property, like @shortname

@@ -2,37 +2,136 @@ import yaml
 import fnmatch
 
 class Classification:
+	TYPE_BINARY = 'binary'
+	TYPE_SOURCE = 'source'
+	TYPE_AUTOFLAVOR = 'autoflavor'
+
 	class Label:
-		def __init__(self, name, id):
+		def __init__(self, name, type, id):
 			self.name = name
+			self.type = type
 			self.id = id
+			# FIXME: rename to runtimeRequires
 			self.uses = set()
-			self.builds = set()
-			self.explicitClosure = set()
+			self.buildRequires = set()
+
+			self.flavorBase = None
+			self._flavors = {}
+
+			# the closure comprises all packages of this label plus the ones
+			# referenced by subordinate labels
 			self._closure = None
 
+			# the build closure is the closure of the "build" group(s)
+			# that build the package contained in this label
+			self._buildClosure = None
+
+			self.isBuiltBy = None
+
 		def addRuntimeDependency(self, other):
+			assert(other is not None)
 			self._closure = None
 			self.uses.add(other)
 
 		def addBuildDependency(self, other):
-			self.builds.add(other)
+			assert(other is not None)
+			self._closure = None
+			self.buildRequires.add(other)
 
-		def addToClosure(self, other):
-			self.explicitClosure.add(other)
+		@property
+		def flavors(self):
+			return map(lambda pair: pair[1], sorted(self._flavors.items()))
+
+		def getBuildFlavor(self, name):
+			return self._flavors.get(name)
+
+		def addBuildFlavor(self, flavorName, otherLabel):
+			if self.getBuildFlavor(flavorName) is not None:
+				raise Exception(f"Duplicate definition of flavor {flavorName} for {self.name}")
+
+			self._flavors[flavorName] = otherLabel
+
+			# flavors inherit the parent's build project by default
+			if self.isBuiltBy and not otherLabel.isBuiltBy:
+				otherLabel.setBuiltBy(self.isBuiltBy)
+
+			# This creates a circular reference that kills garbage collection, but
+			# we'll live with this for now
+			otherLabel.flavorBase = self
+
+		def setBuiltBy(self, sourceLabel):
+			if self.isBuiltBy is sourceLabel:
+				return
+			if self.isBuiltBy is not None:
+				raise Exception(f"Duplicate source group for {self}: {self.isBuiltBy} vs {sourceLabel}")
+			self.isBuiltBy = sourceLabel
 
 		@property
 		def closure(self):
 			if self._closure is None:
-				self._closure = set()
-				self._closure.update(self.uses)
-				self._closure.update(self.explicitClosure)
-				for req in self.uses:
-					self._closure.update(req.closure)
+				self.updateClosure()
 			return self._closure
 
+		@property
+		def buildClosure(self):
+			if self._buildClosure is None:
+				self.updateBuildClosure()
+			return self._buildClosure
+
+		def updateClosure(self):
+			self.updateClosureWork()
+
+		def updateBuildClosure(self):
+			if not self.buildRequires:
+				self._buildClosure = self._closure
+			else:
+				self._buildClosure = set()
+				self._buildClosure.update(self.closure)
+				for label in self.buildRequires:
+					self._buildClosure.update(label.buildClosure)
+					if label.type is Classification.TYPE_BINARY:
+						self._buildClosure.add(label)
+
+				if self.flavorBase:
+					self._buildClosure.update(self.flavorBase.buildClosure)
+
+
+		GUARD = "guard"
+
+		def updateClosureWork(self, chain = []):
+			def circularDependencyError(chain):
+				cycle = " -> ".join(_.name for _ in chain)
+				raise Exception(f"Circular dependency of labels while resolving {cycle}")
+
+			if self._closure is self.GUARD:
+				circularDependencyError(chain)
+
+			self._closure = self.GUARD
+
+			chain = chain + [self]
+			# print("update", " -> ".join(_.name for _ in chain))
+
+			result = set()
+			if self.flavorBase:
+				result.update(self.flavorBase.closure)
+			for label in self.uses:
+				if label._closure is self.GUARD:
+					circularDependencyError(chain + [label])
+				if label._closure is None:
+					label.updateClosureWork(chain)
+				result.update(label._closure)
+
+			if self.type is Classification.TYPE_BINARY:
+				result.add(self)
+
+			self._closure = result
+
 		def isKnownDependency(self, other):
-			return other in self.closure
+			if other in self.closure:
+				return True
+			if self.isBuiltBy == other.isBuiltBy:
+				return True
+			return False
 
 		def __str__(self):
 			return self.name
@@ -42,17 +141,76 @@ class Classification:
 			self._labels = {}
 			self._nextLabelId = 0
 
-		def createLabel(self, name):
+		def createLabel(self, name, type):
 			label = self._labels.get(name)
 			if label is None:
-				label = Classification.Label(name, self._nextLabelId)
+				label = Classification.Label(name, type, self._nextLabelId)
 				self._labels[name] = label
 				self._nextLabelId += 1
+			elif label.type != type:
+				raise Exception(f"Conflicting types for label {name}!")
 			return label
 
 		@property
 		def allLabels(self):
 			return sorted(self._labels.values(), key = lambda _: _.name)
+
+		def finalize(self):
+			for label in self._labels.values():
+				label._buildClosure = set()
+
+			# force compute the closure of each label
+			for label in self._labels.values():
+				label.updateClosure()
+
+				sourceProject = label.isBuiltBy
+				if sourceProject is not None:
+					sourceProject._buildClosure.update(label._closure)
+
+			if True:
+				self.showLabel("@CoreLibraries")
+				#self.showLabel("@CoreLibraries+odbc")
+				self.showLabel("@CryptoLibraries")
+				self.showLabel("@ApplicationLibraries")
+				#self.showLabel("@Boot")
+				#self.showLabel("@Kernel")
+
+		def getExtendedClosure(self, name):
+			label = self._labels.get(name)
+			if label is None:
+				raise Exception(f"Unknown label {name}")
+
+			return label._buildClosure
+
+		def show(self):
+			for label in self.allLabels:
+				self.showLabel(label)
+
+		def showLabel(self, label):
+			if type(label) == str:
+				label = self._labels[label]
+
+			print(f"Label {label.name}")
+			if label.isBuiltBy:
+				print(f"  source project {label.isBuiltBy}")
+			for name, lset in (("requires", label.uses), ("buildrequires", label.buildRequires), ("closure", label._closure), ("build closure", label._buildClosure)):
+				if not lset:
+					continue
+				print(f"  {name}")
+
+				if lset is not label._closure and label._closure.issubset(lset):
+					if lset == label._closure:
+						print(f"    (same as closure)")
+						continue
+
+					print(f"    closure plus:")
+					lset = lset.difference(label._closure)
+
+				for c in lset:
+					if type(c) is str:
+						print(f"XXX label {label} {name} contains string {c}")
+					print(f"    {c.name}")
+				print()
 
 	class Reason(object):
 		def __init__(self, pkg):
@@ -119,6 +277,36 @@ class Classification:
 		def __str__(self):
 			return f"{self.package.fullname()} is the source of {self.binary.fullname()}"
 
+	class ReasonSiblingPackage(Reason):
+		def __init__(self, pkg, sibling):
+			super().__init__(pkg)
+			self.sibling = sibling
+
+		@property
+		def type(self):
+			return 'sibling package'
+
+		def chain(self):
+			return self.reasonChain(self.sibling)
+
+		def __str__(self):
+			return f"{self.package.fullname()} is a sibling package of {self.sibling.fullname()}"
+
+	class ReasonRelatedPackage(ReasonSiblingPackage):
+		def __init__(self, relationName, pkg, sibling):
+			super().__init__(pkg, sibling)
+			self.relation = relationName
+
+		@property
+		def type(self):
+			return f"{self.relation} package"
+
+		def chain(self):
+			return self.reasonChain(self.sibling)
+
+		def __str__(self):
+			return f"{self.package.fullname()} is a {self.relation} package related to {self.sibling.fullname()}"
+
 	class ReasonBuildDependency(Reason):
 		def __init__(self, pkg, parentReason):
 			super().__init__(pkg)
@@ -179,6 +367,121 @@ class Classification:
 			self.result.update(result)
 			return result
 
+	class SiblingPackageClosure(Classifier):
+		def __init__(self, problems, label, store, **kwargs):
+			super().__init__(label, **kwargs)
+			self.problems = problems
+			self.store = store
+
+			self.packageCheck = None
+
+		def handleSourceProjectConflict(self, build):
+			self.problems.addSourceProjectConflict(build)
+
+		def enumerate(self, packages):
+			alreadySeen = set()
+			for rpm in packages:
+				buildId = rpm.obsBuildId
+				if buildId is None:
+					print(f"No OBS package for {rpm.shortname}")
+					continue
+
+				if buildId in alreadySeen:
+					continue
+				alreadySeen.add(buildId)
+
+				build = self.store.retrieveOBSPackageById(buildId)
+				if build is None:
+					print(f"Could not find OBS package {buildId} for {rpm.shortname}")
+					continue
+
+				yield rpm, build
+
+		def classify(self, packages):
+			label = self.label
+
+			result = set()
+
+			for rpm, build in self.enumerate(packages):
+				problematic = False
+
+				for other in build.binaries:
+					if other.label is None:
+						other.label = label
+						other.labelReason = Classification.ReasonSiblingPackage(other, rpm)
+						result.add(other)
+					elif other.label is not rpm.label and \
+					     (other.label.isBuiltBy is not rpm.label.isBuiltBy):
+						# report the problem once when we're done with processing all packages
+						problematic = True
+
+						if False:
+							print(f"Source project conflict for {build.name}")
+							print(f"  {rpm.shortname} was labelled as {rpm.label}, built by {rpm.label.isBuiltBy}")
+							print(f"  {other.shortname} was labelled as {other.label}, built by {other.label.isBuiltBy}")
+
+				if problematic:
+					# print(f"Adding SourceProjectConflict for {build.name}")
+					self.handleSourceProjectConflict(build)
+
+			self.result.update(result)
+			return result
+
+	class AutoflavorPackageClosure(SiblingPackageClosure):
+		def __init__(self, problemLog, store):
+			super().__init__(problemLog, None, store)
+			self.flavors = {}
+
+		def addFlavor(self, name):
+			if self.flavors.get(name) is None:
+				self.flavors[name] = set()
+			return self.flavors[name]
+
+		def getFlavor(self, name):
+			return self.flavors.get(name)
+
+		def classify(self, packages):
+			result = set()
+			for rpm, build in self.enumerate(packages):
+				for other in build.binaries:
+					if other.label is None:
+						continue
+					if other.label.type == Classification.TYPE_AUTOFLAVOR:
+						# print(f"### identified {other.shortname} as a {other.label.name} package")
+						self.addFlavor(other.label.name).add((rpm, other))
+
+		def labelFlavoredPackages(self, flavorName, label):
+			result = set()
+
+			matching = self.getFlavor(flavorName)
+			if matching:
+				for rpm, other in matching:
+					# print(f"::: label {other.shortname} as {label}")
+					other.label = label
+					other.labelReason = Classification.ReasonRelatedPackage(flavorName, other, rpm)
+					result.add(other)
+			return result
+
+	class RelatedPackageClosure(SiblingPackageClosure):
+		def classify(self, packages):
+			relation = self.RELATION
+			label = self.label
+
+			result = set()
+			for rpm, build in self.enumerate(packages):
+				if relation.checkPackage(rpm):
+					print(f"Found {relation.NAME} package {rpm.shortname} in non-{relation.NAME} group {rpm.label}")
+					continue
+
+				for other in build.binaries:
+					if other.label is None and relation.checkPackage(other):
+						print(f"### identified {other.shortname} as a {relation.NAME} package")
+						other.label = label
+						other.labelReason = Classification.ReasonRelatedPackage(relation, other, rpm)
+						result.add(other)
+
+			self.result.update(result)
+			return result
 
 	class DependencyClassifier(Classifier):
 		def __init__(self, worker, arch, preferences, label):
@@ -355,21 +658,17 @@ class PackagePreferences:
 
 
 class PackageGroup:
-	TYPE_BINARY = 'binary'
-	TYPE_SOURCE = 'source'
-
-	def __init__(self, name, type = None):
-		if type is None:
-			type = self.TYPE_BINARY
-
+	def __init__(self, name):
 		self.name = name
-		self.type = type
 
 		self.defined = False
 		self.matchCount = 0
 		self.expand = True
 		self.label = None
 		self._packages = []
+		self._buildFlavors = {}
+		self._runtimeRequires = {}
+		self._buildRequires = {}
 
 	def track(self, pkg):
 		self._packages.append(pkg)
@@ -383,6 +682,10 @@ class PackageGroup:
 			print(f"Package {pkg.fullname()} cannot change label from {pkg.label} to {self.label}")
 
 	@property
+	def type(self):
+		return self.label.type
+
+	@property
 	def packages(self):
 		return set(self._packages)
 
@@ -394,15 +697,41 @@ class PackageGroup:
 	def groupNames(self):
 		return set(_.group for _ in self._packages)
 
+	@property
+	def runtimeRequires(self):
+		return set(self._runtimeRequires.values())
+
+	@property
+	def buildRequires(self):
+		return set(self._buildRequires.values())
+
+	@property
+	def isFlavor(self):
+		return self.label.flavorBase is not None
+
 	def addRequires(self, otherGroup):
-		if self.type == self.TYPE_BINARY:
-			self.label.addRuntimeDependency(otherGroup.label)
-		else:
-			self.label.addBuildDependency(otherGroup.label)
+		if otherGroup.label is None:
+			print(f"Group {otherGroup.name} has a NULL label")
+		self.label.addRuntimeDependency(otherGroup.label)
+		self._runtimeRequires[otherGroup.name] = otherGroup
 
 	def addBuildRequires(self, otherGroup):
-		assert(self.type == self.TYPE_SOURCE)
 		self.label.addBuildDependency(otherGroup.label)
+		self._buildRequires[otherGroup.name] = otherGroup
+
+	@property
+	def flavors(self):
+		return map(lambda pair: pair[1], sorted(self._buildFlavors.items()))
+
+	def addBuildFlavor(self, flavorName, otherGroup):
+		if self._buildFlavors.get(flavorName):
+			raise Exception(f"Duplicate definition of build flavor {flavorName} for {self.name}")
+		self._buildFlavors[flavorName] = otherGroup
+
+		self.label.addBuildFlavor(flavorName, otherGroup.label)
+
+	def getBuildFlavor(self, name):
+		return self._buildFlavors.get(name)
 
 class NameFNMatch:
 	def __init__(self, type, value, group):
@@ -434,9 +763,12 @@ class BaseFilterSet:
 			self.value = value
 			self.group = group
 
+		def __str__(self):
+			return self.value
+
 		@property
 		def key(self):
-			return self.value
+			return (-len(self.value), self.value)
 
 		def match(self, name):
 			return fnmatch.fnmatchcase(name, self.value)
@@ -446,6 +778,9 @@ class BaseFilterSet:
 			self.name = name
 			self.arch = arch
 			self.group = group
+
+		def __str__(self):
+			return f"{self.name}.{self.arch}"
 
 		@property
 		def key(self):
@@ -468,7 +803,7 @@ class BaseFilterSet:
 		else:
 			if self._exactMatches.get(value):
 				conflict = self._exactMatches[value]
-				print(f"OOPS: {self.type} filter us anbiguous for {value} ({group.name} vs {conflict.name})")
+				print(f"OOPS: {self.type} filter is ambiguous for {value} ({group.name} vs {conflict.name})")
 				return
 			self._exactMatches[value] = group
 
@@ -607,6 +942,12 @@ class PackageFilter:
 			self.reason = reason
 
 		def labelPackage(self, pkg):
+			# HACK
+			# Do not group all devel packages, so that the
+			# DevelClosure can pick them up later.
+			if self.label.type == Classification.TYPE_AUTOFLAVOR:
+				pass
+
 			pkg.label = self.label
 			pkg.labelReason = Classification.ReasonFilter(pkg, self.reason)
 
@@ -617,6 +958,7 @@ class PackageFilter:
 		self._filterGroups = []
 		self._groups = {}
 		self._preferences = PackagePreferences()
+		self._autoflavors = []
 
 		self.defaultFilterGroup = self.makeFilterGroup(self.PRIORITY_DEFAULT)
 
@@ -624,10 +966,14 @@ class PackageFilter:
 			data = yaml.full_load(f)
 
 		for gd in data['groups']:
-			self.parseGroup(PackageGroup.TYPE_BINARY, gd)
+			self.parseGroup(Classification.TYPE_BINARY, gd)
 
 		for gd in data.get('build_groups') or []:
-			self.parseGroup(PackageGroup.TYPE_SOURCE, gd)
+			self.parseGroup(Classification.TYPE_SOURCE, gd)
+
+		for gd in data.get('autoflavors') or []:
+			group = self.parseGroup(Classification.TYPE_AUTOFLAVOR, gd)
+			self._autoflavors.append(group)
 
 		for pref in data.get('preferences') or []:
 			preferred = pref.get('prefer')
@@ -639,6 +985,7 @@ class PackageFilter:
 					self._preferences.prefer(preferred, other)
 
 		self.finalize()
+		self.classificationScheme.finalize()
 
 	def finalize(self):
 		for filterGroup in self._filterGroups:
@@ -668,7 +1015,54 @@ class PackageFilter:
 		return self.makeGroupInternal(name, type)
 
 	def makeSourceGroup(self, name):
-		return self.makeGroupInternal(name, PackageGroup.TYPE_SOURCE)
+		return self.makeGroupInternal(name, Classification.TYPE_SOURCE)
+
+	def instantiateAutoFlavor(self, baseGroup, autoFlavor):
+		# groupName = f"{baseGroup.name}+{autoFlavor.name}"
+		flavor = baseGroup.getBuildFlavor(autoFlavor.name)
+		if flavor:
+			print(f"{baseGroup.name} already has a {autoFlavor.name} flavor named {flavor.name}")
+		if flavor is None:
+			flavor = self.makeFlavorGroup(baseGroup, autoFlavor.name)
+
+		for req in autoFlavor.runtimeRequires:
+			flavor.addRequires(req)
+		for req in autoFlavor.buildRequires:
+			flavor.addBuildRequires(req)
+
+		return flavor
+
+	def makeFlavorGroup(self, baseGroup, flavorName):
+		flavor = baseGroup.getBuildFlavor(flavorName)
+		if flavor is not None:
+			return flavor
+
+		groupName = f"{baseGroup.name}+{flavorName}"
+		flavor = self.makeGroupInternal(groupName, baseGroup.type)
+
+		for buildReq in baseGroup.buildRequires:
+			flavor.addBuildRequires(buildReq)
+
+			# FIXME: this can go with autoflavors
+			# If this build dependency is not a flavor, automatically
+			# add the label's devel flavor
+			if not buildReq.isFlavor:
+				subordinateDevelFlavor = self.makeFlavorGroup(buildReq, "devel")
+				flavor.addBuildRequires(subordinateDevelFlavor)
+
+		for runtimeReq in baseGroup.runtimeRequires:
+			flavor.addRequires(runtimeReq)
+
+		# Flavors are built from the same source project as their base group
+		if flavor.type == Classification.TYPE_BINARY:
+			flavor.label.isBuiltBy = baseGroup.label.isBuiltBy
+			flavor.addRequires(baseGroup)
+
+		names = flavor._runtimeRequires.keys()
+		# print(f"Flavor {flavor.label} requires {' '.join(names)}")
+
+		baseGroup.addBuildFlavor(flavorName, flavor)
+		return flavor
 
 	def makeGroupInternal(self, name, type):
 		try:
@@ -677,14 +1071,18 @@ class PackageFilter:
 			group = None
 
 		if group is None:
-			group = PackageGroup(name, type)
+			if not type:
+				raise Exception(f"Cannot create group {name} with no type")
 
-			if self.classificationScheme:
-				group.label = self.classificationScheme.createLabel(name)
-
+			group = PackageGroup(name)
 			self._groups[name] = group
-		elif type and group.type != type:
-			raise Exception(f"Group {name} does not match expected type ({group.type} vs {type})")
+
+		if type:
+			if group.label is None:
+				group.label = self.classificationScheme.createLabel(name, type)
+			elif group.type != type:
+				raise Exception(f"Group {name} does not match expected type ({group.type} vs {type})")
+
 		return group
 
 	@property
@@ -695,12 +1093,42 @@ class PackageFilter:
 	def packagePreferences(self):
 		return self._preferences
 
-	def parseGroup(self, groupType, gd):
-		group = self.makeGroupInternal(gd['name'], groupType)
+	@property
+	def autoFlavors(self):
+		return self._autoflavors
 
+	def parseGroup(self, groupType, gd):
+		groupName = gd['name']
+		group = self.makeGroupInternal(groupName, groupType)
+		return self.processGroupDefinition(group, gd)
+
+	def parseBuildFlavor(self, baseGroup, gd):
+		group = self.makeFlavorGroup(baseGroup, gd['name'])
+		return self.processGroupDefinition(group, gd)
+
+	VALID_GROUP_FIELDS = set((
+		'name',
+		'expand',
+		'priority',
+		'requires',
+		'buildrequires',
+		'products',
+		'packages',
+		'sources',
+		'binaries',
+		'rpmGroups',
+		'buildflavors',
+		'sourceproject',
+	))
+
+	def processGroupDefinition(self, group, gd):
 		if group.defined:
 			raise Exception(f"Duplicate definition of group \"{group.name}\" in filter yaml")
 		group.defined = True
+
+		for field in gd.keys():
+			if field not in self.VALID_GROUP_FIELDS:
+				raise Exception(f"Invalid field {field} in definition of group {group.name}")
 
 		value = gd.get('expand')
 		if type(value) == bool:
@@ -716,17 +1144,18 @@ class PackageFilter:
 		if group.label:
 			nameList = gd.get('requires') or []
 			for name in nameList:
-				otherGroup = self.makeGroupInternal(name, groupType)
+				otherGroup = self.makeGroupInternal(name, Classification.TYPE_BINARY)
 				group.addRequires(otherGroup)
 
-			nameList = gd.get('explicitClosure') or []
+			nameList = gd.get('buildrequires') or []
 			for name in nameList:
-				group.label.addToClosure(self.classificationScheme.createLabel(name))
-
-			nameList = gd.get('builds') or []
-			for name in nameList:
-				otherGroup = self.makeGroupInternal(name, PackageGroup.TYPE_BINARY)
+				otherGroup = self.makeGroupInternal(name, Classification.TYPE_SOURCE)
 				group.addBuildRequires(otherGroup)
+
+		name = gd.get('sourceproject')
+		if name is not None:
+			sourceProject = self.makeGroupInternal(name, Classification.TYPE_SOURCE)
+			group.label.setBuiltBy(sourceProject.label)
 
 		nameList = gd.get('products') or []
 		for name in nameList:
@@ -748,3 +1177,9 @@ class PackageFilter:
 		nameList = gd.get('rpmGroups') or []
 		for name in nameList:
 			filterGroup.addRpmGroupFilter(name, group)
+
+		flavors = gd.get('buildflavors') or []
+		for fd in flavors:
+			self.parseBuildFlavor(group, fd)
+
+		return group

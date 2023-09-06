@@ -1,5 +1,6 @@
 import sqlite3
 from packages import Package, PackageInfo
+from obsclnt import OBSPackage
 
 optSqlDebug = 0
 
@@ -524,6 +525,7 @@ class PackageTable(UniqueTable):
 		super().__init__(db)
 
 		self.knownPackageIDs = dict()
+		self.knownBuilds = dict()
 
 	@staticmethod
 	def makeKey(name, version, release, arch):
@@ -531,11 +533,17 @@ class PackageTable(UniqueTable):
 
 	def updateKnownIDs(self):
 		c = self.db.conn.cursor()
-		c.execute("SELECT id, name, version, release, arch FROM packages;")
+		c.execute("SELECT id, name, version, release, arch, buildId FROM packages;")
 		for row in c.fetchall():
-			(id, name, version, release, arch) = row
+			(id, name, version, release, arch, buildId) = row
 			key = self.makeKey(name, version, release, arch)
 			self.knownPackageIDs[key] = id
+
+			try:
+				self.knownBuilds[buildId].append(id)
+			except:
+				self.knownBuilds[buildId] = [id]
+
 		print(f"Found {len(self.knownPackageIDs)} packages in database")
 
 	def isKnownPackageObject(self, obj):
@@ -558,6 +566,9 @@ class PackageTable(UniqueTable):
 		self.knownPackageIDs[key] = h.id
 		# print(f"{key}: {obj.fullname()} -> {h.id}")
 		return h.id
+
+	def getPackagesForBuild(self, buildId):
+		return self.knownBuilds.get(buildId) or []
 
 class LatestPackageTable(UniqueTable):
 	NAME = "latest"
@@ -642,6 +653,15 @@ class LatestPackageTable(UniqueTable):
 
 class BuildTable(UniqueTable):
 	NAME = "builds"
+	OBJECT_TEMPLATE = ObjectTemplate("obsPackage", {
+				'backingStoreId' : 'id',
+				'name' : 'name',
+#				'sourcePackageId' : 'sourceId',
+				'buildTime' : 'buildTime',
+				},
+				ctorArgs = (
+					'name',
+				))
 	TABLE_FIELDS = """
 			id integer PRIMARY KEY,
 			name text NOT NULL,
@@ -966,6 +986,7 @@ class BackingStoreDB(DB):
 		self.keyValueStore.onLoad()
 
 		self.packageCache = PackageCache()
+		self.obsPackageCache = PackageCache()
 		self.providesCache = ProvidesCache()
 
 		self._allowDepTreeLookups = False
@@ -1241,18 +1262,8 @@ class BackingStoreDB(DB):
 		# this returns a list of (dependencyId, packageId) pairs
 		rawRequired = self.tree.retrieveRequired(pkg.backingStoreId)
 
-		missing = set()
-		found = dict()
-
-		for depId, targetId in rawRequired:
-			target = self.packageCache.get(targetId)
-			if target is None:
-				missing.add(targetId)
-
-		if missing:
-			for d in self.packages.selectMultiple([], 'id', list(missing)):
-				t = self.constructPackage(d['id'], d)
-				assert(t)
+		# make sure we have proper Package objects in our cache for each requisite
+		self.loadPackagesIntoCache(list(pkgId for depId, pkgId in rawRequired))
 
 		for depId, targetId in rawRequired:
 			if False:
@@ -1269,6 +1280,25 @@ class BackingStoreDB(DB):
 		# really list? or better set?
 		pkg.resolvedRequires = list(resolved)
 
+	def loadPackagesIntoCache(self, pkgIdList):
+		result = set()
+
+		missing = set()
+		for pkgId in pkgIdList:
+			pkg = self.packageCache.get(pkgId)
+			if pkg is None:
+				missing.add(pkgId)
+			else:
+				result.add(pkg)
+
+		if missing:
+			for d in self.packages.selectMultiple([], 'id', list(missing)):
+				pkg = self.constructPackage(d['id'], d)
+				assert(pkg)
+				result.add(pkg)
+
+		return result
+
 	def retrieveSourcePackage(self, d, product = None):
 		src = None
 
@@ -1283,6 +1313,46 @@ class BackingStoreDB(DB):
 			pass
 
 		return src
+
+	def enumerateOBSPackages(self):
+		result = []
+		for d in self.builds.fetchAll():
+			buildId = d['id']
+
+			obsPackage = self.obsPackageCache.get(buildId)
+			if obsPackage is None:
+				obsPackage = self.constructOBSPackage(d)
+
+			result.append(obsPackage)
+
+		return result
+
+	def retrieveOBSPackageById(self, buildId):
+		obsPackage = self.obsPackageCache.get(buildId)
+		if obsPackage is not None:
+			return obsPackage
+
+		d = self.builds.fetchOne(id = buildId)
+		if d is None:
+			return None
+
+		return self.constructOBSPackage(d)
+
+	def constructOBSPackage(self, d):
+		obsPackage = self.builds.constructObject(OBSPackage, d)
+
+		# For now, only the packages that succeed make it into the DB
+		obsPackage.buildStatus = OBSPackage.STATUS_SUCCEEDED
+
+		pkgIdList = self.packages.getPackagesForBuild(obsPackage.backingStoreId)
+		obsPackage._binaries = list(self.loadPackagesIntoCache(pkgIdList))
+
+		names = [_.shortname for _ in obsPackage._binaries]
+		# print(f"{obsPackage.name} -> {', '.join(names)}")
+
+		# FIXME: discover the build dependencies if desired
+
+		return obsPackage
 
 	def retrievePackageFiles(self, pkgId):
 		result = self.files.fetchColumn('path', pkgId = pkgId)

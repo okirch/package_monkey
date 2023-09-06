@@ -367,13 +367,11 @@ class Classification:
 			self.result.update(result)
 			return result
 
-	class SiblingPackageClosure(Classifier):
+	class BuildPackageClosure(Classifier):
 		def __init__(self, problems, label, store, **kwargs):
 			super().__init__(label, **kwargs)
 			self.problems = problems
 			self.store = store
-
-			self.packageCheck = None
 
 		def handleSourceProjectConflict(self, build):
 			self.problems.addSourceProjectConflict(build)
@@ -397,6 +395,7 @@ class Classification:
 
 				yield rpm, build
 
+	class SiblingPackageClosure(BuildPackageClosure):
 		def classify(self, packages):
 			label = self.label
 
@@ -427,7 +426,7 @@ class Classification:
 			self.result.update(result)
 			return result
 
-	class AutoflavorPackageClosure(SiblingPackageClosure):
+	class AutoflavorPackageClosure(BuildPackageClosure):
 		def __init__(self, problemLog, store):
 			super().__init__(problemLog, None, store)
 			self.flavors = {}
@@ -462,7 +461,7 @@ class Classification:
 					result.add(other)
 			return result
 
-	class RelatedPackageClosure(SiblingPackageClosure):
+	class RelatedPackageClosure(BuildPackageClosure):
 		def classify(self, packages):
 			relation = self.RELATION
 			label = self.label
@@ -479,6 +478,29 @@ class Classification:
 						other.label = label
 						other.labelReason = Classification.ReasonRelatedPackage(relation, other, rpm)
 						result.add(other)
+
+			self.result.update(result)
+			return result
+
+	class BuildRequiresClosure(BuildPackageClosure):
+		def __init__(self, problemLog, store):
+			super().__init__(problemLog, None, store)
+			self.flavors = {}
+
+		def classify(self, packages):
+			result = set()
+			for rpm, build in self.enumerate(packages):
+				pass
+
+			seen = set()
+			for rpm, build in self.enumerate(packages):
+				if build in seen:
+					continue
+				seen.add(build)
+
+				for req in build.buildRequires:
+					# print(build.name, req.shortname)
+					result.add(req)
 
 			self.result.update(result)
 			return result
@@ -1020,8 +1042,6 @@ class PackageFilter:
 	def instantiateAutoFlavor(self, baseGroup, autoFlavor):
 		# groupName = f"{baseGroup.name}+{autoFlavor.name}"
 		flavor = baseGroup.getBuildFlavor(autoFlavor.name)
-		if flavor:
-			print(f"{baseGroup.name} already has a {autoFlavor.name} flavor named {flavor.name}")
 		if flavor is None:
 			flavor = self.makeFlavorGroup(baseGroup, autoFlavor.name)
 

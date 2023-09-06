@@ -884,7 +884,6 @@ class DirectedGraphTable(UniqueTable):
 			result.append((row[0], row[1]))
 
 		return result
-		return self.fetchAll(fields = ('requiredPkgId', 'dependencyId'), requiringPkgId = pkgId)
 
 class TreeTable(DirectedGraphTable):
 	NAME = "tree"
@@ -1141,8 +1140,8 @@ class BackingStoreDB(DB):
 		# Update build dependencies, first
 		edges = set()
 		for obsPackage in obsPackageList:
-			for other in obsPackage.buildRequires:
-				edges.add((obsPackage.backingStoreId, other.backingStoreId))
+			for rpm in obsPackage.buildRequires:
+				edges.add((obsPackage.backingStoreId, rpm.backingStoreId))
 
 		for source, target in edges:
 			self.buildDep.addEdge(requiringPkgId = source, requiredPkgId = target)
@@ -1350,7 +1349,22 @@ class BackingStoreDB(DB):
 		names = [_.shortname for _ in obsPackage._binaries]
 		# print(f"{obsPackage.name} -> {', '.join(names)}")
 
-		# FIXME: discover the build dependencies if desired
+		# discover the build dependencies if desired
+		assert(self._allowDepTreeLookups)
+		if self._allowDepTreeLookups:
+			# this returns a list of (dependencyId, packageId) pairs
+			rawRequired = self.buildDep.retrieveRequired(obsPackage.backingStoreId)
+			# discard the dependency ID, we didn't store anything useful to begin with
+			rawRequired = list(map(lambda pair: pair[1], rawRequired))
+
+			# make sure we have proper Package objects in our cache for each requisite
+			self.loadPackagesIntoCache(rawRequired)
+
+			for pkgId in rawRequired:
+				target = self.packageCache.get(pkgId)
+				if target is None:
+					raise Exception(f"{obsPackage.name}: cannot resolve pkgId {pkgId}")
+				obsPackage.addBuildRequires(target)
 
 		return obsPackage
 

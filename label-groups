@@ -121,6 +121,17 @@ for label in binaryLabels:
 	classifier.classify(labelledPackages)
 	closure[siblingGroup.name] = classifier.result
 
+	classifier = Classification.BuildRequiresClosure(problemLog, store)
+	packagesNeededForBuild = classifier.classify(labelledPackages)
+	labels = set()
+	for rpm in packagesNeededForBuild:
+		if rpm.label is None:
+			print(f"{rpm.shortname} is needed to build {group.name}, but it's not labelled")
+		else:
+			labels.add(rpm.label)
+
+	names = [_.name for _ in labels]
+	print(f"This group requires {' '.join(names)} for building")
 	closure[label.name] = labelledPackages
 
 for label in sourceLabels:

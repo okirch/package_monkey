@@ -130,8 +130,7 @@ class OBSSchema(object):
 				result.obsrelease = value
 			elif key == 'bdep':
 				bdep = self.processSimpleXML(child, ("name", "version", "release", "arch", "hdrmd5", ), ("notmeta",))
-				if bdep.notmeta == "1":
-					result.builddeps.append(bdep)
+				result.builddeps.append(bdep)
 			elif key in ('constraint', ):
 				pass
 			else:
@@ -510,9 +509,9 @@ class OBSPackage:
 	def sourcePackage(self, value):
 		self._source = value
 
-	def addBuildRequires(self, obsPackage):
-		assert(obsPackage.backingStoreId)
-		self._buildRequires.add(obsPackage)
+	def addBuildRequires(self, rpm):
+		assert(rpm.backingStoreId)
+		self._buildRequires.add(rpm)
 
 	@property
 	def buildRequires(self):
@@ -701,7 +700,7 @@ class OBSProject:
 		for used in data.builddeps:
 			required = self.product.findPackage(used.name, used.version, used.release, used.arch)
 			if required is None:
-				print(f"WARNING: building {obsPackage.name} uses {used.shortname}, but I cannot find it")
+				print(f"WARNING: building {obsPackage.name} uses {used.name}.{used.arch}, but I cannot find it")
 				if False:
 					raise Exception()
 				continue
@@ -709,15 +708,6 @@ class OBSProject:
 			result.add(required)
 
 		return result
-
-	def updateBuildDependenciesOld(self, client, arch):
-		for buildInfo in client.getBuildDepInfo(self.name, self.buildRepository, arch):
-			pkg = self.addPackage(buildInfo.name)
-			for bName in buildInfo.binaries:
-				pkg.addBinary(bName)
-
-			for bName in buildInfo.buildRequires:
-				pkg.addBuildRequires(bName)
 
 	def addPackage(self, name):
 		pkg = self._packages.get(name)
@@ -835,14 +825,7 @@ class OBSProject:
 		for obsPackage in toBeAdded:
 			obsPackage.rpmsUsedForBuild = self.getRpmsUsedForBuild(client, obsPackage)
 			for rpm in obsPackage.rpmsUsedForBuild:
-				assert(rpm.backingStoreId)
-
-				requiredPackage = rpmToPackage.get(rpm.backingStoreId)
-				if requiredPackage is None:
-					print(f"Cannot determine the OBS package that {rpm.shortname} belongs to")
-					continue
-
-				obsPackage.addBuildRequires(requiredPackage)
+				obsPackage.addBuildRequires(rpm)
 			queue.add(obsPackage)
 
 		print("Done.")

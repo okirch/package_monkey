@@ -183,14 +183,40 @@ groups:
    requires:
     - "@Core"
    packages:
+    - libcairo*
     - libICE6
     - libSM6
     - libX11-6
+    - libX11-data
     - libXau6
     - libXaw3d6
     - libXaw3d7
     - libXaw3d8
     - libXaw7
+    - libxcb1
+    - libxcb-composite0
+    - libxcb-damage0
+    - libxcb-dpms0
+    - libxcb-dri2-0
+    - libxcb-dri3-0
+    - libxcb-glx0
+    - libxcb-present0
+    - libxcb-randr0
+    - libxcb-record0
+    - libxcb-render0
+    - libxcb-res0
+    - libxcb-screensaver0
+    - libxcb-shape0
+    - libxcb-shm0
+    - libxcb-sync1
+    - libxcb-xf86dri0
+    - libxcb-xfixes0
+    - libxcb-xinerama0
+    - libxcb-xinput0
+    - libxcb-xkb1
+    - libxcb-xtest0
+    - libxcb-xv0
+    - libxcb-xvmc0
     - libXcomposite1
     - libXft2
     - libXi6
@@ -200,9 +226,9 @@ groups:
     - libXt
     - libXt6
     - libXtst
-    - libxcb1
-    - libcairo*
     - xaw3dd
+
+
 
  - name: "@X11"
    sourceproject: X11
@@ -277,10 +303,12 @@ groups:
     - p11-kit-tools
     - crypto-policies
     - libtasn1
+    - libtasn1-6
     - gpgme
     - libgpgme11
     - libgcrypt20
     - libgcrypt20-hmac
+    - libgpg-error0
 
  - name: "@CoreLibraries"
    sourceproject: Core
@@ -301,10 +329,12 @@ groups:
     - libauparse0
     - libboost_thread1*
     - libcap-ng0
+    - libcap2
     - libcom_err2
     - libcrack2
     - libcurl4
 #   - libdevmapper*
+    - libdb-4_8
     - libedit0
     - libevent-2*
     - libext2fs2
@@ -312,19 +342,25 @@ groups:
     - libfftw3*
     - libfreetype6
     - libgcc_s1
+    - libgdbm6
+    - libgdbm_compat4
     - libglib-*
     - libldap-*
     - liblzma5
     - liblzo2*
+    - libmpdec3
     - libnl3-200
     - libnl-config
     - libopenssl1_1
     - libopenssl3
     - libpci3
     - libpcre2*
+    - libpopt0
     - libprotobuf-lite20
+    - libreadline8
     - libreiserfscore0
     - libsasl2-*
+    - libselinux1
     - cyrus-sasl
     - cyrus-sasl-scram
     - cyrus-sasl-plain
@@ -339,6 +375,7 @@ groups:
     - libgomp1
     - openldap2
     - libz1
+    - libzio1
     - libyaml
    buildflavors:
     - name: odbc
@@ -418,6 +455,7 @@ groups:
     - pciutils
     - pciutils-*
     - permissions
+    - polkit-default-privs
     - prctl
     - psmisc
     - psutils
@@ -515,6 +553,16 @@ groups:
    packages:
     - rpm-build
     - flex
+    - post-build-checks
+    - compat-usrmerge-build
+    - compat-usrmerge-tools
+    - build-compare
+    - build-mkbaselibs
+    - rpmlint-mini
+    - rpm-config-SUSE
+    - brp-check-suse
+    - lua54
+    - obs-service-*
 
  - name: "@ApplicationLibraries"
    requires:
@@ -532,6 +580,7 @@ groups:
     - "@Core"
    packages:
     - apparmor*
+    - libapparmor1
     - pam_apparmor
    buildflavors:
     - name: python
@@ -1142,6 +1191,11 @@ groups:
       binaries:
        - dracut-fips
        - dracut-ima
+
+ - name: "@BootBuild"
+   sourceproject: KernelPlus
+   packages:
+    - plymouth
 
  - name: "@Stuff"
    rpmGroups:

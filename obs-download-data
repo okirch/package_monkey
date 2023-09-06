@@ -1,0 +1,36 @@
+#!/usr/bin/python3
+#
+# To download the OBS data for Dolomite, invoke like this:
+#  ./obs-download-data --family dolomite --db dolomite.db
+#
+
+forceRefresh = True
+
+from options import Application
+from obsclnt import OBSClient, OBSProject
+
+application = Application('obs-download-data')
+
+store = application.backingStore
+
+# store the arch we're asked to look at, so that we don't
+# have to play guessing games later on
+store.putProperty("arch", application.architecture)
+
+obsInstanceHostname = "api.suse.de"
+
+obs = OBSClient(f"https://{obsInstanceHostname}")
+obs.setCachePath("cache/http")
+
+for release in application.enumerateProducts():
+
+	product = release.createEmptyProduct()
+
+	print(f"Release {release}")
+	for bp in release.buildProjects:
+		print(f"  {bp}")
+
+		project = OBSProject(bp, product)
+		project.setCachePath(f"cache/obs/{obsInstanceHostname}")
+		project.updateBinaryList(obs)
+		project.updateBackingStore(application.backingStore, obs)

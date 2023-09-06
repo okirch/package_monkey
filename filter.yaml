@@ -434,8 +434,6 @@ groups:
        - btrfsprogs-udev-rules
        - openssh-clients
        - libusb*
-       - brltty
-       - libbrlapi*
     - name: glib
       requires:
        - "@SystemdLibraries"
@@ -464,28 +462,6 @@ groups:
        - "@Core+systemdlibs"
       binaries:
        - python-btrfsutil
-       - python3-brlapi
-    - name: x11
-      buildrequires:
-       - X11
-      requires:
-       - "@X11Libraries"
-      binaries:
-       - brltty-driver-xwindow
-    - name: gnome
-      buildrequires:
-       - Gnome
-      requires:
-       - "@Gnome"
-      binaries:
-       - brltty-driver-at-spi2
-    - name: java
-      buildrequires:
-       - Java
-      requires:
-       - "@Java"
-      binaries:
-       - brlapi-java
 
  - name: "@FancyLibraries"
    requires:
@@ -669,7 +645,6 @@ groups:
     - squashfs
     - sysfsutils
     - target-isns
-    - udisks2
     - xfsdump
     - xfsprogs
     - pam_mount

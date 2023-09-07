@@ -37,47 +37,49 @@ for pinfo in store.enumerateLatestPackages():
 
 	collection.add(pkg)
 
-def flattenLabelTree(label, alreadySeen):
-	alreadySeen.add(label)
-	result = []
+class LabelTreeTraversal:
+	def __init__(self):
+		self.alreadySeen = set()
+		self.visited = []
 
-	if label.type == Classification.TYPE_BINARY:
-		children = label.uses
-	else:
-		children = label.buildRequires
+	def flatten(self, label):
+		return self.flattenWork(label, lambda l: l.uses)
 
-	for child in children:
-		if child not in alreadySeen:
-			result += flattenLabelTree(child, alreadySeen)
+	def flattenBuildRequirements(self, label):
+		return self.flattenWork(label, lambda l: l.buildRequires)
 
-	result.append(label)
-	return result
+	def flattenWork(self, label, childAccessor):
+		result = []
 
-def flattenGroup(groupName, alreadySeen):
-	group = packageFilter.makeGroup(groupName)
-	label = group.label
+		if label in self.alreadySeen:
+			return result
 
-	if label in alreadySeen:
-		return set()
+		self.alreadySeen.add(label)
+		for child in childAccessor(label):
+			if child not in self.alreadySeen:
+				result += self.flattenWork(child, childAccessor)
 
-	result = flattenLabelTree(label, alreadySeen)
+		self.visited.append(label)
+		result.append(label)
 
-	for flavor in group.flavors:
-		label = flavor.label
-		if label not in alreadySeen:
-			result += flattenLabelTree(label, alreadySeen)
+		for child in label.flavors:
+			result += self.flattenWork(child, childAccessor)
 
-	return result
+		return result
+
+	def __iter__(self):
+		return iter(self.visited)
 
 def flattenGroupList(*names):
-	labelSequence = []
-	alreadySeen = set()
+	traversal = LabelTreeTraversal()
 	for groupName in names:
-		labelSequence += flattenGroup(groupName, alreadySeen)
-	return labelSequence
+		group = packageFilter.makeGroup(groupName)
+		traversal.flatten(group.label)
+	return traversal
 
-binaryLabels = flattenGroupList("@Core", "@HostCore", "@Kernel", "@UpdateStack", "@CoreLibraries+odbc", "@MinimalSystemd")
-sourceLabels = flattenGroupList("Core", "KernelPlus")
+binaryTraversal = flattenGroupList("@Core", "@HostCore", "@Kernel", "@UpdateStack", "@CoreLibraries+odbc", "@MinimalSystemd")
+#sourceTraversal = flattenGroupList("Core", "KernelPlus")
+sourceTraversal = []
 
 worker = ResolverWorker(resolver)
 problemLog = worker.problems
@@ -89,8 +91,9 @@ if productArchitecture is None:
 resolverContext = worker.contextForArch(productArchitecture)
 preferences = ResolverPreferences()
 
-closure = {}
-for label in binaryLabels:
+def classifyRuntimeDependencies(label):
+	global closure
+
 	group = packageFilter.makeGroup(label.name)
 	labelledPackages = group.packages
 
@@ -100,10 +103,8 @@ for label in binaryLabels:
 	classifier = Classification.DownwardClosure(worker, productArchitecture, preferences, label)
 	classifier.classify(labelledPackages)
 	labelledPackages = classifier.result
+	closure[label.name] = labelledPackages
 
-	# FIXME:
-	# Maybe we should do this the other way round and assign all flavor packages
-	# to the group flavor of a sibling as soon as we have that one labelled
 	classifier = Classification.AutoflavorPackageClosure(problemLog, store)
 	classifier.classify(labelledPackages)
 	for flavorDef in packageFilter.autoFlavors:
@@ -115,29 +116,62 @@ for label in binaryLabels:
 		relabeled = classifier.labelFlavoredPackages(flavorDef.name, flavor.label)
 		closure[flavor.name] = relabeled
 
-	# Step N: sort all other sibling packages into $Group-unused
-	siblingGroup = packageFilter.makeFlavorGroup(group, "unused")
-	classifier = Classification.SiblingPackageClosure(problemLog, siblingGroup.label, store)
-	classifier.classify(labelledPackages)
-	closure[siblingGroup.name] = classifier.result
+	# Step N: sort all other sibling packages into $Group+unused.
+	# To avoid infinite recursion, do not perform this step for the +unused flavor itself.
+	if not label.name.endswith("unused"):
+		siblingGroup = packageFilter.makeFlavorGroup(group, "unused")
+		classifier = Classification.SiblingPackageClosure(problemLog, siblingGroup.label, store)
+		classifier.classify(labelledPackages)
+		closure[siblingGroup.name] = classifier.result
 
-	classifier = Classification.BuildRequiresClosure(problemLog, store)
-	packagesNeededForBuild = classifier.classify(labelledPackages)
-	labels = set()
-	for rpm in packagesNeededForBuild:
-		if rpm.label is None:
-			print(f"{rpm.shortname} is needed to build {group.name}, but it's not labelled")
-		else:
-			labels.add(rpm.label)
+def classifyBuildDependencies(label):
+	global binaryTraversal
+	global closure
 
-	names = [_.name for _ in labels]
-	print(f"This group requires {' '.join(names)} for building")
-	closure[label.name] = labelledPackages
+	# get the build requirements of this label and make sure we've satisfied all their runtime
+	# requirements
+	for buildLabel in binaryTraversal.flattenBuildRequirements(label):
+		classifyRuntimeDependencies(buildLabel)
 
-for label in sourceLabels:
+	group = packageFilter.makeGroup(label.name)
+
+	classifier = Classification.BuildRequiresClosure(problemLog, label, store)
+	packagesNeededForBuild = classifier.classify(group.packages)
+
+	unlabelledPackages = classifier.unlabelledPackages
+	if unlabelledPackages:
+		print(f"{label.name} has {len(unlabelledPackages)} unclassified build requirements")
+
+		print(f"Classifying new build requirements for {label}")
+		classifier = Classification.UnknownPackageClassifier(worker, productArchitecture, preferences, label)
+		classifier.classify(unlabelledPackages)
+
+		# FIXME: This should also be part of the problem report
+		for suggestedLabel, candidatePackages in classifier.suggestions:
+			print(f"   Classifier suggests label {suggestedLabel} for these package(s)")
+			for cand in candidatePackages:
+				print(f"      {cand.shortname}")
+
+closure = {}
+processedBinaryLabels = []
+
+queue = list(binaryTraversal)
+while queue:
+	label = queue.pop(0)
+	classifyRuntimeDependencies(label)
+
+	# After classification, new flavors may have been added automatically
+	# Traverse any newly created flavors insert them at the head of the queue
+	for flavor in label.flavors:
+		queue[:0] = binaryTraversal.flatten(flavor)
+
+for label in binaryTraversal:
+	classifyBuildDependencies(label)
+
+for label in sourceTraversal:
 	group = packageFilter.makeSourceGroup(label.name)
 
-	print(f"Classify packages belonging to {group.label}")
+	print(f"Classify packages belonging to source project {group.label}")
 
 	classifier = Classification.BuildRequireClosure(worker, productArchitecture, preferences, label)
 	assert(classifier)
@@ -148,14 +182,14 @@ for label in sourceLabels:
 
 	closure[label.name] = classifier.result
 
-for label in binaryLabels:
+for label in binaryTraversal:
 	print()
 	print(label)
 
 	for pkg in sorted(closure[label.name], key = lambda p: p.name):
 		print(f"  {pkg.name}")
 
-for label in sourceLabels:
+for label in sourceTraversal:
 	print()
 	print(f"Source project {label}")
 

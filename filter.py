@@ -1,12 +1,19 @@
 import yaml
 import fnmatch
 
+from util import CycleDetector, GenerationCounter, Timestamp
+
+
 class Classification:
 	TYPE_BINARY = 'binary'
 	TYPE_SOURCE = 'source'
 	TYPE_AUTOFLAVOR = 'autoflavor'
 
 	class Label:
+		GENERATION = GenerationCounter()
+		RUNTIME_CYCLE_GUARD = CycleDetector("runtime dependency")
+		BUILD_CYCLE_GUARD = CycleDetector("build dependency")
+
 		def __init__(self, name, type, id):
 			self.name = name
 			self.type = type
@@ -18,25 +25,31 @@ class Classification:
 			self.flavorBase = None
 			self._flavors = {}
 
+			self._timestamp = Timestamp()
+
 			# the closure comprises all packages of this label plus the ones
 			# referenced by subordinate labels
 			self._closure = None
 
-			# the build closure is the closure of the "build" group(s)
-			# that build the package contained in this label
+			# the build closure comprises the labels that were listed as
+			# build requirements, recursively.
 			self._buildClosure = None
 
 			self.isBuiltBy = None
 
+		@classmethod
+		def hierarchyNeedsUpdate(klass):
+			klass.GENERATION.tick()
+
 		def addRuntimeDependency(self, other):
 			assert(other is not None)
-			self._closure = None
 			self.uses.add(other)
+			self.hierarchyNeedsUpdate()
 
 		def addBuildDependency(self, other):
 			assert(other is not None)
-			self._closure = None
 			self.buildRequires.add(other)
+			self.hierarchyNeedsUpdate()
 
 		@property
 		def flavors(self):
@@ -59,6 +72,8 @@ class Classification:
 			# we'll live with this for now
 			otherLabel.flavorBase = self
 
+			self.hierarchyNeedsUpdate()
+
 		def setBuiltBy(self, sourceLabel):
 			if self.isBuiltBy is sourceLabel:
 				return
@@ -66,35 +81,77 @@ class Classification:
 				raise Exception(f"Duplicate source group for {self}: {self.isBuiltBy} vs {sourceLabel}")
 			self.isBuiltBy = sourceLabel
 
+			self.hierarchyNeedsUpdate()
+
 		@property
 		def closure(self):
+			self.maybeInvalidateClosures()
 			if self._closure is None:
-				self.updateClosure()
+				with self.RUNTIME_CYCLE_GUARD.protect(self.name) as guard:
+					self.updateClosure()
+
 			return self._closure
 
 		@property
 		def buildClosure(self):
+			self.maybeInvalidateClosures()
 			if self._buildClosure is None:
-				self.updateBuildClosure()
+				with self.BUILD_CYCLE_GUARD.protect(self.name) as guard:
+					self.updateBuildClosure()
+
 			return self._buildClosure
 
+		def maybeInvalidateClosures(self):
+			if not self._timestamp.isCurrent(self.GENERATION):
+				self._closure = None
+				self._buildClosure = None
+
+		def maybeUpdateClosures(self):
+			if self._timestamp.isCurrent(self.GENERATION):
+				return
+
+			self._closure = None
+			self._buildClosure = None
+
 		def updateClosure(self):
-			self.updateClosureWork()
+			self._closure = None
+
+			result = set()
+			if self.flavorBase:
+				result.update(self.flavorBase.closure)
+			for label in self.uses:
+				result.update(label.closure)
+
+			if self.type is Classification.TYPE_BINARY:
+				result.add(self)
+
+			self._closure = result
 
 		def updateBuildClosure(self):
-			if not self.buildRequires:
-				self._buildClosure = self._closure
-			else:
-				self._buildClosure = set()
-				self._buildClosure.update(self.closure)
-				for label in self.buildRequires:
-					self._buildClosure.update(label.buildClosure)
-					if label.type is Classification.TYPE_BINARY:
-						self._buildClosure.add(label)
+			self._buildClosure = None
 
-				if self.flavorBase:
-					self._buildClosure.update(self.flavorBase.buildClosure)
+			result = set()
+			result.update(self.closure)
+			for label in self.uses:
+				result.update(label.buildClosure)
+				develFlavor = label.getBuildFlavor('devel')
 
+				# If we have a runtime requirement on @Foobar, 
+				# assume that we'll have a build requirement on
+				# @Foobar+devel in addition
+				if develFlavor is not None:
+					result.add(develFlavor)
+
+			for label in self.buildRequires:
+				result.update(label.closure)
+
+			if self.flavorBase:
+				result.update(self.flavorBase.buildClosure)
+
+			if self.type is Classification.TYPE_BINARY:
+				result.add(self)
+
+			self._buildClosure = result
 
 		GUARD = "guard"
 
@@ -157,17 +214,10 @@ class Classification:
 
 		def finalize(self):
 			for label in self._labels.values():
-				label._buildClosure = set()
+				label.closure
+				label.buildClosure
 
-			# force compute the closure of each label
-			for label in self._labels.values():
-				label.updateClosure()
-
-				sourceProject = label.isBuiltBy
-				if sourceProject is not None:
-					sourceProject._buildClosure.update(label._closure)
-
-			if True:
+			if False:
 				self.showLabel("@CoreLibraries")
 				#self.showLabel("@CoreLibraries+odbc")
 				self.showLabel("@CryptoLibraries")
@@ -207,8 +257,6 @@ class Classification:
 					lset = lset.difference(label._closure)
 
 				for c in lset:
-					if type(c) is str:
-						print(f"XXX label {label} {name} contains string {c}")
 					print(f"    {c.name}")
 				print()
 
@@ -342,31 +390,6 @@ class Classification:
 			self.label = label
 			self.result = set()
 
-	class XXXSourceClassifier(Classifier):
-		def classify(self, packages):
-			label = self.label
-
-			result = set()
-			for binary in packages:
-				src = binary.sourcePackage
-				if src is None:
-					# add problem to worker
-					print(f"Warning, no source for {binary.fullname()}")
-					continue
-
-				if src.label and src.label is not label:
-					print(f"Problem with {src.fullname()}: label {label} vs {src.label}")
-					continue
-
-				# print(f"label {src.name} as {label}")
-				src.label = label
-				src.labelReason = Classification.ReasonSourcePackage(src, binary)
-
-				result.add(src)
-
-			self.result.update(result)
-			return result
-
 	class BuildPackageClosure(Classifier):
 		def __init__(self, problems, label, store, **kwargs):
 			super().__init__(label, **kwargs)
@@ -375,6 +398,9 @@ class Classification:
 
 		def handleSourceProjectConflict(self, build):
 			self.problems.addSourceProjectConflict(build)
+
+		def handleUnexpectedBuildDependency(self, pkg, build, required):
+			self.problems.addUnexpectedBuildDependency(pkg, build.name, required)
 
 		def enumerate(self, packages):
 			alreadySeen = set()
@@ -398,6 +424,7 @@ class Classification:
 	class SiblingPackageClosure(BuildPackageClosure):
 		def classify(self, packages):
 			label = self.label
+			sourceLabel = self.label.isBuiltBy
 
 			result = set()
 
@@ -405,6 +432,10 @@ class Classification:
 				problematic = False
 
 				for other in build.binaries:
+					if other.isSourcePackage:
+						# We're not going to label the source package for now
+						continue
+
 					if other.label is None:
 						other.label = label
 						other.labelReason = Classification.ReasonSiblingPackage(other, rpm)
@@ -483,14 +514,15 @@ class Classification:
 			return result
 
 	class BuildRequiresClosure(BuildPackageClosure):
-		def __init__(self, problemLog, store):
-			super().__init__(problemLog, None, store)
+		def __init__(self, problemLog, label, store):
+			super().__init__(problemLog, label, store)
 			self.flavors = {}
+			self.unlabelledPackages = None
 
 		def classify(self, packages):
+			buildClosure = self.label.buildClosure
+			unlabelledPackages = set()
 			result = set()
-			for rpm, build in self.enumerate(packages):
-				pass
 
 			seen = set()
 			for rpm, build in self.enumerate(packages):
@@ -499,10 +531,14 @@ class Classification:
 				seen.add(build)
 
 				for req in build.buildRequires:
-					# print(build.name, req.shortname)
-					result.add(req)
+					if req.label is None:
+						unlabelledPackages.add((rpm, build.name, req))
+					elif req.label not in buildClosure:
+						self.handleUnexpectedBuildDependency(rpm, build, req)
+					else:
+						result.add(req)
 
-			self.result.update(result)
+			self.unlabelledPackages = unlabelledPackages
 			return result
 
 	class DependencyClassifier(Classifier):
@@ -518,6 +554,9 @@ class Classification:
 
 		def handleUnexpectedDependency(self, pkg, reason):
 			self.worker.problems.addUnexpectedDependency(self.label.name, reason, pkg)
+
+		def handleUnlabelledBuildDependency(self, originPackage, buildName, requiredPackage):
+			self.worker.problems.addUnlabelledBuildDependency(originPackage, buildName, requiredPackage)
 
 		def handleMissingSource(self, pkg, reason):
 			self.worker.problems.addMissingSource(pkg, reason)
@@ -582,6 +621,83 @@ class Classification:
 
 			return True
 
+	class UnknownPackageClassifier(DownwardClosure):
+		def __init__(self, *args):
+			super().__init__(*args)
+			self.suggested = {}
+
+		def classify(self, problematicItems):
+			worker = self.worker
+			for originPackage, buildName, unlabelledPackage in problematicItems:
+				if unlabelledPackage.label:
+					continue
+
+				worker.add(unlabelledPackage)
+				labelClosure = set()
+				incrementalPackageClosure = set()
+
+				while True:
+					pkg = worker.next()
+					if pkg is None:
+						break
+					for dep, target in self.context.resolveDownward(self.preferences, pkg):
+						if target.label is None:
+							incrementalPackageClosure.add(target)
+							# why are we recursing?
+							worker.add(target)
+						else:
+							labelClosure.add(target.label)
+
+				suggestedLabel = None
+
+				if incrementalPackageClosure:
+					# package has dependencies that have not been labelled, either
+					# we check for a "good" label recursively, but I'm shying away
+					# from the complexity. Or we report the issue.
+					self.handleUnlabelledBuildDependency(originPackage, buildName, unlabelledPackage)
+				else:
+					suggestedLabel = self.findTopmostLabel(labelClosure)
+
+				if suggestedLabel is not None:
+					self.suggestLabel(unlabelledPackage, suggestedLabel)
+				else:
+					pass
+					# FIXME: add a problem report
+
+				continue
+				names = sorted(_.name for _ in labelClosure)
+				print(f"{unlabelledPackage.shortname} -> {' '.join(names)}")
+				for pkg in incrementalPackageClosure:
+					print(f"  {pkg.shortname} [{pkg.sourceName}]")
+
+		@property
+		def suggestions(self):
+			result = []
+			for label in sorted(self.suggested.keys(), key = lambda _: _.name):
+				result.append((label, self.suggested[label]))
+			return result
+
+		def suggestLabel(self, pkg, label):
+			try:
+				suggestions = self.suggested[label]
+			except:
+				suggestions = []
+				self.suggested[label] = suggestions
+			suggestions.append(pkg)
+
+		def findTopmostLabel(self, labels):
+			from functools import reduce
+
+			if len(labels) == 1:
+				return next(iter(labels))
+
+			closure = reduce(set.union, [_.closure for _ in labels], set())
+			for lbl in labels:
+				if closure.issubset(lbl.closure):
+					return lbl
+			return None
+
+
 	class BuildRequireClosure(DownwardClosure):
 		def __init__(self, *args):
 			super().__init__(*args)
@@ -628,16 +744,6 @@ class Classification:
 				return src.labelReason
 
 			raise Exception()
-			result = set()
-			for pkg in arg:
-				src = pkg.sourcePackage
-				if src is None:
-					print(f"Warning, no source for {pkg.fullname()}")
-				elif src.label and src.label is not self.label:
-					print(f"Cannot label {src.fullname()} as {self.label}; it is already labeled {src.label}")
-				else:
-					result.add(src)
-			return result
 
 class PackagePreferences:
 	def __init__(self):
@@ -687,6 +793,7 @@ class PackageGroup:
 		self.matchCount = 0
 		self.expand = True
 		self.label = None
+		self.description = None
 		self._packages = []
 		self._buildFlavors = {}
 		self._runtimeRequires = {}
@@ -830,7 +937,7 @@ class BaseFilterSet:
 			self._exactMatches[value] = group
 
 	def finalize(self):
-		self._globMatches.sort(key = lambda m: m.key, reverse = True)
+		self._globMatches.sort(key = lambda m: m.key)
 
 	def tryFastMatch(self, name):
 		group = self._exactMatches.get(name)
@@ -1066,9 +1173,10 @@ class PackageFilter:
 			# FIXME: this can go with autoflavors
 			# If this build dependency is not a flavor, automatically
 			# add the label's devel flavor
-			if not buildReq.isFlavor:
-				subordinateDevelFlavor = self.makeFlavorGroup(buildReq, "devel")
-				flavor.addBuildRequires(subordinateDevelFlavor)
+			if False:
+				if not buildReq.isFlavor:
+					subordinateDevelFlavor = self.makeFlavorGroup(buildReq, "devel")
+					flavor.addBuildRequires(subordinateDevelFlavor)
 
 		for runtimeReq in baseGroup.runtimeRequires:
 			flavor.addRequires(runtimeReq)
@@ -1128,6 +1236,7 @@ class PackageFilter:
 
 	VALID_GROUP_FIELDS = set((
 		'name',
+		'description',
 		'expand',
 		'priority',
 		'requires',
@@ -1150,6 +1259,8 @@ class PackageFilter:
 			if field not in self.VALID_GROUP_FIELDS:
 				raise Exception(f"Invalid field {field} in definition of group {group.name}")
 
+		group.description = gd.get('description')
+
 		value = gd.get('expand')
 		if type(value) == bool:
 			group.expand = value
@@ -1169,7 +1280,7 @@ class PackageFilter:
 
 			nameList = gd.get('buildrequires') or []
 			for name in nameList:
-				otherGroup = self.makeGroupInternal(name, Classification.TYPE_SOURCE)
+				otherGroup = self.makeGroupInternal(name, Classification.TYPE_BINARY)
 				group.addBuildRequires(otherGroup)
 
 		name = gd.get('sourceproject')

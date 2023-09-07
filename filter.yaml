@@ -235,6 +235,7 @@ groups:
     - libxcb-xvmc0
     - libXcomposite1
     - libXext6
+    - libXfixes3
     - libXft2
     - libXi6
     - libXmu6
@@ -844,7 +845,6 @@ groups:
    packages:
     - vim
     - emacs
-    - man
     - apcupsd
     - btrfsmaintenance
 
@@ -1138,7 +1138,6 @@ groups:
     - traceroute
     - fetchmail
     - whois
-    - w3m
     - telnet
     - nmap
     - mutt

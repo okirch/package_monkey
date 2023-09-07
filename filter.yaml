@@ -113,6 +113,10 @@ groups:
    packages:
     - gcc*
     - binutils
+    - ccache
+    - debugedit
+    - dejagnu
+    - dwz
 
  - name: "@BaseDevTools"
    requires:
@@ -121,16 +125,28 @@ groups:
     - make
     - bison
     - systemd-rpm-macros
+    - autoconf
+    - autoconf-archive
+    - autogen
+    - automake
+    - cmake
+    - cmake-mini
+    - imake
+    - obs-service-*
+    - pkgconf
+    - pkgconf-m4
+    - net-tools-deprecated
+    - datefudge
+    - meson
+    - ninja
+    - gnu-efi
+    - makedepend
 
  - name: "@Development"
    requires:
     - "@GCC"
    packages:
-    - cmake
-    - autoconf
-    - automake
-    - autogen
-    - imake
+    - none
 
  - name: "@Documentation"
    rpmGroups:
@@ -170,7 +186,7 @@ groups:
       binaries:
        - postgresql-test
 
- - name: "@Graphics"
+ - name: "@GraphicalApps"
    rpmGroups:
     - Productivity/Graphics/*
 
@@ -218,6 +234,7 @@ groups:
     - libxcb-xv0
     - libxcb-xvmc0
     - libXcomposite1
+    - libXext6
     - libXft2
     - libXi6
     - libXmu6
@@ -227,7 +244,6 @@ groups:
     - libXt6
     - libXtst
     - xaw3dd
-
 
 
  - name: "@X11"
@@ -309,6 +325,12 @@ groups:
     - libgcrypt20
     - libgcrypt20-hmac
     - libgpg-error0
+    - libgnutls30
+    - libksba8
+    - libcrypt1
+    - libargon2*
+    - librhash0
+    - pesign
 
  - name: "@CoreLibraries"
    sourceproject: Core
@@ -325,9 +347,12 @@ groups:
     - glibc
     - glib2
     - glib2-branding-SLE
+    - libaio1
     - libaudit1
     - libauparse0
+    - libalternatives1
     - libboost_thread1*
+    - libbpf1
     - libcap-ng0
     - libcap2
     - libcom_err2
@@ -335,6 +360,7 @@ groups:
     - libcurl4
 #   - libdevmapper*
     - libdb-4_8
+    - libeconf0
     - libedit0
     - libevent-2*
     - libext2fs2
@@ -345,22 +371,32 @@ groups:
     - libgdbm6
     - libgdbm_compat4
     - libglib-*
+    - libgmp10
     - libldap-*
     - liblzma5
     - liblzo2*
+    - libmpc3
     - libmpdec3
+    - libmpfr6
     - libnl3-200
     - libnl-config
+    - libnpth0
     - libopenssl1_1
     - libopenssl3
+    - libpipeline1
     - libpci3
     - libpcre2*
     - libpopt0
     - libprotobuf-lite20
+    - libqrencode4
     - libreadline8
     - libreiserfscore0
     - libsasl2-*
     - libselinux1
+    - libsemanage2
+    - libsemanage-conf
+    - libsepol2
+    - libuv1
     - cyrus-sasl
     - cyrus-sasl-scram
     - cyrus-sasl-plain
@@ -377,6 +413,13 @@ groups:
     - libz1
     - libzio1
     - libyaml
+    - libpwquality1
+    - libgmpxx4
+    - libmnl0
+    - libverto1
+    - libclang13
+    - libclang-cpp16
+    - libLLVM16
    buildflavors:
     - name: odbc
       binaries:
@@ -404,6 +447,7 @@ groups:
     - aaa_base
     - acl
     - adjtimex
+    - alts
     - at
     - attr
     - bash
@@ -416,6 +460,7 @@ groups:
     - ca-certificates
     - ca-certificates-mozilla
     - coreutils
+    - coreutils-single
     - cpio
 #   - cronie
 #   - cryptsetup
@@ -432,6 +477,7 @@ groups:
     - findutils
     - gc
     - gettext-runtime
+    - gnutls
     - gpart
     - gpg2
     - gptfdisk
@@ -439,7 +485,6 @@ groups:
     - gzip
     - hardlink
     - hostname
-    - info
     - kbd
     - krb5
     - krb5-mini
@@ -462,6 +507,7 @@ groups:
     - rpm
     - sed
     - shadow
+    - shared-mime-info
     - sharutils
     - sle-*-release
     - sqlite3
@@ -474,6 +520,7 @@ groups:
     - tcsh
     - time
     - timezone
+    - unzip
     - update-alternatives
     - utempter
     - util-linux*
@@ -488,6 +535,7 @@ groups:
     - zstd
     - libxml2
     - libxslt1
+    - libexslt0
     - libxslt-tools
     - libexpat1
    buildflavors:
@@ -548,21 +596,116 @@ groups:
        - snapper-zypp-plugin
        - permissions-zypp-plugin
 
+ - name: "@Console"
+   sourceproject: Core
+   requires:
+    - "@Core"
+   packages:
+    - console-setup
+    - libgpm2
+    - screen
+
+ - name: "@ManDoc"
+   sourceproject: Core
+   requires:
+    - "@Core"
+   packages:
+    - mandoc
+    - man
+    - groff
+    - help2man
+
+ - name: "@Texinfo"
+   sourceproject: Core
+   requires:
+    - "@Core"
+   packages:
+    - texi2info
+    - texi2html
+    - info
+    - makeinfo
+
+ - name: "@XMLPlus"
+   sourceproject: XMLPlus
+   requires:
+    - "@Core"
+   packages:
+    - xmlgraphics-*
+    - xmlto
+    - libxml++
+    - libxmlsec1*
+    - xml-commons-apis
+    - xmlcharent
+
+ - name: "@Docbook"
+   sourceproject: Core
+   requires:
+    - "@XMLPlus"
+   packages:
+    - docbook_4
+    - docbook_5
+    - docbook5-xsl-stylesheets
+    - docbook-xsl-stylesheets
+    - sgml-skel
+    - asciidoc
+
+ - name: "@TclCore"
+   sourceproject: Core
+   requires:
+    - "@Core"
+   packages:
+    - tcl
+    - expect
+
+ - name: "@LUA"
+   sourceproject: Core
+   requires:
+    - "@Core"
+   packages:
+    - lua54
+    - lua-macros
+   buildflavors:
+    - name: runtime
+      packages:
+       - libluajit*
+
  - name: "@CoreBuild"
    sourceproject: Core
+   requires:
+    - "@Core"
+    - "@Docbook"
+    - "@TclCore"
+    - "@ManDoc"
+    - "@Texinfo"
    packages:
-    - rpm-build
-    - flex
-    - post-build-checks
-    - compat-usrmerge-build
-    - compat-usrmerge-tools
+    - memory-constraints
+    - brp-check-suse
     - build-compare
     - build-mkbaselibs
-    - rpmlint-mini
+    - clang
+    - clang16
+    - doxygen
+    - compat-usrmerge-build
+    - compat-usrmerge-tools
+    - flex
+    - gawk
+    - gettext-runtime-mini
+    - gettext-tools-mini
+    - gperf
+    - isl
+    - libtool
+    - patch
+    - patchutils
+    - post-build-checks
+    - rpm-build
     - rpm-config-SUSE
-    - brp-check-suse
-    - lua54
-    - obs-service-*
+    - rpmlint-mini
+    - swig
+    - valgrind
+    - pesign-obs-integration
+    - bpftool
+    - guile
+    - libcunit1
 
  - name: "@ApplicationLibraries"
    requires:
@@ -821,8 +964,14 @@ groups:
     - ruby-yui
 
  - name: "@Fonts"
+   sourceproject: Fonts
    packages:
     - "*-fonts"
+
+ - name: "@FontsTools"
+   sourceproject: Fonts
+   packages:
+    - xxx
 
  - name: "@Container"
    products:
@@ -901,6 +1050,10 @@ groups:
     - name: python
       packages:
        - cpuset
+    - name: devel
+      packages:
+       - systemtap-headers
+       - systemtap-dtrace
 
  - name: "@KernelDebugging"
    sourceproject: KernelPlus
@@ -911,7 +1064,7 @@ groups:
    requires:
     - "@Core"
    packages:
-    - none
+    - xxx
 
  - name: "@HostNetworking"
    requires:
@@ -955,8 +1108,18 @@ groups:
     - ipsec-tools
     - ipset
     - ipvsadm
+    - netcfg
+    - netcat-openbsd
 
- - name: HPC
+ - name: "@Graphics"
+   sourceproject: Graphics
+   requires:
+    - "@Core"
+   packages:
+    - libjpeg8
+    - libgif7
+
+ - name: "@HPC"
    products:
     - SLE-Module-HPC
    packages:
@@ -964,6 +1127,7 @@ groups:
     - mpi-selector
     - mpich
     - mpitests*
+    - suse-hpc
 
  - name: "@NetworkUtils"
    packages:
@@ -1014,6 +1178,12 @@ groups:
        - postfix-postgresql
        - bind-modules-mysql
 
+ - name: "@BrowsersConsole"
+   sourceproject: Networking
+   packages:
+    - elinks
+    - w3m
+
  - name: "@Samba"
    requires:
     - "@NetworkServices"
@@ -1038,6 +1208,15 @@ groups:
     - "@X11"
    packages:
     - nginx
+
+ - name: "@ApacheCommons"
+   sourceproject: ApacheCommons
+   requires:
+    - "@Core"
+    - "@Java"
+   packages:
+    - apache-commons-*
+    - apache-pdfbox
 
  - name: "@Apache"
    sourceproject: Apache

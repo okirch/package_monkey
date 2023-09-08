@@ -569,10 +569,10 @@ class ResolverWorker:
 					label = rpm.label
 					if label is None:
 						key = "unclassified"
-					elif not label.isBuiltBy:
-						key = f"{label} (no build project)"
+					elif not label.sourceProject:
+						key = f"{label} (no source project)"
 					else:
-						key = label.isBuiltBy.name
+						key = label.sourceProject.name
 
 					dest = map.get(key)
 					if dest is None:

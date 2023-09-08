@@ -35,7 +35,7 @@ class Classification:
 			# build requirements, recursively.
 			self._buildClosure = None
 
-			self.isBuiltBy = None
+			self.sourceProject = None
 
 		@classmethod
 		def hierarchyNeedsUpdate(klass):
@@ -65,8 +65,8 @@ class Classification:
 			self._flavors[flavorName] = otherLabel
 
 			# flavors inherit the parent's build project by default
-			if self.isBuiltBy and not otherLabel.isBuiltBy:
-				otherLabel.setBuiltBy(self.isBuiltBy)
+			if self.sourceProject and not otherLabel.sourceProject:
+				otherLabel.setSourceProject(self.sourceProject)
 
 			# This creates a circular reference that kills garbage collection, but
 			# we'll live with this for now
@@ -74,12 +74,12 @@ class Classification:
 
 			self.hierarchyNeedsUpdate()
 
-		def setBuiltBy(self, sourceLabel):
-			if self.isBuiltBy is sourceLabel:
+		def setSourceProject(self, sourceLabel):
+			if self.sourceProject is sourceLabel:
 				return
-			if self.isBuiltBy is not None:
-				raise Exception(f"Duplicate source group for {self}: {self.isBuiltBy} vs {sourceLabel}")
-			self.isBuiltBy = sourceLabel
+			if self.sourceProject is not None:
+				raise Exception(f"Duplicate source group for {self}: {self.sourceProject} vs {sourceLabel}")
+			self.sourceProject = sourceLabel
 
 			self.hierarchyNeedsUpdate()
 
@@ -186,7 +186,7 @@ class Classification:
 		def isKnownDependency(self, other):
 			if other in self.closure:
 				return True
-			if self.isBuiltBy == other.isBuiltBy:
+			if self.sourceProject == other.sourceProject:
 				return True
 			return False
 
@@ -241,8 +241,8 @@ class Classification:
 				label = self._labels[label]
 
 			print(f"Label {label.name}")
-			if label.isBuiltBy:
-				print(f"  source project {label.isBuiltBy}")
+			if label.sourceProject:
+				print(f"  source project {label.sourceProject}")
 			for name, lset in (("requires", label.uses), ("buildrequires", label.buildRequires), ("closure", label._closure), ("build closure", label._buildClosure)):
 				if not lset:
 					continue
@@ -424,7 +424,7 @@ class Classification:
 	class SiblingPackageClosure(BuildPackageClosure):
 		def classify(self, packages):
 			label = self.label
-			sourceLabel = self.label.isBuiltBy
+			sourceLabel = self.label.sourceProject
 
 			result = set()
 
@@ -441,14 +441,14 @@ class Classification:
 						other.labelReason = Classification.ReasonSiblingPackage(other, rpm)
 						result.add(other)
 					elif other.label is not rpm.label and \
-					     (other.label.isBuiltBy is not rpm.label.isBuiltBy):
+					     (other.label.sourceProject is not rpm.label.sourceProject):
 						# report the problem once when we're done with processing all packages
 						problematic = True
 
 						if False:
 							print(f"Source project conflict for {build.name}")
-							print(f"  {rpm.shortname} was labelled as {rpm.label}, built by {rpm.label.isBuiltBy}")
-							print(f"  {other.shortname} was labelled as {other.label}, built by {other.label.isBuiltBy}")
+							print(f"  {rpm.shortname} was labelled as {rpm.label}, built by {rpm.label.sourceProject}")
+							print(f"  {other.shortname} was labelled as {other.label}, built by {other.label.sourceProject}")
 
 				if problematic:
 					# print(f"Adding SourceProjectConflict for {build.name}")
@@ -1183,7 +1183,7 @@ class PackageFilter:
 
 		# Flavors are built from the same source project as their base group
 		if flavor.type == Classification.TYPE_BINARY:
-			flavor.label.isBuiltBy = baseGroup.label.isBuiltBy
+			flavor.label.sourceProject = baseGroup.label.sourceProject
 			flavor.addRequires(baseGroup)
 
 		names = flavor._runtimeRequires.keys()
@@ -1286,7 +1286,7 @@ class PackageFilter:
 		name = gd.get('sourceproject')
 		if name is not None:
 			sourceProject = self.makeGroupInternal(name, Classification.TYPE_SOURCE)
-			group.label.setBuiltBy(sourceProject.label)
+			group.label.setSourceProject(sourceProject.label)
 
 		nameList = gd.get('products') or []
 		for name in nameList:

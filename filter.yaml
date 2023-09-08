@@ -59,7 +59,7 @@ autoflavors:
     - python310-*
     - python311-*
  - name: devel
-   priority: 1
+#  priority: 1
    packages:
     - "*-devel"
     - "*-devel-static"
@@ -82,16 +82,16 @@ autoflavors:
 build_groups:
  - name: "Core"
    buildrequires:
-    - BaseBuildEnv
+    - "@BaseBuildEnv"
  - name: "KernelPlus"
    buildrequires:
-    - "Core"
+    - "@Core"
  - name: "PerlCore"
    buildrequires:
-    - "Core"
+    - "@Core"
  - name: Databases
    buildrequires:
-    - "Core"
+    - "@Core"
  - name: BaseBuildEnv
    requires:
     - "@GCC"
@@ -307,11 +307,12 @@ groups:
     - dbus-1-glib-tool*
     - dbus-1-glib
     - polkit-gnome*
+    - libpulse0
 
  - name: "@CryptoLibraries"
    sourceproject: Core
    buildrequires:
-    - Core
+    - "@Core"
    binaries:
     - openssl-3
     - openssl-1_1
@@ -336,7 +337,7 @@ groups:
  - name: "@CoreLibraries"
    sourceproject: Core
    buildrequires:
-    - Core
+    - "@BaseDevTools"
    binaries:
     - perl
     - perl-base
@@ -373,6 +374,7 @@ groups:
     - libgdbm_compat4
     - libglib-*
     - libgmp10
+    - libicu*
     - libldap-*
     - liblzma5
     - liblzo2*
@@ -389,6 +391,7 @@ groups:
     - libpcre2*
     - libpopt0
     - libprotobuf-lite20
+    - libpsx2
     - libqrencode4
     - libreadline8
     - libreiserfscore0
@@ -398,6 +401,7 @@ groups:
     - libsemanage-conf
     - libsepol2
     - libuv1
+    - libwtmpdb0
     - cyrus-sasl
     - cyrus-sasl-scram
     - cyrus-sasl-plain
@@ -428,7 +432,7 @@ groups:
       requires:
        - "@Databases"
       buildrequires:
-       - Databases
+       - "@Databases"
     - name: test
       packages:
        - libglib-testing
@@ -438,7 +442,7 @@ groups:
  - name: "@Core"
    sourceproject: Core
    buildrequires:
-    - Core
+    - "@BaseDevTools"
    requires:
     - "@CoreLibraries"
     - "@CryptoLibraries"
@@ -476,6 +480,7 @@ groups:
     - filesystem
     - fillup
     - findutils
+    - gawk
     - gc
     - gettext-runtime
     - gnutls
@@ -501,7 +506,6 @@ groups:
     - pciutils
     - pciutils-*
     - permissions
-    - polkit-default-privs
     - prctl
     - psmisc
     - psutils
@@ -552,12 +556,22 @@ groups:
     - name: systemdlibs
       requires:
        - "@SystemdLibraries"
+       - "@UdevLibraries"
+       - "@LUA+runtime"
       binaries:
        - procps
        - btrfsprogs
+       # for some weird reason, polkit-default-privs now requires polkit
+       - polkit-default-privs
        - btrfsprogs-udev-rules
        - openssh-clients
-       - libusb*
+       - util-linux-systemd
+    - name: udevlibs
+      requires:
+       - "@UdevLibraries"
+      packages:
+       - libhidapi-hidraw0
+       - libusb-*
     - name: glib
       requires:
        - "@SystemdLibraries"
@@ -571,6 +585,7 @@ groups:
        - "@NetworkServices"
        - "@HostStorage"
        - "@Core+systemdlibs"
+       - "@Core+udevlibs"
       binaries:
        - cyrus-sasl-*
        - e2fsprogs-scrub
@@ -581,12 +596,14 @@ groups:
        - "@Databases"
        - "@Core+networkServices"
       binaries:
-       - cyrus-sasl-sql*
+       - cyrus-sasl-sqlauthprop*
+       - cyrus-sasl-sqlauthd*
     - name: python
       buildrequires:
-       - Python
+       - "@Python"
       requires:
        - "@Core+systemdlibs"
+       - "@Core+udevlibs"
       binaries:
        - python-btrfsutil
        - sudo-plugin-python
@@ -637,6 +654,8 @@ groups:
     - libxmlsec1*
     - xml-commons-apis
     - xmlcharent
+    - iso_ent
+    - opensp
 
  - name: "@Docbook"
    sourceproject: Core
@@ -668,12 +687,21 @@ groups:
    buildflavors:
     - name: runtime
       packages:
+       - liblua5*
        - libluajit*
 
  - name: "@CoreBuild"
+   description: |
+     This defines the set of packages that will be used to build
+     Core packages by default.
    sourceproject: Core
    requires:
+    - "@GCC"
+    - "@LUA"
+    - "@LUA+runtime"
+    - "@Kernel+obs"
     - "@Core"
+    - "@Core+devel"
     - "@Docbook"
     - "@TclCore"
     - "@ManDoc"
@@ -689,7 +717,6 @@ groups:
     - compat-usrmerge-build
     - compat-usrmerge-tools
     - flex
-    - gawk
     - gettext-runtime-mini
     - gettext-tools-mini
     - gperf
@@ -712,11 +739,14 @@ groups:
    requires:
     - "@Core"
     - "@Core+systemdlibs"
+    - "@Core+udevlibs"
+    - "@Core+glib"
     - "@X11Libraries"
+    - "@GraphicsLibraries"
+    - "@AudioLibraries"
+    - "@KernelAudio"
    packages:
 #   - libgspell*
-    - libicu*
-    - libpulse0
 
  - name: "@AppArmor"
    sourceproject: AppArmor
@@ -729,24 +759,31 @@ groups:
    buildflavors:
     - name: python
       buildrequires:
-       - Python
+       - "@Python"
       binaries:
        - python3-apparmor
     - name: ruby
       buildrequires:
-       - Ruby
+       - "@Ruby"
       binaries:
        - ruby-apparmor
     - name: perl
       buildrequires:
-       - Perl
+       - "@Perl"
       binaries:
        - perl-apparmor
     - name: apache
       buildrequires:
-       - Apache
+       - "@Apache"
       binaries:
        - apache2-mod_apparmor
+
+ - name: "@UdevLibraries"
+   sourceproject: Systemd
+   requires:
+    - "@Core"
+   packages:
+    - libudev-mini1
 
  - name: "@SystemdLibraries"
    sourceproject: Systemd
@@ -754,7 +791,6 @@ groups:
     - "@Core"
    packages:
     - libsystemd0-mini
-    - libudev-mini1
     - libdbus-1-*
     - dbus-1
 
@@ -764,6 +800,7 @@ groups:
     - "@Core"
     - "@Core+glib"
     - "@SystemdLibraries"
+    - "@UdevLibraries"
     - "@KernelCore"
    packages:
     - acct
@@ -813,6 +850,8 @@ groups:
    sourceproject: UpdateStack
    requires:
     - "@Core"
+    - "@Core+systemdlibs"
+    - "@Core+udevlibs"
     - "@NetworkCore"
     - "@PythonCore"
     - "@Ruby"
@@ -997,32 +1036,56 @@ groups:
    sources:
     - flatpak
 
- - name: "@KernelCore"
+ - name: "@KernelLibraries"
+   description: |
+     This provides some commonly used libraries that live in KernelPlus.
+     They are singled out like this so that other components can use
+     them without pulling in all of KernelPlus.
    sourceproject: KernelPlus
+   requires:
+    - "@CoreLibraries"
    buildrequires:
-    - KernelPlus
+    - "@BaseBuildEnv"
+   packages:
+    - libkmod2
+    - libnuma1
+
+ - name: "@KernelCore"
+   description: |
+     This provides some nearly ubiquitous kernel utilities occasionally
+     used in non-kernel applications.
+   sourceproject: KernelPlus
+   requires:
+    - "@Core"
+    - "@KernelLibraries"
+   packages:
+    - kmod
+
+ - name: "@KernelAudio"
+   sourceproject: KernelPlus
    requires:
     - "@Core"
    packages:
-    - kmod
+    - alsa
+    - alsa-plugins
+    - alsa-utils
+
 
 # some pieces of Kernel require perl-Bootloader which needs perl
  - name: "@Kernel"
    sourceproject: KernelPlus
    buildrequires:
-    - KernelPlus
+    - "@KernelPlus"
    requires:
     - "@Core"
     - "@KernelCore"
+    - "@KernelAudio"
     - "@NetworkCore"
     - "@PerlCore"
     - "@Boot"
    rpmGroups:
     - System/Kernel
    packages:
-    - alsa
-    - alsa-plugins
-    - alsa-utils
     - cpupower
     - dmidecode
     - dosfstools
@@ -1054,6 +1117,10 @@ groups:
       packages:
        - systemtap-headers
        - systemtap-dtrace
+    - name: obs
+      packages:
+       - kernel-obs-build
+       - linux-glibc-devel
 
  - name: "@KernelDebugging"
    sourceproject: KernelPlus
@@ -1101,6 +1168,7 @@ groups:
     - rpcbind
     - rdma-core
     - rds-tools
+    - libfabric1
     - nvme-*
     - dhcp-tools
     - firewalld-rpcbind-helper
@@ -1111,13 +1179,30 @@ groups:
     - netcfg
     - netcat-openbsd
 
- - name: "@Graphics"
-   sourceproject: Graphics
+ - name: "@GraphicsLibraries"
+   sourceproject: Multimedia
    requires:
     - "@Core"
    packages:
     - libjpeg8
+    - libturbojpeg0
     - libgif7
+
+ - name: "@AudioLibraries"
+   sourceproject: Multimedia
+   requires:
+    - "@Core"
+   packages:
+    - libvorbisfile3
+    - libsndfile1
+
+ - name: "@HPCCoreLibraries"
+   sourceproject: Core
+   requires:
+    - "@HostNetworking"
+   packages:
+    - libfftw3*-hpc
+    - libopenmpi2-gnu-hpc*
 
  - name: "@HPC"
    products:
@@ -1243,6 +1328,8 @@ groups:
     - ovmf
     - hyper-v
 
+ # We should probably define separate @Topics for different python versions
+ # and have the generic @Python reference a specific version
  - name: "@Python"
    expand: no
    requires:
@@ -1251,6 +1338,33 @@ groups:
     - Development/*/Python
    packages:
     - python
+    - python310-setuptools
+
+ - name: "@PythonStandard"
+   requires:
+    - "@Python"
+   packages:
+    - python3*-alabaster
+    - python3*-apipkg
+    - python3*-Babel
+    - python3*-certifi
+    - python3*-cffi
+    - python3*-charset-normalizer
+    - python3*-cryptography
+    - python3*-docutils
+    - python3*-idna
+    - python3*-imagesize
+    - python3*-iniconfig
+    - python3*-py
+    - python3*-pycparser
+    - python3*-pytz
+    - python3*-requests
+    - python3*-six
+    - python3*-Jinja2
+    - python3*-MarkupSafe
+    - python3*-packaging
+    - python3*-Pygments
+    - python3*-Sphinx
 
  - name: "@PythonModules"
    expand: no
@@ -1347,9 +1461,12 @@ groups:
  - name: "@Boot"
    sourceproject: KernelPlus
    buildrequires:
-    - KernelPlus
+    - "@KernelPlus"
+    # for grub2
+    - "@Fonts"
    requires:
     - "@Core"
+    - "@Core+udevlibs"
     - "@PerlCore"
     - "@MinimalSystemd"
    packages:
@@ -1362,6 +1479,7 @@ groups:
     - shim
     - u-boot
     - rollback-helper
+    - fde-tools
    buildflavors:
     - name: security
       requires:
@@ -1369,6 +1487,13 @@ groups:
       binaries:
        - dracut-fips
        - dracut-ima
+    - name: branding
+      # grub2-branding-SLE seems to require everything under the sun, including
+      # libudisks2 gtk4-tools geoclue2... not sure why.
+      buildrequires:
+       - "@GraphicsLibraries"
+      binaries:
+       - grub2-branding-*
 
  - name: "@BootBuild"
    sourceproject: KernelPlus

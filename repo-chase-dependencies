@@ -7,7 +7,7 @@ from database import BackingStoreDB
 import sys
 from options import Application
 
-application = Application('build-dependency-tree')
+application = Application('repo-chase-dependencies')
 dummy = application.catalog
 
 store = application.backingStore

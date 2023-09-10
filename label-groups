@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-forceRefresh = True
 
 from repos import RepoDict, UrlCacheStrategy
 from products import ProductCatalog, CacheLocation
@@ -43,7 +42,7 @@ class LabelTreeTraversal:
 		self.visited = []
 
 	def flatten(self, label):
-		return self.flattenWork(label, lambda l: l.uses)
+		return self.flattenWork(label, lambda l: l.runtimeRequires)
 
 	def flattenBuildRequirements(self, label):
 		return self.flattenWork(label, lambda l: l.buildRequires)

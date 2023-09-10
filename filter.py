@@ -18,8 +18,7 @@ class Classification:
 			self.name = name
 			self.type = type
 			self.id = id
-			# FIXME: rename to runtimeRequires
-			self.uses = set()
+			self.runtimeRequires = set()
 			self.buildRequires = set()
 
 			self.flavorBase = None
@@ -43,7 +42,7 @@ class Classification:
 
 		def addRuntimeDependency(self, other):
 			assert(other is not None)
-			self.uses.add(other)
+			self.runtimeRequires.add(other)
 			self.hierarchyNeedsUpdate()
 
 		def addBuildDependency(self, other):
@@ -119,7 +118,7 @@ class Classification:
 			result = set()
 			if self.flavorBase:
 				result.update(self.flavorBase.closure)
-			for label in self.uses:
+			for label in self.runtimeRequires:
 				result.update(label.closure)
 
 			if self.type is Classification.TYPE_BINARY:
@@ -132,7 +131,7 @@ class Classification:
 
 			result = set()
 			result.update(self.closure)
-			for label in self.uses:
+			for label in self.runtimeRequires:
 				result.update(label.buildClosure)
 				develFlavor = label.getBuildFlavor('devel')
 
@@ -171,7 +170,7 @@ class Classification:
 			result = set()
 			if self.flavorBase:
 				result.update(self.flavorBase.closure)
-			for label in self.uses:
+			for label in self.runtimeRequires:
 				if label._closure is self.GUARD:
 					circularDependencyError(chain + [label])
 				if label._closure is None:
@@ -243,7 +242,7 @@ class Classification:
 			print(f"Label {label.name}")
 			if label.sourceProject:
 				print(f"  source project {label.sourceProject}")
-			for name, lset in (("requires", label.uses), ("buildrequires", label.buildRequires), ("closure", label._closure), ("build closure", label._buildClosure)):
+			for name, lset in (("requires", label.runtimeRequires), ("buildrequires", label.buildRequires), ("closure", label._closure), ("build closure", label._buildClosure)):
 				if not lset:
 					continue
 				print(f"  {name}")

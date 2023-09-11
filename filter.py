@@ -217,6 +217,18 @@ class Classification:
 			return sorted(self._labels.values(), key = lambda _: _.name)
 
 		def finalize(self):
+			def inheritSourceProject(label):
+				if label.sourceProject is None:
+					if label.flavorBase:
+						source = inheritSourceProject(label.flavorBase)
+						if source:
+							label.setSourceProject(source)
+				return label.sourceProject
+
+			for label in self._labels.values():
+				if label.sourceProject is None:
+					inheritSourceProject(label)
+
 			for label in self._labels.values():
 				label.closure
 				label.buildClosure
@@ -1219,6 +1231,11 @@ class PackageFilter:
 
 		group.description = gd.get('description')
 
+		name = gd.get('sourceproject')
+		if name is not None:
+			sourceProject = self.makeGroupInternal(name, Classification.TYPE_SOURCE)
+			group.label.setSourceProject(sourceProject.label)
+
 		value = gd.get('expand')
 		if type(value) == bool:
 			group.expand = value
@@ -1237,11 +1254,6 @@ class PackageFilter:
 			for name in nameList:
 				otherGroup = self.makeGroupInternal(name, Classification.TYPE_BINARY)
 				group.addBuildRequires(otherGroup)
-
-		name = gd.get('sourceproject')
-		if name is not None:
-			sourceProject = self.makeGroupInternal(name, Classification.TYPE_SOURCE)
-			group.label.setSourceProject(sourceProject.label)
 
 		# The yaml file may specify per-group priorities for filters, but there is just
 		# one global set of filters. Rather than passing the group and priority argument

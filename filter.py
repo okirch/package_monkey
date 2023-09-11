@@ -886,22 +886,22 @@ class GlobMatch:
 
 
 class FilterSetBuilder(object):
-	def __init__(self, filterGroup, group, priority = None):
-		self.filterGroup = filterGroup
+	def __init__(self, filterSet, group, priority = None):
+		self.filterSet = filterSet
 		self.group = group
 		self.priority = priority
 
 	def addProductFilter(self, name):
-		self.addMatch(self.filterGroup.productFilters, name)
+		self.addMatch(self.filterSet.productFilters, name)
 
 	def addBinaryPackageFilter(self, name):
-		self.addMatch(self.filterGroup.binaryPkgFilters, name)
+		self.addMatch(self.filterSet.binaryPkgFilters, name)
 
 	def addSourcePackageFilter(self, name):
-		self.addMatch(self.filterGroup.sourcePkgFilters, name)
+		self.addMatch(self.filterSet.sourcePkgFilters, name)
 
 	def addRpmGroupFilter(self, name):
-		self.addMatch(self.filterGroup.rpmGroupFilters, name)
+		self.addMatch(self.filterSet.rpmGroupFilters, name)
 
 	def addMatch(self, filterSet, value):
 		group = self.group
@@ -926,7 +926,7 @@ class FilterSetBuilder(object):
 
 		filterSet.addMatch(value, group, priority)
 
-class BaseFilterSet(object):
+class FilterType(object):
 	def __init__(self, type):
 		self.type = type
 		self._exactMatches = {}
@@ -969,14 +969,14 @@ class BaseFilterSet(object):
 			verdict = self.trySlowNameMatch(name)
 		return verdict
 
-class RpmGroupFilterSet(BaseFilterSet):
+class RpmGroupFilters(FilterType):
 	def __init__(self):
 		super().__init__('rpmgroup')
 
 	def apply(self, pkg, product):
 		return self.applyName(pkg.group)
 
-class ProductFilterSet(BaseFilterSet):
+class ProductFilters(FilterType):
 	def __init__(self):
 		super().__init__('product')
 
@@ -985,14 +985,14 @@ class ProductFilterSet(BaseFilterSet):
 			return None
 		return self.applyName(product.name)
 
-class PackageFilterSet(BaseFilterSet):
+class PackageFilters(FilterType):
 	def __init__(self):
 		super().__init__('package')
 
 	def apply(self, pkg, product):
 		return self.applyName(pkg.name)
 
-class SourcePackageFilterSet(BaseFilterSet):
+class SourcePackageFilters(FilterType):
 	def __init__(self):
 		super().__init__('source package')
 
@@ -1002,7 +1002,7 @@ class SourcePackageFilterSet(BaseFilterSet):
 			return None
 		return self.applyName(src.name)
 
-class PackageFilterGroup:
+class PackageFilterSet:
 	def __init__(self):
 		self._productFilters = None
 		self._binaryPkgFilters = None
@@ -1013,25 +1013,25 @@ class PackageFilterGroup:
 	@property
 	def productFilters(self):
 		if not self._productFilters:
-			self._productFilters = ProductFilterSet()
+			self._productFilters = ProductFilters()
 		return self._productFilters
 
 	@property
 	def binaryPkgFilters(self):
 		if not self._binaryPkgFilters:
-			self._binaryPkgFilters = PackageFilterSet()
+			self._binaryPkgFilters = PackageFilters()
 		return self._binaryPkgFilters
 
 	@property
 	def sourcePkgFilters(self):
 		if not self._sourcePkgFilters:
-			self._sourcePkgFilters = SourcePackageFilterSet()
+			self._sourcePkgFilters = SourcePackageFilters()
 		return self._sourcePkgFilters
 
 	@property
 	def rpmGroupFilters(self):
 		if not self._rpmGroupFilters:
-			self._rpmGroupFilters = RpmGroupFilterSet()
+			self._rpmGroupFilters = RpmGroupFilters()
 		return self._rpmGroupFilters
 
 	def finalize(self):
@@ -1073,7 +1073,7 @@ class PackageFilter:
 		self._preferences = PackagePreferences()
 		self._autoflavors = []
 
-		self.filterGroup = PackageFilterGroup()
+		self.filterSet = PackageFilterSet()
 
 		with open(filename) as f:
 			data = yaml.full_load(f)
@@ -1101,10 +1101,21 @@ class PackageFilter:
 		self.classificationScheme.finalize()
 
 	def finalize(self):
-		self.filterGroup.finalize()
+		def validateDependencies(dependencies):
+			for req in dependencies:
+				other = self._groups.get(req.name)
+				assert(other)
+				if not other.defined:
+					raise Exception(f"filter configuration issue: group {group.label} requires {other.label}, which is not defined anywhere")
+
+		self.filterSet.finalize()
+
+		for group in self._groups.values():
+			label = group.label
+			validateDependencies(label.buildRequires)
 
 	def apply(self, pkg, product):
-		return self.filterGroup.apply(pkg, product)
+		return self.filterSet.apply(pkg, product)
 
 	def makeGroup(self, name, type = None):
 		return self.makeGroupInternal(name, type)
@@ -1235,7 +1246,7 @@ class PackageFilter:
 		# The yaml file may specify per-group priorities for filters, but there is just
 		# one global set of filters. Rather than passing the group and priority argument
 		# into each add*Filter function, create a Builder object that does this transparently.
-		filterSetBuilder = FilterSetBuilder(self.filterGroup, group, priority)
+		filterSetBuilder = FilterSetBuilder(self.filterSet, group, priority)
 
 		nameList = gd.get('products') or []
 		for name in nameList:

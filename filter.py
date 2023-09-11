@@ -864,78 +864,86 @@ class PackageGroup:
 	def getBuildFlavor(self, name):
 		return self._buildFlavors.get(name)
 
-class NameFNMatch:
-	def __init__(self, type, value, group):
-		self.type = type
+class GlobMatch:
+	PRIORITY_DEFAULT = 5
+
+	def __init__(self, value, group, priority = PRIORITY_DEFAULT):
 		self.value = value
 		self.group = group
+		self.priority = priority
 
 	def __str__(self):
-		return f"{self.type} filter \"{self.value}\""
+		if self.priority == self.PRIORITY_DEFAULT:
+			return self.value
+		return f"{self.value} (priority {self.priority})"
+
+	@property
+	def key(self):
+		return (self.priority, -len(self.value), self.value)
 
 	def match(self, name):
 		return fnmatch.fnmatchcase(name, self.value)
 
-class NameEqual:
-	def __init__(self, type, value, group):
-		self.type = type
-		self.value = value
+
+class FilterSetBuilder(object):
+	def __init__(self, filterGroup, group, priority = None):
+		self.filterGroup = filterGroup
 		self.group = group
+		self.priority = priority
 
-	def __str__(self):
-		return f"{self.type} filter \"{self.value}\""
+	def addProductFilter(self, name):
+		self.addMatch(self.filterGroup.productFilters, name)
 
-	def match(self, name):
-		return name == self.value
+	def addBinaryPackageFilter(self, name):
+		self.addMatch(self.filterGroup.binaryPkgFilters, name)
 
-class BaseFilterSet:
-	class GlobMatch:
-		def __init__(self, value, group):
-			self.value = value
-			self.group = group
+	def addSourcePackageFilter(self, name):
+		self.addMatch(self.filterGroup.sourcePkgFilters, name)
 
-		def __str__(self):
-			return self.value
+	def addRpmGroupFilter(self, name):
+		self.addMatch(self.filterGroup.rpmGroupFilters, name)
 
-		@property
-		def key(self):
-			return (-len(self.value), self.value)
+	def addMatch(self, filterSet, value):
+		group = self.group
+		priority = self.priority
 
-		def match(self, name):
-			return fnmatch.fnmatchcase(name, self.value)
+		# A match may come with additional parameters, as in 
+		#
+		#	postgresql-* priority=8
+		#
+		if ' ' in value:
+			words = value.split()
+			value = words[0]
+			for param in words[1:]:
+				(argName, argValue) = param.split('=')
+				if argName == 'priority':
+					priority = int(argValue)
+				else:
+					raise Exception(f"Unknown match parameter {param} in {self.filterSet} expression \"{value}\" for group {group.name}");
 
-	class GenericPackageMatch:
-		def __init__(self, name, arch, group):
-			self.name = name
-			self.arch = arch
-			self.group = group
+		if priority is None:
+			priority = GlobMatch.PRIORITY_DEFAULT
 
-		def __str__(self):
-			return f"{self.name}.{self.arch}"
+		filterSet.addMatch(value, group, priority)
 
-		@property
-		def key(self):
-			return f"{self.name}/{self.arch}"
-
-		def match(self, name, arch):
-			if self.arch and self.arch != arch:
-				return False
-
-			return fnmatch.fnmatchcase(name, self.name)
-
+class BaseFilterSet(object):
 	def __init__(self, type):
 		self.type = type
 		self._exactMatches = {}
 		self._globMatches = []
 
-	def addMatch(self, value, group):
+	def __str__(self):
+		return f"{self.type} filter"
+
+	def addMatch(self, value, group, priority):
 		if '*' in value or '?' in value:
-			self._globMatches.append(self.GlobMatch(value, group))
+			self._globMatches.append(GlobMatch(value, group, priority))
 		else:
 			if self._exactMatches.get(value):
 				conflict = self._exactMatches[value]
 				print(f"OOPS: {self.type} filter is ambiguous for {value} ({group.name} vs {conflict.name})")
 				return
+			# NB: silently ignore any priority value for exact match
 			self._exactMatches[value] = group
 
 	def finalize(self):
@@ -951,7 +959,7 @@ class BaseFilterSet:
 	def trySlowNameMatch(self, name):
 		for glob in self._globMatches:
 			if glob.match(name):
-				return PackageFilter.Verdict(glob.group, f"{self.type} filter {glob.key}")
+				return PackageFilter.Verdict(glob.group, f"{self.type} filter {glob}")
 
 		return None
 
@@ -995,8 +1003,7 @@ class SourcePackageFilterSet(BaseFilterSet):
 		return self.applyName(src.name)
 
 class PackageFilterGroup:
-	def __init__(self, prio):
-		self.priority = prio
+	def __init__(self):
 		self._productFilters = None
 		self._binaryPkgFilters = None
 		self._sourcePkgFilters = None
@@ -1029,31 +1036,10 @@ class PackageFilterGroup:
 
 	def finalize(self):
 		self._applicableFilters = []
-		if self._productFilters:
-			self._applicableFilters.append(self._productFilters)
-		if self._binaryPkgFilters:
-			self._applicableFilters.append(self._binaryPkgFilters)
-		if self._sourcePkgFilters:
-			self._applicableFilters.append(self._sourcePkgFilters)
-		if self._rpmGroupFilters:
-			self._applicableFilters.append(self._rpmGroupFilters)
-
 		for filterSet in (self._productFilters, self._binaryPkgFilters, self._sourcePkgFilters, self._rpmGroupFilters):
 			if filterSet is not None:
 				filterSet.finalize()
 				self._applicableFilters.append(filterSet)
-
-	def addProductFilter(self, name, group):
-		self.productFilters.addMatch(name, group)
-
-	def addBinaryPackageFilter(self, name, group):
-		self.binaryPkgFilters.addMatch(name, group)
-
-	def addSourcePackageFilter(self, name, group):
-		self.sourcePkgFilters.addMatch(name, group)
-
-	def addRpmGroupFilter(self, name, group):
-		self.rpmGroupFilters.addMatch(name, group)
 
 	def apply(self, pkg, product):
 		for filterSet in self._applicableFilters:
@@ -1063,9 +1049,6 @@ class PackageFilterGroup:
 		return verdict
 
 class PackageFilter:
-	PRIORITY_MAX = 10
-	PRIORITY_DEFAULT = 7
-
 	class Verdict:
 		def __init__(self, group, reason):
 			self.group = group
@@ -1086,12 +1069,11 @@ class PackageFilter:
 
 	def __init__(self, filename = 'filter.yaml', scheme = None):
 		self.classificationScheme = scheme or Classification.Scheme()
-		self._filterGroups = []
 		self._groups = {}
 		self._preferences = PackagePreferences()
 		self._autoflavors = []
 
-		self.defaultFilterGroup = self.makeFilterGroup(self.PRIORITY_DEFAULT)
+		self.filterGroup = PackageFilterGroup()
 
 		with open(filename) as f:
 			data = yaml.full_load(f)
@@ -1119,28 +1101,10 @@ class PackageFilter:
 		self.classificationScheme.finalize()
 
 	def finalize(self):
-		for filterGroup in self._filterGroups:
-			filterGroup.finalize()
-
-		self._filterGroups.sort(key = lambda fg: fg.priority)
+		self.filterGroup.finalize()
 
 	def apply(self, pkg, product):
-		for filterGroup in self._filterGroups:
-			verdict = filterGroup.apply(pkg, product)
-			if verdict is not None:
-				break
-
-		return verdict
-
-	def makeFilterGroup(self, priority):
-		for filterGroup in self._filterGroups:
-			if filterGroup.priority == priority:
-				return filterGroup
-
-		filterGroup = PackageFilterGroup(priority)
-		self._filterGroups.append(filterGroup)
-
-		return filterGroup
+		return self.filterGroup.apply(pkg, product)
 
 	def makeGroup(self, name, type = None):
 		return self.makeGroupInternal(name, type)
@@ -1248,12 +1212,9 @@ class PackageFilter:
 		if type(value) == bool:
 			group.expand = value
 
-		value = gd.get('priority')
-		if value is not None:
-			assert(type(value) == int)
-			filterGroup = self.makeFilterGroup(value)
-		else:
-			filterGroup = self.defaultFilterGroup
+		priority = gd.get('priority')
+		if priority is not None:
+			assert(type(priority) == int)
 
 		if group.label:
 			nameList = gd.get('requires') or []
@@ -1271,26 +1232,31 @@ class PackageFilter:
 			sourceProject = self.makeGroupInternal(name, Classification.TYPE_SOURCE)
 			group.label.setSourceProject(sourceProject.label)
 
+		# The yaml file may specify per-group priorities for filters, but there is just
+		# one global set of filters. Rather than passing the group and priority argument
+		# into each add*Filter function, create a Builder object that does this transparently.
+		filterSetBuilder = FilterSetBuilder(self.filterGroup, group, priority)
+
 		nameList = gd.get('products') or []
 		for name in nameList:
-			filterGroup.addProductFilter(name, group)
+			filterSetBuilder.addProductFilter(name)
 
 		nameList = gd.get('packages') or []
 		for name in nameList:
-			filterGroup.addBinaryPackageFilter(name, group)
-			filterGroup.addSourcePackageFilter(name, group)
+			filterSetBuilder.addBinaryPackageFilter(name)
+			filterSetBuilder.addSourcePackageFilter(name)
 
 		nameList = gd.get('sources') or []
 		for name in nameList:
-			filterGroup.addSourcePackageFilter(name, group)
+			filterSetBuilder.addSourcePackageFilter(name)
 
 		nameList = gd.get('binaries') or []
 		for name in nameList:
-			filterGroup.addBinaryPackageFilter(name, group)
+			filterSetBuilder.addBinaryPackageFilter(name)
 
 		nameList = gd.get('rpmGroups') or []
 		for name in nameList:
-			filterGroup.addRpmGroupFilter(name, group)
+			filterSetBuilder.addRpmGroupFilter(name)
 
 		flavors = gd.get('buildflavors') or []
 		for fd in flavors:

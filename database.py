@@ -1069,14 +1069,9 @@ class BackingStoreDB(DB):
 		if obj.backingStoreId is None:
 			raise Exception(f"Cannot update sourceId for {obj.fullname()} - backingStoreId is not set")
 
-		if obj.name == "yelp-tools":
-			print(f"Updating {obj.name} source id {sourceId}")
-			global optSqlDebug
-			optSqlDebug = 1
 		keys = ['sourceId']
 		values = [sourceId]
 		self.packages.updateKeysAndValues(keys, values, id = obj.backingStoreId)
-		optSqlDebug = 0
 
 	def updatePackageDependenciesWork(self, objList):
 		# Clean out all files and dependencies that belong to this package

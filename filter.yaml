@@ -8,7 +8,10 @@ autoflavors:
     - python310-*
     - python311-*
  - name: devel
-#  priority: 1
+   # make sure that packages that end with *-devel are
+   # recognized by this filter with a higher priority than
+   # any prefix match.
+   priority: 4
    packages:
     - "*-devel"
     - "*-devel-static"
@@ -27,6 +30,16 @@ autoflavors:
    # these shouldn't really end up in a different multibuild flavor
    packages:
     - system-user-*
+ - name: doc
+   priority: 4
+   packages:
+    - "*-doc"
+    - "*-docs"
+
+build_configs:
+ - name: Core/standard
+   buildrequires:
+    - "@BaseBuildEnv"
 
 build_groups:
  - name: "Core"
@@ -57,8 +70,23 @@ groups:
     - "*-32bit"
     - "*-32bit-*"
 
+ - name: "@GccRuntime"
+   sourceproject: GCC
+   packages:
+    - libgcc_s1
+    - libstdc++6
+    - libgomp1
+   buildflavors:
+    - name: devel
+      binaries:
+       # not sure why this isn't picked up automatically
+       # FIXME
+       - libstdc++-devel
+
  - name: "@GCC"
    sourceproject: GCC
+   requires:
+    - "@GccRuntime"
    packages:
     - gcc*
     - binutils
@@ -66,6 +94,11 @@ groups:
     - debugedit
     - dejagnu
     - dwz
+   buildflavors:
+    - name: devel
+      packages:
+       - libstdc++6-devel-gcc13
+       - gcc13-devel
 
  - name: "@BaseDevTools"
    requires:
@@ -91,6 +124,521 @@ groups:
     - gnu-efi
     - makedepend
 
+ - name: "@CoreConfig"
+   buildconfig: Core/standard
+   binaries:
+    - filesystem
+    - system-group-hardware
+    - system-group-wheel
+    - system-user-bin
+    - system-user-daemon
+    - system-user-nobody
+    - system-user-root
+    - system-user-tss
+    - system-users
+
+ - name: "@Glibc"
+   buildconfig: Core/standard
+   binaries:
+    - glibc
+   buildflavors:
+    - name: devel
+      binaries:
+       - linux-glibc-devel
+
+ - name: "@CryptoLibraries"
+   buildconfig: Core/standard
+   requires:
+    - "@CoreConfig"
+    - "@Glibc"
+   buildrequires:
+    - "@Core0"
+   binaries:
+    - mozilla-nss
+    - p11-kit-nss-trust
+    - p11-kit-tools
+    - crypto-policies
+    - libtasn1
+    - libtasn1-6
+    - libgcrypt20
+    - libgcrypt20-hmac
+    - libgpg-error0
+    - libgnutls30
+    - libksba8
+    - libcrypt1
+    - libargon2*
+    - librhash0
+    - libtss2-*
+
+ - name: "@CryptoUtils"
+   buildconfig: Core/standard
+   requires:
+    - "@CryptoLibraries"
+   buildrequires:
+    - "@Core0"
+   binaries:
+    - openssl
+    - openssl-3
+    - openssl-1_1
+    - pesign
+    - gpgme
+
+ - name: "@CoreLibraries"
+   buildconfig: Core/standard
+   requires:
+    - "@GccRuntime"
+    - "@CryptoLibraries"
+   buildrequires:
+    - "@BaseDevTools"
+   packages:
+    - cracklib
+    - cracklib-dict-full
+    - cracklib-dict-small
+    - libaio1
+    - libalternatives1
+    - libaudit1
+    - libauparse0
+    - libblkid1
+    - libboost_thread1*
+    - libbpf1
+    - libbrotlicommon1
+    - libbrotlidec1
+    - libbz2-1
+    - libcap2
+    - libcap-ng0
+    - libclang13
+    - libclang-cpp16
+    - libcom_err2
+    - libcrack2
+    - libdb-4_8
+#   - libdevmapper*
+    - libeconf0
+    - libedit0
+    - libevent-2*
+    - libext2fs2
+    - libfftw3*
+    - libfl2
+    - libfreetype6
+    - libgdbm6
+    - libgdbm_compat4
+    - libgmp10
+    - libgmpxx4
+    - libjson-c5
+    - libldap-*
+    - libldap2
+    - libLLVM16
+    - libltdl7
+    - liblua5*
+    - libluajit*
+    - liblzma5
+    - liblzo2*
+    - libmnl0
+    - libmpc3
+    - libmpdec3
+    - libmpfr6
+    - libncurses6
+    - libnl3-200
+    - libnl-config
+    - libnpth0
+    - libopenssl1_1
+    - libopenssl3
+    - libpci3
+    - libpcre2*
+    - libpipeline1
+    - libpopt0
+    - libprotobuf-lite20
+    - libpsx2
+    - libpwquality1
+    - libqrencode4
+    - libreadline8
+    - libreiserfscore0
+    - libsasl2-*
+    - libseccomp*
+    - libselinux1
+    - libsemanage2
+    - libsemanage-conf
+    - libsepol2
+    - libsqlite3*
+    - libssh4
+    - libssh-config
+    - libuuid1
+    - libuv1
+    - libverto1
+    - libwtmpdb0
+    - libxml2
+    - libyaml
+    - libz1
+    - libzio1
+    - libzstd1
+    - terminfo-base
+    - update-alternatives
+   buildflavors:
+    - name: odbc
+      binaries:
+       - openldap2-back-sql
+      requires:
+       - "@Databases"
+      buildrequires:
+       - "@Databases"
+    - name: test
+      packages:
+#      - libglib-testing
+
+ - name: "@Core0"
+   buildconfig: Core/standard
+   buildrequires:
+    - "@BaseDevTools"
+   requires:
+    - "@CoreLibraries"
+    - "@CoreConfig+accounts"
+   binaries:
+    - rpm
+   packages:
+    - aaa_base
+    - acl
+    - adjtimex
+    - alts
+    - at
+    - attr
+    - bash
+    - bash-*
+    - bc
+    - bridge-utils
+    - brotli
+    - bzip2
+    - ca-certificates
+    - ca-certificates-mozilla
+    - coreutils
+    - coreutils-single
+    - cpio
+#   - cronie
+    - curl
+    - cyrus-sasl
+    - cyrus-sasl-scram
+    - cyrus-sasl-plain
+    - cyrus-sasl-digestmd5
+#   - dbus-1
+#   - dbus-1-x11
+    - delayacct-utils
+    - dialog
+    - diffutils
+    - e2fsprogs
+    - elfutils
+    - fdupes
+    - file
+    - fillup
+    - findutils
+    - gawk
+    - gc
+    - gettext-runtime
+    - gettext-runtime-mini
+    - gnutls
+    - gpart
+    - gptfdisk
+    - grep
+    - gzip
+    - hardlink
+    - hostname
+    - kbd
+    - keyutils
+    - krb5
+    - krb5-mini
+    - less
+    - libbtrfs*
+    - libcap-progs
+    - libexpat1
+    - libexslt0
+    - libicu*
+    - libnscd1
+    - libxslt1
+    - libxslt-tools
+    - logrotate
+    - m4
+    - mailx
+    - mkisofs
+    - mozilla-nss-tools
+    - ncurses
+    - openssh-common
+    - pam
+    - pam-*
+    - pam_*
+    - pciutils-*
+    - permissions
+    - prctl
+    - psmisc
+    - rpm-config-SUSE
+    - sed
+    - shadow
+    - shared-mime-info
+    - sharutils
+    - sle-*-release
+    - sqlite3
+    - sudo
+    - suse-build-key
+    - system-role-*
+    - sysuser-tools
+    - tar
+    - tcsh
+    - time
+    - timezone
+    - unzip
+    - utempter
+    - util-linux*
+    - wget
+    - which
+    - xz
+    - zsh
+    - zstd
+
+ - name: "@Core1"
+   buildconfig: Core/standard
+   buildrequires:
+    - "@BaseDevTools"
+   requires:
+    - "@CoreLibraries"
+    - "@Core0"
+    - "@MinimalSystemd"
+    - "@PerlCore"
+   packages:
+    # libgpgme11 belongs here rather than @CryptoLibraries as it depends on gpg2
+    - libgpgme11
+    - libcurl4
+    - nscd
+    - cyrus-sasl-saslauthd
+    - tpm2.0-abrmd
+    - snapper
+    - procps
+    - btrfsprogs
+    # for some weird reason, polkit-default-privs now requires polkit
+    - polkit-default-privs
+    - btrfsprogs-udev-rules
+    - openssh-clients
+    - util-linux-systemd
+    - libsnapper7
+    - pam_snapper
+    - libhidapi-hidraw0
+    - libusb-*
+    - libfido2-1
+    - gpg2
+    - psutils
+    - openldap2
+#   - libgio-*
+#   - gio-branding-*
+#   - glib2-tools
+#   - glib2
+#   - glib2-branding-SLE
+   buildflavors:
+    - name: test
+      packages:
+#      - libglib-testing-0-0
+
+ - name: "@Core"
+   buildconfig: Core/standard
+   buildrequires:
+    - "@BaseDevTools"
+   requires:
+    - "@CoreLibraries"
+    - "@Core0"
+    - "@Core1"
+   packages:
+   buildflavors:
+    - name: glib
+      requires:
+       - "@SystemdLibraries"
+       - "@X11Libraries"
+      binaries:
+    - name: networkServices
+      requires:
+       - "@NetworkServices"
+       - "@HostStorage"
+       - "@Core+systemdlibs"
+       - "@Core+udevlibs"
+      binaries:
+       - cyrus-sasl-*
+       - e2fsprogs-scrub
+       - openssh-server
+       - openssh
+    - name: postgres
+      requires:
+       - "@Databases"
+       - "@Core+networkServices"
+      binaries:
+       - cyrus-sasl-sqlauxprop*
+       - cyrus-sasl-sqlauthd*
+    - name: python
+      buildrequires:
+       - "@Python"
+      requires:
+       - "@PythonCore"
+       - "@Core+systemdlibs"
+       - "@Core+udevlibs"
+      binaries:
+       - python-btrfsutil
+       - sudo-plugin-python
+    - name: zypp
+      requires:
+       - "@UpdateStack"
+       - "@UpdateStack+python"
+       - "@Core+systemd"
+      binaries:
+       - snapper-zypp-plugin
+       - permissions-zypp-plugin
+    - name: java
+      buildrequires:
+       - "@Java"
+      binaries:
+       - pam-doc
+    - name: kernellibs
+      requires:
+       - "@KernelLibraries"
+       - "@KernelLibraries+udev"
+      binaries:
+       - pciutils
+       - libcryptsetup12
+       - cryptsetup
+       - efivar
+
+ - name: "@SELinux"
+   buildconfig: Core/standard
+   requires:
+    - "@Core0"
+   binaries:
+    - selinux-tools
+    - checkpolicy
+    - setools
+
+ - name: "@Console"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+   packages:
+    - console-setup
+    - libgpm2
+    - screen
+
+ - name: "@ManDoc"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+   packages:
+    - mandoc
+    - man
+    - groff
+    - help2man
+
+ - name: "@Texinfo"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+   packages:
+    - texi2info
+    - texi2html
+    - info
+    - makeinfo
+
+ - name: "@XMLPlus"
+   sourceproject: XMLPlus
+   requires:
+    - "@Core0"
+   packages:
+    - xmlgraphics-*
+    - xmlto
+    - libxml++
+    - libxmlsec1*
+    - xml-commons-apis
+    - xmlcharent
+    - iso_ent
+    - opensp
+
+ - name: "@Docbook"
+   sourceproject: Core
+   requires:
+    - "@XMLPlus"
+   packages:
+    - docbook_4
+    - docbook_5
+    - docbook5-xsl-stylesheets
+    - docbook-xsl-stylesheets
+    - sgml-skel
+    - asciidoc
+
+ - name: "@TclCore"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+    - "@X11"
+    - "@GraphicsLibraries"
+   buildrequires:
+    - "@X11Libraries+devel"
+   packages:
+    - tcl
+    - tk
+    - expect
+
+ - name: "@LUA"
+   description: |
+     Contains the command line utilities for LUA.
+     The LUA runtime (ie the libraries) are part of CoreLibraries for now
+   sourceproject: Core
+   requires:
+    - "@Core0"
+   packages:
+    - lua51
+    - lua53
+    - lua54
+    - lua-macros
+
+ - name: "@CoreBuild"
+   description: |
+     This defines the set of packages that will be used to build
+     Core packages by default.
+   sourceproject: Core
+   requires:
+    - "@GCC"
+    - "@LUA"
+    - "@LUA+runtime"
+    - "@Kernel+obs"
+    - "@Core0"
+    - "@Core+devel"
+    - "@Docbook"
+    - "@TclCore"
+    - "@ManDoc"
+    - "@Texinfo"
+   packages:
+    - memory-constraints
+    - brp-check-suse
+    - build-compare
+    - build-mkbaselibs
+    - clang
+    - clang16
+    - doxygen
+    - compat-usrmerge-build
+    - compat-usrmerge-tools
+    - flex
+    - gettext-runtime-mini
+    - gettext-tools-mini
+    - gperf
+    - isl
+    - libtool
+    - patch
+    - patchutils
+    - post-build-checks
+    - rpm-build
+    - rpmlint-mini
+    - swig
+    - valgrind
+    - pesign-obs-integration
+    - bpftool
+    - guile
+    - libcunit1
+    - libcheck0
+
+ - name: "@BaseBuildEnv"
+   description: |
+    Generic build environment for packages above the Core level
+   requires:
+    - "@Core0"
+
  - name: "@Development"
    requires:
     - "@GCC"
@@ -108,11 +656,12 @@ groups:
    rpmGroups:
     - Productivity/Databases*
    requires:
-    - "@Core"
+    - "@Core0"
     - "@NetworkServices"
     - "@ApplicationLibraries"
    packages:
     - postgresql-*
+    - postgresql15-*
     - libpq5
     - unixODBC
     - rsyslog-module-mysql
@@ -126,8 +675,15 @@ groups:
       requires:
        - "@Python"
       binaries:
+       - postgresql-plpython
+       - postgresql-contrib
        - postgresql15-plpython
        - postgresql15-contrib
+    - name: tcl
+      requires:
+       - "@TclCore"
+      binaries:
+       - postgresql-pltcl
     - name: doc
       binaries:
        - postgresql-docs
@@ -143,16 +699,29 @@ groups:
    rpmGroups:
     - Productivity/Multimedia/*
 
+ - name: "@DesktopBuild"
+   sourceproject: X11
+   requires:
+    - "@Core0"
+    - "@FontLibraries"
+   packages:
+    - desktop-file-utils
+    - update-desktop-files
+
  - name: "@X11Libraries"
    sourceproject: X11
    requires:
-    - "@Core"
+    - "@Core0"
+    - "@FontLibraries"
+   buildrequires:
+    - "@DesktopBuild"
    packages:
     - libcairo*
     - libICE6
     - libSM6
     - libX11-6
     - libX11-data
+    - libX11-xcb1
     - libXau6
     - libXaw3d6
     - libXaw3d7
@@ -183,18 +752,37 @@ groups:
     - libxcb-xv0
     - libxcb-xvmc0
     - libXcomposite1
+    - libXcursor1
+    - libXdmcp6
     - libXext6
     - libXfixes3
     - libXft2
     - libXi6
+    - libXinerama1
     - libXmu6
+    - libXmuu1
     - libXpm4
+    - libXrandr2
     - libXrender1
+    - libxshmfence1
     - libXt
     - libXt6
     - libXtst
+    - libXv1
+    - libXxf86vm1
     - xaw3dd
-
+    - xorgproto
+    - libXdamage1
+    - util-macros
+   buildflavors:
+    - name: devel
+      packages:
+       # for the time being, we need to specify this explicitly. The *-devel rules
+       # will only label foobar-devel packages correctly if there is a corresponding
+       # foobar package somewhere.
+       # FIXME
+       - xorgproto-devel
+       - util-macros-devel
 
  - name: "@X11"
    sourceproject: X11
@@ -242,7 +830,7 @@ groups:
  - name: "@Gnome"
    sourceproject: Gnome
    requires:
-    - "@Core"
+    - "@Core0"
     - "@X11Libraries"
     - "@ApplicationLibraries"
     - "@Flatpak"
@@ -257,436 +845,13 @@ groups:
     - dbus-1-glib
     - polkit-gnome*
     - libpulse0
-
- - name: "@CryptoLibraries"
-   sourceproject: Core
-   buildrequires:
-    - "@Core"
-   binaries:
-    - openssl-3
-    - openssl-1_1
-    - mozilla-nss
-    - p11-kit-nss-trust
-    - p11-kit-tools
-    - crypto-policies
-    - libtasn1
-    - libtasn1-6
-    - gpgme
-    - libgpgme11
-    - libgcrypt20
-    - libgcrypt20-hmac
-    - libgpg-error0
-    - libgnutls30
-    - libksba8
-    - libcrypt1
-    - libargon2*
-    - librhash0
-    - pesign
-
- - name: "@CoreLibraries"
-   sourceproject: Core
-   buildrequires:
-    - "@BaseDevTools"
-   binaries:
-    - perl
-    - perl-base
-    - perl-doc
-   packages:
-    - cracklib
-    - cracklib-dict-small
-    - cracklib-dict-full
-    - glibc
-    - glib2
-    - glib2-branding-SLE
-    - libaio1
-    - libaudit1
-    - libauparse0
-    - libalternatives1
-    - libboost_thread1*
-    - libbpf1
-    - libcap-ng0
-    - libcap2
-    - libcom_err2
-    - libcrack2
-    - libcurl4
-#   - libdevmapper*
-    - libdb-4_8
-    - libeconf0
-    - libedit0
-    - libevent-2*
-    - libext2fs2
-    - libfl2
-    - libfftw3*
-    - libfreetype6
-    - libgcc_s1
-    - libgdbm6
-    - libgdbm_compat4
-    - libglib-*
-    - libgmp10
-    - libicu*
-    - libldap-*
-    - liblzma5
-    - liblzo2*
-    - libmpc3
-    - libmpdec3
-    - libmpfr6
-    - libnl3-200
-    - libnl-config
-    - libnpth0
-    - libopenssl1_1
-    - libopenssl3
-    - libpipeline1
-    - libpci3
-    - libpcre2*
-    - libpopt0
-    - libprotobuf-lite20
-    - libpsx2
-    - libqrencode4
-    - libreadline8
-    - libreiserfscore0
-    - libsasl2-*
-    - libselinux1
-    - libsemanage2
-    - libsemanage-conf
-    - libsepol2
-    - libuv1
-    - libwtmpdb0
-    - cyrus-sasl
-    - cyrus-sasl-scram
-    - cyrus-sasl-plain
-    - cyrus-sasl-digestmd5
-    - libssh4
-    - libssh-config
-    - libstdc++6
-    - libsqlite3*
-    - libseccomp*
-    - libsystemd0
-    - libudev1
-    - libgomp1
-    - openldap2
-    - libz1
-    - libzio1
-    - libyaml
-    - libpwquality1
-    - libgmpxx4
-    - libmnl0
-    - libverto1
-    - libclang13
-    - libclang-cpp16
-    - libLLVM16
-   buildflavors:
-    - name: odbc
-      binaries:
-       - openldap2-back-sql
-      requires:
-       - "@Databases"
-      buildrequires:
-       - "@Databases"
-    - name: test
-      packages:
-       - libglib-testing
-
-#   - libgio-*
-
- - name: "@Core"
-   sourceproject: Core
-   buildrequires:
-    - "@BaseDevTools"
-   requires:
-    - "@CoreLibraries"
-    - "@CryptoLibraries"
-   sources:
-    - system-user-*
-   packages:
-    - aaa_base
-    - acl
-    - adjtimex
-    - alts
-    - at
-    - attr
-    - bash
-    - bash-*
-    - bc
-    - bridge-utils
-    - brotli
-    - libbtrfs*
-    - bzip2
-    - ca-certificates
-    - ca-certificates-mozilla
-    - coreutils
-    - coreutils-single
-    - cpio
-#   - cronie
-#   - cryptsetup
-#   - dbus-1
-#   - dbus-1-x11
-    - delayacct-utils
-    - diffutils
-    - e2fsprogs
-    - elfutils
-    - fdupes
-    - file
-    - filesystem
-    - fillup
-    - findutils
-    - gawk
-    - gc
-    - gettext-runtime
-    - gnutls
-    - gpart
-    - gpg2
-    - gptfdisk
-    - grep
-    - gzip
-    - hardlink
-    - hostname
-    - kbd
-    - krb5
-    - krb5-mini
-    - keyutils
-    - less
-    - logrotate
-    - m4
-    - mozilla-nss-tools
-    - ncurses
-    - pam
-    - pam-*
-    - pam_*
-    - pciutils
-    - pciutils-*
-    - permissions
-    - prctl
-    - psmisc
-    - psutils
-    - rpm
-    - sed
-    - shadow
-    - shared-mime-info
-    - sharutils
-    - sle-*-release
-    - sqlite3
-    - sudo
-    - suse-build-key
-    - system-role-*
-    - system-users
-    - sysuser-tools
-    - tar
-    - tcsh
-    - time
-    - timezone
-    - unzip
-    - update-alternatives
-    - utempter
-    - util-linux*
-    - which
-    - zsh
-    - curl
-    - wget
-    - mailx
-    - openssh-common
-    - mkisofs
-    - xz
-    - zstd
-    - libxml2
-    - libxslt1
-    - libexslt0
-    - libxslt-tools
-    - libexpat1
-   buildflavors:
-    - name: systemd
-      requires:
-       - "@MinimalSystemd"
-      binaries:
-       - nscd
-       - cyrus-sasl-saslauthd
-       - snapper
-       - libsnapper7
-       - pam_snapper
-    - name: systemdlibs
-      requires:
-       - "@SystemdLibraries"
-       - "@UdevLibraries"
-       - "@LUA+runtime"
-      binaries:
-       - procps
-       - btrfsprogs
-       # for some weird reason, polkit-default-privs now requires polkit
-       - polkit-default-privs
-       - btrfsprogs-udev-rules
-       - openssh-clients
-       - util-linux-systemd
-    - name: udevlibs
-      requires:
-       - "@UdevLibraries"
-      packages:
-       - libhidapi-hidraw0
-       - libusb-*
-    - name: glib
-      requires:
-       - "@SystemdLibraries"
-       - "@X11Libraries"
-      binaries:
-       - libgio-*
-       - gio-branding-*
-       - libglib-testing
-    - name: networkServices
-      requires:
-       - "@NetworkServices"
-       - "@HostStorage"
-       - "@Core+systemdlibs"
-       - "@Core+udevlibs"
-      binaries:
-       - cyrus-sasl-*
-       - e2fsprogs-scrub
-       - openssh-server
-       - openssh
-    - name: postgres
-      requires:
-       - "@Databases"
-       - "@Core+networkServices"
-      binaries:
-       - cyrus-sasl-sqlauthprop*
-       - cyrus-sasl-sqlauthd*
-    - name: python
-      buildrequires:
-       - "@Python"
-      requires:
-       - "@Core+systemdlibs"
-       - "@Core+udevlibs"
-      binaries:
-       - python-btrfsutil
-       - sudo-plugin-python
-    - name: zypp
-      requires:
-       - "@UpdateStack"
-      binaries:
-       - snapper-zypp-plugin
-       - permissions-zypp-plugin
-
- - name: "@Console"
-   sourceproject: Core
-   requires:
-    - "@Core"
-   packages:
-    - console-setup
-    - libgpm2
-    - screen
-
- - name: "@ManDoc"
-   sourceproject: Core
-   requires:
-    - "@Core"
-   packages:
-    - mandoc
-    - man
-    - groff
-    - help2man
-
- - name: "@Texinfo"
-   sourceproject: Core
-   requires:
-    - "@Core"
-   packages:
-    - texi2info
-    - texi2html
-    - info
-    - makeinfo
-
- - name: "@XMLPlus"
-   sourceproject: XMLPlus
-   requires:
-    - "@Core"
-   packages:
-    - xmlgraphics-*
-    - xmlto
-    - libxml++
-    - libxmlsec1*
-    - xml-commons-apis
-    - xmlcharent
-    - iso_ent
-    - opensp
-
- - name: "@Docbook"
-   sourceproject: Core
-   requires:
-    - "@XMLPlus"
-   packages:
-    - docbook_4
-    - docbook_5
-    - docbook5-xsl-stylesheets
-    - docbook-xsl-stylesheets
-    - sgml-skel
-    - asciidoc
-
- - name: "@TclCore"
-   sourceproject: Core
-   requires:
-    - "@Core"
-   packages:
-    - tcl
-    - expect
-
- - name: "@LUA"
-   sourceproject: Core
-   requires:
-    - "@Core"
-   packages:
-    - lua54
-    - lua-macros
-   buildflavors:
-    - name: runtime
-      packages:
-       - liblua5*
-       - libluajit*
-
- - name: "@CoreBuild"
-   description: |
-     This defines the set of packages that will be used to build
-     Core packages by default.
-   sourceproject: Core
-   requires:
-    - "@GCC"
-    - "@LUA"
-    - "@LUA+runtime"
-    - "@Kernel+obs"
-    - "@Core"
-    - "@Core+devel"
-    - "@Docbook"
-    - "@TclCore"
-    - "@ManDoc"
-    - "@Texinfo"
-   packages:
-    - memory-constraints
-    - brp-check-suse
-    - build-compare
-    - build-mkbaselibs
-    - clang
-    - clang16
-    - doxygen
-    - compat-usrmerge-build
-    - compat-usrmerge-tools
-    - flex
-    - gettext-runtime-mini
-    - gettext-tools-mini
-    - gperf
-    - isl
-    - libtool
-    - patch
-    - patchutils
-    - post-build-checks
-    - rpm-build
-    - rpm-config-SUSE
-    - rpmlint-mini
-    - swig
-    - valgrind
-    - pesign-obs-integration
-    - bpftool
-    - guile
-    - libcunit1
+    - libgio-*
+#   - gio-branding-*
+#   - glib2-tools
 
  - name: "@ApplicationLibraries"
    requires:
-    - "@Core"
+    - "@Core0"
     - "@Core+systemdlibs"
     - "@Core+udevlibs"
     - "@Core+glib"
@@ -700,7 +865,7 @@ groups:
  - name: "@AppArmor"
    sourceproject: AppArmor
    requires:
-    - "@Core"
+    - "@Core0"
    packages:
     - apparmor*
     - libapparmor1
@@ -730,14 +895,15 @@ groups:
  - name: "@UdevLibraries"
    sourceproject: Systemd
    requires:
-    - "@Core"
+    - "@Core0"
    packages:
-    - libudev-mini1
+    - libudev1
+#   - libudev-mini1
 
  - name: "@SystemdLibraries"
    sourceproject: Systemd
    requires:
-    - "@Core"
+    - "@Core0"
    packages:
     - libsystemd0-mini
     - libdbus-1-*
@@ -746,11 +912,13 @@ groups:
  - name: "@MinimalSystemd"
    sourceproject: Systemd
    requires:
-    - "@Core"
-    - "@Core+glib"
+    - "@Core0"
+#   - "@Core+glib"
+    - "@KernelLibraries+udev"
     - "@SystemdLibraries"
     - "@UdevLibraries"
     - "@KernelCore"
+    - "@SELinux"
    packages:
     - acct
     - biosdevname
@@ -766,7 +934,6 @@ groups:
     - systemd
     - systemd-*
     - udev
-    - util-linux-systemd
 #   - btrfsprogs-udev-rules
    buildflavors:
     - name: test
@@ -815,6 +982,12 @@ groups:
     - zypper-*
     - libsolv
     - perl-solv
+   buildflavors:
+    - name: python
+      requires:
+       - "@Python"
+      binaries:
+       - python3*-zypp-plugin
 
  - name: "@DirectoryIntegration"
    sourceproject: DirectoryIntegration
@@ -836,27 +1009,37 @@ groups:
     - apcupsd
     - btrfsmaintenance
 
+ - name: "@Security"
+   sourceproject: Security
+   requires:
+    - "@Core"
+   packages:
+    - hmaccalc
+   buildflavors:
+    - name: services
+      requires:
+       - "@MinimalSystemd"
+      packages:
+       - pcsc
+       - pcsc-lite
+       - pam_pkcs11
+
  - name: "@HostSecurity"
-   sourceproject: Host
+   requires:
+    - "@Core"
+    - "@Security"
+   sourceproject: Security
    packages:
     - audit
     - audit-secondary
-    - checkpolicy
-    - cracklib*
-    - hmaccalc
     - ibmswtpm2
     - ibmtss
     - ima-evm-utils
     - ima-inspect
     - opensc
-    - pam_pkcs11
     - pam_u2f
-    - pcsc
-    - pcsc-*
     - policycoreutils
-    - setools
     - tpm-*
-    - tpm2*
     - trousers
     - ykclient
     - ykpers
@@ -875,7 +1058,6 @@ groups:
     - autofs
     - bcache-tools
     - device-mapper
-    - libdevmapper*
     - dos2unix
     - dump
     - duperemove
@@ -894,6 +1076,10 @@ groups:
     - xfsdump
     - xfsprogs
     - pam_mount
+   buildflavors:
+    - name: test
+      binaries:
+       - lvm2-testsuite
 
  - name: "@NetworkStorage"
    sourceproject: Host
@@ -951,6 +1137,13 @@ groups:
     - ruby3.2-rubygem-agama
     - ruby-yui
 
+ - name: "@FontLibraries"
+   sourceproject: Fonts
+   packages:
+    - libfreetype2
+    - libfontconfig
+    - fontconfig
+
  - name: "@Fonts"
    sourceproject: Fonts
    packages:
@@ -998,6 +1191,13 @@ groups:
    packages:
     - libkmod2
     - libnuma1
+    - libfuse2
+   buildflavors:
+    - name: udev
+      requires:
+       - "@UdevLibraries"
+      binaries:
+       - libdevmapper*
 
  - name: "@KernelCore"
    description: |
@@ -1005,7 +1205,7 @@ groups:
      used in non-kernel applications.
    sourceproject: KernelPlus
    requires:
-    - "@Core"
+    - "@Core0"
     - "@KernelLibraries"
    packages:
     - kmod
@@ -1013,20 +1213,26 @@ groups:
  - name: "@KernelAudio"
    sourceproject: KernelPlus
    requires:
-    - "@Core"
+    - "@Core0"
    packages:
     - alsa
     - alsa-plugins
     - alsa-utils
 
+ - name: "@KernelBuild"
+   sourceproject: KernelPlus
+   buildrequires:
+    - "@CoreBuild"
+   packages:
+    - nasm
 
 # some pieces of Kernel require perl-Bootloader which needs perl
  - name: "@Kernel"
    sourceproject: KernelPlus
    buildrequires:
-    - "@KernelPlus"
+    - "@KernelBuild"
    requires:
-    - "@Core"
+    - "@Core0"
     - "@KernelCore"
     - "@KernelAudio"
     - "@NetworkCore"
@@ -1060,6 +1266,8 @@ groups:
     - ucode-intel
    buildflavors:
     - name: python
+      requires:
+       - "@PythonCore"
       packages:
        - cpuset
     - name: devel
@@ -1069,7 +1277,6 @@ groups:
     - name: obs
       packages:
        - kernel-obs-build
-       - linux-glibc-devel
 
  - name: "@KernelDebugging"
    sourceproject: KernelPlus
@@ -1077,12 +1284,15 @@ groups:
     - acpica
 
  - name: "@NetworkCore"
+   sourceproject: Core
    requires:
-    - "@Core"
+    - "@Core0"
    packages:
-    - xxx
+    - iproute2
+    - libwrap0
 
  - name: "@HostNetworking"
+   sourceproject: Core
    requires:
     - "@NetworkCore"
    packages:
@@ -1099,8 +1309,8 @@ groups:
     - susefirewall2-to-firewalld
     - ibutils*
     - infinipath*
-    - iproute2
     - NetworkManager
+    - NetworkManager-branding-SLE
     - strongswan
     - stunnel
     - nftables
@@ -1131,19 +1341,28 @@ groups:
  - name: "@GraphicsLibraries"
    sourceproject: Multimedia
    requires:
-    - "@Core"
+    - "@Core0"
    packages:
     - libjpeg8
     - libturbojpeg0
     - libgif7
+    - libpng16
+   buildflavors:
+    - name: devel
+      binaries:
+       - libpng16-devel-x86-64
 
  - name: "@AudioLibraries"
    sourceproject: Multimedia
    requires:
-    - "@Core"
+    - "@Core0"
    packages:
     - libvorbisfile3
     - libsndfile1
+    - libspeex1
+    - libspeexdsp1
+    - libtheoraenc1
+    - libtheoradec1
 
  - name: "@HPCCoreLibraries"
    sourceproject: Core
@@ -1245,7 +1464,7 @@ groups:
  - name: "@ApacheCommons"
    sourceproject: ApacheCommons
    requires:
-    - "@Core"
+    - "@Core0"
     - "@Java"
    packages:
     - apache-commons-*
@@ -1301,6 +1520,7 @@ groups:
     - python3*-charset-normalizer
     - python3*-cryptography
     - python3*-docutils
+    - python3*-future
     - python3*-idna
     - python3*-imagesize
     - python3*-iniconfig
@@ -1329,7 +1549,10 @@ groups:
 
  - name: "@PythonCore"
    requires:
-    - "@Core"
+    - "@Core0"
+   buildrequires:
+    - "@DesktopBuild"
+    - "@X11Libraries+devel"
    sources:
     - python39-core
     - python310-core
@@ -1346,7 +1569,7 @@ groups:
  - name: "@Ruby"
    sourceproject: Ruby
    requires:
-    - "@Core"
+    - "@Core0"
    rpmGroups:
     - Development/*/Ruby
    packages:
@@ -1365,6 +1588,21 @@ groups:
     - rubygem-libguestfs
     - ruby-solv
 
+ - name: "@PerlCore"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+   packages:
+    - perl
+    - perl-base
+    - perl-doc
+    - perl-Bootloader
+    - perl-IPC-Run3
+    - perl-Date-Calc
+    - perl-Carp-Clan
+    - perl-Bit-Vector
+    - perl-Text-Unidecode
+
  - name: "@Perl"
    sourceproject: Perl
    requires:
@@ -1374,17 +1612,6 @@ groups:
    packages:
     - perl*
 
- - name: "@PerlCore"
-   sourceproject: Core
-   requires:
-    - "@Core"
-   packages:
-    - perl-Bootloader
-    - perl-IPC-Run3
-    - perl-Date-Calc
-    - perl-Carp-Clan
-    - perl-Bit-Vector
-
  - name: "@Java"
    rpmGroups:
     - Development/*/Java
@@ -1392,6 +1619,8 @@ groups:
     - mx4j
     - java-*
     - javapackages-*
+    - qdox
+    - glassfish-servlet-api
 
  - name: "@Go"
    rpmGroups:
@@ -1410,18 +1639,21 @@ groups:
  - name: "@Boot"
    sourceproject: KernelPlus
    buildrequires:
-    - "@KernelPlus"
+    - "@KernelBuild"
     # for grub2
     - "@Fonts"
    requires:
     - "@Core"
     - "@Core+udevlibs"
+    - "@Core+kernellibs"
+    - "@Core+systemdlibs"
+    - "@CryptoUtils"
+    - "@NetworkCore"
     - "@PerlCore"
     - "@MinimalSystemd"
    packages:
     - dracut
     - efibootmgr
-    - efivar
     - grub2
     - grub2-branding*
     - mokutil
@@ -1473,12 +1705,12 @@ groups:
     - ruby*-rubygem-ruby-augeas
     - freeipmi
 
-#
+# 
 # Ignore these for now.
 # preferences are only needed when we resolve dependencies
 # ourselves (ie when retrieving package definitions from a repomd).
 # OBS provides reasonable dependency resolutions already...
-#
+# 
 preferences:
  - over:
     - "*-32bit"
@@ -1518,7 +1750,7 @@ preferences:
  - prefer: ocaml-compiler-libs-devel
    over: ocaml-compiler-libs
  - prefer: cross-nvptx-newlib12-devel
-   over:
+   over: 
     - cross-nvptx-newlib7-devel
     - cross-nvptx-newlib11-devel
  - prefer: mvapich2-psm2
@@ -1529,3 +1761,4 @@ preferences:
     - mpich-ofi
 # libOpenIPMI0 and OpenIPMI
 # icu.691-devel and libicu-devel
+

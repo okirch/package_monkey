@@ -304,7 +304,7 @@ class Classification:
 			return [self]
 
 		def __str__(self):
-			return f"{self.package.fullname()} identified by {self.filterDesc}"
+			return f"{self.package} identified by {self.filterDesc}"
 
 	class ReasonRequires(Reason):
 		def __init__(self, pkg, dependant, req):
@@ -324,7 +324,10 @@ class Classification:
 			return self.dependant.labelReason.originPackage
 
 		def __str__(self):
-			return f"{self.package.fullname()} required by {self.dependant.fullname()} via {self.req}"
+			result = f"{self.package} required by {self.dependant}"
+			if self.req is not None:
+				result += f" via {self.req}"
+			return result
 
 	class ReasonSourcePackage(Reason):
 		def __init__(self, pkg, binary):
@@ -339,7 +342,7 @@ class Classification:
 			return self.reasonChain(self.binary)
 
 		def __str__(self):
-			return f"{self.package.fullname()} is the source of {self.binary.fullname()}"
+			return f"{self.package} is the source of {self.binary}"
 
 	class ReasonSiblingPackage(Reason):
 		def __init__(self, pkg, sibling):
@@ -354,7 +357,7 @@ class Classification:
 			return self.reasonChain(self.sibling)
 
 		def __str__(self):
-			return f"{self.package.fullname()} is a sibling package of {self.sibling.fullname()}"
+			return f"{self.package} is a sibling package of {self.sibling}"
 
 	class ReasonRelatedPackage(ReasonSiblingPackage):
 		def __init__(self, relationName, pkg, sibling):
@@ -369,7 +372,7 @@ class Classification:
 			return self.reasonChain(self.sibling)
 
 		def __str__(self):
-			return f"{self.package.fullname()} is a {self.relation} package related to {self.sibling.fullname()}"
+			return f"{self.package} is a {self.relation} package related to {self.sibling}"
 
 	class ReasonBuildDependency(Reason):
 		def __init__(self, pkg, parentReason):
@@ -384,7 +387,7 @@ class Classification:
 			return [self.parentReason]
 
 		def __str__(self):
-			return f"{self.package.fullname()} builds {self.parentReason.package.fullname()}"
+			return f"{self.package} builds {self.parentReason.package}"
 
 	class ReasonSourceClosure(Reason):
 		def __init__(self, pkg, sibling):
@@ -399,7 +402,7 @@ class Classification:
 			return self.reasonChain(self.sibling)
 
 		def __str__(self):
-			return f"{self.package.fullname()} built from the same source as {self.sibling.fullname()}"
+			return f"{self.package} built from the same source as {self.sibling}"
 
 	class Classifier(object):
 		def __init__(self, label):

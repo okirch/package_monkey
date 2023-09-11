@@ -474,10 +474,10 @@ class ResolverWorker:
 			print(f"Unexpected dependency {self.desc}:")
 			for (wantedReason, badPackage) in self.conflicts:
 				origin = wantedReason.originPackage
-				print(f" * {origin.fullname()} -> {badPackage.fullname()}")
+				print(f" * {origin} -> {badPackage}")
 				indent = "   "
 				self.showProof(wantedReason, indent = "      ")
-				print(f"      Package {badPackage.fullname()} was labeled as {badPackage.label} due to:")
+				print(f"      Package {badPackage} was labeled as {badPackage.label} due to:")
 				self.showProof(badPackage.labelReason, indent = "         ")
 
 	class UnexpectedBuildDependency(Problem):
@@ -492,10 +492,10 @@ class ResolverWorker:
 			print(f"Unexpected build dependency {self.desc}:")
 			for (buildName, wantedReason, badPackage) in self.conflicts:
 				origin = wantedReason.originPackage
-				print(f" * {origin.fullname()} -> {badPackage.fullname()}")
+				print(f" * {origin} -> {badPackage}")
 				self.showProof(wantedReason, indent = "      ")
-				print(f"   building {buildName} required {badPackage.shortname}")
-				print(f"      Package {badPackage.fullname()} was labeled as {badPackage.label} due to:")
+				print(f"   building {buildName} required {badPackage}")
+				print(f"      Package {badPackage} was labeled as {badPackage.label} due to:")
 				self.showProof(badPackage.labelReason, indent = "         ")
 
 	class UnlabelledBuildDependency(Problem):
@@ -524,11 +524,11 @@ class ResolverWorker:
 			print(f"Unlabelled build dependencies of {self.desc}:")
 			for build in sorted(self.builds.values(), key = lambda b: b.name):
 				origin = build.reason.originPackage
-				print(f" * {origin.fullname()} -> {build.name}")
+				print(f" * {origin} -> {build.name}")
 				self.showProof(build.reason, indent = "      ")
 				print(f"   building {build.name} required the following package(s) which have not been labelled yet")
 				for badPackage in build.packages:
-					print(f"      {badPackage.fullname()}")
+					print(f"      {badPackage}")
 
 	class UnresolvedDependency(Problem):
 		def __init__(self, *args):
@@ -541,7 +541,7 @@ class ResolverWorker:
 		def show(self):
 			print(f"Unresolved dependency {self.desc}, required by:")
 			for pkg in self.requiredby:
-				print(f" * {pkg.fullname()}")
+				print(f" * {pkg}")
 
 	class MissingSource(Problem):
 		def __init__(self, *args):
@@ -554,7 +554,7 @@ class ResolverWorker:
 		def show(self):
 			print(f"Missing source package {self.desc}, required by:")
 			for (pkg, reason) in self.requiredby:
-				print(f" * {pkg.fullname()}")
+				print(f" * {pkg}")
 				self.showProof(reason, indent = "      ")
 
 	class SourceProjectConflict(Problem):
@@ -1444,6 +1444,10 @@ class Package:
 
 	def setChanges(self, changes):
 		self._changes = sorted(changes, key = lambda c : int(c.date))
+
+	def __str__(self):
+		# make the default name reporting format configurable
+		return self.shortname
 
 	@property
 	def shortname(self):

@@ -186,7 +186,7 @@ for label in binaryTraversal:
 	print(label)
 
 	for pkg in sorted(closure[label.name], key = lambda p: p.name):
-		print(f"  {pkg.name}")
+		print(f"  {pkg}")
 
 for label in sourceTraversal:
 	print()

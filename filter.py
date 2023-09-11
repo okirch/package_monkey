@@ -50,6 +50,11 @@ class Classification:
 			self.buildRequires.add(other)
 			self.hierarchyNeedsUpdate()
 
+		def copyRequirementsFrom(self, other):
+			self.runtimeRequires.update(other.runtimeRequires)
+			self.buildRequires.update(other.buildRequires)
+			self.hierarchyNeedsUpdate()
+
 		@property
 		def flavors(self):
 			return map(lambda pair: pair[1], sorted(self._flavors.items()))
@@ -795,8 +800,6 @@ class PackageGroup:
 		self.description = None
 		self._packages = []
 		self._buildFlavors = {}
-		self._runtimeRequires = {}
-		self._buildRequires = {}
 
 	def track(self, pkg):
 		self._packages.append(pkg)
@@ -827,11 +830,11 @@ class PackageGroup:
 
 	@property
 	def runtimeRequires(self):
-		return set(self._runtimeRequires.values())
+		raise Exception("obsolete method called")
 
 	@property
 	def buildRequires(self):
-		return set(self._buildRequires.values())
+		raise Exception("obsolete method called")
 
 	@property
 	def isFlavor(self):
@@ -839,13 +842,13 @@ class PackageGroup:
 
 	def addRequires(self, otherGroup):
 		if otherGroup.label is None:
-			print(f"Group {otherGroup.name} has a NULL label")
+			raise Exception(f"Group {otherGroup.name} has a NULL label")
 		self.label.addRuntimeDependency(otherGroup.label)
-		self._runtimeRequires[otherGroup.name] = otherGroup
 
 	def addBuildRequires(self, otherGroup):
+		if otherGroup.label is None:
+			raise Exception(f"Group {otherGroup.name} has a NULL label")
 		self.label.addBuildDependency(otherGroup.label)
-		self._buildRequires[otherGroup.name] = otherGroup
 
 	@property
 	def flavors(self):
@@ -1151,11 +1154,7 @@ class PackageFilter:
 		if flavor is None:
 			flavor = self.makeFlavorGroup(baseGroup, autoFlavor.name)
 
-		for req in autoFlavor.runtimeRequires:
-			flavor.addRequires(req)
-		for req in autoFlavor.buildRequires:
-			flavor.addBuildRequires(req)
-
+		flavor.label.copyRequirementsFrom(autoFlavor.label)
 		return flavor
 
 	def makeFlavorGroup(self, baseGroup, flavorName):
@@ -1166,27 +1165,12 @@ class PackageFilter:
 		groupName = f"{baseGroup.name}+{flavorName}"
 		flavor = self.makeGroupInternal(groupName, baseGroup.type)
 
-		for buildReq in baseGroup.buildRequires:
-			flavor.addBuildRequires(buildReq)
-
-			# FIXME: this can go with autoflavors
-			# If this build dependency is not a flavor, automatically
-			# add the label's devel flavor
-			if False:
-				if not buildReq.isFlavor:
-					subordinateDevelFlavor = self.makeFlavorGroup(buildReq, "devel")
-					flavor.addBuildRequires(subordinateDevelFlavor)
-
-		for runtimeReq in baseGroup.runtimeRequires:
-			flavor.addRequires(runtimeReq)
+		flavor.label.copyRequirementsFrom(baseGroup.label)
 
 		# Flavors are built from the same source project as their base group
 		if flavor.type == Classification.TYPE_BINARY:
 			flavor.label.sourceProject = baseGroup.label.sourceProject
-			flavor.addRequires(baseGroup)
-
-		names = flavor._runtimeRequires.keys()
-		# print(f"Flavor {flavor.label} requires {' '.join(names)}")
+			flavor.label.addRuntimeDependency(baseGroup.label)
 
 		baseGroup.addBuildFlavor(flavorName, flavor)
 		return flavor

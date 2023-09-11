@@ -1132,6 +1132,17 @@ class PackageFilter:
 	def makeGroup(self, name, type = None):
 		return self.makeGroupInternal(name, type)
 
+	def resolveGroupReference(self, name, type = None):
+		if '+' not in name:
+			return self.makeGroupInternal(name, type)
+
+		words = name.split('+')
+		group = self.makeGroupInternal(words.pop(0), type)
+
+		for flavorName in words:
+			group = self.makeFlavorGroup(group, flavorName)
+		return group
+
 	def makeSourceGroup(self, name):
 		return self.makeGroupInternal(name, Classification.TYPE_SOURCE)
 
@@ -1247,12 +1258,12 @@ class PackageFilter:
 		if group.label:
 			nameList = gd.get('requires') or []
 			for name in nameList:
-				otherGroup = self.makeGroupInternal(name, Classification.TYPE_BINARY)
+				otherGroup = self.resolveGroupReference(name, Classification.TYPE_BINARY)
 				group.addRequires(otherGroup)
 
 			nameList = gd.get('buildrequires') or []
 			for name in nameList:
-				otherGroup = self.makeGroupInternal(name, Classification.TYPE_BINARY)
+				otherGroup = self.resolveGroupReference(name, Classification.TYPE_BINARY)
 				group.addBuildRequires(otherGroup)
 
 		# The yaml file may specify per-group priorities for filters, but there is just

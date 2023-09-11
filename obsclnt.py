@@ -777,8 +777,7 @@ class OBSProject:
 
 			sourcePackage = pkg.sourcePackage
 			if sourcePackage.backingStoreId is None:
-				print(f"Source package {sourcePackage.shortname} is not in DB")
-				fail
+				raise Exception(f"Source package {sourcePackage.shortname} is not in DB")
 
 			for rpm in pkg.binaries:
 				rpm.obsBuildId = pkg.backingStoreId

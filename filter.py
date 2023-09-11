@@ -1117,6 +1117,15 @@ class PackageFilter:
 			for req in dependencies:
 				other = self._groups.get(req.name)
 				assert(other)
+
+				name = req.name
+				while True:
+					other = self._groups.get(name)
+					assert(other)
+					if not other.label.flavorBase:
+						break
+					name = other.label.flavorBase.name
+
 				if not other.defined:
 					raise Exception(f"filter configuration issue: group {group.label} requires {other.label}, which is not defined anywhere")
 

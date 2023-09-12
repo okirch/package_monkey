@@ -588,7 +588,7 @@ class ResolverWorker:
 
 	class Problems:
 		def __init__(self):
-			self._unexpected = {}
+			self._unexpectedRuntime = {}
 			self._unexpectedBuild = {}
 			self._unlabelledBuild = {}
 			self._unresolved = {}
@@ -597,16 +597,16 @@ class ResolverWorker:
 
 		@property
 		def categories(self):
-			return (self._unexpected, self._unlabelledBuild, self._unexpectedBuild, self._unresolved, self._nosource, self._projectconf)
+			return (self._unexpectedRuntime, self._unlabelledBuild, self._unexpectedBuild, self._unresolved, self._nosource, self._projectconf)
 
 		def addUnexpectedDependency(self, fromLabel, fromReason, toPackage):
 			toLabel = toPackage.label.name
 
 			key = f"{fromLabel}/{toLabel}"
-			ud = self._unexpected.get(key)
+			ud = self._unexpectedRuntime.get(key)
 			if ud is None:
 				ud = ResolverWorker.UnexpectedDependency(f"{fromLabel} -> {toLabel}")
-				self._unexpected[key] = ud
+				self._unexpectedRuntime[key] = ud
 			ud.add((fromReason, toPackage))
 
 		def addUnexpectedBuildDependency(self, fromPackage, buildName, toPackage):

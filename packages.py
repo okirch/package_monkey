@@ -594,13 +594,26 @@ class ResolverWorker:
 			self._unresolved = {}
 			self._nosource = {}
 			self._projectconf = {}
+			self._ignoreLabels = set()
 
 		@property
 		def categories(self):
 			return (self._unexpectedRuntime, self._unlabelledBuild, self._unexpectedBuild, self._unresolved, self._nosource, self._projectconf)
 
+		def ignore(self, label):
+			self._ignoreLabels.add(label)
+
+		def isIgnored(self, fromLabel, toLabel):
+			if fromLabel in self._ignoreLabels:
+				return True
+			if fromLabel.flavorBase and fromLabel.flavorBase in self._ignoreLabels:
+				return True
+			return None
+
 		def addUnexpectedDependency(self, fromLabel, fromReason, toPackage):
 			toLabel = toPackage.label.name
+			if self.isIgnored(fromLabel, toLabel):
+				return
 
 			key = f"{fromLabel}/{toLabel}"
 			ud = self._unexpectedRuntime.get(key)
@@ -610,8 +623,11 @@ class ResolverWorker:
 			ud.add((fromReason, toPackage))
 
 		def addUnexpectedBuildDependency(self, fromPackage, buildName, toPackage):
-			fromLabel = fromPackage.label.name
-			toLabel = toPackage.label.name
+			fromLabel = fromPackage.label
+			toLabel = toPackage.label
+
+			if self.isIgnored(fromLabel, toLabel):
+				return
 
 			key = f"{fromLabel}/{toLabel}"
 			ud = self._unexpectedBuild.get(key)
@@ -621,6 +637,9 @@ class ResolverWorker:
 			ud.add((buildName, fromPackage.labelReason, toPackage))
 
 		def addUnlabelledBuildDependency(self, fromPackage, buildName, toPackage):
+			if self.isIgnored(fromPackage.label, None):
+				return
+
 			key = str(fromPackage.label)
 			ud = self._unlabelledBuild.get(key)
 			if ud is None:
@@ -629,7 +648,8 @@ class ResolverWorker:
 			ud.add(fromPackage.labelReason, buildName, toPackage)
 
 		def addUnableToResolve(self, pkg, dep):
-			# print(f"{pkg.fullname()}: cannot resolve dependency {dep}")
+			if self.isIgnored(pkg.label, None):
+				return
 
 			key = str(dep)
 			ur = self._unresolved.get(key)
@@ -639,6 +659,9 @@ class ResolverWorker:
 			ur.add(pkg)
 
 		def addMissingSource(self, pkg, reason):
+			if self.isIgnored(pkg.label, None):
+				return
+
 			key = f"{pkg.fullname()}"
 			problem = self._nosource.get(key)
 			if problem is None:

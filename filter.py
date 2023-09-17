@@ -9,9 +9,11 @@ class Classification:
 	TYPE_SOURCE = 'source'
 	TYPE_AUTOFLAVOR = 'autoflavor'
 	TYPE_BUILDCONFIG = 'buildconf'
+	TYPE_BUILDCONFIG_FLAVOR = 'build-flavor'
 
 	DISPOSITION_SEPARATE = 'separate'
 	DISPOSITION_MERGE = 'merge'
+	DISPOSITION_IGNORE = 'ignore'
 
 	class Label:
 		GENERATION = GenerationCounter()
@@ -24,7 +26,9 @@ class Classification:
 			self.id = id
 			self.runtimeRequires = set()
 			self.buildRequires = set()
+			self.runtimeAugmentations = set()
 			self.disposition = None
+			self.defined = False
 
 			self.flavorBase = None
 			self._flavors = {}
@@ -59,17 +63,22 @@ class Classification:
 			klass.GENERATION.tick()
 
 		def addRuntimeDependency(self, other):
-			assert(other is not None)
+			assert(isinstance(other, Classification.Label))
 			self.runtimeRequires.add(other)
 			self.hierarchyNeedsUpdate()
 
+		def addRuntimeAugmentation(self, other):
+			self.addRuntimeDependency(other)
+			self.runtimeAugmentations.add(other)
+
 		def addBuildDependency(self, other):
-			assert(other is not None)
+			assert(isinstance(other, Classification.Label))
 			self.buildRequires.add(other)
 			self.hierarchyNeedsUpdate()
 
 		def copyRequirementsFrom(self, other):
 			self.runtimeRequires.update(other.runtimeRequires)
+			self.runtimeAugmentations.update(other.runtimeAugmentations)
 			self.buildRequires.update(other.buildRequires)
 			self.hierarchyNeedsUpdate()
 
@@ -92,6 +101,9 @@ class Classification:
 			if self.buildConfig and not otherLabel.buildConfig:
 				otherLabel.setBuildConfig(self.buildConfig)
 
+			if self.sourceProject and otherLabel.sourceProject is not self.sourceProject:
+				raise Exception(f"build flavor {otherLabel} uses source project {otherLabel.sourceProject}, but {self} uses {self.sourceProject}")
+
 			# This creates a circular reference that kills garbage collection, but
 			# we'll live with this for now
 			otherLabel.flavorBase = self
@@ -103,6 +115,8 @@ class Classification:
 				return
 			if self.sourceProject is not None:
 				raise Exception(f"Duplicate source group for {self}: {self.sourceProject} vs {sourceLabel}")
+
+			assert(isinstance(sourceLabel, Classification.Label))
 			self.sourceProject = sourceLabel
 
 			self.hierarchyNeedsUpdate()
@@ -116,8 +130,17 @@ class Classification:
 			if self.sourceProject is None:
 				self.sourceProject = configLabel.sourceProject
 
+			self.copyRequirementsFrom(configLabel)
 			self.hierarchyNeedsUpdate()
 
+		def getBuildConfigFlavor(self, name):
+			sourceProject = self.sourceProject
+			if sourceProject is None:
+				return None
+
+			return sourceProject.getBuildFlavor(name)
+
+		# FIXME: rename to runtimeClosure
 		@property
 		def closure(self):
 			self.maybeInvalidateClosures()
@@ -225,6 +248,65 @@ class Classification:
 				return True
 			return False
 
+		def mayAutoSelect(self, flavor):
+			if flavor is self:
+				return False
+			if not flavor.autoSelect:
+				return False
+			if flavor.flavorBase is None:
+				return False
+
+			# this is somewhat tricky but important.
+			# consider this:
+			#	@Python+gnome, which requires @Gnome. it contains python
+			#		modules that would be useful in a Gnome environment
+			#	@Gnome+python, which requires @Python, and contains a
+			#		(hypothetical) python utility named gnome-foo
+			#
+			# If we're not careful, we end up with @Python+gnome auto-selecting
+			# @Gnome+python. But what we really want is the other way around
+			if not self.runtimeAugmentations.isdisjoint(flavor.closure):
+				return False
+
+			return True
+
+		def autoSelectCompatibleFlavors(self):
+			if not self.autoSelect:
+				return
+
+			availableFlavors = set()
+			for requiredLabel in self.closure:
+				for flavor in requiredLabel.flavors:
+					if self.mayAutoSelect(flavor):
+						availableFlavors.add(flavor)
+
+			candidateFlavors = availableFlavors.difference(self.closure)
+			if self.name in ("@Glib2+dbus", "@DBus+x11"):
+				print(self, "try to select from", [str(_) for _ in candidateFlavors])
+
+			# Two things to note: we avoid adding new flavors immediately, in order to
+			# avoid some costly recomputations of label closures.
+			# Second, we iterate because adding one flavor in round #1 may actually
+			# provide the needed support to enable a second flavor in round #2.
+			# A typical example would be @GnomeLibraries requiring @DBus and @GLib.
+			# The first round would enable @GLib+dbus, and the second round would enable
+			# @DBus+x11
+			while candidateFlavors:
+				# print(self, " try to select from ", [str(_) for _ in candidateFlavors])
+				eligibleFlavors = set()
+				for flavor in candidateFlavors:
+					if flavor.allFlavorRequirementsSatisfied(self):
+						# print(f"{self} auto-selected {flavor}")
+						eligibleFlavors.add(flavor)
+
+				if not eligibleFlavors:
+					break
+
+				for flavor in eligibleFlavors:
+					self.addRuntimeDependency(flavor) 
+
+				candidateFlavors.difference_update(eligibleFlavors)
+
 		def allFlavorRequirementsSatisfied(self, referringLabel):
 			if referringLabel in self.closure:
 				return False
@@ -237,14 +319,13 @@ class Classification:
 			if referringLabel.flavorBase == self:
 				return False
 
-			delta = self.closure.difference(self.flavorBase.closure)
-			if not delta.issubset(referringLabel.closure):
-				return False
+			missing = self.closure.difference(self.flavorBase.closure)
+			missing.difference_update(referringLabel.closure)
+			try:
+				missing.remove(self)
+			except: pass
 
-			if False:
-				names = sorted([str(label) for label in delta])
-				print(f"flavor requirements of {self} are satisfied by {referringLabel}: {', '.join(names)}")
-			return True
+			return not(missing)
 
 		def __str__(self):
 			return self.name
@@ -264,7 +345,7 @@ class Classification:
 				self._labels[name] = label
 				self._nextLabelId += 1
 			elif label.type != type:
-				raise Exception(f"Conflicting types for label {name}!")
+				raise Exception(f"Conflicting types for label {name}. Already have a label of type {label.type}, now asked to create {type}")
 			return label
 
 		@property
@@ -293,6 +374,12 @@ class Classification:
 					inheritSourceProject(label)
 				if label.buildConfig is None:
 					inheritBuildConfig(label)
+
+				if label.type == Classification.TYPE_BINARY:
+					if label.buildConfig is None and label.disposition != Classification.DISPOSITION_IGNORE:
+						raise Exception(f"Label {label}: no buildconfig specified")
+					elif not label.buildConfig.defined:
+						raise Exception(f"Label {label} references buildconfig {label.buildConfig}, but it's not defined anywhere")
 
 			for label in self._labels.values():
 				label.closure
@@ -875,13 +962,13 @@ class PackageGroup:
 	def __init__(self, name):
 		self.name = name
 
-		self.defined = False
 		self.matchCount = 0
 		self.expand = True
 		self.label = None
 		self.description = None
 		self._packages = []
 		self._buildFlavors = {}
+		self._closure = set()
 
 	def track(self, pkg):
 		self._packages.append(pkg)
@@ -892,7 +979,9 @@ class PackageGroup:
 		elif pkg.label is self.label:
 			pass
 		else:
-			print(f"Package {pkg.fullname()} cannot change label from {pkg.label} to {self.label}")
+			raise Exception(f"Package {pkg.fullname()} cannot change label from {pkg.label} to {self.label}")
+
+		self._closure.add(pkg)
 
 	@property
 	def type(self):
@@ -901,6 +990,10 @@ class PackageGroup:
 	@property
 	def packages(self):
 		return set(self._packages)
+
+	@property
+	def closure(self):
+		return set(self._closure)
 
 	@property
 	def packageNames(self):
@@ -922,10 +1015,23 @@ class PackageGroup:
 	def isFlavor(self):
 		return self.label.flavorBase is not None
 
+	@property
+	def defined(self):
+		return self.label and self.label.defined
+
+	@defined.setter
+	def defined(self, value):
+		self.label.defined = value
+
 	def addRequires(self, otherGroup):
 		if otherGroup.label is None:
 			raise Exception(f"Group {otherGroup.name} has a NULL label")
 		self.label.addRuntimeDependency(otherGroup.label)
+
+	def addAugmentation(self, otherGroup):
+		if otherGroup.label is None:
+			raise Exception(f"Group {otherGroup.name} has a NULL label")
+		self.label.addRuntimeAugmentation(otherGroup.label)
 
 	def addBuildRequires(self, otherGroup):
 		if otherGroup.label is None:
@@ -945,6 +1051,10 @@ class PackageGroup:
 
 	def getBuildFlavor(self, name):
 		return self._buildFlavors.get(name)
+
+	# Having classified a set of packages, we add it to the group's closure
+	def update(self, packages):
+		self._closure.update(packages)
 
 class GlobMatch:
 	PRIORITY_DEFAULT = 5
@@ -1138,12 +1248,6 @@ class PackageFilter:
 			self.reason = reason
 
 		def labelPackage(self, pkg):
-			# HACK
-			# Do not group all devel packages, so that the
-			# DevelClosure can pick them up later.
-			if self.label.type == Classification.TYPE_AUTOFLAVOR:
-				pass
-
 			pkg.label = self.label
 			pkg.labelReason = Classification.ReasonFilter(pkg, self.reason)
 
@@ -1160,18 +1264,23 @@ class PackageFilter:
 		with open(filename) as f:
 			data = yaml.full_load(f)
 
-		for gd in data.get('build_groups') or []:
-			self.parseGroup(Classification.TYPE_SOURCE, gd)
+		# Parse autoflavors *before* everything else so that we can populate
+		# newly created flavors from default settings.
+		for gd in data.get('autoflavors') or []:
+			group = self.parseGroup(Classification.TYPE_AUTOFLAVOR, gd)
+			self._autoflavors.append(group)
 
 		for gd in data.get('build_configs') or []:
 			self.parseGroup(Classification.TYPE_BUILDCONFIG, gd)
 
+		for gd in data.get('buildconfig_flavors') or []:
+			self.parseGroup(Classification.TYPE_BUILDCONFIG_FLAVOR, gd)
+
+		for gd in data.get('build_groups') or []:
+			self.parseGroup(Classification.TYPE_SOURCE, gd)
+
 		for gd in data['groups']:
 			self.parseGroup(Classification.TYPE_BINARY, gd)
-
-		for gd in data.get('autoflavors') or []:
-			group = self.parseGroup(Classification.TYPE_AUTOFLAVOR, gd)
-			self._autoflavors.append(group)
 
 		for pref in data.get('preferences') or []:
 			preferred = pref.get('prefer')
@@ -1188,16 +1297,14 @@ class PackageFilter:
 	def finalize(self):
 		def validateDependencies(dependencies):
 			for req in dependencies:
-				other = self._groups.get(req.name)
-				assert(other)
-
-				name = req.name
+				chase = req
 				while True:
-					other = self._groups.get(name)
-					assert(other)
+					other = self.getGroup(chase.name, chase.type)
+					if other is None:
+						raise Exception(f"could not find {chase.type} group {chase.name}")
 					if not other.label.flavorBase:
 						break
-					name = other.label.flavorBase.name
+					chase = other.label.flavorBase
 
 				if not other.defined:
 					raise Exception(f"filter configuration issue: group {group.label} requires {other.label}, which is not defined anywhere")
@@ -1212,6 +1319,7 @@ class PackageFilter:
 		return self.filterSet.apply(pkg, product)
 
 	def makeGroup(self, name, type = None):
+		assert(type)
 		return self.makeGroupInternal(name, type)
 
 	def resolveGroupReference(self, name, type = None):
@@ -1239,14 +1347,31 @@ class PackageFilter:
 	def makeSourceGroup(self, name):
 		return self.makeGroupInternal(name, Classification.TYPE_SOURCE)
 
+	def makeBinaryGroup(self, name):
+		return self.makeGroupInternal(name, Classification.TYPE_BINARY)
+
 	def instantiateAutoFlavor(self, baseGroup, autoFlavor):
 		# groupName = f"{baseGroup.name}+{autoFlavor.name}"
 		flavor = baseGroup.getBuildFlavor(autoFlavor.name)
 		if flavor is None:
 			flavor = self.makeFlavorGroup(baseGroup, autoFlavor.name)
-			flavor.autoSelect = True
 
 		flavor.label.copyRequirementsFrom(autoFlavor.label)
+		return flavor
+
+	def instantiateBuildConfigFlavor(self, sourceProject, name):
+		if sourceProject is None:
+			return None
+
+		flavor = sourceProject.getBuildFlavor(name)
+		if flavor is None:
+			tmpl = self.getGroup(name, Classification.TYPE_BUILDCONFIG_FLAVOR)
+			if tmpl is not None:
+				sourceGroup = self.makeGroupInternal(sourceProject.name, Classification.TYPE_SOURCE);
+
+				flavor = self.instantiateAutoFlavor(sourceGroup, tmpl)
+				flavor.label.copyRequirementsFrom(tmpl.label)
+
 		return flavor
 
 	def makeFlavorGroup(self, baseGroup, flavorName, type = None):
@@ -1255,30 +1380,102 @@ class PackageFilter:
 			return flavor
 
 		if type is None:
-			type = baseGroup.type
+			if baseGroup.type == Classification.TYPE_SOURCE:
+				type = Classification.TYPE_BUILDCONFIG
+			else:
+				type = baseGroup.type
+		assert(type in (Classification.TYPE_BUILDCONFIG, Classification.TYPE_BINARY))
 
-		if type == Classification.TYPE_BUILDCONFIG:
-			groupName = f"{baseGroup.name}/{flavorName}"
+		if type == Classification.TYPE_BINARY:
+			flavor = self.createBinaryFlavor(baseGroup, flavorName)
+		elif type == Classification.TYPE_BUILDCONFIG:
+			flavor = self.createBuildConfigFlavor(baseGroup, flavorName)
 		else:
-			groupName = f"{baseGroup.name}+{flavorName}"
-
-		flavor = self.makeGroupInternal(groupName, type)
-		flavor.label.copyRequirementsFrom(baseGroup.label)
-
-		# Flavors are built from the same source project as their base group
-		if flavor.type == Classification.TYPE_BINARY:
-			flavor.label.sourceProject = baseGroup.label.sourceProject
-			flavor.label.buildConfig = baseGroup.label.buildConfig
-			flavor.label.addRuntimeDependency(baseGroup.label)
-		elif flavor.type == Classification.TYPE_BUILDCONFIG:
-			flavor.label.sourceProject = baseGroup
+			raise Exception(f"Don't know how to create a {type} flavor for {baseGroup.label}+{flavorName}")
 
 		baseGroup.addBuildFlavor(flavorName, flavor)
 		return flavor
 
+	def createBinaryFlavor(self, baseGroup, flavorName):
+		groupName = f"{baseGroup.name}+{flavorName}"
+
+		flavor = self.makeGroupInternal(groupName, Classification.TYPE_BINARY)
+		flavor.label.copyRequirementsFrom(baseGroup.label)
+
+		# Flavors are built from the same source project as their base group
+		flavor.label.sourceProject = baseGroup.label.sourceProject
+
+		# When creating @Foo+blah, and @Foo has a sourceProject of FooSource, check
+		# whether there's a buildconfig for FooSource/blah
+		buildLabel = self.getBuildConfigFlavor(baseGroup.label.sourceProject, flavorName)
+		if buildLabel is None:
+			buildLabel = baseGroup.label.buildConfig
+
+		if buildLabel:
+			flavor.label.setBuildConfig(buildLabel)
+
+		# @Foo+blah always requires @Foo for runtime
+		flavor.label.addRuntimeDependency(baseGroup.label)
+
+		for flavorDef in self._autoflavors:
+			if flavorDef.name == flavorName:
+				# If there is a default flavor definition, copy its autoselect
+				# setting.
+				flavor.label.autoSelect = flavorDef.label.autoSelect
+
+		return flavor
+
+	def createBuildConfigFlavor(self, baseGroup, flavorName):
+		groupName = f"{baseGroup.name}/{flavorName}"
+
+		flavor = self.makeGroupInternal(groupName, Classification.TYPE_BUILDCONFIG)
+		flavor.label.copyRequirementsFrom(baseGroup.label)
+
+		# the source project for FooSource/blah is FooSource
+		flavor.label.sourceProject = baseGroup.label
+
+		# For the time being, make all buildconfigs auto-selectable.
+		# Probably a useless gesture.
+		flavor.autoSelect = True
+
+		return flavor
+
+	def getBuildConfigFlavor(self, sourceProject, flavorName):
+		if sourceProject is None:
+			return None
+		assert(isinstance(sourceProject, Classification.Label))
+
+		buildLabel = sourceProject.getBuildFlavor(flavorName)
+		if buildLabel is None:
+			buildGroup = self.instantiateBuildConfigFlavor(sourceProject, flavorName)
+			if buildGroup is not None:
+				buildLabel = buildGroup.label
+
+		if buildLabel is not None:
+			if False:
+				print(f": {sourceProject} has flavor {buildLabel} type {buildLabel.type}")
+				for req in buildLabel.runtimeRequires:
+					print(f"  {buildLabel} -> {req}")
+
+			# pretend that it's defined
+			buildLabel.defined = True
+
+		return buildLabel
+
+	def getGroup(self, name, type = None):
+		try:
+			group = self._groups[type, name]
+		except:
+			return None
+
+		if type and group.type != type:
+			raise Exception(f"Group {name} does not match expected type (has {group.type}; expected {type})")
+
+		return group
+
 	def makeGroupInternal(self, name, type):
 		try:
-			group = self._groups[name]
+			group = self._groups[type, name]
 		except:
 			group = None
 
@@ -1287,7 +1484,7 @@ class PackageFilter:
 				raise Exception(f"Cannot create group {name} with no type")
 
 			group = PackageGroup(name)
-			self._groups[name] = group
+			self._groups[type, name] = group
 
 		if type:
 			if group.label is None:
@@ -1300,6 +1497,18 @@ class PackageFilter:
 	@property
 	def groups(self):
 		return sorted(self._groups.values(), key = lambda grp: grp.matchCount)
+
+	def updateGroup(self, label, packages):
+		group = self.getGroup(label.name, label.type)
+		assert(group.label is label)
+
+		group.update(packages)
+
+	def getGroupPackages(self, label):
+		group = self.getGroup(label.name, label.type)
+		assert(group.label is label)
+
+		return group.closure
 
 	@property
 	def packagePreferences(self):
@@ -1325,6 +1534,7 @@ class PackageFilter:
 		'priority',
 		'requires',
 		'buildrequires',
+		'augments',
 		'products',
 		'packages',
 		'sources',
@@ -1338,6 +1548,12 @@ class PackageFilter:
 	))
 
 	def processGroupDefinition(self, group, gd):
+		def getBoolean(gd, tag):
+			value = gd.get(tag)
+			if value is not None and type(value) is not bool:
+				raise Exception(f"{group.label}: bad value {tag}={value} (expected boolean value not {type(value)})")
+			return value
+
 		if group.defined:
 			raise Exception(f"Duplicate definition of group \"{group.name}\" in filter yaml")
 		group.defined = True
@@ -1364,13 +1580,13 @@ class PackageFilter:
 
 		value = gd.get('disposition')
 		if value is not None:
-			if value not in ('separate', 'merge') or group.type != Classification.TYPE_AUTOFLAVOR:
+			if value not in ('separate', 'merge', 'ignore') or group.type != Classification.TYPE_AUTOFLAVOR:
 				raise Exception(f"Invalid disposition={value} in definition of {group.type} group {group.name}")
 			group.label.disposition = value
 
-		value = gd.get('autoselect')
-		if type(value) == bool:
-			group.autoSelect = value
+		value = getBoolean(gd, 'autoselect')
+		if value is not None:
+			group.label.autoSelect = value
 
 		priority = gd.get('priority')
 		if priority is not None:
@@ -1381,6 +1597,24 @@ class PackageFilter:
 			for name in nameList:
 				otherGroup = self.resolveGroupReference(name, Classification.TYPE_BINARY)
 				group.addRequires(otherGroup)
+
+			# 'augments' are like runtime requirements, except they also flags the
+			# group/flavor as an augmentation. Augmentations will never auto-select any
+			# flavors that require any of the labels that are being augmented.
+			#
+			# Example:
+			#  @Python+gnome contains a couple of python modules that are intended for use
+			#	with gnome based frameworks. It requires @Gnome
+			#  @Gnome+python contains python utilities that need these modules, and requires @Python
+			#
+			# If we work purely with requirements, we will end up with @Python+gnome
+			# auto-selecting @Gnome+python.
+			# By having @Python+gnome augment rather than require @Gnome, we end up with
+			# @Gnome+python auto-selecting @Python+gnome rather than the other way around
+			nameList = gd.get('augments') or []
+			for name in nameList:
+				otherGroup = self.resolveGroupReference(name, Classification.TYPE_BINARY)
+				group.addAugmentation(otherGroup)
 
 			nameList = gd.get('buildrequires') or []
 			for name in nameList:

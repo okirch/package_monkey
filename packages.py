@@ -454,49 +454,36 @@ class ResolverContext:
 
 class ResolverWorker:
 	class Problem(object):
-		def __init__(self, desc):
-			self.desc = desc
+		def __init__(self):
+			pass
 
-		def showProof(self, reason, indent = "  "):
+		def showProof(self, reason, writer):
 			for why in reason.chain():
-				print(f"{indent}{why}")
-				indent += "  "
+				writer = writer.indentingWriter()
+				writer.print(why)
 
 	class UnexpectedDependency(Problem):
-		def __init__(self, *args):
-			super().__init__(*args)
+		def __init__(self, fromLabel, toLabel):
+			super().__init__()
+			self.fromLabel = fromLabel
+			self.toLabel = toLabel
+
 			self.conflicts = []
+
+		@property
+		def desc(self):
+			return f"{self.fromLabel} -> {self.toLabel}"
 
 		def add(self, conflict):
 			self.conflicts.append(conflict)
 
-		def show(self):
-			print(f"Unexpected dependency {self.desc}:")
-			for (wantedReason, badPackage) in self.conflicts:
-				origin = wantedReason.originPackage
-				print(f" * {origin} -> {badPackage}")
-				indent = "   "
-				self.showProof(wantedReason, indent = "      ")
-				print(f"      Package {badPackage} was labeled as {badPackage.label} due to:")
-				self.showProof(badPackage.labelReason, indent = "         ")
+	class UnexpectedRuntimeDependency(UnexpectedDependency):
+		def show(self, report):
+			report.addUnexpectedRuntimeDependency(self)
 
-	class UnexpectedBuildDependency(Problem):
-		def __init__(self, *args):
-			super().__init__(*args)
-			self.conflicts = []
-
-		def add(self, conflict):
-			self.conflicts.append(conflict)
-
-		def show(self):
-			print(f"Unexpected build dependency {self.desc}:")
-			for (buildName, wantedReason, badPackage) in self.conflicts:
-				origin = wantedReason.originPackage
-				print(f" * {origin} -> {badPackage}")
-				self.showProof(wantedReason, indent = "      ")
-				print(f"   building {buildName} required {badPackage}")
-				print(f"      Package {badPackage} was labeled as {badPackage.label} due to:")
-				self.showProof(badPackage.labelReason, indent = "         ")
+	class UnexpectedBuildDependency(UnexpectedDependency):
+		def show(self, report):
+			report.addUnexpectedBuildDependency(self)
 
 	class UnlabelledBuildDependency(Problem):
 		# we record only one reason why a package build is part of a component
@@ -506,9 +493,14 @@ class ResolverWorker:
 				self.reason = reason
 				self.packages = []
 
-		def __init__(self, *args):
-			super().__init__(*args)
+		def __init__(self, fromLabel):
+			super().__init__()
+			self.fromLabel = fromLabel
 			self.builds = {}
+
+		@property
+		def desc(self):
+			return str(self.fromLabel)
 
 		def add(self, wantedReason, buildName, pkg):
 			assert(type(buildName) is str)
@@ -520,71 +512,53 @@ class ResolverWorker:
 
 			build.packages.append(pkg)
 
-		def show(self):
-			print(f"Unlabelled build dependencies of {self.desc}:")
-			for build in sorted(self.builds.values(), key = lambda b: b.name):
-				origin = build.reason.originPackage
-				print(f" * {origin} -> {build.name}")
-				self.showProof(build.reason, indent = "      ")
-				print(f"   building {build.name} required the following package(s) which have not been labelled yet")
-				for badPackage in build.packages:
-					print(f"      {badPackage}")
+		def show(self, report):
+			report.addUnlabelledBuildDependency(self)
 
 	class UnresolvedDependency(Problem):
-		def __init__(self, *args):
-			super().__init__(*args)
+		def __init__(self, dependency):
+			super().__init__()
+
+			self.dependency = dependency
 			self.requiredby = set()
+
+		@property
+		def desc(self):
+			return str(self.dependency)
 
 		def add(self, pkg):
 			self.requiredby.add(pkg)
 
-		def show(self):
-			print(f"Unresolved dependency {self.desc}, required by:")
-			for pkg in self.requiredby:
-				print(f" * {pkg}")
+		def show(report):
+			report.addUnresolvedDependency(self)
 
 	class MissingSource(Problem):
-		def __init__(self, *args):
-			super().__init__(*args)
+		def __init__(self, package):
+			super().__init__()
+			self.package = package
 			self.requiredby = set()
+
+		@property
+		def desc(self):
+			return str(self.package)
 
 		def add(self, pkg, reason):
 			self.requiredby.add((pkg, reason))
 
-		def show(self):
-			print(f"Missing source package {self.desc}, required by:")
-			for (pkg, reason) in self.requiredby:
-				print(f" * {pkg}")
-				self.showProof(reason, indent = "      ")
+		def show(self, report):
+			report.addMissingSource(self)
 
 	class SourceProjectConflict(Problem):
-		def __init__(self, label, build, *args):
-			super().__init__(label, *args)
+		def __init__(self, build, *args):
+			super().__init__()
 			self.build = build
 
-		def show(self):
-			map = {}
-			for rpm in self.build.binaries:
-				if not rpm.isSourcePackage:
-					label = rpm.label
-					if label is None:
-						key = "unclassified"
-					elif not label.sourceProject:
-						key = f"{label} (no source project)"
-					else:
-						key = label.sourceProject.name
+		@property
+		def desc(self):
+			return self.build.name
 
-					dest = map.get(key)
-					if dest is None:
-						map[key] = []
-						dest = map[key]
-					dest.append(rpm)
-
-			print(f"Conflicting source projects for OBS package {self.desc}")
-			for key, packages in sorted(map.items()):
-				names = (rpm.shortname for rpm in packages)
-				print(f" * {key}: {', '.join(names)}")
-				# FIXME: if we want to be verbose, we could display the label reason for each rpm
+		def show(self, report):
+			report.addSourceProjectConflict(self)
 
 	class Problems:
 		def __init__(self):
@@ -618,7 +592,7 @@ class ResolverWorker:
 			key = f"{fromLabel}/{toLabel}"
 			ud = self._unexpectedRuntime.get(key)
 			if ud is None:
-				ud = ResolverWorker.UnexpectedDependency(f"{fromLabel} -> {toLabel}")
+				ud = ResolverWorker.UnexpectedRuntimeDependency(fromLabel, toLabel)
 				self._unexpectedRuntime[key] = ud
 			ud.add((fromReason, toPackage))
 
@@ -632,7 +606,7 @@ class ResolverWorker:
 			key = f"{fromLabel}/{toLabel}"
 			ud = self._unexpectedBuild.get(key)
 			if ud is None:
-				ud = ResolverWorker.UnexpectedBuildDependency(f"{fromLabel} -> {toLabel}")
+				ud = ResolverWorker.UnexpectedBuildDependency(fromLabel, toLabel)
 				self._unexpectedBuild[key] = ud
 			ud.add((buildName, fromPackage.labelReason, toPackage))
 
@@ -643,7 +617,7 @@ class ResolverWorker:
 			key = str(fromPackage.label)
 			ud = self._unlabelledBuild.get(key)
 			if ud is None:
-				ud = ResolverWorker.UnlabelledBuildDependency(key)
+				ud = ResolverWorker.UnlabelledBuildDependency(fromPackage.label)
 				self._unlabelledBuild[key] = ud
 			ud.add(fromPackage.labelReason, buildName, toPackage)
 
@@ -654,7 +628,7 @@ class ResolverWorker:
 			key = str(dep)
 			ur = self._unresolved.get(key)
 			if ur is None:
-				ur = ResolverWorker.UnresolvedDependency(key)
+				ur = ResolverWorker.UnresolvedDependency(dep)
 				self._unresolved[key] = ur
 			ur.add(pkg)
 
@@ -665,7 +639,7 @@ class ResolverWorker:
 			key = f"{pkg.fullname()}"
 			problem = self._nosource.get(key)
 			if problem is None:
-				problem = ResolverWorker.MissingSource(key)
+				problem = ResolverWorker.MissingSource(pkg)
 				self._nosource[key] = problem
 			problem.add(pkg, reason)
 
@@ -673,17 +647,17 @@ class ResolverWorker:
 			key = build.name
 			problem = self._projectconf.get(key)
 			if problem is None:
-				problem = ResolverWorker.SourceProjectConflict(key, build)
+				problem = ResolverWorker.SourceProjectConflict(build)
 				self._projectconf[key] = problem
 
 		def __bool__(self):
 			return any(self.categories)
 
-		def show(self):
+		def show(self, writer):
 			for category in self.categories:
-				print()
+				categoryReport = writer.addProblemCategory(None)
 				for key, problem in sorted(category.items()):
-					problem.show()
+					problem.show(categoryReport)
 
 	def __init__(self, resolver, processfn = None):
 		self._resolver = resolver

@@ -84,22 +84,29 @@ class CycleException(Exception):
 		super().__init__(msg)
 		self.cycle = cycle
 
-class CycleDetector:
+class CycleDetector(object):
 	class Ticket:
 		def __init__(self, detector, key):
 			self.detector = detector
 			self.key = key
+			self.valid = False
+
+#		def __bool__(self):
+#			return self.valid
 
 		def __enter__(self):
-			self.detector.acquire(self.key)
+			self.valid = self.detector.acquire(self.key)
+			return self
 
 		def __exit__(self, *args):
-			self.detector.release(self.key)
+			if self.valid:
+				self.detector.release(self.key)
+				self.valid = False
 
 		def drop(self):
-			if self.detector:
-				self.detector(key)
-				self.detector = None
+			if self.valid:
+				self.detector.release(self.key)
+				self.valid = False
 
 	def __init__(self, name):
 		self.name = name
@@ -118,10 +125,30 @@ class CycleDetector:
 			raise CycleException(f"Detected {self.name} loop in {' -> '.join(names)}", cycle)
 
 		self.chain.append(key)
+		return True
 
 	def release(self, key):
 		if not self.chain or self.chain[-1] != key:
 			raise Exception(f"Out-of-sequence release of key {key} in Cycle detector")
 
 		self.chain.pop()
+
+class LoggingCycleDetector(CycleDetector):
+	def __init__(self, *args):
+		super().__init__(*args)
+		self.cycles = []
+
+	def acquire(self, key):
+		# for very deep trees, we would need something more efficient than a linear search.
+		# O(n^2) is good enough for the shallow trees we're dealing with here.
+		if key in self.chain:
+			i = self.chain.index(key)
+			self.cycles.append(self.chain[i:] + [key])
+			return False
+
+		if len(self.chain) > 1000:
+			raise Exception("Looks like a cycle but you ignored all warnings")
+
+		self.chain.append(key)
+		return True
 

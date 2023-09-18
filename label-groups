@@ -4,7 +4,7 @@
 from repos import RepoDict, UrlCacheStrategy
 from products import ProductCatalog, CacheLocation
 from packages import Product, Resolver, ResolverWorker, ResolverPreferences, PackageSelector, PackageCollection
-from filter import PackageFilter, Classification
+from filter import PackageFilter, Classification, PotentialClassification
 from options import Application
 from writers import StandardWriter
 
@@ -21,10 +21,13 @@ unclassified = packageFilter.makeBinaryGroup("Unclassified")
 
 labelOrder = classificationScheme.createOrdering(Classification.TYPE_BINARY)
 
+potentialClassification = PotentialClassification(labelOrder)
+
 packageSelector = PackageSelector()
 collection = PackageCollection()
 
 resolver = Resolver(backingStore = store)
+canary = None
 
 for pinfo in store.enumerateLatestPackages():
 	pkg = store.retrievePackage(pinfo)
@@ -33,6 +36,8 @@ for pinfo in store.enumerateLatestPackages():
 	verdict = packageFilter.apply(pkg, pinfo.product)
 	if verdict is not None:
 		verdict.labelPackage(pkg)
+		if pkg.name == "python310-base":
+			canary = pkg
 	else:
 		# we currently have no good way to properly mark unclassified packages
 		# group = unclassified
@@ -78,7 +83,44 @@ if productArchitecture is None:
 	raise Exception("database does not record architecture of original query")
 
 resolverContext = worker.contextForArch(productArchitecture)
-classificationContext = Classification.ClassificationContext(worker, productArchitecture, labelOrder)
+classificationContext = Classification.ClassificationContext(worker, productArchitecture, labelOrder, store)
+
+def classifyAutoFlavors(label, labelledPackages):
+	# Do not apply auto-flavors to groups that are already a flavor of some other group.
+	# Otherwise, we end up with labels like @HostNetworking+gnome+devel+unused
+	if label.flavorBase is not None:
+		return
+
+	classifier = Classification.AutoflavorPackageClosure(problemLog, store)
+	classifier.classify(labelledPackages)
+	for flavorDef in packageFilter.autoFlavors:
+		found = classifier.getFlavor(flavorDef.name)
+		if found is None:
+			continue
+
+		if label.autoFlavorCanBeMerged(flavorDef.label):
+			# The autoflavor has a disposition of "merge", or
+			# it has a disposition of "maybe_merge" and all its requirements
+			# are already present in the base label
+			relabeled = classifier.labelFlavoredPackages(flavorDef.name, label)
+			packageFilter.updateGroup(label, relabeled)
+
+			if False:
+				print(f"Merged {len(relabeled)} packages into {label}")
+				for l in relabeled:
+					print(f"  {l}")
+		elif flavorDef.label.disposition == Classification.DISPOSITION_IGNORE:
+			pass
+		else:
+			# we're not really instantiating a new flavor here
+			flavorLabel = label.getBuildFlavor(flavorDef.name)
+			relabeled = classifier.labelFlavoredPackages(flavorDef.name, flavorLabel)
+			packageFilter.updateGroup(flavorLabel, relabeled)
+
+def classifyRuntimeDependenciesFlexible(labelledPackages):
+	# Step 1: build the runtime dependency closure
+	classifier = Classification.FlexibleDownwardClosure(classificationContext, potentialClassification)
+	classifier.classify(labelledPackages)
 
 def classifyRuntimeDependencies(label):
 	global binaryTraversal
@@ -110,41 +152,9 @@ def classifyRuntimeDependencies(label):
 
 	packageFilter.updateGroup(label, labelledPackages)
 
-	# FIXME: we should not do this for groups who are flavors themselves; else
-	# we end up with labels like @HostNetworking+gnome+devel+unused
-	classifier = Classification.AutoflavorPackageClosure(problemLog, store)
-	classifier.classify(labelledPackages)
-	for flavorDef in packageFilter.autoFlavors:
-		# FIXME this should go around the loop
-		if label.flavorBase is not None:
-			continue
-
-
-		found = classifier.getFlavor(flavorDef.name)
-		if found is None:
-			continue
-
-		if flavorDef.label.disposition == Classification.DISPOSITION_MERGE:
-			relabeled = classifier.labelFlavoredPackages(flavorDef.name, label)
-			packageFilter.updateGroup(label, relabeled)
-
-			if True:
-				print(f"Merged {len(relabeled)} packages into {label}")
-				for l in relabeled:
-					print(f"  {l}")
-		elif flavorDef.label.disposition == Classification.DISPOSITION_IGNORE:
-			pass
-		else:
-			flavor = packageFilter.instantiateAutoFlavor(group, flavorDef)
-			relabeled = classifier.labelFlavoredPackages(flavorDef.name, flavor.label)
-			packageFilter.updateGroup(flavor.label, relabeled)
-
-			# If we instantiate Foo+devel, automatically make Foo buildrequire Foo+devel
-			if flavorDef.name == "devel":
-				group.addBuildRequires(flavor)
-				# maybe this can happen later
-				if group.label.buildConfig:
-					group.label.buildConfig.addBuildDependency(flavor.label)
+	# for each of the newly classified packages, see if we have sibling packages that
+	# we can slot into one of the autoflavors like +devel, +python etc.
+	classifyAutoFlavors(label, labelledPackages)
 
 	# Step N: sort all other sibling packages into $Group+unused.
 	# To avoid infinite recursion, do not perform this step for the +unused flavor itself.
@@ -188,8 +198,30 @@ def classifyBuildDependencies(label):
 
 processedBinaryLabels = []
 
-for label in binaryTraversal:
-	classifyRuntimeDependencies(label)
+# Having classified packages that are referenced in the filter definition,
+# inspect their sibling packages and see whether they have been identified
+# by one of the auto flavors like devel or python. If that's the case
+# label them correspondingly (ie as Foo+devel or Foo+python, etc).
+for label in labelOrder.bottomUpTraversal():
+	group = packageFilter.makeBinaryGroup(label.name)
+	classifyAutoFlavors(label, group.packages)
+
+if canary:
+	print(f"### {canary} -> {canary.label} ###")
+
+classifier = Classification.FlexibleDownwardClosure(classificationContext, potentialClassification)
+#for label in labelOrder.bottomUpTraversal():
+#	group = packageFilter.makeBinaryGroup(label.name)
+#	classifier.classify(group.closure)
+classifier.classify(collection)
+
+if canary:
+	print(f"### {canary} -> {canary.label} ###")
+	node = potentialClassification.getPackage(canary)
+	print(f" {node} solution = {node.solution}")
+
+potentialClassification.solve()
+xxx
 
 for label in binaryTraversal:
 	# classifyBuildDependencies(label)

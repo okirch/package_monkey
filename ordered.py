@@ -1,4 +1,4 @@
-from util import CycleDetector, GenerationCounter, Timestamp
+from util import CycleDetector, LoggingCycleDetector, GenerationCounter, Timestamp
 
 class OrderedSetMember(object):
 	def __init__(self, key):
@@ -10,6 +10,7 @@ class OrderedSetMember(object):
 		self._upwardClosure = None
 		self._downwardClosure = None
 		self._defined = False
+		self._hidden = False
 
 	def __str__(self):
 		return str(self.key)
@@ -50,8 +51,14 @@ class PartialOrder(object):
 		self._timestamp = Timestamp()
 		self._final = False
 
+		self._hidden = None
+
 	def __contains__(self, name):
 		return node in self._unsorted
+
+	@property
+	def allkeys(self):
+		return set(self._unsorted.keys())
 
 	def add(self, key, below):
 		assert(not self._final)
@@ -66,6 +73,14 @@ class PartialOrder(object):
 			self.establishRelation(node, self.createNode(req))
 
 		self._sorted = None
+
+	def hide(self, hiddenSet):
+		if self._hidden is None:
+			self._hidden = set()
+
+		self._hidden.update(hiddenSet)
+		for key in hiddenSet:
+			self.getNode(key)._hidden = True
 
 	def createNode(self, key):
 		try:
@@ -92,28 +107,168 @@ class PartialOrder(object):
 		nodes = self.getSubsetToTraverse(subset)
 		return BottomUpTraversal(nodes)
 
-	def topDownTraversal(self, subset):
+	def topDownTraversal(self, subset = None):
 		assert(self._final)
 		nodes = self.getSubsetToTraverse(subset)
 		return TopDownTraversal(nodes)
 
 	def downwardClosureFor(self, key):
 		node = self.getNode(key)
-		return node._downwardClosure
+		return self.filterKeys(node._downwardClosure)
 
 	def upwardClosureFor(self, key):
 		node = self.getNode(key)
-		return node._upwardClosure
+		return self.filterKeys(node._upwardClosure)
+
+	def minimumOf(self, subset):
+		result = None
+		for node in map(self.getNode, subset):
+			if result is None or node.rank < result.rank:
+				result = node
+
+		if not result:
+			return None
+		return result.key
+
+	def minima(self, subset):
+		remaining = set(map(self.getNode, subset))
+
+		result = set()
+		while remaining:
+			node = remaining.pop()
+
+			ignore = False
+			for m in result:
+				if node in m._upwardClosure:
+					# node is above one of the minima we have so far
+					ignore = True
+					break
+				if m in node._upwardClosure:
+					# node is below one of the minima we have so far. replace the existing
+					# minimum
+					result.remove(m)
+					break
+
+			if not ignore:
+				result.add(node)
+
+		if False:
+			for n1 in result:
+				for n2 in result:
+					if n1 is n2:
+						continue
+					assert(n1 not in n2._upwardClosure)
+					assert(n2 not in n1._upwardClosure)
+
+		return result
+
+	def maxima(self, subset):
+		remaining = set(map(self.getNode, subset))
+
+		result = set()
+		while remaining:
+			node = remaining.pop()
+
+			ignore = False
+			for m in result:
+				if node in m._downwardClosure:
+					# node is below one of the maxima we have so far. ignore it.
+					ignore = True
+					break
+				if m in node._downwardClosure:
+					# node is above one of the maxima we have so far. replace the existing
+					# maximum
+					result.remove(m)
+					break
+
+			if not ignore:
+				result.add(node)
+
+		return result
 
 	def getSubsetToTraverse(self, subset):
 		if subset is None:
-			return self._sorted
+			return self.filterNodes(self._sorted)
 
+		subset = self.filterKeys(subset)
 		nodes = set(map(self.getNode, subset))
 		return self.sortedSubset(nodes)
 
 	def sortedSubset(self, subset):
 		return sorted(subset, key = lambda node: (self.rank(node), str(node)))
+
+	def filterKeys(self, keySet):
+		if self._hidden:
+			keySet = keySet.intersection(self._hidden)
+		return keySet
+
+	def filterNodes(self, nodeList):
+		if self._hidden:
+			nodeList = list(filter(lambda node: not node._hidden, nodeList))
+		return nodeList
+
+	class CollapsedCycle:
+		def __init__(self, members):
+			self.members = set(members)
+			self._name = None
+
+		def __str__(self):
+			if self._name is None:
+				self._name = ' '.join(map(str, self.members))
+			return self.name
+
+		def update(self, other):
+			assert(isinstance(other, self.__class__))
+			self.members.update(other.members)
+			self._name = None
+
+		def __len__(self):
+			return len(self.members)
+
+	def getCollapsibleCycles(self):
+		guard = LoggingCycleDetector(self.name)
+		seen = set()
+
+		for node in self._unsorted.values():
+			self.randomWalk(node, guard, seen)
+
+		print(f"detected {len(guard.cycles)} cycles")
+
+		collapse = {}
+		for cycle in guard.cycles:
+			cc = self.CollapsedCycle(cycle)
+			for key in cycle:
+				if collapse.get(key) is not None:
+					cc.update(collapse[key])
+			for key in cc.members:
+				collapse[key] = cc
+
+		if not collapse:
+			return []
+
+		groups = set(collapse.values())
+		print(f"collapsed cycles into {len(groups)} groups")
+
+		maxLen = max(map(len, groups))
+		print(f"largest group has {maxLen} elements")
+
+		return groups
+
+	def randomWalk(self, node, guard, seen):
+		if node in seen:
+			return
+
+		with guard.protect(node.key) as ticket:
+			if not ticket.valid:
+				return
+
+			for lower in node.below:
+				self.randomWalk(lower, guard, seen)
+
+			# Add the node to the set of visited nodes *after*
+			# descending into it. Otherwise we wouldn't catch
+			# the cycles.
+			seen.add(node)
 
 	def finalize(self):
 		if self._final:
@@ -140,11 +295,12 @@ class PartialOrder(object):
 			node._upwardClosure = closure
 
 		self._final = True
+		return True
 
 	def rank(self, node):
 		if node._rank is None:
 			rank = 0
-			with self.guard.protect(node.name) as guard:
+			with self.guard.protect(node.key) as ticket:
 				for lower in node.below:
 					lowerRank = self.rank(lower)
 					if lowerRank >= rank:
@@ -179,7 +335,7 @@ class BottomUpTraversal:
 		return iter(self.keys)
 
 class TopDownTraversal:
-	def __init__(self, keys):
+	def __init__(self, nodes):
 		self.keys = reversed(list(map(lambda node: node.key, nodes)))
 
 	def __iter__(self):

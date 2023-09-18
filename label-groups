@@ -84,7 +84,10 @@ binaryTraversal = flattenGroupList(Classification.TYPE_BINARY, binaryGroupNames)
 #sourceTraversal = flattenGroupList(Classification.TYPE_SOURCE, ("Core", "KernelPlus"))
 sourceTraversal = []
 
-worker = ResolverWorker(resolver)
+# do we ever define these preferences anywhere?
+preferences = ResolverPreferences()
+
+worker = ResolverWorker(resolver, preferences = preferences)
 problemLog = worker.problems
 
 for labelName in ("@Gnome", "@Texlive", "@Emacs", "@Vim", "@Qt"):
@@ -98,7 +101,7 @@ if productArchitecture is None:
 	raise Exception("database does not record architecture of original query")
 
 resolverContext = worker.contextForArch(productArchitecture)
-preferences = ResolverPreferences()
+classificationContext = Classification.ClassificationContext(worker, productArchitecture, labelOrder)
 
 def classifyRuntimeDependencies(label):
 	global binaryTraversal
@@ -124,7 +127,7 @@ def classifyRuntimeDependencies(label):
 			label.addRuntimeDependency(flavor)
 
 	# Step 1: build the runtime dependency closure
-	classifier = Classification.DownwardClosure(worker, productArchitecture, preferences, label)
+	classifier = Classification.DownwardClosure(classificationContext, label)
 	classifier.classify(labelledPackages)
 	labelledPackages = classifier.result
 
@@ -197,7 +200,7 @@ def classifyBuildDependencies(label):
 		print(f"{label.name} has {len(unlabelledPackages)} unclassified build requirements")
 
 		print(f"Classifying new build requirements for {label}")
-		classifier = Classification.UnknownPackageClassifier(worker, productArchitecture, preferences, label)
+		classifier = Classification.UnknownPackageClassifier(worker, productArchitecture, label)
 		classifier.classify(unlabelledPackages)
 
 		# FIXME: This should also be part of the problem report
@@ -226,7 +229,7 @@ for label in sourceTraversal:
 
 	print(f"Classify packages belonging to source project {group.label}")
 
-	classifier = Classification.BuildRequireClosure(worker, productArchitecture, preferences, label)
+	classifier = Classification.BuildRequireClosure(worker, productArchitecture, label)
 	assert(classifier)
 	for component in label.buildRequires:
 		componentGroup = packageFilter.makeBinaryGroup(component.name)

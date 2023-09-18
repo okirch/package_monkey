@@ -558,6 +558,12 @@ class Classification:
 		def __str__(self):
 			return f"{self.package} built from the same source as {self.sibling}"
 
+	class ClassificationContext:
+		def __init__(self, worker, productArchitecture, labelOrder):
+			self.worker = worker
+			self.productArchitecture = productArchitecture
+			self.labelOrder = labelOrder
+
 	class Classifier(object):
 		def __init__(self, label):
 			self.label = label
@@ -715,12 +721,12 @@ class Classification:
 			return result
 
 	class DependencyClassifier(Classifier):
-		def __init__(self, worker, arch, preferences, label):
+		def __init__(self, classificationContext, label):
 			super().__init__(label)
 
-			self.worker = worker
-			self.context = worker.contextForArch(arch)
-			self.preferences = preferences
+			self.worker = classificationContext.worker
+			self.context = self.worker.contextForArch(classificationContext.productArchitecture)
+#			self.labelOrder = classificationContext.labelOrder
 
 		def handleUnresolvableDependency(self, pkg, dep):
 			self.worker.problems.addUnableToResolve(pkg, dep)
@@ -744,7 +750,7 @@ class Classification:
 
 		def edges(self, pkg):
 			result = []
-			for dep, target in self.context.resolveDownward(self.preferences, pkg):
+			for dep, target in self.context.resolveDownward(pkg):
 				result.append(Classification.ReasonRequires(target, pkg, dep))
 
 			return result

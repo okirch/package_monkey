@@ -366,8 +366,10 @@ class ResolverPreferences:
 		return bestRating - candidateRating
 
 class ResolverContext:
-	def __init__(self, resolver, arch, problems):
-		self._resolver = resolver
+	def __init__(self, worker, arch):
+		self._resolver = worker._resolver
+		self._preferences = worker._preferences
+		self._problems = worker._problems
 
 		if arch in ('src', 'nosrc'):
 			altArch = 'nosrc'
@@ -375,7 +377,6 @@ class ResolverContext:
 			altArch = 'noarch'
 		self.arch = [arch, altArch]
 
-		self._problems = problems
 		self._cache = ResolverCache()
 
 		self.debugMsg = debugDependency
@@ -407,16 +408,16 @@ class ResolverContext:
 		found = self._resolver.expand(choice.result)
 		return found
 
-	def resolveRequires(self, preferences, req):
+	def resolveRequires(self, req):
 		try:
 			candidates = req.enumerateCandidateSolutions(self._resolver)
-			found = self.selectPreferredCandidate(preferences, candidates)
+			found = self.selectPreferredCandidate(self._preferences, candidates)
 		except Exception as e:
 			print(f"Caught exception while resolving {req}: {e}")
 			found = None
 		return found
 
-	def resolveDownward(self, preferences, pkg):
+	def resolveDownward(self, pkg):
 		result = []
 
 		if pkg.resolvedRequires is not None:
@@ -435,7 +436,7 @@ class ResolverContext:
 
 			if found is None:
 				# No cache entry found, take the slow path and resolve it
-				found = self.resolveRequires(preferences, dep)
+				found = self.resolveRequires(dep)
 				# ... and stick the result into the cache
 				self._cache.put(dep, found)
 			elif found is ResolverCache.NEGATIVE_ENTRY:
@@ -659,12 +660,13 @@ class ResolverWorker:
 				for key, problem in sorted(category.items()):
 					problem.show(categoryReport)
 
-	def __init__(self, resolver, processfn = None):
+	def __init__(self, resolver, processfn = None, preferences = None):
 		self._resolver = resolver
 		self._queue = []
 		self._packages = set()
 		self._process = processfn
 		self._problems = self.Problems()
+		self._preferences = preferences
 		self._contexts = {}
 
 		self.debugMsg = debugDependency
@@ -675,7 +677,7 @@ class ResolverWorker:
 
 		ctx = self._contexts.get(arch)
 		if ctx is None:
-			ctx = ResolverContext(self._resolver, arch, self._problems)
+			ctx = ResolverContext(self, arch)
 			self._contexts[arch] = ctx
 		return ctx
 

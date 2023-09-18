@@ -79,6 +79,11 @@ class Timestamp:
 #				self.traverse(visitor)
 #			visitor.visit(self)
 #
+class CycleException(Exception):
+	def __init__(self, msg, cycle):
+		super().__init__(msg)
+		self.cycle = cycle
+
 class CycleDetector:
 	class Ticket:
 		def __init__(self, detector, key):
@@ -107,10 +112,12 @@ class CycleDetector:
 		# for very deep trees, we would need something more efficient than a linear search.
 		# O(n^2) is good enough for the shallow trees we're dealing with here.
 		if key in self.chain:
-			names = self.chain + [key]
-			raise Exception(f"Detected {self.name} loop in {' -> '.join(names)}")
+			i = self.chain.index(key)
+			cycle = self.chain[i:] + [key]
+			names = map(str, cycle)
+			raise CycleException(f"Detected {self.name} loop in {' -> '.join(names)}", cycle)
 
-		self.chain.append(str(key))
+		self.chain.append(key)
 
 	def release(self, key):
 		if not self.chain or self.chain[-1] != key:

@@ -2,7 +2,7 @@ import yaml
 import fnmatch
 
 from util import CycleDetector, GenerationCounter, Timestamp
-
+from ordered import PartialOrder
 
 class Classification:
 	TYPE_BINARY = 'binary'
@@ -27,7 +27,7 @@ class Classification:
 			self.runtimeRequires = set()
 			self.buildRequires = set()
 			self.runtimeAugmentations = set()
-			self.disposition = None
+			self.disposition = Classification.DISPOSITION_SEPARATE
 			self.defined = False
 
 			self.flavorBase = None
@@ -143,6 +143,7 @@ class Classification:
 		# FIXME: rename to runtimeClosure
 		@property
 		def closure(self):
+			fail
 			self.maybeInvalidateClosures()
 			if self._closure is None:
 				with self.RUNTIME_CYCLE_GUARD.protect(self.name) as guard:
@@ -271,6 +272,9 @@ class Classification:
 			return True
 
 		def autoSelectCompatibleFlavors(self):
+			print("autoSelectCompatibleFlavors disabled")
+			return
+
 			if not self.autoSelect:
 				return
 
@@ -281,8 +285,6 @@ class Classification:
 						availableFlavors.add(flavor)
 
 			candidateFlavors = availableFlavors.difference(self.closure)
-			if self.name in ("@Glib2+dbus", "@DBus+x11"):
-				print(self, "try to select from", [str(_) for _ in candidateFlavors])
 
 			# Two things to note: we avoid adding new flavors immediately, in order to
 			# avoid some costly recomputations of label closures.
@@ -352,6 +354,18 @@ class Classification:
 		def allLabels(self):
 			return sorted(self._labels.values(), key = lambda _: _.name)
 
+		def createOrdering(self, labelType):
+			if labelType != Classification.TYPE_BINARY:
+				raise Exception(f"Unable to create an ordering for {labelType} labels")
+
+			order = PartialOrder("runtime dependency")
+			for label in self._labels.values():
+				if label.type is labelType:
+					order.add(label, label.runtimeRequires)
+
+			order.finalize()
+			return order
+
 		def finalize(self):
 			def inheritSourceProject(label):
 				if label.sourceProject is None:
@@ -380,6 +394,8 @@ class Classification:
 						raise Exception(f"Label {label}: no buildconfig specified")
 					elif not label.buildConfig.defined:
 						raise Exception(f"Label {label} references buildconfig {label.buildConfig}, but it's not defined anywhere")
+
+			return
 
 			for label in self._labels.values():
 				label.closure
@@ -726,7 +742,7 @@ class Classification:
 
 			self.worker = classificationContext.worker
 			self.context = self.worker.contextForArch(classificationContext.productArchitecture)
-#			self.labelOrder = classificationContext.labelOrder
+			self.labelOrder = classificationContext.labelOrder
 
 		def handleUnresolvableDependency(self, pkg, dep):
 			self.worker.problems.addUnableToResolve(pkg, dep)
@@ -739,6 +755,21 @@ class Classification:
 
 		def handleMissingSource(self, pkg, reason):
 			self.worker.problems.addMissingSource(pkg, reason)
+
+		# a is a known dependency of b iff a <= b in the label order
+		def isKnownDependency(self, a, b):
+			if a in self.labelOrder.downwardClosureFor(b):
+				return True
+
+			if a.buildConfig and a.buildConfig == b.buildConfig:
+				return True
+
+			if False:
+				print(f"label {a} is not a good dependency of {b} [buildconf {a.buildConfig} vs {b.buildConfig}]")
+				names = map(str, self.labelOrder[b]._downwardClosure)
+				print(f" -> {' '.join(names)}")
+
+			return False
 
 		def debugMsg(self, msg):
 			self.worker.debugMsg(msg)
@@ -766,7 +797,9 @@ class Classification:
 				return None
 
 			if pkg.label is not None:
-				if not self.label.isKnownDependency(pkg.label):
+				# if the package belongs to a group that is within our closure,
+				# we're fine. Otherwise, flag this dependency as bad
+				if not self.isKnownDependency(pkg.label, self.label):
 					self.handleUnexpectedDependency(pkg, edge)
 
 				# Do not recurse into this package
@@ -1320,6 +1353,19 @@ class PackageFilter:
 		for group in self._groups.values():
 			label = group.label
 			validateDependencies(label.buildRequires)
+
+		for group in list(self._groups.values()):
+			if group.label.flavorBase is not None:
+				continue
+
+			if group.label.type is not Classification.TYPE_BINARY:
+				continue
+
+			for autoFlavor in self.autoFlavors:
+				if autoFlavor.label.disposition != Classification.DISPOSITION_SEPARATE:
+					continue
+
+				flavor = self.instantiateAutoFlavor(group, autoFlavor)
 
 	def apply(self, pkg, product):
 		return self.filterSet.apply(pkg, product)

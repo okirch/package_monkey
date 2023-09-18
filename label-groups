@@ -19,6 +19,8 @@ classificationScheme = Classification.Scheme()
 packageFilter = PackageFilter(scheme = classificationScheme)
 unclassified = packageFilter.makeBinaryGroup("Unclassified")
 
+labelOrder = classificationScheme.createOrdering(Classification.TYPE_BINARY)
+
 packageSelector = PackageSelector()
 collection = PackageCollection()
 
@@ -38,48 +40,23 @@ for pinfo in store.enumerateLatestPackages():
 
 	collection.add(pkg)
 
-class LabelTreeTraversal:
-	def __init__(self):
-		self.alreadySeen = set()
-		self.visited = []
-
-	def flatten(self, label):
-		return self.flattenWork(label, lambda l: l.runtimeRequires)
-
-	def flattenBuildRequirements(self, label):
-		return self.flattenWork(label, lambda l: l.buildRequires)
-
-	def flattenWork(self, label, childAccessor):
-		result = []
-
-		if label in self.alreadySeen:
-			return result
-
-		self.alreadySeen.add(label)
-		for child in childAccessor(label):
-			if child not in self.alreadySeen:
-				result += self.flattenWork(child, childAccessor)
-
-		self.visited.append(label)
-		result.append(label)
-
-		for child in label.flavors:
-			result += self.flattenWork(child, childAccessor)
-
-		return result
-
-	def __iter__(self):
-		return iter(self.visited)
-
 def flattenGroupList(type, names):
-	traversal = LabelTreeTraversal()
-	for groupName in names:
-		group = packageFilter.makeGroup(groupName, type)
-		traversal.flatten(group.label)
-	return traversal
+	labelSet = set()
+	for name in names:
+		label = classificationScheme.getLabel(name)
+		if label is None:
+			print(f"Warning: no label {name}")
+			continue
+
+		assert(label.type == type)
+
+		belowSet = labelOrder.downwardClosureFor(label)
+		labelSet.update(belowSet)
+
+	return labelOrder.bottomUpTraversal(labelSet)
 
 binaryGroupNames = ("@Core", "@HostCore", "@Kernel", "@UpdateStack", "@CoreLibraries+odbc", "@X11Libraries", "@MinimalSystemd", "@DesktopBuild")
-binaryGroupNames = ("@CoreLibraries", )
+binaryGroupNames = ("@CoreLibraries", "@Core0", "@CoreLibraries+python")
 binaryTraversal = flattenGroupList(Classification.TYPE_BINARY, binaryGroupNames)
 #sourceTraversal = flattenGroupList(Classification.TYPE_SOURCE, ("Core", "KernelPlus"))
 sourceTraversal = []
@@ -151,7 +128,7 @@ def classifyRuntimeDependencies(label):
 			relabeled = classifier.labelFlavoredPackages(flavorDef.name, label)
 			packageFilter.updateGroup(label, relabeled)
 
-			if False:
+			if True:
 				print(f"Merged {len(relabeled)} packages into {label}")
 				for l in relabeled:
 					print(f"  {l}")
@@ -160,9 +137,9 @@ def classifyRuntimeDependencies(label):
 		else:
 			flavor = packageFilter.instantiateAutoFlavor(group, flavorDef)
 			relabeled = classifier.labelFlavoredPackages(flavorDef.name, flavor.label)
-			packageFilter.updateGroup(label, relabeled)
+			packageFilter.updateGroup(flavor.label, relabeled)
 
-			# If we instantiate Foo+devel, automatically add make Foo buildrequire Foo+devel
+			# If we instantiate Foo+devel, automatically make Foo buildrequire Foo+devel
 			if flavorDef.name == "devel":
 				group.addBuildRequires(flavor)
 				# maybe this can happen later
@@ -211,18 +188,12 @@ def classifyBuildDependencies(label):
 
 processedBinaryLabels = []
 
-queue = list(binaryTraversal)
-while queue:
-	label = queue.pop(0)
+for label in binaryTraversal:
 	classifyRuntimeDependencies(label)
 
-	# After classification, new flavors may have been added automatically
-	# Traverse any newly created flavors insert them at the head of the queue
-	for flavor in label.flavors:
-		queue[:0] = binaryTraversal.flatten(flavor)
-
 for label in binaryTraversal:
-	classifyBuildDependencies(label)
+	# classifyBuildDependencies(label)
+	pass
 
 for label in sourceTraversal:
 	group = packageFilter.makeSourceGroup(label.name)

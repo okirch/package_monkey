@@ -37,10 +37,10 @@ class OrderedSetMember(object):
 		return self is not other
 
 	def __le__(self, other):
-		return self in other._downwardClosure
+		return self.key in other._downwardClosure
 
 	def __ge__(self, other):
-		return other in self._downwardClosure
+		return other.key in self._downwardClosure
 
 class PartialOrder(object):
 	def __init__(self, name):
@@ -138,29 +138,31 @@ class PartialOrder(object):
 			node = remaining.pop()
 
 			ignore = False
+			dropped = []
 			for m in result:
-				if node in m._upwardClosure:
+				if node >= m:
 					# node is above one of the minima we have so far
 					ignore = True
 					break
-				if m in node._upwardClosure:
+				if m >= node:
 					# node is below one of the minima we have so far. replace the existing
-					# minimum
-					result.remove(m)
-					break
+					# minimum, and continue.
+					dropped.append(m)
 
 			if not ignore:
 				result.add(node)
+			for m in dropped:
+				result.remove(m)
 
 		if False:
 			for n1 in result:
 				for n2 in result:
 					if n1 is n2:
 						continue
-					assert(n1 not in n2._upwardClosure)
-					assert(n2 not in n1._upwardClosure)
+					assert(not (n1 >= n2))
+					assert(not (n1 <= n2))
 
-		return result
+		return list(map(lambda node: node.key, result))
 
 	def maxima(self, subset):
 		remaining = set(map(self.getNode, subset))
@@ -170,21 +172,23 @@ class PartialOrder(object):
 			node = remaining.pop()
 
 			ignore = False
+			dropped = []
 			for m in result:
-				if node in m._downwardClosure:
+				if node <= m:
 					# node is below one of the maxima we have so far. ignore it.
 					ignore = True
 					break
-				if m in node._downwardClosure:
+				if m <= node:
 					# node is above one of the maxima we have so far. replace the existing
-					# maximum
-					result.remove(m)
-					break
+					# maximum, and continue.
+					dropped.append(m)
 
 			if not ignore:
 				result.add(node)
+			for m in dropped:
+				result.remove(m)
 
-		return result
+		return list(map(lambda node: node.key, result))
 
 	def getSubsetToTraverse(self, subset):
 		if subset is None:

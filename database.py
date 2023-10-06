@@ -1361,6 +1361,8 @@ class BackingStoreDB(DB):
 					raise Exception(f"{obsPackage.name}: cannot resolve pkgId {pkgId}")
 				obsPackage.addBuildRequires(target)
 
+		self.obsPackageCache.put(obsPackage)
+
 		return obsPackage
 
 	def retrievePackageFiles(self, pkgId):

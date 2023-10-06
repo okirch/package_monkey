@@ -203,6 +203,7 @@ class PartialOrder(object):
 
 	def filterKeys(self, keySet):
 		if self._hidden:
+			# FIXME shouldn't this be .difference?!
 			keySet = keySet.intersection(self._hidden)
 		return keySet
 
@@ -236,8 +237,6 @@ class PartialOrder(object):
 		for node in self._unsorted.values():
 			self.randomWalk(node, guard, seen)
 
-		print(f"detected {len(guard.cycles)} cycles")
-
 		collapse = {}
 		for cycle in guard.cycles:
 			cc = self.CollapsedCycle(cycle)
@@ -251,11 +250,6 @@ class PartialOrder(object):
 			return []
 
 		groups = set(collapse.values())
-		print(f"collapsed cycles into {len(groups)} groups")
-
-		maxLen = max(map(len, groups))
-		print(f"largest group has {maxLen} elements")
-
 		return groups
 
 	def randomWalk(self, node, guard, seen):

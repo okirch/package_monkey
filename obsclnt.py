@@ -470,6 +470,9 @@ class OBSPackage:
 		self._source = None
 		self._binaries = []
 
+	def __str__(self):
+		return self.name
+
 	def addBinary(self, pinfo):
 		self._binaries.append(pinfo)
 

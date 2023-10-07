@@ -92,7 +92,7 @@ class PartialOrder(object):
 	def getNode(self, key):
 		node = self._unsorted.get(key)
 		if node is None:
-			raise Exception(f"Partial order {self.name} has no element {key}")
+			raise Exception(f"Partial order {self.name} has no element {key} (type {type(key)})")
 		return node
 
 	def __getitem__(self, key):
@@ -119,6 +119,12 @@ class PartialOrder(object):
 	def upwardClosureFor(self, key):
 		node = self.getNode(key)
 		return self.filterKeys(node._upwardClosure)
+
+	def subsetIsBelow(self, subset, key):
+		return subset.issubset(self.downwardClosureFor(key))
+
+	def subsetIsAbove(self, subset, key):
+		return subset.issubset(self.upwardClosureFor(key))
 
 	def minimumOf(self, subset):
 		result = None

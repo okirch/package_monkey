@@ -2,10 +2,11 @@ import yaml
 import fnmatch
 
 from util import CycleDetector, LoggingCycleDetector, CycleException, GenerationCounter, Timestamp
+from util import filterHighestRanking
 from ordered import PartialOrder
 from functools import reduce
 
-optPackageCycleDebug = 0
+optPackageCycleDebug = 1
 
 def intersectSets(a, b):
 	if a is None:
@@ -46,6 +47,7 @@ class Classification:
 			self.name = name
 			self.type = type
 			self.id = id
+			self.gravity = None
 			self.runtimeRequires = set()
 			self.buildRequires = set()
 			self.runtimeAugmentations = set()
@@ -239,6 +241,17 @@ class Classification:
 				return None
 
 			return sourceProject.getBuildFlavor(name)
+
+		# Starting @Foo+flavor-purpose, look up @Foo-$flavorName-$purposeName
+		def findSibling(self, flavorName, purposeName):
+			label = self
+			while label.flavorBase:
+				label = label.flavorBase
+			if flavorName is not None:
+				label = label.getBuildFlavor(flavorName)
+			if label and purposeName:
+				label = label.getObjectPurpose(purposeName)
+			return label
 
 		# FIXME: rename to runtimeClosure
 		@property
@@ -463,6 +476,11 @@ class Classification:
 		def __str__(self):
 			return self.name
 
+	# return the list of labels rated highest (ie with the lowest priority value)
+	@staticmethod
+	def filterLabelsByGravity(labels):
+		return set(filterHighestRanking(labels, lambda l: l.gravity))
+
 	class Scheme:
 		def __init__(self):
 			self._labels = {}
@@ -518,7 +536,7 @@ class Classification:
 
 			return label
 
-		def createPurpose(self, baseLabel, purposeName):
+		def createPurpose(self, baseLabel, purposeName, template = None):
 			if baseLabel.purposeName is not None:
 				print(f"{baseLabel} isPurpose={baseLabel.isPurpose}")
 				raise Exception(f"Cannot derive purpose {purposeName} from label {baseLabel} because it already has a purpose")
@@ -527,6 +545,9 @@ class Classification:
 			label.flavorBase = baseLabel
 			label.flavorName = baseLabel.flavorName
 			label.purposeName = purposeName
+
+			# the new purpose label inherits the base label's gravity
+			label.gravity = baseLabel.gravity
 
 			baseLabel.addObjectPurpose(label)
 
@@ -540,9 +561,26 @@ class Classification:
 			# ... and their build config
 			label.setBuildConfig(baseLabel.buildConfig)
 
-			# @Foo-devel always requires @Foo for runtime
-			# FIXME: does this make sense for all purposes?
+			# copy requirements from template, if given
+			if template:
+				label.copyRequirementsFrom(template)
+
+			# There's a question whether @Foo-devel should always require @Foo for runtime.
+			# While this makes sense for some purposes like man, it usually doesn't make sense
+			# for others.
+			# But it does make sense for things like devel packages (all devel packages that
+			# come with a libfoo.so symlink have to require the underlying libfoo package)
 			label.addRuntimeDependency(baseLabel)
+
+			# Loop over all depdendencies of the base label and require their purpose-variants
+			# ie if we're currently creating NetworkServices-devel, and NetworkServices requires
+			# NetworkLibraries, then we make NetworkServices-devel require NetworkLibraries-devel
+			for req in baseLabel.runtimeRequires:
+				if not req.isPurpose:
+					requirePurpose = req.getObjectPurpose(purposeName)
+					if requirePurpose is None:
+						requirePurpose = self.createPurpose(req, purposeName, template = template)
+					label.addRuntimeDependency(requirePurpose)
 
 			return label
 
@@ -687,6 +725,23 @@ class Classification:
 
 		def __str__(self):
 			return f"{self.package} identified by {self.filterDesc}"
+
+	class ReasonPurpose(Reason):
+		def __init__(self, pkg, purposeName, buildName):
+			super().__init__(pkg)
+			self.purposeName = purposeName
+			self.buildName = buildName
+
+		@property
+		def type(self):
+			return f"purpose:{self.purposeName}"
+
+		def chain(self):
+			return [self]
+
+		def __str__(self):
+			return f"{self.package} is a {self.purposeName} package of {self.buildName}"
+
 
 	class ReasonRequires(Reason):
 		def __init__(self, pkg, dependant, req):
@@ -1304,6 +1359,10 @@ class PotentialClassification(object):
 				return set([self.package])
 			return self._cycle
 
+		@property
+		def isCollapsedCycle(self):
+			return bool(self._cycle)
+
 		def addLowerNeighbor(self, other):
 			self._lowerNeighbors.add(other)
 
@@ -1365,11 +1424,39 @@ class PotentialClassification(object):
 			names = list(map(str, cone))
 			return ' '.join(names)
 
-		def x__update(self, limits):
-			if self._candidates is None:
-				self._candidates = limits
-			else:
-				self._candidates = self._candidates.intersection(limits)
+		def filterCandidateLabels(self, candidateLabels):
+			candidateLabels = intersectSets(candidateLabels, self.lowerCone)
+			if candidateLabels and len(candidateLabels) > 1:
+				# Inspect the priority values of all labels involved and return
+				# the ones that have a higher gravity
+				filtered = Classification.filterLabelsByGravity(candidateLabels)
+				if filtered != candidateLabels:
+					print(f"{self}: reduced set of candidates based on their gravity" + 
+						f"  {' '.join(map(str, candidateLabels))} -> {' '.join(map(str, filtered))}")
+					candidateLabels = filtered
+
+				# disambiguate labels
+				# a) If we have Foo-devel, Foo+python-devel, Foo+somethingelse-devel, we want to
+				#    return Foo-devel
+				if len(candidateLabels) > 1:
+					baseLabels = set()
+					for label in candidateLabels:
+						# For @Foo+flavor-purpose, look up @Foo-purpose
+						label = label.findSibling(None, label.purposeName)
+						if label is None:
+							return candidateLabels
+						baseLabels.add(label)
+
+					if len(baseLabels) == 1:
+						return baseLabels
+
+				# b) If we have a single maximum in the subset, use that.
+				#    This takes care of cases where we place libfoo in @BlahLibraries
+				#    and foo-tools in @BlahUtils. In such a case, we put foo-devel
+				#    into the (higher) @BlahUtils-devel bucket.
+				if len(candidateLabels) > 1:
+					candidateLabels = self._order.maxima(candidateLabels)
+			return candidateLabels
 
 		@property
 		def candidates(self):
@@ -1416,15 +1503,52 @@ class PotentialClassification(object):
 				return allLabels[0]
 			return None
 
+	class Traversal:
+		class Cursor:
+			def __init__(self, queue, node, depth):
+				self.queue = queue
+				self.node = node
+				self.depth = depth
+				self.allowDescent = True
+
+			def descend(self):
+				if not self.allowDescent:
+					return False
+
+				entries = []
+				for neigh in self.node.lowerNeighbors:
+					entries.append(self.__class__(self.queue, neigh, self.depth + 1))
+				self.queue[:0] = entries
+				return True
+
+			def __str__(self):
+				return (self.depth * "   ") + f" - {self.node}"
+
+		def __init__(self, node):
+			self.queue = []
+			self.seen = set()
+			self.Cursor(self.queue, node, 0).descend()
+
+		def __iter__(self):
+			while self.queue:
+				next = self.queue.pop(0)
+				if next.node in self.seen:
+					next.allowDescent = False
+				else:
+					self.seen.add(next.node)
+				yield next
+
 	class SiblingInfo:
 		def __init__(self, build):
 			self.name = build.name
 			self.packages = []
+			self.sources = []
 
 			self.labels = set()
 			for rpm in build.binaries:
-				# We're not going to label the source package for now
-				if not rpm.isSourcePackage:
+				if rpm.isSourcePackage:
+					self.sources.append(rpm)
+				else:
 					self.packages.append(rpm)
 
 					label = rpm.label
@@ -1439,6 +1563,14 @@ class PotentialClassification(object):
 
 		def recordDecision(self, node, label):
 			self.labels.add(label)
+
+		@property
+		def sourceLabels(self):
+			result = set()
+			for pkg in self.sources:
+				if pkg.label:
+					result.add(pkg.label)
+			return result
 
 		@property
 		def baseLabels(self):
@@ -1489,7 +1621,7 @@ class PotentialClassification(object):
 
 		self._recentlyPlaced = []
 
-	def recordDecision(self, interval, label):
+	def recordDecision(self, interval, label, reason = None):
 		if interval.solution is label:
 			return
 		assert(interval.solution is None)
@@ -1499,6 +1631,24 @@ class PotentialClassification(object):
 			interval.siblings.recordDecision(interval, label)
 
 		self._recentlyPlaced.append(interval)
+
+		for pkg in interval.packages:
+			if pkg.label is label:
+				continue
+
+			if pkg.label is not None:
+				if pkg.label.type == Classification.TYPE_PURPOSE or \
+				   pkg.label.type == Classification.TYPE_AUTOFLAVOR:
+					continue
+				
+				# This can happen when we try to collapse a cycle of packages that have different
+				# labels
+				print(f"WARNING: Refusing to change label of {pkg} from {pkg.label} to {label}")
+				# raise Exception(f"Attempt to change label of {pkg} from {pkg.label} to {label}")
+				continue
+
+			pkg.label = label
+			pkg.labelReason = reason
 
 	def addEdge(self, requiringPackage, requiredPackage):
 		assert(requiringPackage is not requiredPackage)
@@ -1525,11 +1675,12 @@ class PotentialClassification(object):
 			interval = self._packages[pkg]
 		except:
 			interval = self.LabelInterval(self._order, name = str(pkg), package = pkg)
-
-			if pkg.label and pkg.label.type == Classification.TYPE_BINARY:
-				self.recordDecision(interval, pkg.label)
-
 			self._packages[pkg] = interval
+
+			# Copy already assigned labels to the newly created node
+			if pkg.label and pkg.label.type == Classification.TYPE_BINARY:
+				interval.solution = pkg.label
+
 		return interval
 
 	def collapse(self, cycle):
@@ -1573,10 +1724,10 @@ class PotentialClassification(object):
 		for pkg in cyclePackages:
 			self._packages[pkg] = newInterval
 
-		debugPackageCycles(f"Collapsed dependency cycle {newInterval}")
+		debugPackageCycles(f"Collapsed dependency cycle {newInterval}, label {label}")
 
 	def createPartialOrder(self):
-		order = PartialOrder("runtime dependency")
+		order = PartialOrder("node runtime dependency")
 
 		seen = set()
 		for interval in self._packages.values():
@@ -1594,11 +1745,21 @@ class PotentialClassification(object):
 
 			for cycle in cycles:
 				self.collapse(cycle.members)
+
 			# rinse and repeat
 			return None
 
 		order.finalize()
 		return order
+
+	def recordInitialPlacements(self):
+		# Create initial _recentlyPlaced list
+		self._recentlyPlaced = []
+		for node in self._packages.values():
+			if node.solution:
+				self._recentlyPlaced.append(node)
+				if node.siblings is not None:
+					node.siblings.recordDecision(node, node.solution)
 
 	def ignoreFlavoredPackages(self, order, tabooFlavorNames):
 		hidden = set()
@@ -1613,14 +1774,17 @@ class PotentialClassification(object):
 
 		order.hide(hidden)
 
-	def placeSiblingsAccordingToPurpose(self):
-		builds = set()
-		for node in self._recentlyPlaced:
+	def placeSiblingsAccordingToPurpose(self, order):
+		builds = []
+		seen = set()
+		for node in order.bottomUpTraversal(self._recentlyPlaced):
 			if node.siblings is not None:
-				builds.add(node.siblings)
+				if node.siblings not in seen:
+					builds.append(node.siblings)
+					seen.add(node.siblings)
 
 		for siblings in builds:
-			labels = set()
+			candidateLabels = set()
 			purposes = []
 			for pkg in siblings:
 				node = self.getPackage(pkg)
@@ -1628,40 +1792,57 @@ class PotentialClassification(object):
 					label = node.solution
 					if label.isPurpose:
 						label = label.flavorBase
-					labels.add(label)
-				elif pkg.label and pkg.label.type == Classification.TYPE_PURPOSE:
-					purposes.append(pkg)
-
-			if not purposes:
-				continue
-
-			if len(labels) > 1:
-				labels = self._order.maxima(labels)
-
-			if len(labels) == 0:
-				continue
-
-			if len(labels) > 1:
-				names = map(str, purposes)
-				lnames = map(str, labels)
-				print(f"Unable to place {' '.join(names)} (obs package {siblings}): ambiguous labels {' '.join(lnames)}")
-				continue
-
-			baseLabel = labels.pop()
-			assert(not baseLabel.isPurpose)
-
-			for sib in purposes:
-				sibLabel = sib.label
-
-				if sibLabel.disposition == Classification.DISPOSITION_MERGE:
-					purposeLabel = baseLabel
+					candidateLabels.add(label)
 				else:
-					purposeLabel = baseLabel.getObjectPurpose(sibLabel.name)
-					if purposeLabel is None:
-						raise Exception(f"Oops, unknown label {baseLabel}-{sibLabel}")
+					label = pkg.label
+					# The node may represent a collapsed cycle. See if the packages that
+					# were collapsed share a common purpose
+					if label is None:
+						label = node.commonLabel
+					if label and label.type == Classification.TYPE_PURPOSE:
+						purposes.append((pkg, label))
 
-				print(f"{sib} will be placed in {purposeLabel}; close to its siblings")
-				self.recordDecision(self.getPackage(sib), purposeLabel)
+			if not purposes or not candidateLabels:
+				continue
+
+			for siblingPackage, siblingPurposeLabel in purposes:
+				sibNode = self.getPackage(siblingPackage)
+
+				if sibNode.solution is not None:
+					print(f"Warning: {siblingPackage} was already placed through a different sibling (most likely it's part of a dependency cycle)")
+					continue
+
+				candidatePurposes = set(map(lambda label: label.getObjectPurpose(siblingPurposeLabel.name), candidateLabels))
+
+				labels = sibNode.filterCandidateLabels(candidatePurposes)
+				if not labels:
+					lnames = map(str, candidatePurposes)
+					print(f"Unable to place {siblingPackage} (obs package {siblings}): no matching label; candidates {' '.join(lnames)}")
+					for cursor in self.Traversal(sibNode):
+						neigh = cursor.node
+
+						match = neigh.filterCandidateLabels(candidatePurposes)
+						if match == candidatePurposes:
+							continue
+						match = map(str, match)
+						print(f"{cursor} [{' '.join(match)}]")
+
+						if cursor.depth < 5:
+							cursor.descend()
+					continue
+
+				if len(labels) > 1:
+					lnames = map(str, candidatePurposes)
+					print(f"Unable to place {siblingPackage} (obs package {siblings}): ambiguous labels {' '.join(lnames)}")
+					continue
+
+				purposeLabel = next(iter(labels))
+				if siblingPurposeLabel.disposition == Classification.DISPOSITION_MERGE:
+					purposeLabel = purposeLabel.flavorBase
+
+				print(f"{siblingPackage} will be placed in {purposeLabel}; close to its siblings")
+				reason = Classification.ReasonPurpose(siblingPackage, str(siblingPurposeLabel), siblings.name)
+				self.recordDecision(sibNode, purposeLabel, reason)
 
 		self._recentlyPlaced = []
 
@@ -1673,16 +1854,20 @@ class PotentialClassification(object):
 		while order is None:
 			order = self.createPartialOrder()
 
-		self.placeSiblingsAccordingToPurpose()
-
 		# on the first pass, hide any non-essential packages
 		self.ignoreFlavoredPackages(order, ('devel', 'doc', 'i18n', 'man'))
 
-		suggestedNewLabels = []
 		for interval in order.bottomUpTraversal():
 			for lower in interval.lowerNeighbors:
 				interval.updateFromBelow(lower)
 
+		# populate the _recentlyPlaced list with the nodes that have been assigned
+		# a label by the admin.
+		self.recordInitialPlacements()
+		self.placeSiblingsAccordingToPurpose(order)
+
+		suggestedNewLabels = []
+		for interval in order.bottomUpTraversal():
 			if interval.solution:
 				missing = []
 				for lower in interval.lowerNeighbors:
@@ -1696,7 +1881,7 @@ class PotentialClassification(object):
 						if lower.solution:
 							print(f" - {lower} [{lower.solution}]")
 						else:
-							print(f" - {lower}")
+							print(f" - {lower} (to be classified)")
 
 			# Report those packages where the lowerCone collapses to an empty set
 			# (All the packages above will naturally have an empty lower cone as well)
@@ -1812,7 +1997,7 @@ class PotentialClassification(object):
 				print(f"{interval} - try to place into {choice}")
 				self.chooseLabelForInterval(interval, choice, f"because its siblings are in {baseLabel}")
 
-		self.placeSiblingsAccordingToPurpose()
+		self.placeSiblingsAccordingToPurpose(order)
 
 		for interval in order.topDownTraversal():
 			# don't do anything if already solved
@@ -3093,7 +3278,9 @@ class PackageFilter:
 		if purposeDef is None:
 			raise Exception(f"Undefined purpose {purposeName} in definition of {baseGroup.label}: you must define {purposeName} globally first")
 
-		label = self.classificationScheme.createPurpose(baseGroup.label, purposeName)
+		label = baseGroup.label.getObjectPurpose(purposeName)
+		if label is None:
+			label = self.classificationScheme.createPurpose(baseGroup.label, purposeName, template = purposeDef.label)
 
 		# copy requirements from purposeDef
 		label.copyRequirementsFrom(purposeDef.label)
@@ -3235,6 +3422,7 @@ class PackageFilter:
 		'description',
 		'expand',
 		'priority',
+		'gravity',
 		'requires',
 		'buildrequires',
 		'augments',
@@ -3295,6 +3483,11 @@ class PackageFilter:
 		priority = gd.get('priority')
 		if priority is not None:
 			assert(type(priority) == int)
+
+		gravity = gd.get('gravity')
+		if gravity is not None:
+			assert(type(gravity) == int)
+			group.label.gravity = gravity
 
 		if group.label:
 			nameList = gd.get('requires') or []

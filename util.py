@@ -152,3 +152,33 @@ class LoggingCycleDetector(CycleDetector):
 		self.chain.append(key)
 		return True
 
+#
+# filter a collection of things by rank
+# A rank of None indicates no ranking at all, and is "less than" any other rank
+#
+def filterRanking(items, getRank, isBetterThan):
+	bestRank = None
+	found = []
+	for item in items:
+		rank = getRank(item)
+		if rank != bestRank:
+			if rank is None:
+				continue
+
+			if type(rank) != int:
+				raise Exception(f"ranking function returns non-integer value {rank}")
+
+			if bestRank is not None and isBetterThan(bestRank, rank):
+				continue
+
+			bestRank = rank
+			found = []
+		found.append(item)
+	
+	return found
+
+def filterLowestRanking(items, getRank):
+	return filterRanking(items, getRank, int.__lt__)
+
+def filterHighestRanking(items, getRank):
+	return filterRanking(items, getRank, int.__gt__)

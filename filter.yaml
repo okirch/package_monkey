@@ -1410,6 +1410,7 @@ groups:
       requires:
        - "@Python"
        - "@DBus-devel"
+       - "@GnomeLibraries"
 #      - "@X11Libraries-devel"
 
  - name: "@GnomeLibraries"
@@ -1534,6 +1535,12 @@ groups:
        - "@Docbook+texlive"
       binaries:
        - gtk-doc-mkpdf
+    - name: bluetooth
+      requires:
+       - "@Bluetooth+systemd"
+      packages:
+       - pulseaudio-module-bluetooth
+       - gnome-bluetooth
    purposes:
     - name: devel
       packages:
@@ -1654,6 +1661,12 @@ groups:
        - "@X11Libraries"
       binaries:
        - dbus-1-x11
+   purposes:
+    - name: devel
+      requires:
+       - "@GnomeLibraries"
+       - "@SELinux-devel"
+       - "@PythonCore"
 
  - name: "@MinimalSystemd"
    buildconfig: Systemd/standard
@@ -1963,6 +1976,9 @@ groups:
     - "@FullSystemd"
     - "@PythonModules"
     - "@UpdateStack"
+    - "@PolicyKit"
+    - "@Container"
+    - "@HostNetworking+gnomelibs"
    packages:
     - autoyast2
     - yast2*
@@ -1996,6 +2012,11 @@ groups:
        - "@Qt"
       binaries:
        - libyui-qt
+    - name: pcp
+      requires:
+       - "@PCP"
+      binaries:
+       - cockpit-pcp
    purposes:
     - name: devel
       requires: 
@@ -2061,6 +2082,7 @@ groups:
    requires:
     - "@Core"
     - "@NetworkCore"
+    - "@HostNetworking"
     - "@FullSystemd"
     - "@SELinux"
     - "@Glib2" # required by slirp
@@ -2260,6 +2282,27 @@ groups:
     - libwrap0
     - libtirpc3
     - libxtables12
+    - libbluetooth3
+
+ - name: "@Bluetooth"
+   buildconfig: Core/standard
+   requires:
+    - "@NetworkLibraries"
+    - "@Glib2"
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@KernelAudio"
+       - "@MinimalSystemd"
+      packages:
+       - bluez
+       - bluez-deprecated
+    - name: printing
+      requires:
+       - "@Bluetooth+systemd"
+       - "@PrintServer"
+      packages:
+       - bluez-cups
 
  - name: "@NetworkCore"
    buildconfig: Core/standard
@@ -2563,7 +2606,6 @@ groups:
     - ypserv
     - tcpd
     - freeradius-client
-    - bluez
     - cronie
     - net-snmp
     - perl-SNMP
@@ -2582,11 +2624,6 @@ groups:
        - "@Python"
       binaries:
        - freeradius-server-python3
-    - name: glib
-      requires:
-       - "@Glib2"
-      binaries:
-       - bluez-deprecated
 
  - name: "@MailClient"
    buildconfig: Network/standard

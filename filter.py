@@ -1,7 +1,7 @@
 import yaml
 import fnmatch
 
-from util import CycleDetector, LoggingCycleDetector, CycleException, GenerationCounter, Timestamp, ExecTimer
+from util import ExecTimer
 from util import filterHighestRanking
 from ordered import PartialOrder
 from functools import reduce
@@ -39,10 +39,6 @@ class Classification:
 	DISPOSITION_IGNORE = 'ignore'
 
 	class Label:
-		GENERATION = GenerationCounter()
-		RUNTIME_CYCLE_GUARD = CycleDetector("runtime dependency")
-		BUILD_CYCLE_GUARD = CycleDetector("build dependency")
-
 		def __init__(self, name, type, id):
 			self.name = name
 			self.type = type
@@ -67,8 +63,6 @@ class Classification:
 			self._purposes = {}
 
 			self.mergeableAutoFlavors = set()
-
-			self._timestamp = Timestamp()
 
 			# the closure comprises all packages of this label plus the ones
 			# referenced by subordinate labels
@@ -253,122 +247,6 @@ class Classification:
 				label = label.getObjectPurpose(purposeName)
 			return label
 
-		# FIXME: rename to runtimeClosure
-		@property
-		def closure(self):
-			# FIXME nuke
-			fail
-			self.maybeInvalidateClosures()
-			if self._closure is None:
-				with self.RUNTIME_CYCLE_GUARD.protect(self.name) as guard:
-					self.updateClosure()
-
-			return self._closure
-
-		@property
-		def buildClosure(self):
-			# FIXME nuke
-			self.maybeInvalidateClosures()
-			if self._buildClosure is None:
-				with self.BUILD_CYCLE_GUARD.protect(self.name) as guard:
-					self.updateBuildClosure()
-
-			return self._buildClosure
-
-		def maybeInvalidateClosures(self):
-			# FIXME nuke
-			if not self._timestamp.isCurrent(self.GENERATION):
-				self._closure = None
-				self._buildClosure = None
-
-		def maybeUpdateClosures(self):
-			# FIXME nuke
-			if self._timestamp.isCurrent(self.GENERATION):
-				return
-
-			self._closure = None
-			self._buildClosure = None
-
-		def updateClosure(self):
-			# FIXME nuke
-			self._closure = None
-
-			result = set()
-			if self.flavorBase:
-				result.update(self.flavorBase.closure)
-			for label in self.runtimeRequires:
-				result.update(label.closure)
-
-			if self.type is Classification.TYPE_BINARY:
-				result.add(self)
-
-			self._closure = result
-
-		def updateBuildClosure(self):
-			# FIXME nuke
-			self._buildClosure = None
-
-			result = set()
-			result.update(self.closure)
-			for label in self.runtimeRequires:
-				result.update(label.buildClosure)
-				develFlavor = label.getBuildFlavor('devel')
-
-				# If we have a runtime requirement on @Foobar, 
-				# assume that we'll have a build requirement on
-				# @Foobar+devel in addition
-				if develFlavor is not None:
-					result.add(develFlavor)
-
-			for label in self.buildRequires:
-				result.update(label.closure)
-
-			if self.flavorBase:
-				result.update(self.flavorBase.buildClosure)
-
-			if self.type is Classification.TYPE_BINARY:
-				result.add(self)
-
-			self._buildClosure = result
-
-		GUARD = "guard"
-
-		def updateClosureWork(self, chain = []):
-			# FIXME nuke
-			def circularDependencyError(chain):
-				cycle = " -> ".join(_.name for _ in chain)
-				raise Exception(f"Circular dependency of labels while resolving {cycle}")
-
-			if self._closure is self.GUARD:
-				circularDependencyError(chain)
-
-			self._closure = self.GUARD
-
-			chain = chain + [self]
-			# print("update", " -> ".join(_.name for _ in chain))
-
-			result = set()
-			if self.flavorBase:
-				result.update(self.flavorBase.closure)
-			for label in self.runtimeRequires:
-				if label._closure is self.GUARD:
-					circularDependencyError(chain + [label])
-				if label._closure is None:
-					label.updateClosureWork(chain)
-				result.update(label._closure)
-
-			if self.type is Classification.TYPE_BINARY:
-				result.add(self)
-
-			self._closure = result
-
-		def isKnownDependency(self, other):
-			if other in self.closure:
-				return True
-			if self.buildConfig and self.buildConfig == other.buildConfig:
-				return True
-			return False
-
 		def mayAutoSelect(self, order, flavor):
 			if flavor is self:
 				return False
@@ -448,25 +326,6 @@ class Classification:
 				return False
 
 			missing = myClosure.difference(flavorBaseClosure)
-			try:
-				missing.remove(self)
-			except: pass
-
-			return not(missing)
-
-
-		def xallFlavorRequirementsSatisfied(self, referringLabel, referringLabelClosure):
-			if not referringLabel.autoSelect:
-				return False
-			if not self.autoSelect:
-				return False
-			if self.flavorBase is None:
-				return False
-			if referringLabel.flavorBase == self:
-				return False
-
-			missing = referringLabelClosure.difference(self.flavorBase.closure)
-			missing.difference_update(referringLabel.closure)
 			try:
 				missing.remove(self)
 			except: pass
@@ -644,20 +503,6 @@ class Classification:
 			order = self.createOrdering(Classification.TYPE_BINARY)
 			for label in order.bottomUpTraversal():
 				label.autoSelectCompatibleFlavors(order)
-
-			return
-
-			for label in self._labels.values():
-				label.closure
-				label.buildClosure
-
-			if False:
-				self.showLabel("@CoreLibraries")
-				#self.showLabel("@CoreLibraries+odbc")
-				self.showLabel("@CryptoLibraries")
-				self.showLabel("@ApplicationLibraries")
-				#self.showLabel("@Boot")
-				#self.showLabel("@Kernel")
 
 		def getExtendedClosure(self, name):
 			label = self._labels.get(name)
@@ -999,7 +844,8 @@ class Classification:
 			self.unlabelledPackages = None
 
 		def classify(self, packages):
-			buildClosure = self.label.buildClosure
+			# this is broken right now
+			buildClosure = XXX
 			unlabelledPackages = set()
 			result = set()
 
@@ -1243,17 +1089,8 @@ class Classification:
 			suggestions.append(pkg)
 
 		def findTopmostLabel(self, labels):
-			from functools import reduce
-
-			if len(labels) == 1:
-				return next(iter(labels))
-
-			closure = reduce(set.union, [_.closure for _ in labels], set())
-			for lbl in labels:
-				if closure.issubset(lbl.closure):
-					return lbl
-			return None
-
+			# removed code that no longer worked. Need to do this by using PartialOrder.maximum()
+			assert(0)
 
 	class BuildRequireClosure(DownwardClosure):
 		def __init__(self, *args):

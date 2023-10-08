@@ -369,7 +369,7 @@ groups:
    buildconfig: Core/standard
    requires:
     - "@GCC"
-    # some packages; notably libgpg-error-devel, requires info when installed
+    # some -devel packages require info when installed; usually through gettext but sometimes directly
     - "@Texinfo"
     - "@Glibc-devel"
     - "@Core0"
@@ -382,8 +382,12 @@ groups:
     - autogen
     # libssh-devel requires cmake
     - cmake
-    - cmake-mini
+#   - cmake-mini
     - make
+    - gettext-runtime-mini
+    - gettext-tools-mini
+    - gettext-runtime
+    - gettext-tools
 
  - name: "@CoreLibraries"
    # when deciding where to place -devel packages for a set of packages spread across
@@ -448,7 +452,7 @@ groups:
     - libelf1
     - libevent-2*
     - libext2fs2
-    - libfftw3*
+    - libfftw3-3
     - libfl2
     - libfreebl3
     # It's a font library, but it's used in so many places that it makes sense to place it here
@@ -538,6 +542,7 @@ groups:
       requires:
        - "@HPC"
       packages:
+       - libfftw3_mpi3
        - libboost_graph_parallel1*
        - libboost_mpi1*
     - name: python
@@ -709,9 +714,15 @@ groups:
     - suse-build-key
    buildflavors:
     - name: gnome
+      requires:
+       - "@GnomeLibraries"
       packages:
        - tpm2.0-abrmd
        - libtss2-tcti-tabrmd0
+      purposes:
+       - name: devel
+         binaries:
+          - libgpgme-devel priority=0
     - name: test
       packages:
 #      - libglib-testing-0-0
@@ -800,6 +811,8 @@ groups:
    requires:
     - "@Core"
     - "@Perl"
+    - "@PythonStandard"
+    - "@GCC"
    packages:
     - pcp
     - libpcp3*
@@ -960,7 +973,6 @@ groups:
    packages:
     - texi2info
     - texi2html
-    - info
     - makeinfo
    buildflavors:
     - name: tex
@@ -1065,13 +1077,8 @@ groups:
     - flex
     # flex directly requires the devel package; it might be nicer to split off a libfl pkg
     - libfl-devel
-    - gettext-runtime-mini
-    - gettext-tools-mini
-    - gettext-runtime
-    - gettext-tools
     - perl-libintl-perl
     - gperf
-    - libtool
     - patch
     - patchutils
     - post-build-checks
@@ -1198,7 +1205,6 @@ groups:
    buildrequires:
     - "@DesktopBuild"
    packages:
-    - libcairo*
     - libdrm2
     - libdrm_*
     - libICE6
@@ -1291,7 +1297,6 @@ groups:
     - "@DesktopBuild"
     - "@BrowsersConsole"
    packages:
-    - cairo*
     - mkfontdir
     - mkfontscale
     - setxkbmap
@@ -1403,6 +1408,7 @@ groups:
    purposes:
     - name: devel
       requires:
+       - "@Python"
        - "@DBus-devel"
 #      - "@X11Libraries-devel"
 
@@ -1416,6 +1422,19 @@ groups:
    packages:
     - libgio-2*
     - dconf
+    - libgirepository-1*
+    - girepository-1*
+    - glib2
+    - at-spi2*
+    - libatk-1*
+    - libatk-bridge-2*
+    - libatspi0
+   purposes:
+    - name: devel
+      binaries:
+       - glib2-devel
+       - glibmm2-devel
+       - glibmm2_4-devel
 
  - name: "@DesktopLibraries"
    buildconfig: Gnome/standard
@@ -1429,8 +1448,6 @@ groups:
     - "@FontLibraries+gnomelibs"
    packages:
     - gsettings-desktop-schemas
-    - glib2
-    - girepository-1*
     - libgtk-3*
     - libgtk-2*
     - gtk2-schema
@@ -1444,12 +1461,10 @@ groups:
     - gtk4-schema
     - gtk4-tools
     - gtk4-data
+    - gettext-its-gtk*
     - libgdk_pixbuf-2*
     - libjson-glib-1*
     - libnice10
-    - libatk-1*
-    - libatk-bridge-2*
-    - libatspi0
     - libnotify4
     - gstreamer
     - gstreamer-*
@@ -1457,6 +1472,7 @@ groups:
     - libgstgl-*
     - libgstcuda-*
     - pango
+    - pangomm
     - libcanberra
     - libgcr3
     # or move to AudioLibraries:
@@ -1501,7 +1517,6 @@ groups:
     - gsettings-*
     - gtk*
     - gtk-doc
-    - at-spi2*
     - gnome-*
     - polkit-gnome*
     - xdg-menu
@@ -1524,6 +1539,10 @@ groups:
       packages:
        - gnome-doc-utils
        - gnome-doc-utils-lang
+    - name: doc
+      requires:
+       # gtkmm3-doc requires glibmm2-devel
+       - "@Gnome-devel"
 
  - name: "@GnomeApplications"
    buildconfig: Gnome/standard
@@ -1681,6 +1700,13 @@ groups:
     - "@MinimalSystemd"
    packages:
     - udisks2
+   purposes:
+    # We placed glib2 and related libraries in GnomeLibraries, but due to
+    # its depedencies, glib2-devel had to go to DesktopLibraries.
+    # So we have to force the -devel flavor to requires DesktopLibraries-devel
+    - name: devel
+      requires:
+       - "@DesktopLibraries-devel"
 
  - name: "@Busybox"
    buildconfig: Host/standard
@@ -1965,6 +1991,11 @@ groups:
        - "@Console"
       binaries:
        - libyui-ncurses-tools
+    - name: qt
+      requires:
+       - "@Qt"
+      binaries:
+       - libyui-qt
    purposes:
     - name: devel
       requires: 
@@ -1997,6 +2028,10 @@ groups:
       binaries:
        - harfbuzz-tools
        - libharfbuzz-gobject0
+       # we have to force the priority here to avoid having
+       # typelib-1_0-HarfBuzz placed through the normal mechanism
+       # (which fails in this case).
+       - typelib-1_0-HarfBuzz* priority=0
 
  - name: "@Fonts"
    buildconfig: Typesetting/standard
@@ -2083,7 +2118,7 @@ groups:
        - libdevmapper*
     - name: x11
       requires:
-       - "@X11Libraries"
+       - "@GraphicsLibraries+x11"
       binaries:
        - hwloc
 
@@ -2279,7 +2314,6 @@ groups:
     - ipsec-tools
     - ipset
     - ipvsadm
-    - netcfg
     - netcat-openbsd
    buildflavors:
     - name: systemdlibs
@@ -2328,6 +2362,24 @@ groups:
     - libopenjp2-*
     - libtiff6
     - libMagick*
+    - cairo
+    - libcairomm-1*
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - libcairo2
+       - cairo-tools
+    - name: gnomelibs
+      augments:
+       - "@GnomeLibraries"
+      binaries:
+       - libcairo-gobject2
+      purposes:
+       - name: devel
+         binaries:
+          - cairomm*-devel priority=0
 
  - name: "@AudioLibraries"
    buildconfig: Multimedia/standard
@@ -2428,9 +2480,12 @@ groups:
    buildconfig: Core/standard
    requires:
     - "@HostNetworking"
+    - "@LUA"
    packages:
     - libfftw3*-hpc
     - libopenmpi2-gnu-hpc*
+    - lua-lmod
+    - gnu-compilers-hpc
 
  - name: "@HPC"
    buildconfig: HPC/standard
@@ -2441,19 +2496,24 @@ groups:
     - "@Core+networkServices"
     - "@HPCCoreLibraries"
     - "@HostNetworking"
-    - "@LUA"
     - "@TclCore"
    packages:
     - mvapich2*
     - mpi-selector
     - mpich
+    - mpich-gnu-hpc
     - mpitests*
     - suse-hpc
     - openmpi3
     - openmpi4
-    - gnu-compilers-hpc
     - pmix
-    - lua-lmod
+   purposes:
+    - name: devel
+      binaries:
+       - fftw3-*-hpc-devel priority=0
+       - fftw3-*-hpc-devel-static priority=0
+       - openmpi-*-hpc-devel priority=0
+       - openmpi-*-hpc-devel-static priority=0
 
  - name: "@NetworkUtils"
    buildconfig: Network/standard
@@ -2462,14 +2522,20 @@ groups:
    packages:
     - hostinfo
     - rsync
-    - wireshark
     - tcpdump
     - traceroute
+    # move to MailClient?
     - fetchmail
     - whois
     - telnet
     - nmap
     - mutt
+   buildflavors:
+    - name: gnomelibs
+      requires:
+       - "@GnomeLibraries"
+      packages:
+       - wireshark
 
  - name: "@NetworkServices"
    buildconfig: Network/standard
@@ -2541,6 +2607,8 @@ groups:
    buildconfig: Network/standard
    requires:
     - "@NetworkServices"
+    # for libusb:
+    - "@Core1"
    packages:
     - libcups2
     - cups
@@ -2752,12 +2820,16 @@ groups:
     - python3*-Sphinx
     - python3*-urllib3
    buildflavors:
+    - name: graphics
+      augments:
+       - "@GraphicsLibraries"
+      binaries:
+       - python3*-pycairo
     - name: gnomelibs
       augments:
        - "@GnomeLibraries"
       binaries:
        - python3*-gobject-*
-       - python3*-pycairo
        - python3*-Send2Trash
     - name: database
       requires:
@@ -3066,6 +3138,7 @@ groups:
     - "@Core"
     - "@Python"
     - "@MinimalManagement"
+    - "@UpdateStack"
    packages:
     - cmpi-provider-register
     - cim-schema

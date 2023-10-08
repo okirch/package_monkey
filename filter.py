@@ -6,7 +6,7 @@ from util import filterHighestRanking
 from ordered import PartialOrder
 from functools import reduce
 
-optPackageCycleDebug = 1
+optPackageCycleDebug = 0
 
 def intersectSets(a, b):
 	if a is None:
@@ -1509,12 +1509,8 @@ class PotentialClassification(object):
 				self.queue = queue
 				self.node = node
 				self.depth = depth
-				self.allowDescent = True
 
 			def descend(self):
-				if not self.allowDescent:
-					return False
-
 				entries = []
 				for neigh in self.node.lowerNeighbors:
 					entries.append(self.__class__(self.queue, neigh, self.depth + 1))
@@ -1522,7 +1518,10 @@ class PotentialClassification(object):
 				return True
 
 			def __str__(self):
-				return (self.depth * "   ") + f" - {self.node}"
+				result = (self.depth * "   ") + f" - {self.node}"
+				if self.node.solution:
+					result += f" [{self.node.solution}]"
+				return result
 
 		def __init__(self, node):
 			self.queue = []
@@ -1532,11 +1531,9 @@ class PotentialClassification(object):
 		def __iter__(self):
 			while self.queue:
 				next = self.queue.pop(0)
-				if next.node in self.seen:
-					next.allowDescent = False
-				else:
+				if next.node not in self.seen:
 					self.seen.add(next.node)
-				yield next
+					yield next
 
 	class SiblingInfo:
 		def __init__(self, build):
@@ -1824,8 +1821,9 @@ class PotentialClassification(object):
 						match = neigh.filterCandidateLabels(candidatePurposes)
 						if match == candidatePurposes:
 							continue
+
 						match = map(str, match)
-						print(f"{cursor} [{' '.join(match)}]")
+						print(f"{cursor}; match <{' '.join(match)}>")
 
 						if cursor.depth < 5:
 							cursor.descend()
@@ -3090,7 +3088,7 @@ class PackageFilter:
 					if flavor is not None:
 						print(f"{baseLabel}+{autoFlavor.label} packages could be merged into {baseLabel}, but {flavor} exists")
 					else:
-						print(f"{baseLabel}+{autoFlavor.label} packages will be merged into {baseLabel}")
+						# print(f"{baseLabel}+{autoFlavor.label} packages will be merged into {baseLabel}")
 						baseLabel.addMergeableFlavor(autoFlavor.label)
 				else:
 					self.instantiateAutoFlavor(group, autoFlavor)

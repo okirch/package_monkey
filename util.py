@@ -1,6 +1,7 @@
 #
 # Miscellaneous utility classes
 #
+import time
 
 # A simple class for batched processing
 # You can use this when you have a long-running data processing loop
@@ -182,3 +183,19 @@ def filterLowestRanking(items, getRank):
 
 def filterHighestRanking(items, getRank):
 	return filterRanking(items, getRank, int.__gt__)
+
+##################################################################
+#
+# Utility class for execution timing
+#
+##################################################################
+class ExecTimer:
+	def __init__(self):
+		self.t0 = time.time()
+
+	@property
+	def elapsed(self):
+		return time.time() - self.t0
+
+	def __str__(self):
+		return f"{self.elapsed} sec"

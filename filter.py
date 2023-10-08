@@ -1,7 +1,7 @@
 import yaml
 import fnmatch
 
-from util import CycleDetector, LoggingCycleDetector, CycleException, GenerationCounter, Timestamp
+from util import CycleDetector, LoggingCycleDetector, CycleException, GenerationCounter, Timestamp, ExecTimer
 from util import filterHighestRanking
 from ordered import PartialOrder
 from functools import reduce
@@ -2990,6 +2990,11 @@ class PackageFilter:
 
 		self.filterSet = PackageFilterSet()
 
+		timer = ExecTimer()
+		self.load(filename)
+		print(f"Loaded filter definition from {filename}: {timer} elapsed")
+
+	def load(self, filename):
 		with open(filename) as f:
 			data = yaml.full_load(f)
 

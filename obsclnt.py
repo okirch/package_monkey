@@ -186,7 +186,14 @@ class OBSSchema(object):
 			if key in ('provides', 'requires', 'recommends', 'suggests', 'conflicts', 'supplements', 'enhances'):
 				getattr(result, key).append(value)
 			elif key in ('provides_ext', 'requires_ext', 'recommends_ext', 'suggests_ext', 'conflicts_ext'):
+				dep = OBSSchema.Dummy()
+				dep.type = key[:-4]
+				dep.expression = child.attrib['dep']
+				dep.packages = []
+
 				member = getattr(result, key)
+				member.append(dep)
+
 				for grandchild in child:
 					assert(grandchild.tag in ('requiredby', 'providedby'))
 					a = grandchild.attrib
@@ -194,7 +201,7 @@ class OBSSchema(object):
 					del a['repository']
 					pinfo = PackageInfo(**a, epoch = None, backingStoreId = None)
 
-					member.append(pinfo)
+					dep.packages.append(pinfo)
 			else:
 				if getattr(result, key, None) is not None:
 					oldValue = getattr(result, key)
@@ -541,6 +548,7 @@ class OBSProject:
 	def __init__(self, name, product):
 		self.name = name
 		self.product = product
+		self.resolverHints = product.resolverHints
 		self.buildRepository = "standard"
 		self.buildArch = product.arch
 		self._packages = {}
@@ -646,19 +654,42 @@ class OBSProject:
 		return processed
 
 	def updateFileInfoExt(self, client, packageName, filename, rpm, includeLiteralDependencies = True):
-		def resolveDependents(depList, verb):
+		def resolvePackageInfo(pinfoList):
 			result = set()
 
-			for pinfo in depList:
+			if not pinfoList:
+				return result
+
+			for pinfo in pinfoList:
 				if self.ignorePackage(pinfo):
 					continue
 
 				dependent = self.product.findPackage(pinfo.name, pinfo.version, pinfo.release, pinfo.arch)
 				if dependent is None:
-					print(f"{filename} {verb}s {pinfo.fullname()}, but I cannot find it")
+					print(f"{filename} {dep.type} {pinfo.fullname()}, but I cannot find it")
 					continue
 
 				result.add(dependent)
+
+			return result
+
+		def resolveDependents(depList):
+			result = set()
+
+			if depList is None:
+				return result
+
+			for dep in depList:
+				for pinfo in dep.packages:
+					if self.ignorePackage(pinfo):
+						continue
+
+					dependent = self.product.findPackage(pinfo.name, pinfo.version, pinfo.release, pinfo.arch)
+					if dependent is None:
+						print(f"{filename} {dep.type} {pinfo.fullname()}, but I cannot find it")
+						continue
+
+					result.add(dependent)
 			return result
 
 		info = client.getFileInfoExt(self.name, self.buildRepository, packageName, self.buildArch, filename)
@@ -667,20 +698,48 @@ class OBSProject:
 			return False
 
 		if info.requires_ext:
-			rpm.updateResolvedRequires(resolveDependents(info.requires_ext, "require"))
+			requires = self.disambiguateRequires(info.requires_ext)
+			rpm.updateResolvedRequires(resolvePackageInfo(requires))
 		else:
 			for expr in info.requires:
 				dep = Package.processComplexDependency(expr)
 				rpm.requires.append(dep)
 
 		if info.provides_ext:
-			rpm.updateResolvedProvides(resolveDependents(info.provides_ext, "provide"))
+			rpm.updateResolvedProvides(resolveDependents(info.provides_ext))
 		else:
 			for expr in info.provides:
 				dep = Package.processComplexDependency(expr)
 				rpm.provides.append(dep)
 
 		return True
+
+	# In OBS fileinfo_ext data, resolved requirements are represented showing all possible
+	# candidates. However, for good results, we should use only _one_ resolution, which
+	# is the one with fewer dependencies.
+	def disambiguateRequires(self, requires):
+		if self.resolverHints is None:
+			raise Exception(f"No resolver hints to resolve ambiguity in requirements")
+
+		result = []
+		for dep in requires:
+			if len(dep.packages) <= 1:
+				result += dep.packages
+				continue
+
+			nameToPackage = dict((pinfo.name, pinfo) for pinfo in dep.packages)
+			names = set(nameToPackage.keys())
+
+			preferred = self.resolverHints.getPreferred(names)
+			if len(preferred) == 1:
+				bestName = next(iter(preferred))
+				result.append(nameToPackage[bestName])
+				continue
+
+			names = sorted(names)
+			raise Exception(f"Cannot resolve ambiguity in requirement {dep.expression}: {' '.join(names)}")
+
+		return result
 
 	def getRpmsUsedForBuild(self, client, obsPackage):
 		sourceVersion = obsPackage.sourceVersion

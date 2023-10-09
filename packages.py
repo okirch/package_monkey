@@ -1525,7 +1525,9 @@ class Package:
 			self.status.show(self.fullname())
 
 class Product:
-	def __init__(self):
+	def __init__(self, resolverHints = None):
+		self.resolverHints = resolverHints
+
 		self.packages = {}
 		self.sources = {}
 		self._byID = {}

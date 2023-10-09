@@ -1,5 +1,14 @@
+##################################################################
+#
+# Classes and functions related to product definitions
+#  - name, version, architecture
+#  - repo-md URLs
+#  - OBS projects and URLs
+#
+##################################################################
 import yaml
 import os
+from resolver import ResolverHints
 
 from repos import Repo
 
@@ -129,6 +138,7 @@ class ProductFamily:
 		self.cacheLocation = cacheLocation
 		self.repoDef = None
 		self.database = None
+		self.resolverHints = None
 		self.loaded = False
 
 	def load(self):
@@ -153,6 +163,16 @@ class ProductFamily:
 		self.architectures = data['architectures']
 		self.repositories = self.expandRepositories(data)
 		self.projects = self.expandProjects(data)
+
+		hints = data.get('resolverhints')
+		if hints is not None:
+			self.resolverHints = ResolverHints()
+			prefs = hints.get('prefer')
+			if prefs is not None:
+				self.expandResolverPreferences(prefs)
+			self.resolverHints.finalize()
+
+			# self.resolverHints.selfTest()
 
 		self.versions = []
 		for vd in data['versions']:
@@ -195,6 +215,23 @@ class ProductFamily:
 		info.ourceProjects = data.get('source') or []
 		info.buildProjects = data.get('build') or []
 		return info
+
+	def expandResolverPreferences(self, data):
+		for expr in data:
+			words = expr.split()
+
+			if not words:
+				continue
+
+			if words[0] == 'order':
+				self.resolverHints.addNameOrder(words[1:])
+			elif words[0] == 'suffixorder':
+				self.resolverHints.addSuffixOrder(words[1:])
+			elif words[0] == 'prefixorder':
+				self.resolverHints.addPrefixOrder(words[1:])
+			else:
+				raise Exception(f"Cannot parse resolver preference: \"{expr}\"")
+
 
 	def enumerate(self, **args):
 		if args.get('version') == 'latest':
@@ -269,6 +306,7 @@ class Product:
 		self.obsname = obsname
 		self._releases = []
 		self.service = catalog.service
+		self.resolverHints = catalog.resolverHints
 
 	@staticmethod
 	def fromYAML(pd, catalog):
@@ -296,7 +334,7 @@ class Product:
 	def addRelease(self, version, arch):
 		repoURLs = self.service.getRepoURLs(self.obsname, version, arch)
 
-		release = ProductRelease(self.obsname, version, arch, repoURLs, self.service)
+		release = ProductRelease(self.obsname, version, arch, repoURLs, service = self.service, resolverHints = self.resolverHints)
 		self._releases.append(release)
 
 		release.obsProjects = self.service.getOBSProjects(self.obsname, version, arch)
@@ -311,7 +349,7 @@ class Product:
 		return result
 
 class ProductRelease:
-	def __init__(self, name, version, arch, repoURLs, service = None):
+	def __init__(self, name, version, arch, repoURLs, service = None, resolverHints = None):
 		self.name = name
 		self.version = version
 		self.arch = arch
@@ -319,6 +357,7 @@ class ProductRelease:
 		self.repoURLs = repoURLs
 		self.obsProjects = None
 		self.service = service
+		self.resolverHints = resolverHints
 
 		self.backingStoreId = None
 		self.cachedRepos = None
@@ -329,7 +368,7 @@ class ProductRelease:
 	def createEmptyProduct(self):
 		from packages import Product
 
-		result = Product()
+		result = Product(resolverHints = self.resolverHints)
 		result.setNameAndVersion(self.name, self.version, self.arch)
 		result.productId = self.backingStoreId
 

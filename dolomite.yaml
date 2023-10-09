@@ -18,3 +18,180 @@ products:
  - name:        Dolomite
    nickname:    dolomite
    obsname:     Dolomite
+
+resolverhints:
+  prefer:
+    - "order libcontainers-openSUSE-policy libcontainers-default-policy"
+    - "order libjpeg8 libjpeg*"
+    - "order libjpeg8-devel libjpeg*-devel"
+    - "order lua53 lua5?"
+    - "order lua53-devel lua5?-devel"
+    - "order ImageMagick-config-7-SUSE ImageMagick-config-7-*"
+
+    # for a variety of packages, we support installing several (major) versions in parallel.
+    # these usually have the major number somewhere in the RPM name.
+    # In addition, there can be unversioned packages that require what is the "default"
+    # version at a certain point in time.
+    # The OBS dependency resolver will usually pick up and report both; so we try to go
+    # with unversioned package name
+    - "order libopenssl-devel libopenssl-*devel"
+    - "order libpq5 libecpg6 postgresql-devel postgresql*-devel postgresql*-devel-mini"
+    - "order postgresql-server-devel postgresql*-server-devel"
+    - "order go go1.*"
+    - "order cargo cargo1.*"
+    - "order rust rust1.*"
+    - "order libgtop libgtop-2*"
+    - "order glibmm2-devel glibmm2_*-devel"
+
+    # other packages do not have such a default version
+    - "order libomp16-devel libomp15-devel"
+
+    # Packages like systemd and krb5 come with *-mini versions of their packages
+    # When chasing runtime dependencies, we should prefer these mini versions
+    # over the full-blown ones to keep the depdency tree slender
+    - "order systemd-mini systemd"
+    - "order systemd-mini-devel systemd-devel"
+    - "order systemd-mini-container systemd-container"
+    - "order libsystemd0-mini libsystemd0"
+    - "order udev-mini udev"
+    - "order krb5-mini krb5"
+    - "order krb5-mini-devel krb5-devel"
+    - "order libudev-mini1 libudev1"
+    - "order gettext-runtime-mini gettext-runtime"
+    - "order gettext-tools-mini gettext-tools"
+    - "order ghostscript ghostscript-mini"
+
+    # when chasing hard requirements, we prefer the dbus version with the least
+    # baggage
+    - "order dbus-1 dbus-1-glib dbus-1-x11"
+
+    - "order mozilla-nss-certs p11-kit-nss-trust"
+    - "order chrony-pool-suse chrony-pool-*"
+
+    # libOpenIPMI0 vs full OpenIPMI
+    - "order libOpenIPMI0 OpenIPMI"
+
+    # prefer kernel-default over other kernel flavors
+    - "order kernel-default kernel-*"
+
+    # for some packages where there's a variant implementation of some
+    # 'original' go with the original for now
+    - "order unzip unzip-rcc"
+    - "order gzip zstd-gzip"
+
+    # pick java 1.7 over 1.8
+    - "order java-17* java-1_8_0*"
+
+    # java-1_8_0-openjdk-headless over java-1_8_0-openjdk-devel
+    - "order java-1_8_0-openjdk-headless java-1_8_0-openjdk-devel"
+
+    - "order coreutils-single coreutils"
+    - "order grub2-x86_64-efi grub2-i386-efi"
+    - "order libopenblas_pthreads0 libopenblas_serial0 libopenblas_openmp0"
+    - "order libXaw7 xaw3dd"
+
+    # debuginfod has some dummy packages
+    - "order *debuginfod* *debuginfod*-dummy*"
+
+    # Disambiguating some dependencies in HPC
+    # Not all of this makes sense, because these are actual alternatives, all of which should
+    # work when a product ships @HPC.
+    # So what we really want is to mark these as valid alternatives and allow the preferences
+    # engine to return several alternatives. Currently, that can't be done because it's considered
+    # an error.
+    - "order libpsm_infinipath1 libpsm2-compat"
+    - "order mvapich2-psm2 mpich mvapich2-psm mpich-ofi mvapich2"
+    - "order mvapich2-psm openmpi1-libs"
+    - "order libmca_common_dstore1 openmpi4-libs openmpi3-libs"
+    - "prefixorder openmpi4- openmpi3- openmpi2- openmpi1-"
+    - "order openmpi4-config openmpi3-config openmpi2-config openmpi1-config pmix-mca-params"
+
+    - "order ocaml-runtime ocaml"
+    - "order ocaml-compiler-libs ocaml-compiler-libs-devel"
+
+    - "order perl perl-ExtUtils-MakeMaker"
+    - "order perl perl-CPAN-Meta-Requirements"
+
+    # same here; these would be valid alternatives (if one wants to use BDB)
+    - "order postfix postfix-bdb"
+    - "order cyrus-sasl-devel cyrus-sasl-bdb-devel"
+
+    # prefer libfoo over llvm15-libfoo
+    - "prefixorder lib llvm15-lib"
+
+    # xml-commons-apis over xml-commons-apis-bootstrap
+    # antlr over antlr-bootstrap
+    # javacc over javacc-bootstrap
+    # scala over scala-bootstrap
+    - "suffixorder '' -bootstrap"
+
+    - "order javamail geronimo-j2ee*"
+    - "order geronimo-j2ee-1_4-apis geronimo-*-api servletapi4 servletapi5 tomcat-servlet-*-api"
+
+    # apache2-MPM can be resolved by apache2-worker apache2-prefork apache2-event
+    - "order apache2-prefork apache2-*"
+
+    # various python modules that come in different versions
+    - "order python3*-Cython3 python3*-Cython"
+    - "order python3*-SQLAlchemy python3*-SQLAlchemy1"
+    - "order python3*-sip-devel python3*-sip6-devel"
+    - "order python3*-tornado python3*-tornado6"
+    - "order python3*-jupyter-client python3*-jupyter-client7"
+
+    # Some packages do not specify the python abi when requiring other python modules;
+    # so OBS will report both the 3.10 and 3.11 version.
+    # Choose 3.11 over 3.10
+    - "prefixorder python311- python310-"
+
+    # javascript has -default versiuons of some of its packages
+    - "order npm-default npm*"
+    - "order nodejs-default nodejs*"
+    - "order nodejs-devel-default nodejs*-devel"
+
+    # not sure
+    - "order libpcp-devel pcp-devel"
+
+    # libcolord-gtk1 is an older version of this package
+    - "order colord-gtk libcolord-gtk1"
+    - "order typelib-1_0-Gtk-4* typelib-1_0-Gtk-*"
+    - "order gettext-its-gtk4 gettext-its-gtk3"
+    - "order libgnome-desktop-4* libgnome-desktop-*"
+
+    # SELinux
+    - "order selinux-policy-targeted selinux-policy-*"
+
+    - "order cracklib-dict-full cracklib-dict-*"
+
+    # not sure why this is there
+    - "order system-user-lp system-group-hardware"
+
+    - "order man mandoc"
+    - "order emacs-nox emacs-x11"
+
+    # preferred spelling engine?
+    - "order enchant-2-backend-hunspell enchant-2-backend-*"
+    # both packages seem to provide the shared library
+    - "order libgspell-1* gspell"
+
+    # libjack-devel over pipewire-libjack-devel
+    # libjack0 over pipewire-libjack0
+    - "order libjack-devel pipewire-libjack-0*-devel"
+    - "order libjack0 pipewire-libjack-0*"
+    - "order libjackserver0 pipewire-libjack-0*"
+    - "order pulseaudio pipewire-pulseaudio"
+
+    # not sure about this choice
+    - "order php8-embed apache2-mod_php8 php8-cli php8-fastcgi php8-fpm"
+
+    # if in doubt, prefer python311 over python310
+    - "order python310-base python3*-base"
+
+    - "order icewm-lite icewm-default"
+
+    - "suffixorder -mini"
+    - "suffixorder -mini-devel -devel"
+
+    - "suffixorder '' -32bit"
+    - "suffixorder '' -hmac"
+    - "suffixorder -ALP -SLE -SLE-Micro -SUSE -openSUSE -upstream"
+

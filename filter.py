@@ -1485,6 +1485,14 @@ class PotentialClassification(object):
 			pkg.labelReason = reason
 
 	def addEdge(self, requiringPackage, requiredPackage):
+		# Do not add packages that are labeled with disposition ignored
+		if requiringPackage.label and requiringPackage.label.disposition == Classification.DISPOSITION_IGNORE:
+			return
+
+		# A package that is not ignored MUST NOT require an ignored package
+		if requiredPackage.label and requiredPackage.label.disposition == Classification.DISPOSITION_IGNORE:
+			raise Exception(f"{requiringPackage} requires {requiredPackage} [requiredPackage.label] with disposition 'ignore'")
+
 		assert(requiringPackage is not requiredPackage)
 		upper = self.getPackage(requiringPackage)
 		lower = self.getPackage(requiredPackage)
@@ -3312,7 +3320,11 @@ class PackageFilter:
 
 		value = gd.get('disposition')
 		if value is not None:
-			if value not in ('separate', 'merge', 'ignore', 'maybe_merge') or group.type not in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
+			if value == 'ignore' and group.type == Classification.TYPE_BINARY:
+				# we allow regular labels to be marked as "ignore", which helps us hide problematic
+				# packages like patterns-*
+				pass
+			elif value not in ('separate', 'merge', 'ignore', 'maybe_merge') or group.type not in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
 				raise Exception(f"Invalid disposition={value} in definition of {group.type} group {group.name}")
 			group.label.disposition = value
 

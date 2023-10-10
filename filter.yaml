@@ -878,7 +878,6 @@ groups:
     - selinux-policy-minimum
     - selinux-policy-mls
     - selinux-policy-sandbox
-    - patterns-alp-selinux
    buildflavors:
     - name: python
       requires:
@@ -1525,7 +1524,6 @@ groups:
     - xdg-desktop-portal
     - ibus
     - gcr-viewer*
-    - patterns-alp-desktop-gnome
     - WebKitGTK*
     - pulseaudio
    buildflavors:
@@ -1780,7 +1778,6 @@ groups:
     - zypper-*
     - libsolv
     - perl-solv
-    - patterns-alp-base-zypper
    buildflavors:
     - name: python
       requires:
@@ -3202,15 +3199,13 @@ groups:
     - texlive-*
     - perl-biber
 
- - name: "@ObsoleteModuleBasesystem"
+ - name: "@Patterns"
+   description: |
+     patterns packages should live outside the component framework.
+   disposition: ignore
    buildconfig: Core/standard
-   requires:
-    - "@Busybox"
-    - "@Yast2"
-    - "@NetworkCore"
-    - "@NetworkServices"
-    - "@Sysadmin"
-    - "@Vim"
+   packages:
+    - patterns-*
 
 # 
 # Ignore these for now.

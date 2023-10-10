@@ -624,12 +624,6 @@ class LatestPackageTable(UniqueTable):
 			bucket = self.getBucket(pinfo.name)
 			bucket.pinfo = pinfo
 
-	def getPackageByName(self, name):
-		b = self._buckets.get(name)
-		if b is None:
-			return None
-		return b.pinfo
-
 	def update(self, pkg):
 		assert(pkg.backingStoreId)
 
@@ -1198,9 +1192,6 @@ class BackingStoreDB(DB):
 	def enumerateLatestPackages(self):
 		latestPkgIds = list(self.latest.fetchColumn('pkgId'))
 		return self.retrieveMultiplePackageInfos(latestPkgIds)
-
-	def getLatestPackageByName(self, name):
-		return self.latest.getPackageByName(name)
 
 	def retrievePackage(self, pinfo):
 		return self.retrievePackageById(pinfo.backingStoreId, pinfo.product)

@@ -2,6 +2,7 @@
 # writing out the classification results
 #
 
+from csvio import CSVWriter
 
 class BaseWriter:
 	def __init__(self):
@@ -141,3 +142,20 @@ class StandardWriter(BaseWriter):
 		print("==================================================================")
 		print("The resolver flagged the following problems")
 		problemLog.show(self)
+
+class TableWriter(BaseWriter):
+	def __init__(self, filename = None):
+		super().__init__()
+		self.csv = CSVWriter(filename, fields = ['component', 'topic', 'package'])
+
+	def writeLabelDescription(self, label):
+		pass
+
+	def writePackagesForGroup(self, label, packages):
+		component = label.componentName
+		topic = label.name
+		for pkg in sorted(packages, key = lambda p: p.name):
+			self.csv.write([component, topic, pkg.shortname])
+
+	def writeProblems(self, problemLog):
+		raise Exception("CSV writer does not support problem log")

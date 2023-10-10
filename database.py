@@ -1043,6 +1043,10 @@ class BackingStoreDB(DB):
 
 		return obj.backingStoreId
 
+	def fetchPackageObjectId(self, obj):
+		obj.backingStoreId = self.packages.addPackageObject(obj)
+		return bool(obj.backingStoreId)
+
 	def updatePackageDependencies(self, obj):
 		self.requires.addDependencies(obj.requires, obj.backingStoreId)
 		self.provides.addDependencies(obj.provides, obj.backingStoreId)

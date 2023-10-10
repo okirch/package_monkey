@@ -520,7 +520,9 @@ class OBSPackage:
 		self._source = value
 
 	def addBuildRequires(self, rpm):
-		assert(rpm.backingStoreId)
+		if rpm.backingStoreId is None:
+			raise Exception(f"{self}: cannot add requirement {rpm} because it doesn't have a DB id yet")
+
 		self._buildRequires.add(rpm)
 
 	@property
@@ -886,6 +888,14 @@ class OBSProject:
 		for obsPackage in toBeAdded:
 			obsPackage.rpmsUsedForBuild = self.getRpmsUsedForBuild(client, obsPackage)
 			for rpm in obsPackage.rpmsUsedForBuild:
+				if rpm.backingStoreId is None:
+					# we can get here in rare circumstances. For example when the
+					# build for an OBS package failed, then we will not have picked
+					# up the binary RPMs it produces. However, there may still be
+					# (build) dependencies on the rpms produced by a previous build.
+					if not store.fetchPackageObjectId(rpm):
+						raise Exception(f"{obsPackage} requires {rpm} for building, but I couldn't find it in the database")
+
 				obsPackage.addBuildRequires(rpm)
 			queue.add(obsPackage)
 

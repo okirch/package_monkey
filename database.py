@@ -347,6 +347,10 @@ class Table(object):
 
 		self.deleteMultipleWork(whereField, values)
 
+		# we currently do not commit the deletion right away.
+		# not sure whether this is a good idea or not.
+		# self.db.commit()
+
 	def deleteMultipleWork(self, whereField, values):
 		if len(values) == 0:
 			return
@@ -570,6 +574,13 @@ class PackageTable(UniqueTable):
 	def getPackagesForBuild(self, buildId):
 		return self.knownBuilds.get(buildId) or []
 
+##################################################################
+# This table tracks the latest known version of any (non-source)
+# package.
+# FIXME: we should probably distinguish by name+version rather
+# than just the name. Some architectures have 32bit and 64bit
+# versions of the same package.
+##################################################################
 class LatestPackageTable(UniqueTable):
 	NAME = "latest"
 	TABLE_FIELDS = """
@@ -617,13 +628,28 @@ class LatestPackageTable(UniqueTable):
 	def __init__(self, db):
 		super().__init__(db)
 		self._buckets = {}
+		self._duplicates = []
+
+	@property
+	def knownPackages(self):
+		for id, b in sorted(self._buckets.items()):
+			yield b.pinfo
+
+	@property
+	def duplicatePackages(self):
+		return iter(self._duplicates)
 
 	def fetchKnownPackages(self, store):
 		for d in self.fetchAll():
 			pinfo = store.constructPackageInfo(d)
 			bucket = self.getBucket(pinfo.name)
+
+			if bucket.pinfo is not None:
+				self._duplicates.append(bucket.pinfo)
+
 			bucket.pinfo = pinfo
 
+	# FIXME: something is wrong here; we end up with duplicate entries in the DB
 	def update(self, pkg):
 		assert(pkg.backingStoreId)
 
@@ -644,6 +670,23 @@ class LatestPackageTable(UniqueTable):
 			b = self.Latest(name)
 			self._buckets[name] = b
 		return b
+
+	def prune(self):
+		idsToDrop = []
+		for pinfo in self._duplicates:
+			print(f"Table \"{self.name}\" contains redundant entry {pinfo}")
+			idsToDrop.append(pinfo.backingStoreId)
+
+		if not idsToDrop:
+			print(f"Table \"{self.name}\" does not contain any redundant entries")
+			return
+
+		print(f"Dropping {len(idsToDrop)} redundant entries from table {self.name}")
+		self.deleteMultiple('id', idsToDrop)
+		self.db.commit()
+
+		self._duplicates = []
+
 
 class BuildTable(UniqueTable):
 	NAME = "builds"
@@ -1494,3 +1537,6 @@ class BackingStoreDB(DB):
 			self.tree.addEdge(requiringPkgId = source, requiredPkgId = target, dependencyId = dep)
 		defer.commit()
 
+	def fixupLatest(self):
+		# when the database is somewhat hosed it's faster to fix it up than rebuilding it from scratch
+		self.latest.prune()

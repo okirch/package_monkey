@@ -27,10 +27,17 @@ for release in application.enumerateProducts():
 	product = release.createEmptyProduct()
 
 	print(f"Release {release}")
+
+	projects = []
 	for bp in release.buildProjects:
 		print(f"  {bp}")
 
 		project = OBSProject(bp, product)
 		project.setCachePath(f"cache/obs/{obsInstanceHostname}")
+
+		project.primeCache(obs)
+		projects.append(project)
+
+	for project in projects:
 		project.updateBinaryList(obs)
 		project.updateBackingStore(application.backingStore, obs)

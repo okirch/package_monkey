@@ -641,7 +641,7 @@ class LatestPackageTable(UniqueTable):
 
 	def fetchKnownPackages(self, store):
 		for d in self.fetchAll():
-			pinfo = store.constructPackageInfo(d)
+			pinfo = store.constructPackageInfo(d, d['pkgId'])
 			bucket = self.getBucket(pinfo.name)
 
 			if bucket.pinfo is not None:
@@ -1237,7 +1237,12 @@ class BackingStoreDB(DB):
 		return self.retrieveMultiplePackageInfos(latestPkgIds)
 
 	def retrievePackage(self, pinfo):
-		return self.retrievePackageById(pinfo.backingStoreId, pinfo.product)
+		pkg = self.retrievePackageById(pinfo.backingStoreId, pinfo.product)
+
+		if pkg.fullname() != pinfo.fullname():
+			raise Exception(f"DB inconsistency. Looking up {pinfo.fullname()} returned {pkg.fullname()}")
+
+		return pkg
 
 	def retrievePackageById(self, pkgId, product = None):
 		pkg = self.packageCache.get(pkgId)
@@ -1415,12 +1420,12 @@ class BackingStoreDB(DB):
 		if d is None:
 			return None
 
-		return self.constructPackageInfo(d)
+		return self.constructPackageInfo(d, d['id'])
 
 	def retrieveMultiplePackageInfos(self, pkgIdList):
 		result = []
 		for d in self.packages.selectMultiple([], 'id', pkgIdList):
-			pinfo = self.constructPackageInfo(d)
+			pinfo = self.constructPackageInfo(d, d['id'])
 			if pinfo is None:
 				badPkgId = d.get('id')
 				raise Exception(f"cannot build package info for id {badPkgId}")
@@ -1428,7 +1433,10 @@ class BackingStoreDB(DB):
 			result.append(pinfo)
 		return result
 
-	def constructPackageInfo(self, d):
+	# we pass the package id as a separate argument, because we get called with data from
+	# different tables. The basic columns are named the same way, except for the package
+	# id. In the packages table, it's in the 'id' column, whereas in table latest it's in pkgId
+	def constructPackageInfo(self, d, pkgId):
 		productId = d.get('productId')
 
 		pinfo = PackageInfo(name = d['name'],
@@ -1436,7 +1444,7 @@ class BackingStoreDB(DB):
 			release = d['release'],
 			epoch = d['epoch'],
 			arch = d['arch'],
-			backingStoreId = d['id'],
+			backingStoreId = pkgId,
 			productId = productId)
 
 		pinfo.product = self.getCachedProductInfo(productId)

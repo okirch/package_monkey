@@ -3341,6 +3341,11 @@ class PackageFilter:
 			assert(type(gravity) == int)
 			group.label.gravity = gravity
 
+			# we may have defined labels out of order; make sure subordinate purpose labels
+			# inherit the gravity value
+			for purpose in group.label._purposes.values():
+				purpose.gravity = gravity
+
 		if group.label:
 			nameList = gd.get('requires') or []
 			for name in nameList:

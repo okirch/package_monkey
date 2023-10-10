@@ -153,10 +153,12 @@ class LoggingCycleDetector(CycleDetector):
 		self.chain.append(key)
 		return True
 
+##################################################################
 #
 # filter a collection of things by rank
 # A rank of None indicates no ranking at all, and is "less than" any other rank
 #
+##################################################################
 def filterRanking(items, getRank, isBetterThan):
 	bestRank = None
 	found = []
@@ -198,4 +200,26 @@ class ExecTimer:
 		return time.time() - self.t0
 
 	def __str__(self):
-		return f"{self.elapsed} sec"
+		return f"{self.elapsed:.3} sec"
+
+##################################################################
+#
+# A simple progress tracker
+#
+##################################################################
+class ThatsProgress:
+	def __init__(self, total):
+		self.count = 0
+		self.total = total
+
+	@property
+	def percent(self):
+		if self.total == 0:
+			return 100
+		return 100.0 * self.count / self.total
+
+	def __str__(self):
+		return f"{self.percent:3.1f}%"
+
+	def tick(self):
+		self.count += 1

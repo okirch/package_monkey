@@ -599,10 +599,11 @@ class OBSProject:
 
 		packages = self.updateBinaryList(client)
 
-		progress = ThatsProgress(2 * len(packages))
+		progress = ThatsProgress(len(packages))
 
 		failures = 0
 		for obsPackage in packages:
+			infomsg(f"[{progress}] retrieving OBS information for {obsPackage}")
 			for rpm in obsPackage.binaries:
 				info = client.getFileInfoExt(self.name, self.buildRepository, obsPackage.name, self.buildArch, rpm.fullname(),
 						progressMeter = progress)
@@ -610,11 +611,9 @@ class OBSProject:
 					print(f"Unable to obtain fileinfo for {rpm.fullname()}")
 					failures += 1
 
-			progress.tick()
-
-		for obsPackage in packages:
-			if not self.queryPackageBuildInfo(client, obsPackage, progressMeter = progress):
-				print(f"Inable to obtain buildinfo for obs package {obsPackage}")
+			if obsPackage.buildStatus == OBSPackage.STATUS_SUCCEEDED and \
+			   not self.queryPackageBuildInfo(client, obsPackage, progressMeter = progress):
+				print(f"Unable to obtain buildinfo for obs package {obsPackage}")
 				failures += 1
 
 			progress.tick()

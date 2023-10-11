@@ -18,7 +18,7 @@ class XMLNode:
 	def tag(self):
 		return self.realnode.tag
 
-	def add_child(self, name):
+	def addChild(self, name):
 		depth = self.depth + 1
 
 		parent = self.realnode
@@ -48,7 +48,7 @@ class XMLNode:
 
 		return XMLNode(child, depth)
 
-	def add_field(self, name, value):
+	def addField(self, name, value):
 		# Skip empty elements
 		if not value:
 			return None
@@ -56,30 +56,30 @@ class XMLNode:
 		if type(value) != str:
 			value = str(value)
 
-		child = self.add_child(name)
+		child = self.addChild(name)
 		child.realnode.text = value
 
 		return child
 
-	def add_dict(self, dict):
-		self.add_dict_slice(dict, dict.keys())
+	def addDict(self, dict):
+		self.addDictSlice(dict, dict.keys())
 
-	def add_dict_slice(self, dict, fields):
+	def addDictSlice(self, dict, fields):
 		for f in fields:
 			if f in dict:
-				n = self.add_field(f, dict[f])
+				n = self.addField(f, dict[f])
 
-	def add_list(self, name, values):
+	def addList(self, name, values):
 		for v in values:
-			self.add_field(name, v)
+			self.addField(name, v)
 
-	def set_attr(self, name, value):
+	def setAttribute(self, name, value):
 		if not value:
 			return
 
 		self.realnode.set(name, str(value))
 
-	def set_text(self, value):
+	def setText(self, value):
 		self.realnode.text = value
 
 class XMLTree:
@@ -104,26 +104,26 @@ class TreeBuilder:
 
 		vt = type(value)
 		if vt in (bool, int, float, str):
-			child = node.add_child(key)
+			child = node.addChild(key)
 			child.realnode.text = str(value)
-			child.set_attr('type', vt.__name__)
+			child.setAttribute('type', vt.__name__)
 		elif vt in (list, tuple):
 			if len(value) == 0:
 				return
 
-			self.addList(node.add_child(key), 'i', value)
+			self.addList(node.addChild(key), 'i', value)
 		elif vt == dict:
-			self.addDict(node.add_child(key), value)
+			self.addDict(node.addChild(key), value)
 		else:
 			raise ValueError("TreeBuilder: don't know how to represent %s typed data" % vt)
 
 	def addList(self, node, itemname, listData):
-		node.set_attr('type', 'list')
+		node.setAttribute('type', 'list')
 		for item in listData:
 			self.addDatum(node, itemname, item)
 
 	def addDict(self, node, data):
-		node.set_attr('type', 'dict')
+		node.setAttribute('type', 'dict')
 		for key in data.keys():
 			v = data.get(key)
 			if v is not None:

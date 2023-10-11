@@ -159,3 +159,41 @@ class TableWriter(BaseWriter):
 
 	def writeProblems(self, problemLog):
 		raise Exception("CSV writer does not support problem log")
+
+class XmlWriter(BaseWriter):
+	def __init__(self, filename = None):
+		super().__init__()
+		self.xmltree = XMLTree('components')
+
+		self._labels = {}
+
+	def writeLabelDescription(self, label):
+		labelNode = self.xmltree.root.add_child('topic')
+
+		# for now; could also have separate attrs for base name, option, pkgclass
+		labelNode.setAttribute('name', label.name)
+
+		component = label.componentName
+		if component is not None:
+			labelNode.setAttribute('component', componentName)
+
+		runtimeNode = labelNode.add_child('runtime')
+		for req in sorted(label.runtimeRequires, key = lambda l: l.name):
+			reqNode = runtimeNode.add_child('requires')
+			reqNode.setAttribute('topic', reqNode.name)
+
+		self._labels[label.name] = xmlnode
+
+	def writePackagesForGroup(self, label, packages):
+		labelNode = self._labels[label.name]
+
+		for rpm in sorted(packages, key = lambda p: p.name):
+			rpmNode = labelNode.add_child('rpm')
+			rpmNode.setAttribute('name', rpm.name)
+			rpmNode.setAttribute('arch', rpm.arch)
+
+			# FIXME: would be good if we could add the OBS package name here
+
+	def writeProblems(self, problemLog):
+		raise Exception("XML writer does not support problem log")
+

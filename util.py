@@ -202,6 +202,13 @@ class ExecTimer:
 	def __str__(self):
 		return f"{self.elapsed:.3} sec"
 
+class LoggingExecTimer(ExecTimer):
+	def __str__(self):
+		elapsed = self.elapsed
+		min = int(elapsed / 60)
+		sec = int(elapsed) % 60
+		return f"[{min:02}:{sec:02}]"
+
 ##################################################################
 #
 # A simple progress tracker
@@ -223,3 +230,64 @@ class ThatsProgress:
 
 	def tick(self):
 		self.count += 1
+
+##################################################################
+#
+# Interfacing with python's logging class
+#
+##################################################################
+import logging
+
+class LoggingFacade:
+	DEFAULT_FORMAT = '%(asctime)s: %(message)s'
+
+	class RelativeTimeFormatter(logging.Formatter):
+		def __init__(self, *args, **kwargs):
+			super().__init__(*args, **kwargs)
+			self.timer = LoggingExecTimer()
+
+		def formatTime(self, record, datefmt = None):
+			return str(self.timer)
+
+	def __init__(self):
+		self.root = logging.getLogger()
+		self.root.setLevel(logging.INFO)
+
+		self.default = self.getLogger('default')
+
+		self.defaultFormat = self.RelativeTimeFormatter(self.DEFAULT_FORMAT)
+
+	def addRootHandler(self, handler):
+		handler.setFormatter(self.defaultFormat)
+		self.root.addHandler(handler)
+
+	def enableStdout(self):
+		self.addRootHandler(logging.StreamHandler())
+
+	def addLogfile(self, filename):
+		self.addRootHandler(logging.FileHandler(filename, mode = "w"))
+
+	def setLogLevel(self, name, levelName):
+		levelName = levelName.upper()
+		if name == 'all':
+			logger = self.root
+		else:
+			logger = self.getLogger(name)
+
+		logger.setLevel(levelName)
+		logger.debug(f"Enabled {name} debugging messages")
+
+	def isDebugEnabled(self, name):
+		level = self.getLogger(name).getEffectiveLevel()
+		return level <= logging.DEBUG
+
+	def getLogger(self, name = None):
+		return logging.getLogger(name)
+
+loggingFacade = LoggingFacade()
+
+debugmsg = loggingFacade.default.debug
+infomsg = loggingFacade.default.info
+warnmsg = loggingFacade.default.warning
+errormsg = loggingFacade.default.error
+

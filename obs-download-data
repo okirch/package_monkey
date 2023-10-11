@@ -19,8 +19,7 @@ store.putProperty("arch", application.architecture)
 
 obsInstanceHostname = "api.suse.de"
 
-obs = OBSClient(f"https://{obsInstanceHostname}")
-obs.setCachePath("cache/http")
+obs = application.obsClient
 
 for release in application.enumerateProducts():
 
@@ -33,7 +32,9 @@ for release in application.enumerateProducts():
 		print(f"  {bp}")
 
 		project = OBSProject(bp, product)
-		project.setCachePath(f"cache/obs/{obsInstanceHostname}")
+
+		cachePath = application.getCachePath(f"obs/{obs.hostname}")
+		project.setCachePath(cachePath)
 
 		project.primeCache(obs)
 		projects.append(project)

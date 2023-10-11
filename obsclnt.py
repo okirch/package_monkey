@@ -320,13 +320,14 @@ class OBSCache(GenericFileCache):
 		return self.Entry(os.path.join(self.path, path))
 
 class OBSClient(object):
-	def __init__(self, apiurl = None, cache = None):
-		self._apiurl = apiurl or default_obs_apiurl
-		# self._atoms = suse.utils.AtomStrings()
+	def __init__(self, hostname, cache = None):
+		if hostname is None:
+			raise Exception("Cannot create OBS client: missing hostname argument")
+
+		self.hostname = hostname
+		self._apiurl = f"https://{hostname}"
 		self._schema = OBSSchema()
 		self._cache = cache
-
-		# self._deadmanSwitch = suse.utils.DeadmanSwitch(self._apiurl)
 
 		import osc.conf
 		osc.conf.get_config()
@@ -568,6 +569,18 @@ class OBSProject:
 
 	def setCachePath(self, path):
 		self._obsCache = OBSCache(path)
+
+	def setCacheStrategy(self, name):
+		if name == 'none':
+			# always go to OBS. Slow
+			self._maxCacheAge = 0
+		elif name == 'opportunistic':
+			# avoid calling OBS where possible
+			self._maxCacheAge = None
+		elif name == 'default':
+			self._maxCacheAge = 3600
+		else:
+			raise Exception(f"Unknown OBS cache strategy {name}")
 
 	def getCacheEntry(self, *args, **kwargs):
 		if self._obsCache is None:

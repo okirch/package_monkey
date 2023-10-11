@@ -4,8 +4,11 @@ from products import ProductCatalog, CacheLocation
 from database import BackingStoreDB
 from util import ExecTimer, loggingFacade
 from util import debugmsg, infomsg, warnmsg, errormsg
+from obsclnt import OBSClient
 
 class Application:
+	OBS_HOST_DEFAULT = "api.suse.de"
+
 	def __init__(self, name):
 		self.name = name
 		self.args = argparse.ArgumentParser(name)
@@ -18,7 +21,9 @@ class Application:
 		self.args.add_argument('--quiet', action = 'store_true', default = False)
 		self.args.add_argument('--debug', action = 'append', default = [])
 		self.args.add_argument('--logfile', action = 'store')
-		
+		self.args.add_argument('--obs-host', default = Application.OBS_HOST_DEFAULT)
+		self.args.add_argument('--obs-cache-strategy', default = None)
+
 		self.opts = self.args.parse_args()
 
 		self._cache = None
@@ -61,12 +66,33 @@ class Application:
 	@property
 	def backingStore(self):
 		if self._store is None and self.opts.db:
+			timing = ExecTimer()
 			self._store = BackingStoreDB(self.opts.db)
+			print(f"Loaded database {self.opts.db}: {timing} elapsed")
 		return self._store
+
+	@property
+	def obsClient(self):
+		obs = OBSClient(self.opts.obs_host)
+		obs.setCachePath(self.defaultHttpPath)
+
+		# control how much we talk to OBS directly, and how much we use the cache
+		if self.opts.obs_cache_strategy is not None:
+			obs.setCacheStrategy(self.opts.obs_cache_strategy)
+
+		return obs
 
 	@property
 	def architecture(self):
 		return self.opts.arch
+
+	@property
+	def defaultHttpPath(self):
+		return self.getCachePath("http")
+
+	def getCachePath(self, subdir):
+		# for the time being, we place everything in side a local ./cache directory
+		return f"cache/{subdir}"
 
 	def enumerateProducts(self):
 		args = {}

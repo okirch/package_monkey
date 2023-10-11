@@ -1,8 +1,10 @@
 import sqlite3
 from packages import Package, PackageInfo
 from obsclnt import OBSPackage
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
-optSqlDebug = 0
+sqlLogger = loggingFacade.getLogger('sql')
+sqlDebug = sqlLogger.debug
 
 def splitDictKeyValues(d):
 	keys = []
@@ -150,10 +152,10 @@ class Table(object):
 		try:
 			c = self.db.conn.cursor()
 
-			if optSqlDebug:
-				print(f"SQL: {sqlStatement}")
-				if values:
-					print(f"     {values}")
+			sqlDebug(f"SQL: {sqlStatement}")
+			if values:
+				sqlDebug(f"     {values}")
+
 			c.execute(sqlStatement, values)
 		except sqlite3.Error as e:
 			print(f"SQL Error: {e} - {type(e)}")
@@ -167,8 +169,7 @@ class Table(object):
 			print(f"Failed to create table {self.name}")
 			return False
 
-		if optSqlDebug:
-			print(f"Created table {self.name}")
+		sqlDebug(f"Created table {self.name}")
 		return True
 
 	def createIndex(self, name, fields):
@@ -178,8 +179,7 @@ class Table(object):
 			print(f"Failed to create table index {name} for table {self.name}")
 			return False
 
-		if optSqlDebug:
-			print(f"Created table index {name} for table {self.name}")
+		sqlDebug(f"SQL Created table index {name} for table {self.name}")
 		return True
 
 	def createUniqueIndex(self, name, fields):
@@ -189,8 +189,7 @@ class Table(object):
 			print(f"Failed to create table index {name} for table {self.name}")
 			return False
 
-		if optSqlDebug:
-			print(f"Created table index {name} for table {self.name}")
+		sqlDebug(f"Created table index {name} for table {self.name}")
 		return True
 
 	def insert(self, **kwargs):
@@ -373,9 +372,7 @@ class Table(object):
 			d = dict(zip(names, row))
 			result.append(d)
 
-		if optSqlDebug:
-			print(f"SQL: found {len(result)} matches")
-
+		sqlDebug(f"SQL: found {len(result)} matches")
 		return result
 
 	def constructObject(self, klass, d):

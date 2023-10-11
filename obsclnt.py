@@ -737,13 +737,16 @@ class OBSProject:
 
 				dependent = self.product.findPackage(pinfo.name, pinfo.version, pinfo.release, pinfo.arch)
 				if dependent is None:
-					# try a looser match - ignore the release field
-					dependent = self.product.findPackage(pinfo.name, pinfo.version, arch = pinfo.arch)
-				if dependent is None:
-					print(f"{filename} references {pinfo.fullname()}, but I cannot find it")
-					if '32bit' not in pinfo.name:
-						fail
-					continue
+					# try a looser match - ignore version and release
+					dependent = self.product.findPackage(pinfo.name, arch = pinfo.arch)
+					if dependent:
+						warnmsg(f"{filename} references unknown rpm {pinfo.fullname()}, using {dependent} instead")
+					if dependent is None:
+						if '32bit' not in pinfo.name:
+							raise Exception(f"{filename} references {pinfo.fullname()}, but I cannot find it")
+
+						errormsg(f"{filename} references {pinfo.fullname()}, but I cannot find it")
+						continue
 
 				result.add(dependent)
 

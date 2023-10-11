@@ -39,6 +39,9 @@ for release in application.enumerateProducts():
 		project.primeCache(obs)
 		projects.append(project)
 
+	# now we should have everything we need. only go to OBS if something's really missing
+	obs.setCacheStrategy('opportunistic')
+
 	for project in projects:
 		project.updateBinaryList(obs)
 		project.updateBackingStore(application.backingStore, obs)

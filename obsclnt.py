@@ -333,21 +333,35 @@ class OBSClient(object):
 		osc.conf.get_config()
 
 		infomsg(f"Created OBS client for {self._apiurl}")
-		if False:
-			for k, v in osc.conf.config.items():
-				if k.startswith('#'):
-					continue
-				print(f" {k}={v}")
+		self.setCacheStrategy('default')
 
 	def setCachePath(self, path):
 		self._cache = HTTPCache(path)
+
+	def setCacheStrategy(self, name):
+		self._allowApiCalls = True
+		if name == 'none':
+			# always go to OBS. Slow
+			self._maxCacheAge = 0
+		elif name == 'opportunistic':
+			# avoid calling OBS where possible
+			self._maxCacheAge = None
+		elif name == 'exclusive':
+			self._maxCacheAge = None
+			self._allowApiCalls = False
+		elif name == 'default':
+			self._maxCacheAge = 3600
+		else:
+			raise Exception(f"Unknown OBS cache strategy {name}")
+		self.cachePolicy = name
+		infomsg(f"Setting OBS cache strategy to {name}")
 
 	def getHTTPCacheEntry(self, *args, **kwargs):
 		if self._cache is None:
 			return None
 		return self._cache.getEntry(*args, **kwargs)
 
-	def apiCallRaw(self, path, method = "GET", cachingOff = False, cacheEntry = None, maxCacheAge = 3600, progressMeter = None, **params):
+	def apiCallRaw(self, path, method = "GET", cachingOff = False, cacheEntry = None, progressMeter = None, **params):
 		assert(method in ('GET', 'POST'))
 
 		if type(path) == list:
@@ -366,10 +380,13 @@ class OBSClient(object):
 		fullUrl = self._apiurl + "/" + path
 		if method == "GET" and cacheEntry is None and not cachingOff:
 			cacheEntry = self.getHTTPCacheEntry(fullUrl)
-		if cacheEntry is not None and cacheEntry.exists and (maxCacheAge is None or cacheEntry.age < maxCacheAge):
+		if cacheEntry is not None and cacheEntry.exists and (self._maxCacheAge is None or cacheEntry.age < self._maxCacheAge):
 			debugOBS(f"OBS API Call {path} [cached]", prefix = progressMeter)
 			debugCache(f"Loading cache object {cacheEntry.path}")
 			return cacheEntry.open()
+
+		if not self._allowApiCalls:
+			raise Exception(f"Cannot perform API call to {path} (denied by user)")
 
 		from osc.core import http_request
 		from urllib.error import HTTPError
@@ -425,7 +442,6 @@ class OBSClient(object):
 		return self._schema.processBuildDepInfo(res)
 
 	def getBuildInfo(self, project, repository, package, arch, **kwargs):
-		debugOBS(f">> retrieve buildinfo for {package}")
 		res = self.apiCallXML("build", project, repository, arch, package, "_buildinfo", **kwargs)
 		return self._schema.processBuildInfo(res)
 
@@ -562,25 +578,10 @@ class OBSProject:
 		self._packages = {}
 		self._binaries = BinaryMap()
 
-		# This will be set to None to force reading from cache
-		self._maxCacheAge = 3600
-
 		self._obsCache = None
 
 	def setCachePath(self, path):
 		self._obsCache = OBSCache(path)
-
-	def setCacheStrategy(self, name):
-		if name == 'none':
-			# always go to OBS. Slow
-			self._maxCacheAge = 0
-		elif name == 'opportunistic':
-			# avoid calling OBS where possible
-			self._maxCacheAge = None
-		elif name == 'default':
-			self._maxCacheAge = 3600
-		else:
-			raise Exception(f"Unknown OBS cache strategy {name}")
 
 	def getCacheEntry(self, *args, **kwargs):
 		if self._obsCache is None:
@@ -592,7 +593,10 @@ class OBSProject:
 		return sorted(self._packages.values(), key = lambda p: p.name)
 
 	def primeCache(self, client):
-		# params['maxCacheAge'] = None
+		if client.cachePolicy == 'exclusive':
+			infomsg(f"Skipping download of data from OBS - cache policy is {client.cachePolicy}")
+			return
+
 		packages = self.updateBinaryList(client)
 
 		progress = ThatsProgress(2 * len(packages))
@@ -600,7 +604,8 @@ class OBSProject:
 		failures = 0
 		for obsPackage in packages:
 			for rpm in obsPackage.binaries:
-				info = client.getFileInfoExt(self.name, self.buildRepository, obsPackage.name, self.buildArch, rpm.fullname(), progressMeter = progress)
+				info = client.getFileInfoExt(self.name, self.buildRepository, obsPackage.name, self.buildArch, rpm.fullname(),
+						progressMeter = progress)
 				if info is None:
 					print(f"Unable to obtain fileinfo for {rpm.fullname()}")
 					failures += 1
@@ -617,9 +622,6 @@ class OBSProject:
 		if failures:
 			raise Exception(f"Encountered {failures} errors while trying to download project information on {self.name} from OBS")
 
-		self._maxCacheAge = None
-
-
 	def ignorePackage(self, pinfo):
 		name = pinfo.name
 
@@ -635,8 +637,7 @@ class OBSProject:
 				repository = self.buildRepository,
 				arch = self.buildArch,
 				multibuild = 1,
-				view = ('status', 'binarylist'),
-				maxCacheAge = self._maxCacheAge)
+				view = ('status', 'binarylist'))
 
 		# Since we were pretty specific about the repo and arch, the result
 		# should have exactly one element only
@@ -654,11 +655,10 @@ class OBSProject:
 		cacheEntry = self.getCacheEntry(cacheObjectName, project = self.name,
 				repository = self.buildRepository,
 				package = obsPackage.name,
-				arch = self.buildArch,
-				**params)
+				arch = self.buildArch)
 
 		return client.getBuildInfo(self.name, self.buildRepository, obsPackage.name, self.buildArch,
-				cacheEntry = cacheEntry, maxCacheAge = self._maxCacheAge)
+				cacheEntry = cacheEntry, **params)
 
 	def updateBinaryList(self, client, with_binaries = True):
 		debugOBS(f"Getting build results for {self.name}")
@@ -769,7 +769,7 @@ class OBSProject:
 					result.add(dependent)
 			return result
 
-		info = client.getFileInfoExt(self.name, self.buildRepository, packageName, self.buildArch, filename, maxCacheAge = self._maxCacheAge)
+		info = client.getFileInfoExt(self.name, self.buildRepository, packageName, self.buildArch, filename)
 		if info is None:
 			print(f"Unable to obtain fileinfo for {filename}")
 			return False

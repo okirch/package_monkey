@@ -6,21 +6,18 @@ import time
 
 from packages import Package, PackageInfo, PackageInfoFactory
 from util import ChunkingQueue, ThatsProgress
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
-default_obs_apiurl = "https://api.opensuse.org"
-
-optDebugOBS = 1
-optDebugCache = 0
+obsLogger = loggingFacade.getLogger('obs')
+cacheLogger = loggingFacade.getLogger('cache')
 
 def debugOBS(msg, *args, prefix = None, **kwargs):
-	if optDebugOBS >= 1:
-		if prefix:
-			msg = f"[{prefix}] {msg}"
-		print(msg, *args, **kwargs)
+	if prefix:
+		msg = f"[{prefix}] {msg}"
+	obsLogger.debug(msg, *args, **kwargs)
 
 def debugCache(*args, **kwargs):
-	if optDebugCache >= 1:
-		print(*args, **kwargs)
+	cacheLogger.debug(*args, **kwargs)
 
 class OBSSchema(object):
 	class Dummy:
@@ -334,7 +331,7 @@ class OBSClient(object):
 		import osc.conf
 		osc.conf.get_config()
 
-		print(f"Created OBS client for {self._apiurl}")
+		infomsg(f"Created OBS client for {self._apiurl}")
 		if False:
 			for k, v in osc.conf.config.items():
 				if k.startswith('#'):

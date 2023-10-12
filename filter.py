@@ -7,6 +7,7 @@ from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from ordered import PartialOrder
 from functools import reduce
 
+# fixme define a logger for this
 optPackageCycleDebug = 0
 
 def intersectSets(a, b):
@@ -44,6 +45,7 @@ class Classification:
 			self.name = name
 			self.type = type
 			self.id = id
+			self.description = None
 			self.gravity = None
 			self.runtimeRequires = set()
 			self.buildRequires = set()
@@ -344,6 +346,18 @@ class Classification:
 		def __str__(self):
 			return self.name
 
+		def describe(self):
+			attrs = []
+			if self.gravity is not None:
+				attrs.append(f"gravity={self.gravity}")
+			if self.disposition is not None:
+				attrs.append(f"disposition={self.disposition}")
+
+			if not attrs:
+				return self.name
+
+			return f"{self.name} ({', '.join(attrs)})"
+
 	# return the list of labels rated highest (ie with the lowest priority value)
 	@staticmethod
 	def filterLabelsByGravity(labels):
@@ -512,6 +526,8 @@ class Classification:
 					elif not label.buildConfig.defined:
 						raise Exception(f"Label {label} references buildconfig {label.buildConfig}, but it's not defined anywhere")
 
+			# create a partial order but throw it away afterwards. the label hierarchy
+			# is changing as part of this exercise
 			order = self.createOrdering(Classification.TYPE_BINARY)
 			for label in order.bottomUpTraversal():
 				label.autoSelectCompatibleFlavors(order)
@@ -1337,6 +1353,11 @@ class PotentialClassification(object):
 					return True
 			return False
 
+		def labelIsValidCandidate(self, label):
+			if self.candidates is None:
+				return True
+			return label in self.candidates
+
 		@property
 		def allPackageLabels(self):
 			result = []
@@ -1407,6 +1428,9 @@ class PotentialClassification(object):
 		def __iter__(self):
 			return iter(self.packages)
 
+		def __len__(self):
+			return len(self.packages)
+
 		def recordDecision(self, node, label):
 			self.labels.add(label)
 
@@ -1460,6 +1484,19 @@ class PotentialClassification(object):
 		def allBaseLabels(self):
 			return self.baseLabels
 
+	class Verdict:
+		def __init__(self):
+			self._placements = []
+
+		def add(self, node):
+			assert(node.solution)
+			for pkg in node.packages:
+				# third element in tuple should be the label reason
+				self._placements.append((pkg, node.solution, None))
+
+		def __iter__(self):
+			return iter(self._placements)
+
 	def __init__(self, order):
 		self._order = order
 		self._packages = {}
@@ -1489,7 +1526,7 @@ class PotentialClassification(object):
 				
 				# This can happen when we try to collapse a cycle of packages that have different
 				# labels
-				print(f"WARNING: Refusing to change label of {pkg} from {pkg.label} to {label}")
+				warnmsg(f"Refusing to change label of {pkg} from {pkg.label} to {label}")
 				# raise Exception(f"Attempt to change label of {pkg} from {pkg.label} to {label}")
 				continue
 
@@ -1541,6 +1578,10 @@ class PotentialClassification(object):
 		cycleSet = set(cycle)
 		cyclePackages = reduce(set.union, (interval.packages for interval in cycle))
 		cycleNames = list(map(str, cyclePackages))
+
+		if len(cycle) > 2:
+			names =  list(map(str, cycle))
+			print(f"Detected non-trivial cycle {' -> '.join(names)}")
 
 		labels = set()
 		for node in cycle:
@@ -1672,6 +1713,8 @@ class PotentialClassification(object):
 				if not labels:
 					lnames = map(str, candidatePurposes)
 					print(f"Unable to place {siblingPackage} (obs package {siblings}): no matching label; candidates {' '.join(lnames)}")
+
+					# put this into a separate function:
 					for cursor in self.Traversal(sibNode):
 						neigh = cursor.node
 
@@ -1687,6 +1730,9 @@ class PotentialClassification(object):
 					continue
 
 				if len(labels) > 1:
+					# FIXME: If there is more than one base label, this means some siblings were placed by
+					# the user. In this case, we should try all candidate labels in turn and see if
+					# our package would fit any of these.
 					lnames = map(str, candidatePurposes)
 					print(f"Unable to place {siblingPackage} (obs package {siblings}): ambiguous labels {' '.join(lnames)}")
 					continue
@@ -1751,7 +1797,6 @@ class PotentialClassification(object):
 		if suggestedNewLabels:
 			self.reportSuggestedNewLabels(suggestedNewLabels)
 
-
 		for interval in order.topDownTraversal():
 			for lower in interval.lowerNeighbors:
 				lower.updateFromAbove(interval)
@@ -1814,7 +1859,8 @@ class PotentialClassification(object):
 				flavor = baseLabel.getBuildFlavor(autoFlavor.name)
 				if flavor is None:
 					print(f"{interval} cannot be placed; common base label {baseLabel} has no flavor {autoFlavor}")
-				elif self.isValidLabelForInterval(flavor, interval):
+				elif interval.labelIsValidCandidate(flavor):
+					print(f"{flavor} is a valid candidate for {interval}")
 					choice = flavor
 				else:
 					print(f"{interval} cannot be placed into {flavor} because it's not a candidate label")
@@ -1825,12 +1871,12 @@ class PotentialClassification(object):
 					for above in interval._upperNeighbors:
 						if above._upperCone is not None and flavor not in above._upperCone:
 							print(f"    - {above} (required by)")
-			elif self.isValidLabelForInterval(baseLabel, interval):
+			elif interval.labelIsValidCandidate(baseLabel):
 				choice = baseLabel
 			else:
 				goodFlavors = set()
 				for flavor in baseLabel.flavors:
-					if self.isValidLabelForInterval(flavor, interval):
+					if interval.labelIsValidCandidate(flavor):
 						goodFlavors.add(flavor)
 
 				bestFlavors = intersectSets(goodFlavors, interval.candidates)
@@ -1841,6 +1887,8 @@ class PotentialClassification(object):
 					names = ' '.join(map(str, goodFlavors))
 					print(f"   found good flavor(s) {names}")
 					bestFlavors = goodFlavors
+				else:
+					print(f"   no good flavors of {baseLabel} found")
 
 				if len(bestFlavors) > 1:
 					bestFlavors = self._order.minima(bestFlavors)
@@ -1915,17 +1963,19 @@ class PotentialClassification(object):
 			else:
 				self.tryToPlaceWithSibling(interval)
 
-		xxx
+		self.placeSiblingsAccordingToPurpose(order)
+
+		verdict = self.Verdict()
+		for node in order.bottomUpTraversal():
+			if node.solution:
+				verdict.add(node)
+
+		return verdict
 
 	def baseLabelsForSet(self, labels):
 		if labels is None:
 			return None
 		return set(map(lambda label: label.flavorBase or label, labels))
-
-	def isValidLabelForInterval(self, label, interval):
-		if interval.candidates is None:
-			return True
-		return label in interval.candidates
 
 	def reportEmptyLowerCone(self, interval):
 		print(f"{interval} has an actual conflict between its requirements")
@@ -2123,6 +2173,12 @@ class PotentialClassification(object):
 		if interval.siblings is None:
 			return
 
+		# If this OBS package produces just one binary rpm, there are no siblings to
+		# place this with
+		if len(interval.siblings) == 1:
+			print(f"{interval} looks like an only child")
+			return
+
 		if interval.siblings.labels:
 			return self.tryToPlaceWithLabelledSiblings(interval)
 
@@ -2167,6 +2223,7 @@ class PotentialClassification(object):
 			raise Exception()
 
 		if not tryLabels:
+			print(f"Cannot place {interval} - unable to determine some good labels to try")
 			return
 
 		lowerMatches = []
@@ -2195,9 +2252,7 @@ class PotentialClassification(object):
 		pkg = interval.package
 
 		traceme = False
-		gnomelibs = None
-		if pkg.name == "vte-tools-gtk4":
-			print(f"### {pkg}")
+		if interval.name == 'libjitterentropy3.x86_64':
 			traceme = True
 
 		listOfCandidateSets = []
@@ -2207,37 +2262,32 @@ class PotentialClassification(object):
 				print(f"Error: trying to place {pkg} but cannot find its sibling {sib}")
 				continue
 
-			if sibInterval.hasPurposeLabel():
-				continue
+#			if sibInterval.hasPurposeLabel():
+#				continue
 
+			# the sibling doesn't have any constraints
 			if sibInterval.candidates is None:
 				continue
 
 			baseLabels = self.baseLabelsForSet(sibInterval.candidates)
 			listOfCandidateSets.append(baseLabels)
-			if traceme:
-				if gnomelibs is None:
-					for l in baseLabels:
-						if l.name == "@GnomeLibraries":
-							gnomelibs = l
 
-				print(f"   {sib} -> {sibInterval} -> {len(baseLabels)}", end = '')
-				if gnomelibs is not None and gnomelibs in baseLabels:
-					print("; contains @GnomeLibraries", end = '')
-
-				if len(baseLabels) < 10:
-					print(list(map(str, baseLabels)), end = '')
-				print()
+		if not listOfCandidateSets:
+			print(f"{interval} is not constrained by sibling placement; we could just use candidates")
 
 		# For all the unlabelled siblings, intersect the candidate sets
-		commonBaseLabels = reduce(intersectSets, listOfCandidateSets)
+		commonBaseLabels = reduce(intersectSets, listOfCandidateSets, None)
 		if traceme:
 			print(f"    COMMON {len(commonBaseLabels)}")
 
+		if commonBaseLabels == None:
+			print(f"{interval} is not constrained by sibling placement; we could just use candidates")
+
 		if len(commonBaseLabels) > 1:
-			commonBaseLabels = self._order.minima(commonBaseLabels)
+			commonBaseLabels = interval.filterCandidateLabels(commonBaseLabels)
+			# commonBaseLabels = self._order.minima(commonBaseLabels)
 			if traceme:
-				print(f"    MIN {len(commonBaseLabels)}")
+				print(f"    FILTERED {len(commonBaseLabels)}")
 
 		if len(commonBaseLabels) == 1:
 			baseLabel = next(iter(commonBaseLabels))
@@ -2251,8 +2301,7 @@ class PotentialClassification(object):
 
 			nodeList = []
 			for sib in interval.siblings:
-				if not sib.label or not sib.label.isPurpose:
-					nodeList.append(self.getPackage(sib))
+				nodeList.append(self.getPackage(sib))
 
 			self.displayNodes("siblings", nodeList, self._order.minima)
 		else:
@@ -2346,7 +2395,7 @@ class PotentialClassification(object):
 
 		baseFlavors = set()
 		for label in interval.candidates:
-			if label.flavorBase is not None:
+			while label.flavorBase is not None:
 				label = label.flavorBase
 			baseFlavors.add(label)
 
@@ -2455,7 +2504,10 @@ class PotentialClassification(object):
 						bounds = None
 
 				n = len(node.candidates)
-				if bounds:
+				if n < 5:
+					names = map(str, node.candidates)
+					print(f"      {node} [{n} candidates {' '.join(names)}]")
+				elif bounds:
 					names = map(str, bounds)
 					print(f"      {node} [{n} candidates bounded by {' '.join(names)}]")
 				else:
@@ -2526,7 +2578,6 @@ class PackageGroup:
 		self.matchCount = 0
 		self.expand = True
 		self.label = None
-		self.description = None
 		self._packages = []
 		self._buildFlavors = {}
 		self._objectPurposes = {}
@@ -2536,12 +2587,12 @@ class PackageGroup:
 		self._packages.append(pkg)
 		self.matchCount += 1
 
-		if pkg.label is None:
+		if pkg.label is None or pkg.label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
 			pkg.label = self.label
 		elif pkg.label is self.label:
 			pass
 		else:
-			raise Exception(f"Package {pkg.fullname()} cannot change label from {pkg.label} to {self.label}")
+			errormsg(f"Refusing to change {pkg.fullname()} change label from {pkg.label} to {self.label}")
 
 		self._closure.add(pkg)
 
@@ -2978,36 +3029,6 @@ class PackageFilter:
 
 		return
 
-		# XXX The following can go away once we have purpose
-
-		# if @Foo requires @Bar+something, then
-		# @Foo+devel should require @Bar+devel
-		for group in list(self._groups.values()):
-			if group.type != Classification.TYPE_BINARY:
-				continue
-
-			baseLabel = group.label
-			if baseLabel.flavorBase is not None:
-				continue
-
-			flavor = baseLabel.getBuildFlavor('devel')
-			if flavor is None:
-				print(f"Warning: {baseLabel} has no devel flavor")
-				continue
-
-			for baseReq in baseLabel.runtimeRequires:
-				if baseReq.flavorBase:
-					baseReq = baseReq.flavorBase
-				develReq = baseReq.getBuildFlavor("devel")
-				assert(develReq)
-				if flavor in develReq.runtimeRequires:
-					print(f"warning: {flavor} is already a runtime requirement of {develReq}")
-					continue
-				flavor.addRuntimeDependency(develReq)
-
-		hpc = self.getGroup("@HPC", Classification.TYPE_BINARY)
-		assert(hpc.getBuildFlavor("doc"))
-
 	def apply(self, pkg, product):
 		return self.filterSet.apply(pkg, product)
 
@@ -3225,6 +3246,10 @@ class PackageFilter:
 	def updateGroup(self, label, packages):
 		self.getGroupForLabel(label).update(packages)
 
+	def labelOnePackage(self, pkg, label, reason):
+		self.getGroupForLabel(label).track(pkg)
+		pkg.labelReason = reason
+
 	def getGroupPackages(self, label):
 		group = self.getGroupForLabel(label)
 		return group.closure
@@ -3385,7 +3410,7 @@ class PackageFilter:
 			if field not in self.VALID_GROUP_FIELDS:
 				raise Exception(f"Invalid field {field} in definition of group {group.name}")
 
-		group.description = gd.get('description')
+		group.label.description = gd.get('description')
 
 		name = gd.get('sourceproject')
 		if name is not None:

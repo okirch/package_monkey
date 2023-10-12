@@ -1742,6 +1742,10 @@ class PackageInfo:
 		return PackageInfo(name, None, version, release, arch, None)
 
 	@property
+	def shortname(self):
+		return f"{self.name}.{self.arch}"
+
+	@property
 	def key(self):
 		return f"{self.name}/{self.arch}"
 

@@ -101,6 +101,14 @@ class Classification:
 
 			self.isPurpose = (self._purposeName is not None or self.type == Classification.TYPE_PURPOSE)
 
+		@property
+		def componentName(self):
+			if self.sourceProject is not None:
+				return self.sourceProject.name
+			if self.buildConfig is not None:
+				return self.buildConfig.name
+			return None
+
 		def okayToAdd(self, other):
 			if self.type == other.type:
 				return True
@@ -470,6 +478,9 @@ class Classification:
 				raise Exception("Consistency error in label tree")
 
 			return order
+
+		def defaultOrder(self):
+			return self.createOrdering(Classification.TYPE_BINARY)
 
 		def finalize(self):
 			def inheritSourceProject(label):

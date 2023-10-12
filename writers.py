@@ -3,6 +3,7 @@
 #
 
 from csvio import CSVWriter
+from xmltree import XMLTree
 
 class BaseWriter:
 	def __init__(self):
@@ -27,6 +28,10 @@ class BaseWriter:
 			self.writeLabelDescription(label)
 			self.writePackagesForGroup(label, members)
 
+		self.flush()
+
+	def flush(self):
+		pass
 
 class StandardWriter(BaseWriter):
 	class IndentingWriter:
@@ -163,32 +168,36 @@ class TableWriter(BaseWriter):
 class XmlWriter(BaseWriter):
 	def __init__(self, filename = None):
 		super().__init__()
+		self.filename = filename
 		self.xmltree = XMLTree('components')
 
 		self._labels = {}
 
+	def flush(self):
+		self.xmltree.write(self.filename)
+
 	def writeLabelDescription(self, label):
-		labelNode = self.xmltree.root.add_child('topic')
+		labelNode = self.xmltree.root.addChild('topic')
 
 		# for now; could also have separate attrs for base name, option, pkgclass
 		labelNode.setAttribute('name', label.name)
 
-		component = label.componentName
-		if component is not None:
+		componentName = label.componentName
+		if componentName is not None:
 			labelNode.setAttribute('component', componentName)
 
-		runtimeNode = labelNode.add_child('runtime')
+		runtimeNode = labelNode.addChild('runtime')
 		for req in sorted(label.runtimeRequires, key = lambda l: l.name):
-			reqNode = runtimeNode.add_child('requires')
-			reqNode.setAttribute('topic', reqNode.name)
+			reqNode = runtimeNode.addChild('requires')
+			reqNode.setAttribute('topic', req.name)
 
-		self._labels[label.name] = xmlnode
+		self._labels[label.name] = labelNode
 
 	def writePackagesForGroup(self, label, packages):
 		labelNode = self._labels[label.name]
 
 		for rpm in sorted(packages, key = lambda p: p.name):
-			rpmNode = labelNode.add_child('rpm')
+			rpmNode = labelNode.addChild('rpm')
 			rpmNode.setAttribute('name', rpm.name)
 			rpmNode.setAttribute('arch', rpm.arch)
 

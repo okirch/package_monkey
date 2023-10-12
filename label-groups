@@ -6,7 +6,7 @@ from products import ProductCatalog, CacheLocation
 from packages import Product, Resolver, ResolverWorker, ResolverPreferences, PackageSelector, PackageCollection
 from filter import PackageFilter, Classification, PotentialClassification
 from options import Application
-from writers import StandardWriter, TableWriter
+from writers import StandardWriter, TableWriter, XmlWriter
 
 application = Application('build-dependency-tree')
 dummy = application.catalog
@@ -242,6 +242,9 @@ for label in sourceTraversal:
 	closure[label.name] = classifier.result
 
 writer = TableWriter("packages.csv")
+writer.write(packageFilter, labelOrder.bottomUpTraversal())
+
+writer = XmlWriter("packages.xml")
 writer.write(packageFilter, labelOrder.bottomUpTraversal())
 
 writer = StandardWriter()

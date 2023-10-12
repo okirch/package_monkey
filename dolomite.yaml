@@ -35,7 +35,7 @@ resolverhints:
     # The OBS dependency resolver will usually pick up and report both; so we try to go
     # with unversioned package name
     - "order libopenssl-devel libopenssl-*devel"
-    - "order libpq5 libecpg6 postgresql-devel postgresql*-devel postgresql*-devel-mini"
+    - "order libpq5 libecpg6 postgresql*-devel-mini postgresql-devel postgresql*-devel"
     - "order postgresql-server-devel postgresql*-server-devel"
     - "order go go1.*"
     - "order cargo cargo1.*"
@@ -59,7 +59,11 @@ resolverhints:
     - "order libudev-mini1 libudev1"
     - "order gettext-runtime-mini gettext-runtime"
     - "order gettext-tools-mini gettext-tools"
-    - "order ghostscript ghostscript-mini"
+    - "order ghostscript-mini ghostscript"
+    - "order cmake-mini cmake cmake-full"
+
+    - "suffixorder -mini ''"
+    - "suffixorder -mini-devel -devel"
 
     # when chasing hard requirements, we prefer the dbus version with the least
     # baggage
@@ -67,6 +71,9 @@ resolverhints:
 
     - "order mozilla-nss-certs p11-kit-nss-trust"
     - "order chrony-pool-suse chrony-pool-*"
+
+    - "order libyui-ncurses-pkg16 libyui-qt-pkg16"
+    - "order strongswan-ipsec strongswan"
 
     # libOpenIPMI0 vs full OpenIPMI
     - "order libOpenIPMI0 OpenIPMI"
@@ -92,6 +99,9 @@ resolverhints:
 
     # debuginfod has some dummy packages
     - "order *debuginfod* *debuginfod*-dummy*"
+    - "order libdebuginfod1 libdebuginfod1-dummy"
+    - "order debuginfod-client debuginfod-dummy-client"
+    - "order libdebuginfod-devel libdebuginfod-dummy-devel"
 
     # Disambiguating some dependencies in HPC
     # Not all of this makes sense, because these are actual alternatives, all of which should
@@ -109,8 +119,9 @@ resolverhints:
     - "order ocaml-runtime ocaml"
     - "order ocaml-compiler-libs ocaml-compiler-libs-devel"
 
-    - "order perl perl-ExtUtils-MakeMaker"
-    - "order perl perl-CPAN-Meta-Requirements"
+    - "order perl-base perl perl-ExtUtils-MakeMaker"
+    - "order perl-base perl perl-CPAN-Meta-Requirements"
+    - "order perl-base perl perl-File-Path"
 
     # same here; these would be valid alternatives (if one wants to use BDB)
     - "order postfix postfix-bdb"
@@ -183,15 +194,16 @@ resolverhints:
     # not sure about this choice
     - "order php8-embed apache2-mod_php8 php8-cli php8-fastcgi php8-fpm"
 
-    # if in doubt, prefer python311 over python310
-    - "order python310-base python3*-base"
+    # I have no idea whether these are actual alternatives or whether we should
+    # actually chase both dependency edges
+    - "order texlive-hyphen-base texlive-lambda"
+    - "order qt6-location: qt6-location qt6-positioning"
 
     - "order icewm-lite icewm-default"
 
-    - "suffixorder -mini"
-    - "suffixorder -mini-devel -devel"
+    - "order health-checker-plugins-MicroOS health-checker-plugins-caasp health-checker-plugins-kubic health-checker-testing"
 
     - "suffixorder '' -32bit"
     - "suffixorder '' -hmac"
-    - "suffixorder -ALP -SLE -SLE-Micro -SUSE -openSUSE -upstream"
+    - "suffixorder -ALP -SLE -SLE_15 -SLE-Micro -SUSE -openSUSE -upstream"
 

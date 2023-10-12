@@ -339,6 +339,13 @@ class Table(object):
 		c = self.execute(sql, values)
 		return self.cursorFetchAll(c)
 
+	def delete(self, **selector):
+		whereClause, whereValues = self.buildWhereStatement(selector)
+
+		sql = f"DELETE FROM {self.name} {whereClause}"
+		self.execute(sql, whereValues)
+		self.db.commit()
+
 	def deleteMultiple(self, whereField, values):
 		while len(values) > 100:
 			self.deleteMultipleWork(whereField, values[:100])
@@ -360,6 +367,14 @@ class Table(object):
 		sql += " WHERE (" + " OR ".join([f"{whereField}=?"] * count) + ")"
 
 		self.execute(sql, values)
+
+	def deleteAll(self):
+		self.execute(f"DELETE FROM {self.name}")
+
+	def clearColumn(self, field):
+		sql = f"UPDATE {self.name} SET {field}=NULL"
+		self.execute(sql)
+		self.db.commit()
 
 	def cursorFetchAll(self, c):
 		if c is None:
@@ -483,6 +498,7 @@ class ProductTable(UniqueTable):
 			return None
 		return h.id
 
+# FIXME: the buildId should go away
 class PackageTable(UniqueTable):
 	NAME = "packages"
 	OBJECT_TEMPLATE = ObjectTemplate("package", {
@@ -568,8 +584,29 @@ class PackageTable(UniqueTable):
 		# print(f"{key}: {obj.fullname()} -> {h.id}")
 		return h.id
 
+	# FIXME nuke
 	def getPackagesForBuild(self, buildId):
 		return self.knownBuilds.get(buildId) or []
+
+	def enumeratePackagesAndBuildIds(self):
+		c = self.db.conn.cursor()
+		c.execute("SELECT id, name, epoch, version, release, arch, buildId FROM packages;")
+		for row in c.fetchall():
+			(id, name, epoch, version, release, arch, buildId) = row
+			pinfo = PackageInfo(name, epoch, version, release, arch, id)
+			yield (pinfo, buildId)
+
+	def enumeratePackagesAndBuildTimes(self):
+		c = self.db.conn.cursor()
+		c.execute("SELECT id, name, epoch, version, release, arch, buildTime FROM packages;")
+		for row in c.fetchall():
+			(id, name, epoch, version, release, arch, buildTime) = row
+			pinfo = PackageInfo(name, epoch, version, release, arch, id)
+			yield (pinfo, buildTime)
+
+	@property
+	def allValidIds(self):
+		return set(self.knownPackageIDs.values())
 
 ##################################################################
 # This table tracks the latest known version of any (non-source)
@@ -617,6 +654,7 @@ class LatestPackageTable(UniqueTable):
 			self.changed = False
 
 		def update(self, pkg):
+			# This is wrong - we need to look at the build time
 			if self.pinfo and pkg.parsedVersion <= self.pinfo.parsedVersion:
 				return False
 			self.pinfo = pkg
@@ -626,6 +664,7 @@ class LatestPackageTable(UniqueTable):
 		super().__init__(db)
 		self._buckets = {}
 		self._duplicates = []
+		self._latestIds = None
 
 	@property
 	def knownPackages(self):
@@ -646,12 +685,17 @@ class LatestPackageTable(UniqueTable):
 
 			bucket.pinfo = pinfo
 
+		self._latestIds = None
+
 	# FIXME: something is wrong here; we end up with duplicate entries in the DB
 	def update(self, pkg):
 		assert(pkg.backingStoreId)
 
 		b = self.getBucket(pkg.name)
 		if b.update(pkg):
+			if b.pinfo:
+				print(f"remove {b.pinfo.backingStoreId}")
+
 			if b.id is None:
 				# print(f"latest: insert object {pkg.fullname()}")
 				h = self.insertObject(pkg)
@@ -660,6 +704,20 @@ class LatestPackageTable(UniqueTable):
 			else:
 				# print(f"latest: update object {pkg.fullname()} (id {b.id})")
 				self.updateObject(pkg, id = b.id)
+
+			print(f"add {pkg.backingStoreId}")
+
+			# data changed, invalidate the cached list of current package ids
+			self._latestIds = None
+
+	@property
+	def currentPackageIds(self):
+		if self._latestIds is None:
+			self._latestIds = set(bucket.pinfo.backingStoreId for bucket in self._buckets.values())
+		return self._latestIds
+
+	def packageIsLatest(self, pinfo):
+		return pinfo.backingStoreId in self.currentPackageIds
 
 	def getBucket(self, name):
 		b = self._buckets.get(name)
@@ -671,15 +729,15 @@ class LatestPackageTable(UniqueTable):
 	def prune(self):
 		idsToDrop = []
 		for pinfo in self._duplicates:
-			print(f"Table \"{self.name}\" contains redundant entry {pinfo}")
+			infomsg(f"  \"{self.name}\" contains redundant entry {pinfo}")
 			idsToDrop.append(pinfo.backingStoreId)
 
 		if not idsToDrop:
 			print(f"Table \"{self.name}\" does not contain any redundant entries")
 			return
 
-		print(f"Dropping {len(idsToDrop)} redundant entries from table {self.name}")
-		self.deleteMultiple('id', idsToDrop)
+		infomsg(f"Dropping {len(idsToDrop)} redundant entries from table {self.name}")
+		self.deleteMultiple('pkgId', idsToDrop)
 		self.db.commit()
 
 		self._duplicates = []
@@ -925,6 +983,64 @@ class TreeTable(DirectedGraphTable):
 class BuildTreeTable(DirectedGraphTable):
 	NAME = "builddep"
 
+class BuildPackageRelationTable(UniqueTable):
+	NAME = "buildpkgs"
+
+	TABLE_FIELDS = """
+			id integer PRIMARY KEY,
+			buildId integer NOT NULL,
+			pkgId integer NOT NULL
+		"""
+
+	def __init__(self, *args):
+		super().__init__(*args)
+		self._knownBuilds = []
+
+	def fetchKnownBuilds(self):
+		self._knownBuilds = set(self.fetchColumn('buildId'))
+
+	def removePackagesForList(self, idList):
+		self.deleteMultiple('buildId', idList)
+		self._knownBuilds.difference_update(set(idList))
+
+	def havePackages(self, pkgId):
+		assert(pkgId is not None)
+		return pkgId in self._knownBuilds
+
+	def addPackage(self, **kwargs):
+		self.insert(**kwargs)
+
+	def removeRelation(self, buildId, pkgId):
+		self.delete(buildId = buildId, pkgId = pkgId)
+
+	def retrievePackagesForBuild(self, buildId):
+		c = self.selectFrom(fields = ('pkgId', ), selector = {'buildId':  buildId})
+		if c is None:
+			raise Exception(f"SQL query failed")
+
+		return [row[0] for row in c.fetchall()]
+
+	def retrieveBuildForPackage(self, pkgId):
+		c = self.selectFrom(fields = ('buildId', ), selector = {'pkgId':  pkgId})
+		if c is None:
+			raise Exception(f"SQL query failed")
+
+		found = list(row[0] for row in c.fetchall())
+		if len(found) == 0:
+			return None
+		if len(found) > 1:
+			warnmsg(f"DB inconsistency: multiple {self.name} entries for package {pkgId}")
+			return None
+		return found[0]
+
+	def enumerate(self):
+		c = self.selectFrom(fields = ('buildId', 'pkgId' ), selector = None)
+		if c is None:
+			raise Exception(f"unable to iterate over table {self.name}")
+
+		for row in c.fetchall():
+			yield row
+
 class KeyValueTable(UniqueTable):
 	NAME = "keyvalue"
 
@@ -1014,6 +1130,10 @@ class BackingStoreDB(DB):
 
 		self.buildDep = BuildTreeTable.instantiate(self)
 		self.buildDep.createIndex("idx_bdep_down", ['requiringPkgId'])
+
+		self.buildPkgRelation = BuildPackageRelationTable.instantiate(self)
+		self.buildPkgRelation.createIndex("idx_build_pkg", ['buildId'])
+		self.buildPkgRelation.fetchKnownBuilds()
 
 		self.keyValueStore = KeyValueTable.instantiate(self)
 		self.keyValueStore.onLoad()
@@ -1181,9 +1301,9 @@ class BackingStoreDB(DB):
 
 		updated = []
 		for obsPackage in sorted(obsPackageList, key = lambda p: p.name):
-			sourceId = None
-			if obsPackage.sourcePackage:
-				sourceId = obsPackage.sourcePackage.backingStoreId
+			if not all(rpm.backingStoreId for rpm in obsPackage.binaries):
+				print(f"Refusing to update table {self.builds.name} for OBS package {obsPackage.name}: not all rpms are in the database yet")
+				continue
 
 			id = self.builds.update(obsPackage.name, obsPackage.buildTime)
 			if id is None:
@@ -1192,6 +1312,14 @@ class BackingStoreDB(DB):
 
 			obsPackage.backingStoreId = id
 			updated.append(obsPackage)
+
+		# remove all entries from the build->package relation table for the builds we're updating
+		updatedBuildIds = list(map(lambda obp: obp.backingStoreId, updated))
+		self.buildPkgRelation.removePackagesForList(updatedBuildIds)
+
+		for obsPackage in updated:
+			for rpm in obsPackage.binaries:
+				self.buildPkgRelation.addPackage(buildId = obsPackage.backingStoreId, pkgId = rpm.backingStoreId)
 
 		defer.commit()
 		return updated
@@ -1218,20 +1346,8 @@ class BackingStoreDB(DB):
 		self.buildDep.add(requiringPkgId = requiringPkg.backingStoreId,
 				requiredPkgId = requiredPkg.backingStoreId)
 
-	def enumeratePackages(self, product):
-		for d in self.packages.fetchAll(('id', 'name', 'version', 'release', 'epoch', 'arch'), productId = product.productId):
-			fart
-			yield PackageInfo(name = d['name'],
-				version = d['version'],
-				release = d['release'],
-				epoch = d['epoch'],
-				arch = d['arch'],
-				backingStoreId = d['id'],
-				product = product)
-
 	def enumerateLatestPackages(self):
-		latestPkgIds = list(self.latest.fetchColumn('pkgId'))
-		return self.retrieveMultiplePackageInfos(latestPkgIds)
+		return list(self.latest.knownPackages)
 
 	def retrievePackage(self, pinfo):
 		pkg = self.retrievePackageById(pinfo.backingStoreId, pinfo.product)
@@ -1288,23 +1404,41 @@ class BackingStoreDB(DB):
 			if src:
 				pkg.setSourcePackage(src)
 
+		# locate the OBS package from which this was built
+		if not pkg.isSourcePackage:
+			buildId = self.buildPkgRelation.retrieveBuildForPackage(pkgId)
+			if buildId is None:
+				warnmsg(f"Warning: {pkg.fullname()} (id {pkgId}) not tracked by any build")
+				print(d)
+				raise Exception()
+			elif pkg.obsBuildId == buildId:
+				pass
+			elif buildId is not None:
+				pkg.obsBuildId = buildId
+			else:
+				warnmsg(f"Warning: {pkg.fullname()} (id {pkgId}) does not seem to belong to any build (previously {pkg.obsBuildId})")
+
 		return pkg
 
 	def chasePackageDependencies(self, pkg):
 		resolved = set()
 
+		# source packages are not tracked in latest right now
+		if not pkg.isSourcePackage and pkg.backingStoreId not in self.latest.currentPackageIds:
+			warnmsg(f"chasing dependencies for outdated package {pkg}")
+
 		# this returns a list of (dependencyId, packageId) pairs
 		rawRequired = self.tree.retrieveRequired(pkg.backingStoreId)
 
+		requiredPackageIds = set(pkgId for depId, pkgId in rawRequired)
+		stalePackageIds = requiredPackageIds.difference(self.latest.currentPackageIds)
+		if stalePackageIds:
+			warnmsg(f"{pkg} requires one or more stale packages: {' '.join(map(str, stalePackageIds))}")
+
 		# make sure we have proper Package objects in our cache for each requisite
-		self.loadPackagesIntoCache(list(pkgId for depId, pkgId in rawRequired))
+		self.loadPackagesIntoCache(requiredPackageIds)
 
 		for depId, targetId in rawRequired:
-			if False:
-				# workaround - for what?!
-				if depId is None:
-					continue
-
 			target = self.packageCache.get(targetId)
 			dep = self.requires.retrieveDependencyById(depId)
 			assert(depId is None or dep)
@@ -1378,8 +1512,12 @@ class BackingStoreDB(DB):
 		# For now, only the packages that succeed make it into the DB
 		obsPackage.buildStatus = OBSPackage.STATUS_SUCCEEDED
 
-		pkgIdList = self.packages.getPackagesForBuild(obsPackage.backingStoreId)
-		obsPackage._binaries = list(self.loadPackagesIntoCache(pkgIdList))
+		pkgIdList = self.buildPkgRelation.retrievePackagesForBuild(obsPackage.backingStoreId)
+		if pkgIdList is None:
+			infomsg(f"OBS package {obsPackage} (id {obsPackage.backingStoreId}) does not seem to produce any packages")
+			xx
+		else:
+			obsPackage._binaries = list(self.loadPackagesIntoCache(pkgIdList))
 
 		names = [_.shortname for _ in obsPackage._binaries]
 		# print(f"{obsPackage.name} -> {', '.join(names)}")

@@ -27,7 +27,6 @@ packageSelector = PackageSelector()
 collection = PackageCollection()
 
 resolver = Resolver(backingStore = store)
-canary = None
 
 if True:
 	store.fixupLatest()
@@ -42,8 +41,7 @@ for pinfo in store.enumerateLatestPackages():
 	verdict = packageFilter.apply(pkg, pinfo.product)
 	if verdict is not None:
 		verdict.labelPackage(pkg)
-		if pkg.name == "python310-base":
-			canary = pkg
+		print(f"{pkg} is placed in {verdict.label} by package filter rules")
 	else:
 		# we currently have no good way to properly mark unclassified packages
 		# group = unclassified
@@ -62,6 +60,9 @@ def flattenGroupList(type, names):
 		assert(label.type == type)
 
 		belowSet = labelOrder.downwardClosureFor(label)
+		for below in belowSet:
+			if below.type != type:
+				raise Exception(f"downward closure for label {label} contains {below.type} label {below}")
 		labelSet.update(belowSet)
 
 	return labelOrder.bottomUpTraversal(labelSet)
@@ -72,10 +73,7 @@ binaryTraversal = flattenGroupList(Classification.TYPE_BINARY, binaryGroupNames)
 #sourceTraversal = flattenGroupList(Classification.TYPE_SOURCE, ("Core", "KernelPlus"))
 sourceTraversal = []
 
-# do we ever define these preferences anywhere?
-preferences = ResolverPreferences()
-
-worker = ResolverWorker(resolver, preferences = preferences)
+worker = ResolverWorker(resolver)
 problemLog = worker.problems
 
 for labelName in ("@Gnome", "@Texlive", "@Emacs", "@Vim", "@Qt"):
@@ -206,14 +204,11 @@ processedBinaryLabels = []
 
 # Having classified packages that are referenced in the filter definition,
 # inspect their sibling packages and see whether they have been identified
-# by one of the auto flavors like devel or python. If that's the case
-# label them correspondingly (ie as Foo+devel or Foo+python, etc).
+# by one of the auto flavors like python or ruby. If that's the case
+# label them correspondingly (ie as Foo+python, Foo+ruby, etc).
 for label in labelOrder.bottomUpTraversal():
 	group = packageFilter.makeBinaryGroup(label.name)
 	classifyAutoFlavors(label, group.packages)
-
-if canary:
-	print(f"### {canary} -> {canary.label} ###")
 
 classifier = Classification.FlexibleDownwardClosure(classificationContext, potentialClassification)
 #for label in labelOrder.bottomUpTraversal():
@@ -221,29 +216,30 @@ classifier = Classification.FlexibleDownwardClosure(classificationContext, poten
 #	classifier.classify(group.closure)
 classifier.classify(collection)
 
-if canary:
-	print(f"### {canary} -> {canary.label} ###")
-	node = potentialClassification.getPackage(canary)
-	print(f" {node} solution = {node.solution}")
+verdict = potentialClassification.solve()
 
-potentialClassification.solve()
-xxx
+# not very efficient
+for pkg, label, labelReason in verdict:
+	packageFilter.labelOnePackage(pkg, label, labelReason)
 
 for label in binaryTraversal:
 	# classifyBuildDependencies(label)
 	pass
 
-for label in sourceTraversal:
-	group = packageFilter.makeSourceGroup(label.name)
+if False:
+	for label in sourceTraversal:
+		group = packageFilter.makeSourceGroup(label.name)
 
-	print(f"Classify packages belonging to source project {group.label}")
+		print(f"Classify packages belonging to source project {group.label}")
 
-	classifier = Classification.BuildRequireClosure(worker, productArchitecture, label)
-	assert(classifier)
-	for component in label.buildRequires:
-		componentGroup = packageFilter.makeBinaryGroup(component.name)
-		assert(componentGroup)
-		classifier.classify(componentGroup.packages)
+		classifier = Classification.BuildRequireClosure(worker, productArchitecture, label)
+		assert(classifier)
+		for component in label.buildRequires:
+			componentGroup = packageFilter.makeBinaryGroup(component.name)
+			assert(componentGroup)
+			classifier.classify(componentGroup.packages)
+
+		closure[label.name] = classifier.result
 
 	closure[label.name] = classifier.result
 
@@ -253,5 +249,5 @@ writer.write(packageFilter, labelOrder)
 writer = XmlWriter("packages.xml")
 writer.write(packageFilter, labelOrder)
 
-if problemLog:
+if False and problemLog:
 	writer.writeProblems(problemLog)

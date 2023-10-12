@@ -43,13 +43,14 @@ class OrderedSetMember(object):
 		return other.key in self._downwardClosure
 
 class PartialOrder(object):
-	def __init__(self, name):
+	def __init__(self, name, allowUnknownKeys = False):
 		self.name = name
 		self.guard = CycleDetector(name)
 		self._unsorted = {}
 		self._sorted = None
 		self._timestamp = Timestamp()
 		self._final = False
+		self._allowUnknownKeys = allowUnknownKeys
 
 		self._hidden = None
 
@@ -92,8 +93,16 @@ class PartialOrder(object):
 	def getNode(self, key):
 		node = self._unsorted.get(key)
 		if node is None:
+			if self._allowUnknownKeys:
+				return None
 			raise Exception(f"Partial order {self.name} has no element {key} (type {type(key)})")
 		return node
+
+	def getNodesForSet(self, keySet):
+		result = map(self.getNode, keySet)
+		if self._allowUnknownKeys:
+			result = filter(bool, result)
+		return set(result)
 
 	def __getitem__(self, key):
 		return self.getNode(key)
@@ -114,10 +123,14 @@ class PartialOrder(object):
 
 	def downwardClosureFor(self, key):
 		node = self.getNode(key)
+		if node is None:
+			return None
 		return self.filterKeys(node._downwardClosure)
 
 	def upwardClosureFor(self, key):
 		node = self.getNode(key)
+		if node is None:
+			return None
 		return self.filterKeys(node._upwardClosure)
 
 	def subsetIsBelow(self, subset, key):
@@ -128,7 +141,9 @@ class PartialOrder(object):
 
 	def minimumOf(self, subset):
 		result = None
-		for node in map(self.getNode, subset):
+		for node in self.getNodesForSet(subset):
+			if node is None:
+				continue
 			if result is None or node.rank < result.rank:
 				result = node
 
@@ -137,7 +152,7 @@ class PartialOrder(object):
 		return result.key
 
 	def minima(self, subset):
-		remaining = set(map(self.getNode, subset))
+		remaining = self.getNodesForSet(subset)
 
 		result = set()
 		while remaining:
@@ -171,7 +186,7 @@ class PartialOrder(object):
 		return list(map(lambda node: node.key, result))
 
 	def maxima(self, subset):
-		remaining = set(map(self.getNode, subset))
+		remaining = self.getNodesForSet(subset)
 
 		result = set()
 		while remaining:
@@ -201,7 +216,7 @@ class PartialOrder(object):
 			return self.filterNodes(self._sorted)
 
 		subset = self.filterKeys(subset)
-		nodes = set(map(self.getNode, subset))
+		nodes = self.getNodesForSet(subset)
 		return self.sortedSubset(nodes)
 
 	def sortedSubset(self, subset):

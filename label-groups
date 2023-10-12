@@ -29,6 +29,12 @@ collection = PackageCollection()
 resolver = Resolver(backingStore = store)
 canary = None
 
+if True:
+	store.fixupLatest()
+	store.fixupBuilds()
+	store.fixupRequirements()
+	# stop
+
 for pinfo in store.enumerateLatestPackages():
 	pkg = store.retrievePackage(pinfo)
 	assert(pkg.product == pinfo.product)

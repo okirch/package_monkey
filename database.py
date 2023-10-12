@@ -1680,6 +1680,215 @@ class BackingStoreDB(DB):
 			self.tree.addEdge(requiringPkgId = source, requiredPkgId = target, dependencyId = dep)
 		defer.commit()
 
+	# when the database is somewhat hosed it's faster to fix it up than rebuilding it from scratch
 	def fixupLatest(self):
-		# when the database is somewhat hosed it's faster to fix it up than rebuilding it from scratch
-		self.latest.prune()
+		byName = {}
+		staleIds = set()
+		dropIds = set()
+
+		infomsg(f"Filtering table {self.packages.name} for stale entries")
+		for pinfo, buildTime in self.packages.enumeratePackagesAndBuildTimes():
+			assert(buildTime is not None)
+			pinfo.buildTime = buildTime
+
+			key = pinfo.shortname
+			other = byName.get(key)
+			if other is None:
+				byName[key] = pinfo
+			elif other.buildTime < pinfo.buildTime:
+				debugmsg(f"  {other.fullname()} is older than {pinfo.fullname()}")
+				staleIds.add(other.backingStoreId)
+				byName[key] = pinfo
+
+		infomsg(f"Found {len(staleIds)} outdated packages")
+
+		for pinfo in self.latest._duplicates:
+			infomsg(f"  table latest contains stale package {pinfo}")
+		dropIds.update(map(lambda p: p.backingStoreId, self.latest._duplicates))
+
+		infomsg(f"Filtering table {self.latest.name} for entries that refer to outdated packages")
+		updates = []
+		for pinfo in self.enumerateLatestPackages():
+			key = pinfo.shortname
+
+			if pinfo.backingStoreId in staleIds:
+				infomsg(f"  {self.latest.name} refers to {pinfo} which is older than {byName[key]}")
+				dropIds.add(pinfo.backingStoreId)
+				continue
+
+			other = byName.get(key)
+			if other is None:
+				infomsg(f"  {self.latest.name} refers to {pinfo} but this package no longer seems to exist")
+				dropIds.add(pinfo.backingStoreId)
+			elif other.backingStoreId == pinfo.backingStoreId:
+				# okay, no change
+				pass
+			else:
+				infomsg(f"  update latest entry {key}: {pinfo.fullname()} -> {other.fullname()}")
+				updates.append(other)
+
+		# first remove stale entries from the relational table
+		if dropIds:
+			infomsg(f"Dropping {len(dropIds)} entries from table {self.latest.name}")
+			self.latest.deleteMultiple('pkgId', list(dropIds))
+
+		if not updates:
+			infomsg(f"Table \"{self.latest.name}\" seems to be clean")
+			return
+
+		defer = self.deferCommit()
+		for pinfo in updates:
+			infomsg(f"Updating {pinfo.shortname} to {pinfo.version}-{pinfo.release} pkgid {pinfo.backingStoreId}")
+			self.latest.updateKeysAndValues(['version', 'release', 'pkgId'],
+							[pinfo.version, pinfo.release, pinfo.backingStoreId],
+							name = pinfo.name, arch = pinfo.arch)
+		defer.commit()
+
+	class RelationTracking(dict):
+		def add(self, keyId, valueId):
+			try:
+				self[keyId].add(valueId)
+			except:
+				self[keyId] = set((valueId, ))
+
+		def isKnown(self, keyId, valueId):
+			trackedIds = self.get(keyId)
+			return trackedIds and (valueId in trackedIds)
+
+	def findBuildPackageDuplicates(self):
+		found = set()
+		duplicates = set()
+
+		for pair in self.buildPkgRelation.enumerate():
+			if pair in found:
+				duplicates.add(pair)
+			found.add(pair)
+
+		return duplicates
+
+	def fixupBuildPackageConflicts(self):
+		packageTracking = self.RelationTracking()
+		for buildId, pkgId in self.buildPkgRelation.enumerate():
+			packageTracking.add(pkgId, buildId)
+
+		unresolved = set()
+		for pkgId, buildIds in packageTracking.items():
+			if len(buildIds) == 1:
+				continue
+
+			pinfo = self.retrievePackageInfo(pkgId)
+
+			builds = []
+			for buildId in buildIds:
+				d = self.builds.fetchOne(id = buildId)
+				assert(d)
+
+				build = self.builds.constructObject(OBSPackage, d)
+				builds.append(build)
+
+			names = map(str, builds)
+			warnmsg(f"  conflicting entries for {pinfo.fullname()}: {' '.join(names)}")
+
+			uniBuilds = list(filter(lambda b: ':' not in b.name, builds))
+			if len(uniBuilds) == 0:
+				infomsg(f"    all builds are multibuilds; picking one at random")
+				choice = builds[0]
+			elif len(uniBuilds) > 1:
+				warnmsg("    unable to resolve this conflict")
+				unresolved.add(pinfo)
+			else:
+				infomsg(f"    all builds bar one are multibuilds")
+				choice = uniBuilds[0]
+
+			infomsg(f"    place {pinfo} into {build}")
+
+			badBuilds = buildIds.difference(set((build.backingStoreId, )))
+			infomsg(f"  will remove pkg from build(s) {' '.join(map(str, badBuilds))}")
+			for id in badBuilds:
+				self.buildPkgRelation.delete(buildId = id, pkgId = pkgId)
+
+		if unresolved:
+			raise Exception(f"Unable to resolve all conflicts")
+
+	def fixupBuildRelation(self, badBuilds, buildTracking):
+		defer = self.deferCommit()
+
+		# first remove stale entries from the relational table
+		self.buildPkgRelation.deleteMultiple('buildId', list(badBuilds))
+
+		# then recreate these entries, with correct data
+		for buildId in sorted(badBuilds):
+			for pkgId in sorted(buildTracking[buildId]):
+				self.buildPkgRelation.addPackage(buildId = buildId, pkgId = pkgId)
+
+		defer.commit()
+
+	def fixupBuildPackageDuplicates(self, buildTracking):
+		packagesFound = {}
+		buildsFound = {}
+		badBuilds = set()
+		for buildId, pkgId in self.buildPkgRelation.enumerate():
+			conflict = packagesFound.get(pkgId)
+			if conflict is not None:
+				if conflict != buildId:
+					# this should not happen any longer, we just got rid of those in fixupBuildPackageConflicts() above
+					raise Exception(f"  conflicting entries for pkg={pkgId}: build {conflict} vs {buildId}")
+
+				warnmsg(f"  duplicate entry build={buildId} pkg={pkgId}")
+				badBuilds.add(buildId)
+			else:
+				packagesFound[pkgId] = buildId
+
+			buildTracking.add(buildId, pkgId)
+
+		if badBuilds:
+			infomsg(f"Found {len(badBuilds)} builds with dupliate entries")
+			self.fixupBuildRelation(badBuilds, buildTracking)
+
+	def fixupBuildPackageMissing(self, buildTracking):
+		latestPkgIds = set(map(lambda pinfo: pinfo.backingStoreId, self.latest.knownPackages))
+		badBuilds = set()
+
+		for pinfo, buildId in self.packages.enumeratePackagesAndBuildIds():
+			if pinfo.arch in ('src', 'nosrc'):
+				continue
+
+			pkgId = pinfo.backingStoreId
+			if pkgId not in latestPkgIds:
+				# this package is no longer listed in the latest table, we're not interested
+				continue
+
+
+			if buildTracking.isKnown(buildId, pkgId):
+				continue
+
+			warnmsg(f"  {pinfo.fullname()} belongs to build {buildId} but it's not in table {self.buildPkgRelation.name}")
+			badBuilds.add(buildId)
+
+			buildTracking.add(buildId, pkgId)
+
+		if badBuilds:
+			infomsg(f"Found {len(badBuilds)} incomplete builds")
+			self.fixupBuildRelation(badBuilds, buildTracking)
+
+	def fixupBuilds(self):
+		buildTracking = self.RelationTracking()
+		# First, check for packages that show up in more than one builds.
+		# This typically happens for source rpms and multibuilds.
+		self.fixupBuildPackageConflicts()
+
+		# Then check for builds (aka OBS packages) that have duplicate entries
+		self.fixupBuildPackageDuplicates(buildTracking)
+
+		# Finally, loop over packages to see if there are any that are
+		# current (ie referenced from latest) and have a build ID set
+		# that we're not tracking
+		self.fixupBuildPackageMissing(buildTracking)
+
+	def fixupRequirements(self):
+		currentIds = self.latest.currentPackageIds
+		staleIds = self.packages.allValidIds.difference(currentIds)
+
+		for row in self.tree.selectFrom(['id', 'requiringPkgId', 'requiredPkgId'], None):
+			if row[1] in currentIds and row[2] in staleIds:
+				warnmsg(f"  bad dependency in {self.tree.name}: pkg {row[1]} depends on outdated pkg {row[2]}")

@@ -17,7 +17,7 @@ class BaseWriter:
 		if order is None:
 			order = packageFilter.defaultOrder()
 
-		for label in order:
+		for label in order.bottomUpTraversal():
 			if label.name in self._excluded:
 				continue
 
@@ -25,7 +25,9 @@ class BaseWriter:
 			if not members and not self._writeEmptyGroups:
 				continue
 
-			self.writeLabelDescription(label)
+			runtimeRequires = packageFilter.getMinimalRuntimeRequirements(label, order)
+
+			self.writeLabelDescription(label, runtimeRequires)
 			self.writePackagesForGroup(label, members)
 
 		self.flush()
@@ -48,7 +50,7 @@ class StandardWriter(BaseWriter):
 		def indentingWriter(self):
 			return StandardWriter.IndentingWriter(self.indent + "   ")
 
-	def writeLabelDescription(self, label):
+	def writeLabelDescription(self, label, runtimeRequires):
 		print()
 		print(f"== {label.type} group {label} ==")
 
@@ -153,7 +155,7 @@ class TableWriter(BaseWriter):
 		super().__init__()
 		self.csv = CSVWriter(filename, fields = ['component', 'topic', 'package'])
 
-	def writeLabelDescription(self, label):
+	def writeLabelDescription(self, label, runtimeRequires):
 		pass
 
 	def writePackagesForGroup(self, label, packages):
@@ -176,18 +178,30 @@ class XmlWriter(BaseWriter):
 	def flush(self):
 		self.xmltree.write(self.filename)
 
-	def writeLabelDescription(self, label):
+	def writeLabelDescription(self, label, runtimeRequires):
 		labelNode = self.xmltree.root.addChild('topic')
 
 		# for now; could also have separate attrs for base name, option, pkgclass
 		labelNode.setAttribute('name', label.name)
 
+		if label.disposition:
+			labelNode.setAttribute('disposition', label.disposition)
+
 		componentName = label.componentName
 		if componentName is not None:
 			labelNode.setAttribute('component', componentName)
 
+		if label.description:
+			labelNode.addField('description', label.description.strip())
+
+		# This may be None if we were unable to compute a minimal set of requirements
+		# (which usually happens if we have labelled a package but couldn't place
+		# all of its requirements due to a conflict).
+		if runtimeRequires is None:
+			runtimeRequires = label.runtimeRequires
+
 		runtimeNode = labelNode.addChild('runtime')
-		for req in sorted(label.runtimeRequires, key = lambda l: l.name):
+		for req in sorted(runtimeRequires, key = lambda l: l.name):
 			reqNode = runtimeNode.addChild('requires')
 			reqNode.setAttribute('topic', req.name)
 

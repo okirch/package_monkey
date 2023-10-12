@@ -242,15 +242,10 @@ for label in sourceTraversal:
 	closure[label.name] = classifier.result
 
 writer = TableWriter("packages.csv")
-writer.write(packageFilter, labelOrder.bottomUpTraversal())
+writer.write(packageFilter, labelOrder)
 
 writer = XmlWriter("packages.xml")
-writer.write(packageFilter, labelOrder.bottomUpTraversal())
-
-writer = StandardWriter()
-writer.write(packageFilter, binaryTraversal)
-
-# writer.write(packageFilter, sourceTraversal)
+writer.write(packageFilter, labelOrder)
 
 if problemLog:
 	writer.writeProblems(problemLog)

@@ -133,6 +133,20 @@ class PartialOrder(object):
 			return None
 		return self.filterKeys(node._upwardClosure)
 
+	def downwardClosureForSet(self, keySet):
+		result = set()
+		for key in keySet:
+			if key not in result:
+				result.update(self.downwardClosureFor(key))
+		return result
+
+	def upwardClosureForSet(self, keySet):
+		result = set()
+		for key in keySet:
+			if key not in result:
+				result.update(self.upwardClosureFor(key))
+		return result
+
 	def subsetIsBelow(self, subset, key):
 		return subset.issubset(self.downwardClosureFor(key))
 
@@ -183,6 +197,7 @@ class PartialOrder(object):
 					assert(not (n1 >= n2))
 					assert(not (n1 <= n2))
 
+		# FIXME: why are we returning a list rather than a set?
 		return list(map(lambda node: node.key, result))
 
 	def maxima(self, subset):
@@ -209,6 +224,7 @@ class PartialOrder(object):
 			for m in dropped:
 				result.remove(m)
 
+		# FIXME: why are we returning a list rather than a set?
 		return list(map(lambda node: node.key, result))
 
 	def getSubsetToTraverse(self, subset):

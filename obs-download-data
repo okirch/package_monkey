@@ -25,11 +25,11 @@ for release in application.enumerateProducts():
 
 	product = release.createEmptyProduct()
 
-	print(f"Release {release}")
+	infomsg(f"Downloading OBS information for release {release}")
 
 	projects = []
 	for bp in release.buildProjects:
-		print(f"  {bp}")
+		infomsg(f"  {bp}")
 
 		project = OBSProject(bp, product)
 

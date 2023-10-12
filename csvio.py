@@ -10,6 +10,7 @@ import sys
 import os
 import csv
 import copy
+from util import debugmsg, infomsg, warnmsg, errormsg
 
 ##################################################################
 # CSVWriter class
@@ -51,7 +52,7 @@ class CSVWriter:
 	def flush(self):
 		self.flushHeader()
 		if self.__backend is not None:
-			print(f"Wrote {self.count} records to {self.filename}")
+			infomsg(f"Wrote {self.count} records to {self.filename}")
 		return self.__count
 
 	def addField(self, name):
@@ -117,7 +118,7 @@ class CSVReader:
 			header = None
 
 		if not header:
-			print(f"Warning: {self.filename}: empty CSV file")
+			warnmsg(f"{self.filename}: empty CSV file")
 			return
 
 		self.__fields = header
@@ -140,7 +141,7 @@ class CSVReader:
 
 	def close(self):
 		if self.__backend is not None:
-			print(f"Read {self.count} records from {self.filename}")
+			infomsg(f"Read {self.count} records from {self.filename}")
 			self.__backend = None
 		return 0
 

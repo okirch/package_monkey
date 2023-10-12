@@ -1501,7 +1501,7 @@ class Package:
 
 	def builtAfter(self, refTime):
 		if self.buildTime is None:
-			warnmsg("%s from %s-%s has no build time" % (self.fullname(), self.repo.name, self.repo.version))
+			warnmsg(f"%s from %s-%s has no build time" % (self.fullname(), self.repo.name, self.repo.version))
 			self.buildTime = 0
 		return self.buildTime > refTime
 

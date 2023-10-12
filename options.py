@@ -47,7 +47,7 @@ class Application:
 			loggingFacade.setLogLevel(facility, 'debug')
 
 		if loggingFacade.isDebugEnabled('obs'):
-			print("obs debugging enabled")
+			debugmsg("obs debugging enabled")
 
 	@property
 	def catalog(self):
@@ -68,7 +68,7 @@ class Application:
 		if self._store is None and self.opts.db:
 			timing = ExecTimer()
 			self._store = BackingStoreDB(self.opts.db)
-			print(f"Loaded database {self.opts.db}: {timing} elapsed")
+			infomsg(f"Loaded database {self.opts.db}: {timing} elapsed")
 		return self._store
 
 	@property

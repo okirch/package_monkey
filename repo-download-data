@@ -9,6 +9,7 @@ from packages import Product, Resolver, ResolverWorker
 from filter import PackageFilter, Classification
 from database import BackingStoreDB
 from obsclnt import OBSClient, OBSProject
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
 
 application = Application('repo-download')
@@ -19,7 +20,7 @@ store = application.backingStore
 store.putProperty("arch", application.architecture)
 
 for release in application.enumerateProducts():
-	print(f"Found {release}")
+	infomsg(f"Found {release}")
 
 	# FIXME: product = release.createEmptyProduct() instead
 	product = Product()

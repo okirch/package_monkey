@@ -253,7 +253,7 @@ class Repo:
 		try:
 			data = o.retrieveText(splitLines = True)
 		except:
-			print("Repository %s does not seem to exist" % self._url)
+			infomsg("Repository %s does not seem to exist" % self._url)
 			self._cache.setRootObject(None)
 			return
 
@@ -289,7 +289,7 @@ class Repo:
 		try:
 			repomd = rootObject.retrieveXML()
 		except:
-			print("%s does not seem to exist" % rootObject.url)
+			infomsg("%s does not seem to exist" % rootObject.url)
 			self._cache.setRootObject(None)
 			return
 
@@ -367,7 +367,7 @@ class Repo:
 			if timeNode is not None:
 				pkg.buildTime = int(timeNode.attrib['build'])
 			else:
-				print("WARNING: %s: build time not defined" % pkg.fullname())
+				warnmsg("%s: build time not defined" % pkg.fullname())
 				pkg.buildTime = 0
 
 			pkgid = None
@@ -376,7 +376,7 @@ class Repo:
 					pkgid = csumNode.text.strip()
 
 			if pkgid is None:
-				print(f"No pkgid for {pkg.fullname()}")
+				infomsg(f"No pkgid for {pkg.fullname()}")
 			else:
 				pkg.pkgid = pkgid
 
@@ -387,7 +387,7 @@ class Repo:
 					pkg.sourceName = srcNode.text.strip()
 					unresolved.add(pkg.sourceName, pkg)
 				else:
-					print("%s: No sourcepackage defined" % pkg.fullname())
+					infomsg("%s: No sourcepackage defined" % pkg.fullname())
 
 			depNode = fmtNode.find(rpmSchema.requiresTag)
 			pkg.requires = Repo.processDepNode(pkg, depNode)
@@ -399,7 +399,7 @@ class Repo:
 			if groupNode is not None and groupNode.text is not None:
 				pkg.group = groupNode.text.strip()
 			else:
-				print("--- %s: no pkg group" % pkg.fullname())
+				infomsg("--- %s: no pkg group" % pkg.fullname())
 
 			# Add the package after having it fully parsed
 			product.addPackage(pkg)
@@ -418,7 +418,7 @@ class Repo:
 				if src.arch == 'nosrc':
 					continue
 
-				print(f"{product.fullname} does not provide source package {name}; faking it.")
+				infomsg(f"{product.fullname} does not provide source package {name}; faking it.")
 
 				import hashlib
 
@@ -440,7 +440,7 @@ class Repo:
 
 			pkg = product.findPackage(name, version, release, arch)
 			if not pkg:
-				print("%s: cannot find pkg %s-%s-%s.%s.rpm" % (self, name, version, release, arch))
+				infomsg("%s: cannot find pkg %s-%s-%s.%s.rpm" % (self, name, version, release, arch))
 				continue
 
 			changes = []
@@ -464,7 +464,7 @@ class Repo:
 
 				pkg = product.findPackage(name, version, release, arch)
 				if not pkg:
-					print("%s: cannot find pkg %s-%s-%s.%s.rpm" % (self, name, version, release, arch))
+					infomsg("%s: cannot find pkg %s-%s-%s.%s.rpm" % (self, name, version, release, arch))
 					continue
 
 			files = []

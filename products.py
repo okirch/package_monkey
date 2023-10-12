@@ -9,14 +9,12 @@
 import yaml
 import os
 from resolver import ResolverHints
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
 from repos import Repo
 
-optDebugProduct = False
-
-def productDebug(*args, **kwargs):
-	if optDebugProduct:
-		print(*args, **kwargs)
+productLogger = loggingFacade.getLogger('products')
+productDebug = productLogger.debug
 
 class CacheLocation:
 	def __init__(self, path):
@@ -36,10 +34,10 @@ class CacheStrategyStripURL:
 		self.urlRewriter = urlRewriter
 	
 	def cachePath(self, url):
-		# print(f"cachePath({url}) called")
+		# infomsg(f"cachePath({url}) called")
 		if self.urlRewriter is not None:
 			url = self.urlRewriter.rewrite(url)
-			# print(f" rewrite {url}")
+			# infomsg(f" rewrite {url}")
 		if url.startswith(self.baseURL):
 			url = url[len(self.baseURL):]
 			url = url.lstrip('/')
@@ -47,7 +45,7 @@ class CacheStrategyStripURL:
 			barf
 
 		path = os.path.join(self.cacheLocation.path, url)
-		# print(f" => {path}")
+		# infomsg(f" => {path}")
 		return path
 
 class UrlRewriter:
@@ -188,7 +186,7 @@ class ProductFamily:
 			if projects is None:
 				projects = self.projects
 			if projects is None:
-				print(f"Warning: No repositories defined for {name}")
+				warnmsg(f"No repositories defined for {name}")
 
 			self.service.addVersion(name, repositories, projects)
 			self.versions.append(name)
@@ -420,4 +418,4 @@ if False:
 	cat = ProductCatalog()
 
 	for rel in cat.enumerate(version = '15-SP2', arch = 'x86_64'):
-		print(f"Found {rel}")
+		infomsg(f"Found {rel}")

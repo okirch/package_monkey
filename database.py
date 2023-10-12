@@ -60,7 +60,7 @@ class DB(object):
 				self.lock = None
 
 				if count:
-					# print(f"Applying {count} deferred commits")
+					# infomsg(f"Applying {count} deferred commits")
 					self.db.commit()
 
 	def __init__(self):
@@ -72,7 +72,7 @@ class DB(object):
 		try:
 			self.conn = sqlite3.connect(db_file)
 		except sqlite3.Error as e:
-			print(f"Failed to connect to sqlite3 DB {db_file}: {e}")
+			errormsg(f"Failed to connect to sqlite3 DB {db_file}: {e}")
 
 		return self.conn
 
@@ -89,6 +89,7 @@ class ObjectHandle(object):
 		self.tableName = tableName
 		self.id = id
 
+	# FIXME: is this used anywhere?!
 	def fetch(self, memoryObject):
 		conn = self.db.conn
 		sql = f"SELECT * from {self.tableName} where id=?"
@@ -99,7 +100,7 @@ class ObjectHandle(object):
 		names = [field[0] for field in c.description]
 		for r in c.fetchall():
 			for name, value in zip(names, r):
-				print(name, value)
+				infomsg(name, value)
 
 class ObjectTemplate(object):
 	def __init__(self, name, objectToDB, ctorArgs = None):
@@ -121,7 +122,6 @@ class ObjectTemplate(object):
 			if value is not None:
 				d[fieldName] = value
 
-		# print(f"{obj} -> {d}")
 		return d
 
 	def constructObjectFromDB(self, klass, d):
@@ -158,15 +158,15 @@ class Table(object):
 
 			c.execute(sqlStatement, values)
 		except sqlite3.Error as e:
-			print(f"SQL Error: {e} - {type(e)}")
-			print(f"The offending statement was: {sqlStatement}")
+			errormsg(f"SQL Error: {e} - {type(e)}")
+			errormsg(f"The offending statement was: {sqlStatement}")
 			return None
 
 		return c
 
 	def create(self, sqlStatement):
 		if not self.execute(sqlStatement):
-			print(f"Failed to create table {self.name}")
+			errormsg(f"Failed to create table {self.name}")
 			return False
 
 		sqlDebug(f"Created table {self.name}")
@@ -176,7 +176,7 @@ class Table(object):
 		onClause = ", ".join(fields)
 		sqlStatement = f"""CREATE INDEX IF NOT EXISTS {name} ON {self.name} ({onClause});"""
 		if not self.execute(sqlStatement):
-			print(f"Failed to create table index {name} for table {self.name}")
+			errormsg(f"Failed to create table index {name} for table {self.name}")
 			return False
 
 		sqlDebug(f"SQL Created table index {name} for table {self.name}")
@@ -186,7 +186,7 @@ class Table(object):
 		onClause = ", ".join(fields)
 		sqlStatement = f"""CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {self.name} ({onClause});"""
 		if not self.execute(sqlStatement):
-			print(f"Failed to create table index {name} for table {self.name}")
+			errormsg(f"Failed to create table index {name} for table {self.name}")
 			return False
 
 		sqlDebug(f"Created table index {name} for table {self.name}")
@@ -561,7 +561,7 @@ class PackageTable(UniqueTable):
 			except:
 				self.knownBuilds[buildId] = [id]
 
-		print(f"Found {len(self.knownPackageIDs)} packages in database")
+		infomsg(f"Found {len(self.knownPackageIDs)} packages in database")
 
 	def isKnownPackageObject(self, obj):
 		key = self.makeKey(obj.name, obj.version, obj.release, obj.arch)
@@ -572,16 +572,16 @@ class PackageTable(UniqueTable):
 
 		id = self.knownPackageIDs.get(key)
 		if id is not None:
-			# print(f"{key}: already known as {id}")
+			# infomsg(f"{key}: already known as {id}")
 			return id
 
 		h = self.insertObject(obj)
 		if h is None:
-			print(f"Failed to insert {obj.fullname()} into database")
+			errormsg(f"Failed to insert {obj.fullname()} into database")
 			return None
 
 		self.knownPackageIDs[key] = h.id
-		# print(f"{key}: {obj.fullname()} -> {h.id}")
+		# infomsg(f"{key}: {obj.fullname()} -> {h.id}")
 		return h.id
 
 	# FIXME nuke
@@ -694,18 +694,18 @@ class LatestPackageTable(UniqueTable):
 		b = self.getBucket(pkg.name)
 		if b.update(pkg):
 			if b.pinfo:
-				print(f"remove {b.pinfo.backingStoreId}")
+				infomsg(f"remove {b.pinfo.backingStoreId}")
 
 			if b.id is None:
-				# print(f"latest: insert object {pkg.fullname()}")
+				# infomsg(f"latest: insert object {pkg.fullname()}")
 				h = self.insertObject(pkg)
 				assert(h)
 				b.id = h.id
 			else:
-				# print(f"latest: update object {pkg.fullname()} (id {b.id})")
+				# infomsg(f"latest: update object {pkg.fullname()} (id {b.id})")
 				self.updateObject(pkg, id = b.id)
 
-			print(f"add {pkg.backingStoreId}")
+			infomsg(f"add {pkg.backingStoreId}")
 
 			# data changed, invalidate the cached list of current package ids
 			self._latestIds = None
@@ -733,7 +733,7 @@ class LatestPackageTable(UniqueTable):
 			idsToDrop.append(pinfo.backingStoreId)
 
 		if not idsToDrop:
-			print(f"Table \"{self.name}\" does not contain any redundant entries")
+			infomsg(f"Table \"{self.name}\" does not contain any redundant entries")
 			return
 
 		infomsg(f"Dropping {len(idsToDrop)} redundant entries from table {self.name}")
@@ -857,7 +857,7 @@ class DependencyTable(UniqueTable):
 
 	def fetchKnownPackages(self):
 		self._knownPackages = set(self.fetchColumn('pkgId'))
-		print(f"We have dependencies for {len(self._knownPackages)} packages")
+		infomsg(f"We have dependencies for {len(self._knownPackages)} packages")
 
 	def addDependency(self, dep, pkgId):
 		d = dict()
@@ -928,7 +928,7 @@ class DependencyTable(UniqueTable):
 			# FIXME
 			# args['epoch'] = d['epoch']
 
-		# print(args)
+		# infomsg(args)
 		dep = Package.createDependency(**args)
 		self._cache.put(id, dep)
 		return dep
@@ -953,7 +953,7 @@ class DirectedGraphTable(UniqueTable):
 
 	def fetchKnownPackages(self):
 		self._knownPackages = set(self.fetchColumn('requiringPkgId'))
-		print(f"{self.name}: we have dependencies for {len(self._knownPackages)} packages")
+		infomsg(f"{self.name}: we have dependencies for {len(self._knownPackages)} packages")
 
 	def removeDependenciesForList(self, idList):
 		self.deleteMultiple('requiringPkgId', idList)
@@ -1158,7 +1158,7 @@ class BackingStoreDB(DB):
 		if entry.id is None:
 			id = self.products.addProduct(name = release.name, version = release.version, arch = release.arch)
 			self.productCache.updateCacheEntry(entry, id)
-			print(f"Found new product {entry.key}, mapped to ID {id}")
+			infomsg(f"Found new product {entry.key}, mapped to ID {id}")
 
 		assert(self.productCache.entryById(entry.id) == entry)
 
@@ -1189,7 +1189,7 @@ class BackingStoreDB(DB):
 	def addPackageObject(self, obj):
 		obj.backingStoreId = self.packages.addPackageObject(obj)
 		if obj.backingStoreId is None:
-			print(f"ALERT: {obj.fullname()} has no database id")
+			errormsg(f"ALERT: {obj.fullname()} has no database id")
 			return
 
 		if obj.arch not in ('src', 'nosrc'):
@@ -1210,10 +1210,10 @@ class BackingStoreDB(DB):
 			edges = set()
 			for required in obj.resolvedRequires:
 				if required.backingStoreId is None:
-					print(f"Cannot add dependency to DB: {obj.fullname()} requires {required.fullname()}, but the latter has no ID set")
+					infomsg(f"Cannot add dependency to DB: {obj.fullname()} requires {required.fullname()}, but the latter has no ID set")
 					continue
 
-				# print(f"{obj.fullname()} -> {required.fullname()}")
+				# infomsg(f"{obj.fullname()} -> {required.fullname()}")
 				edges.add((obj.backingStoreId, required.backingStoreId, None))
 
 			for source, target, depId in edges:
@@ -1261,7 +1261,7 @@ class BackingStoreDB(DB):
 	def updatePackageSourceObjectList(self, objList):
 		defer = self.deferCommit()
 		for obj in objList:
-			print(f"Updating source for {obj.shortname}")
+			infomsg(f"Updating source for {obj.shortname}")
 			self.updatePackageSource(obj)
 		defer.commit()
 
@@ -1281,7 +1281,7 @@ class BackingStoreDB(DB):
 		for obsPackage in obsPackageList:
 			obsPackage.backingStoreId = self.lookupBuildId(obsPackage.name)
 			if obsPackage.backingStoreId is None:
-				print(f"Unable to add OBS Build {obsPackage.name} to DB")
+				errormsg(f"Unable to add OBS Build {obsPackage.name} to DB")
 				success = False
 
 		defer.commit()
@@ -1302,12 +1302,12 @@ class BackingStoreDB(DB):
 		updated = []
 		for obsPackage in sorted(obsPackageList, key = lambda p: p.name):
 			if not all(rpm.backingStoreId for rpm in obsPackage.binaries):
-				print(f"Refusing to update table {self.builds.name} for OBS package {obsPackage.name}: not all rpms are in the database yet")
+				errormsg(f"Refusing to update table {self.builds.name} for OBS package {obsPackage.name}: not all rpms are in the database yet")
 				continue
 
 			id = self.builds.update(obsPackage.name, obsPackage.buildTime)
 			if id is None:
-				print(f"Unable to update table {self.builds.name} for OBS package {obsPackage.name}")
+				errormsg(f"Unable to update table {self.builds.name} for OBS package {obsPackage.name}")
 				continue
 
 			obsPackage.backingStoreId = id
@@ -1330,7 +1330,7 @@ class BackingStoreDB(DB):
 		for obsPackage in obsPackageList:
 			requiringPackage = obsPackage.sourcePackage
 			if requiringPackage.backingStoreId is None:
-				print(f"Warning: obs package {obsPackage.name} refers to {requiringPackage.fullname()} which has no DB ID")
+				warnmsg(f"obs package {obsPackage.name} refers to {requiringPackage.fullname()} which has no DB ID")
 
 			for used in obsPackage._usedForBuild:
 				requiredPackage = used.sourcePackage
@@ -1342,7 +1342,7 @@ class BackingStoreDB(DB):
 		defer.commit()
 
 	def addBuildDependency(self, requiringPkg, requiredPkg):
-		# print(f"build of {requiringPkg.name} uses {requiredPkg.name}")
+		# infomsg(f"build of {requiringPkg.name} uses {requiredPkg.name}")
 		self.buildDep.add(requiringPkgId = requiringPkg.backingStoreId,
 				requiredPkgId = requiredPkg.backingStoreId)
 
@@ -1409,7 +1409,6 @@ class BackingStoreDB(DB):
 			buildId = self.buildPkgRelation.retrieveBuildForPackage(pkgId)
 			if buildId is None:
 				warnmsg(f"Warning: {pkg.fullname()} (id {pkgId}) not tracked by any build")
-				print(d)
 				raise Exception()
 			elif pkg.obsBuildId == buildId:
 				pass
@@ -1520,7 +1519,7 @@ class BackingStoreDB(DB):
 			obsPackage._binaries = list(self.loadPackagesIntoCache(pkgIdList))
 
 		names = [_.shortname for _ in obsPackage._binaries]
-		# print(f"{obsPackage.name} -> {', '.join(names)}")
+		# infomsg(f"{obsPackage.name} -> {', '.join(names)}")
 
 		# discover the build dependencies if desired
 		assert(self._allowDepTreeLookups)
@@ -1638,7 +1637,7 @@ class BackingStoreDB(DB):
 		for dep, pkgId in providesList:
 			pinfo = relevantPkgs.get(pkgId)
 			if pinfo is None:
-				print(f" ERROR: {name} {dep} references unknown package {pkgId}")
+				errmormsg(f"{name} {dep} references unknown package {pkgId}")
 				continue
 
 			result.append((dep, pinfo))
@@ -1651,7 +1650,7 @@ class BackingStoreDB(DB):
 					raise Exception(f"cannot get package with id {pkgId}")
 				result.append((dep, pinfo))
 
-		# print(f"Resolving {name}: found {len(result)} candidates")
+		# infomsg(f"Resolving {name}: found {len(result)} candidates")
 		self.providesCache.put(name, result)
 
 		return result

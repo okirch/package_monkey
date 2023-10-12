@@ -4,6 +4,7 @@
 
 from csvio import CSVWriter
 from xmltree import XMLTree
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
 class BaseWriter:
 	def __init__(self):
@@ -155,6 +156,8 @@ class TableWriter(BaseWriter):
 		super().__init__()
 		self.csv = CSVWriter(filename, fields = ['component', 'topic', 'package'])
 
+		infomsg(f"Writing results to {filename}")
+
 	def writeLabelDescription(self, label, runtimeRequires):
 		pass
 
@@ -174,6 +177,8 @@ class XmlWriter(BaseWriter):
 		self.xmltree = XMLTree('components')
 
 		self._labels = {}
+
+		infomsg(f"Writing results to {filename}")
 
 	def flush(self):
 		self.xmltree.write(self.filename)

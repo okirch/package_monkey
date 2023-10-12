@@ -27,16 +27,16 @@ class OBSSchema(object):
 		if xmlnode is None:
 			return False
 		if xmlnode.tag != expectTag:
-			print("OBS: unexpected root node <%s> in response (expected <%s>)" % (xmlnode.tag, expectTag));
+			errormsg("OBS: unexpected root node <%s> in response (expected <%s>)" % (xmlnode.tag, expectTag));
 			return False
 
 		return True
 
 	def unexpectedElement(self, node, parent = None):
 		if parent:
-			print("ignoring unexpected element <%s> as child of <%s>" % (node.tag, parent.tag))
+			infomsg("ignoring unexpected element <%s> as child of <%s>" % (node.tag, parent.tag))
 		else:
-			print("ignoring unexpected element <%s>" % node.tag)
+			infomsg("ignoring unexpected element <%s>" % node.tag)
 
 
 	# Process result of querying builddepinfo
@@ -61,7 +61,7 @@ class OBSSchema(object):
 			for grandchild in child:
 				value = grandchild.text.strip()
 				if value and value.startswith('%'):
-					# print(f"_builddepinfo for package {info.name} contains invalid subpkg name \"{value}\"")
+					# infomsg(f"_builddepinfo for package {info.name} contains invalid subpkg name \"{value}\"")
 					info.needs_fixup = True
 					continue
 
@@ -140,7 +140,7 @@ class OBSSchema(object):
 			else:
 				if getattr(result, key, None) is not None:
 					oldValue = getattr(result, key)
-					print(f"Duplicate attribute {key}, changing value from \"{oldValue}\" to \"{value}\"")
+					errormsg(f"Duplicate attribute {key}, changing value from \"{oldValue}\" to \"{value}\"")
 					raise Exception()
 
 				setattr(result, key, value)
@@ -209,7 +209,7 @@ class OBSSchema(object):
 			else:
 				if getattr(result, key, None) is not None:
 					oldValue = getattr(result, key)
-					print(f"Duplicate attribute {key}, changing value from \"{oldValue}\" to \"{value}\"")
+					infomsg(f"Duplicate attribute {key}, changing value from \"{oldValue}\" to \"{value}\"")
 					raise Exception()
 
 				setattr(result, key, value)
@@ -399,7 +399,7 @@ class OBSClient(object):
 			# We could try to catch the HTTPError exception
 			# (apparently defined in urllib.error) but why
 			# bother
-			print("OBS: Unable to get %s - HTTP error %d" % (path, e.code))
+			errormsg("OBS: Unable to get %s - HTTP error %d" % (path, e.code))
 			if e.code == 404:
 				return None
 			raise e
@@ -432,7 +432,7 @@ class OBSClient(object):
 	def queryBuildResult(self, project, **params):
 		xml = self.apiCallXML('build', project, "_result", **params)
 		if xml is None:
-			print(f"Cannot find build/{project}/_result")
+			errormsg(f"Cannot find build/{project}/_result")
 			return None
 
 		return self._schema.processBuildResult(xml)
@@ -527,9 +527,9 @@ class OBSPackage:
 			for pinfo in self._binaries:
 				if pinfo.arch in ('src', 'nosrc'):
 					if found:
-						print(f"OBS Package {self.name} provides more than one source package")
-						print(f"  {found.fullname()}")
-						print(f"  {pinfo.fullname()}")
+						infomsg(f"OBS Package {self.name} provides more than one source package")
+						infomsg(f"  {found.fullname()}")
+						infomsg(f"  {pinfo.fullname()}")
 
 					found = pinfo
 
@@ -608,12 +608,12 @@ class OBSProject:
 				info = client.getFileInfoExt(self.name, self.buildRepository, obsPackage.name, self.buildArch, rpm.fullname(),
 						progressMeter = progress)
 				if info is None:
-					print(f"Unable to obtain fileinfo for {rpm.fullname()}")
+					errormsg(f"Unable to obtain fileinfo for {rpm.fullname()}")
 					failures += 1
 
 			if obsPackage.buildStatus == OBSPackage.STATUS_SUCCEEDED and \
 			   not self.queryPackageBuildInfo(client, obsPackage, progressMeter = progress):
-				print(f"Unable to obtain buildinfo for obs package {obsPackage}")
+				errormsg(f"Unable to obtain buildinfo for obs package {obsPackage}")
 				failures += 1
 
 			progress.tick()
@@ -647,7 +647,7 @@ class OBSProject:
 	def queryPackageBuildInfo(self, client, obsPackage, **params):
 		sourceVersion = obsPackage.sourceVersion
 		if sourceVersion is None:
-			print(f"Cannot retrieve buildinfo for {obsPackage.name}: unable to identify version")
+			errormsg(f"Cannot retrieve buildinfo for {obsPackage.name}: unable to identify version")
 			return False
 
 		cacheObjectName = f"{sourceVersion}/buildInfo"
@@ -765,7 +765,7 @@ class OBSProject:
 
 					dependent = self.product.findPackage(pinfo.name, pinfo.version, pinfo.release, pinfo.arch)
 					if dependent is None:
-						print(f"{filename} {dep.type} {pinfo.fullname()}, but I cannot find it")
+						errormsg(f"{filename} {dep.type} {pinfo.fullname()}, but I cannot find it")
 						continue
 
 					result.add(dependent)
@@ -773,7 +773,7 @@ class OBSProject:
 
 		info = client.getFileInfoExt(self.name, self.buildRepository, packageName, self.buildArch, filename)
 		if info is None:
-			print(f"Unable to obtain fileinfo for {filename}")
+			errormsg(f"Unable to obtain fileinfo for {filename}")
 			return False
 
 		if info.requires_ext:
@@ -829,7 +829,7 @@ class OBSProject:
 		for used in data.builddeps:
 			required = self.product.findPackage(used.name, used.version, used.release, used.arch)
 			if required is None:
-				print(f"WARNING: building {obsPackage.name} uses {used.name}.{used.arch}, but I cannot find it")
+				warnmsg(f"building {obsPackage.name} uses {used.name}.{used.arch}, but I cannot find it")
 				if False:
 					raise Exception()
 				continue
@@ -860,11 +860,11 @@ class OBSProject:
 				continue
 
 			if pkg.buildStatus == OBSPackage.STATUS_FAILED:
-				print(f"Unable to process {pkg.name} - build failed")
+				infomsg(f"Unable to process {pkg.name} - build failed")
 				continue
 
 			if pkg.buildStatus != OBSPackage.STATUS_SUCCEEDED:
-				print(f"Unable to process {pkg.name} - unexpected build status {pkg.buildStatusString}")
+				errormsg(f"Unable to process {pkg.name} - unexpected build status {pkg.buildStatusString}")
 				continue
 
 			validPackages.append(pkg)
@@ -878,7 +878,7 @@ class OBSProject:
 		for pkg in needToResolveSource:
 			sourcePackage = sourceMap.get(pkg.basePackageName)
 			if sourcePackage is None:
-				print(f"Warning: unable to determine source package version for {pkg.basePackageName}")
+				warnmsg(f"unable to determine source package version for {pkg.basePackageName}")
 			else:
 				pkg.sourcePackage = sourcePackage
 
@@ -921,16 +921,16 @@ class OBSProject:
 			if store.obsPackageWasRebuilt(pkg):
 				toBeAdded.append(pkg)
 
-		print(f"About to update {len(binariesToBeAdded)} packages")
+		infomsg(f"About to update {len(binariesToBeAdded)} packages")
 		store.addPackageObjectList(binariesToBeAdded, updateDependencies = False)
 		store.updatePackageSourceObjectList(needToUpdateSourcesFor)
-		print("Done.")
+		infomsg("Done.")
 
-		print(f"About to update depdendencies for packages")
+		infomsg(f"About to update depdendencies for packages")
 		queue = ChunkingQueue(lambda p: self.storeDependencies(store, p))
 		for obsPackage in toBeAdded:
 			rpmNames = ", ".join(_.shortname for _ in obsPackage.binaries)
-			print(f"+ {obsPackage.name}: {rpmNames}")
+			infomsg(f"+ {obsPackage.name}: {rpmNames}")
 
 			for rpm in obsPackage.binaries:
 				if store.havePackageDependencies(rpm):
@@ -940,9 +940,9 @@ class OBSProject:
 					queue.add(rpm)
 
 		queue.flush()
-		print("Done.")
+		infomsg("Done.")
 
-		print(f"About to collect build depdendencies for packages")
+		infomsg(f"About to collect build depdendencies for packages")
 		rpmToPackage = {}
 		for obsPackage in toBeAdded:
 			for rpm in obsPackage.binaries:
@@ -964,7 +964,7 @@ class OBSProject:
 				obsPackage.addBuildRequires(rpm)
 			queue.add(obsPackage)
 
-		print("Done.")
+		infomsg("Done.")
 
 	def storePackages(self, store, processed):
 		msg = ", ".join(_.name for _ in processed)

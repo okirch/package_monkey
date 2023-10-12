@@ -8,6 +8,10 @@ import urllib.parse
 import os.path
 import os
 from packages import Package
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+
+cacheLogger = loggingFacade.getLogger('cache')
+debugCache = cacheLogger.debug
 
 class xmlNamespaceSchema:
 	def __init__(self, ns, *tags):
@@ -32,10 +36,6 @@ def retrieveURLRaw(url):
 		raise ValueError("HTTP status %d when retrieving %s" % (r.status, url))
 
 	return r
-
-def debugCache(msg):
-	if False:
-		print(msg)
 
 class UrlCacheStrategy:
 	def __init__(self, basedir, includeScheme = False, includeHost = True, stripDirs = 0):
@@ -113,7 +113,7 @@ class RepoCache:
 		def invalidate(self):
 			# Drop the local file
 			if self.localPath:
-				debugCache("Dropping %s from cache" % self.localPath)
+				debugCache(f"Dropping {self.localPath} from cache")
 				try:
 					os.remove(self.localPath)
 				except: pass

@@ -1,11 +1,9 @@
 #!/usr/bin/python3
 
-
-from repos import RepoDict, UrlCacheStrategy
-from products import ProductCatalog, CacheLocation
 from packages import Product, Resolver, ResolverWorker, ResolverPreferences, PackageSelector, PackageCollection
 from filter import PackageFilter, Classification, PotentialClassification
 from options import Application
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from writers import StandardWriter, TableWriter, XmlWriter
 
 application = Application('build-dependency-tree')
@@ -41,7 +39,7 @@ for pinfo in store.enumerateLatestPackages():
 	verdict = packageFilter.apply(pkg, pinfo.product)
 	if verdict is not None:
 		verdict.labelPackage(pkg)
-		print(f"{pkg} is placed in {verdict.label} by package filter rules")
+		infomsg(f"{pkg} is placed in {verdict.label} by package filter rules")
 	else:
 		# we currently have no good way to properly mark unclassified packages
 		# group = unclassified
@@ -54,7 +52,7 @@ def flattenGroupList(type, names):
 	for name in names:
 		label = classificationScheme.getLabel(name)
 		if label is None:
-			print(f"Warning: no label {name}")
+			warnmsg(f"no label {name}")
 			continue
 
 		assert(label.type == type)
@@ -79,7 +77,7 @@ problemLog = worker.problems
 for labelName in ("@Gnome", "@Texlive", "@Emacs", "@Vim", "@Qt"):
 	label = classificationScheme.getLabel(labelName)
 	assert(label)
-	print(f"Ignoring all problems for label {label}")
+	infomsg(f"Ignoring all problems for label {label}")
 	problemLog.ignore(label)
 
 productArchitecture = store.getProperty("arch")
@@ -110,9 +108,9 @@ def classifyAutoFlavors(label, labelledPackages):
 			packageFilter.updateGroup(label, relabeled)
 
 			if False:
-				print(f"Merged {len(relabeled)} packages into {label}")
+				infomsg(f"Merged {len(relabeled)} packages into {label}")
 				for l in relabeled:
-					print(f"  {l}")
+					infomsg(f"  {l}")
 		elif flavorDef.label.disposition == Classification.DISPOSITION_IGNORE:
 			pass
 		else:
@@ -132,7 +130,7 @@ def classifyRuntimeDependencies(label):
 	group = packageFilter.makeBinaryGroup(label.name)
 	labelledPackages = group.packages
 
-	print(f"Classify packages belonging to {group.label}")
+	infomsg(f"Classify packages belonging to {group.label}")
 
 	# Step 0: automatically add compatible build flavors of subordinate groups
 	# iff we satisfy all their dependencies
@@ -143,10 +141,10 @@ def classifyRuntimeDependencies(label):
 		for req in label.runtimeRequires:
 			for flavor in req.flavors:
 				if flavor.allFlavorRequirementsSatisfied(label):
-					print(f"{label} auto-selected {flavor} via {req}")
+					infomsg(f"{label} auto-selected {flavor} via {req}")
 					update.add(flavor)
 		for flavor in update:
-			# print(f" {label} -> enable {flavor}")
+			# infomsg(f" {label} -> enable {flavor}")
 			label.addRuntimeDependency(flavor)
 
 	# Step 1: build the runtime dependency closure
@@ -188,17 +186,17 @@ def classifyBuildDependencies(label):
 
 	unlabelledPackages = classifier.unlabelledPackages
 	if unlabelledPackages:
-		print(f"{label.name} has {len(unlabelledPackages)} unclassified build requirements")
+		infomsg(f"{label.name} has {len(unlabelledPackages)} unclassified build requirements")
 
-		print(f"Classifying new build requirements for {label}")
+		infomsg(f"Classifying new build requirements for {label}")
 		classifier = Classification.UnknownPackageClassifier(worker, productArchitecture, label)
 		classifier.classify(unlabelledPackages)
 
 		# FIXME: This should also be part of the problem report
 		for suggestedLabel, candidatePackages in classifier.suggestions:
-			print(f"   Classifier suggests label {suggestedLabel} for these package(s)")
+			infomsg(f"   Classifier suggests label {suggestedLabel} for these package(s)")
 			for cand in candidatePackages:
-				print(f"      {cand.shortname}")
+				infomsg(f"      {cand.shortname}")
 
 processedBinaryLabels = []
 
@@ -230,7 +228,7 @@ if False:
 	for label in sourceTraversal:
 		group = packageFilter.makeSourceGroup(label.name)
 
-		print(f"Classify packages belonging to source project {group.label}")
+		infomsg(f"Classify packages belonging to source project {group.label}")
 
 		classifier = Classification.BuildRequireClosure(worker, productArchitecture, label)
 		assert(classifier)

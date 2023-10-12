@@ -310,7 +310,7 @@ class Classification:
 			# The first round would enable @GLib+dbus, and the second round would enable
 			# @DBus+x11
 			while candidateFlavors:
-				# print(f"{self} try to select from {' '.join(map(str, candidateFlavors))}")
+				# infomsg(f"{self} try to select from {' '.join(map(str, candidateFlavors))}")
 				eligibleFlavors = set()
 				for flavor in order.bottomUpTraversal(candidateFlavors):
 					flavorBaseClosure = order.downwardClosureFor(flavor)
@@ -318,7 +318,7 @@ class Classification:
 						flavorBaseClosure.remove(flavor)
 
 					if flavorBaseClosure.issubset(myClosure):
-						# print(f"{self} auto-selected {flavor}")
+						# infomsg(f"{self} auto-selected {flavor}")
 						myClosure.update(order.downwardClosureFor(flavor))
 						eligibleFlavors.add(flavor)
 
@@ -420,7 +420,7 @@ class Classification:
 
 		def createPurpose(self, baseLabel, purposeName, template = None):
 			if baseLabel.purposeName is not None:
-				print(f"{baseLabel} isPurpose={baseLabel.isPurpose}")
+				infomsg(f"{baseLabel} isPurpose={baseLabel.isPurpose}")
 				raise Exception(f"Cannot derive purpose {purposeName} from label {baseLabel} because it already has a purpose")
 
 			label = self.createLabel(f"{baseLabel}-{purposeName}", baseLabel.type)
@@ -482,7 +482,7 @@ class Classification:
 				if label.type is labelType:
 					for rt in label.runtimeRequires:
 						if rt.type != labelType:
-							print(f"Error: {label} requires label {rt}, which has incompatible type {rt.type}")
+							infomsg(f"Error: {label} requires label {rt}, which has incompatible type {rt.type}")
 							good = False
 
 					order.add(label, label.runtimeRequires)
@@ -547,27 +547,27 @@ class Classification:
 			if type(label) == str:
 				label = self._labels[label]
 
-			print(f"Label {label.name}")
+			infomsg(f"Label {label.name}")
 			if label.sourceProject:
-				print(f"  source project {label.sourceProject}")
+				infomsg(f"  source project {label.sourceProject}")
 			if label.buildConfig:
-				print(f"  build config {label.buildConfig}")
+				infomsg(f"  build config {label.buildConfig}")
 			for name, lset in (("requires", label.runtimeRequires), ("buildrequires", label.buildRequires), ("closure", label._closure), ("build closure", label._buildClosure)):
 				if not lset:
 					continue
-				print(f"  {name}")
+				infomsg(f"  {name}")
 
 				if lset is not label._closure and label._closure.issubset(lset):
 					if lset == label._closure:
-						print(f"    (same as closure)")
+						infomsg(f"    (same as closure)")
 						continue
 
-					print(f"    closure plus:")
+					infomsg(f"    closure plus:")
 					lset = lset.difference(label._closure)
 
 				for c in lset:
-					print(f"    {c.name}")
-				print()
+					infomsg(f"    {c.name}")
+				infomsg("")
 
 	class Reason(object):
 		def __init__(self, pkg):
@@ -759,7 +759,7 @@ class Classification:
 			for rpm in packages:
 				buildId = rpm.obsBuildId
 				if buildId is None:
-					print(f"No OBS package for {rpm.shortname}")
+					infomsg(f"No OBS package for {rpm.shortname}")
 					continue
 
 				if buildId in alreadySeen:
@@ -768,7 +768,7 @@ class Classification:
 
 				build = self.store.retrieveOBSPackageById(buildId)
 				if build is None:
-					print(f"Could not find OBS package {buildId} for {rpm.shortname}")
+					infomsg(f"Could not find OBS package {buildId} for {rpm.shortname}")
 					continue
 
 				yield rpm, build
@@ -798,12 +798,12 @@ class Classification:
 						problematic = True
 
 						if False:
-							print(f"Source project conflict for {build.name}")
-							print(f"  {rpm.shortname} was labelled as {rpm.label}, built by {rpm.label.sourceProject}")
-							print(f"  {other.shortname} was labelled as {other.label}, built by {other.label.sourceProject}")
+							infomsg(f"Source project conflict for {build.name}")
+							infomsg(f"  {rpm.shortname} was labelled as {rpm.label}, built by {rpm.label.sourceProject}")
+							infomsg(f"  {other.shortname} was labelled as {other.label}, built by {other.label.sourceProject}")
 
 				if problematic:
-					# print(f"Adding SourceProjectConflict for {build.name}")
+					# infomsg(f"Adding SourceProjectConflict for {build.name}")
 					self.handleSourceProjectConflict(build)
 
 			self.result.update(result)
@@ -829,7 +829,7 @@ class Classification:
 					if other.label is None:
 						continue
 					if other.label.type == Classification.TYPE_AUTOFLAVOR:
-						# print(f"### identified {other.shortname} as a {other.label.name} package")
+						# infomsg(f"### identified {other.shortname} as a {other.label.name} package")
 						self.addFlavor(other.label.name).add((rpm, other))
 
 		def labelFlavoredPackages(self, flavorName, label):
@@ -838,7 +838,7 @@ class Classification:
 			matching = self.getFlavor(flavorName)
 			if matching:
 				for rpm, other in matching:
-					# print(f"::: label {other.shortname} as {label}")
+					# infomsg(f"::: label {other.shortname} as {label}")
 					other.label = label
 					other.labelReason = Classification.ReasonRelatedPackage(flavorName, other, rpm)
 					result.add(other)
@@ -852,12 +852,12 @@ class Classification:
 			result = set()
 			for rpm, build in self.enumerate(packages):
 				if relation.checkPackage(rpm):
-					print(f"Found {relation.NAME} package {rpm.shortname} in non-{relation.NAME} group {rpm.label}")
+					infomsg(f"Found {relation.NAME} package {rpm.shortname} in non-{relation.NAME} group {rpm.label}")
 					continue
 
 				for other in build.binaries:
 					if other.label is None and relation.checkPackage(other):
-						print(f"### identified {other.shortname} as a {relation.NAME} package")
+						infomsg(f"### identified {other.shortname} as a {relation.NAME} package")
 						other.label = label
 						other.labelReason = Classification.ReasonRelatedPackage(relation, other, rpm)
 						result.add(other)
@@ -924,9 +924,9 @@ class Classification:
 				return True
 
 			if False:
-				print(f"label {a} is not a good dependency of {b} [buildconf {a.buildConfig} vs {b.buildConfig}]")
+				infomsg(f"label {a} is not a good dependency of {b} [buildconf {a.buildConfig} vs {b.buildConfig}]")
 				names = map(str, self.labelOrder[b]._downwardClosure)
-				print(f" -> {' '.join(names)}")
+				infomsg(f" -> {' '.join(names)}")
 
 			return False
 
@@ -964,7 +964,7 @@ class Classification:
 				# Do not recurse into this package
 				return None
 
-			# print(f"Label {self.label}: classify {edge}")
+			# infomsg(f"Label {self.label}: classify {edge}")
 			pkg.label = self.label
 			pkg.labelReason = edge
 
@@ -1043,12 +1043,12 @@ class Classification:
 		def getBuildForPackage(self, rpm):
 			buildId = rpm.obsBuildId
 			if buildId is None:
-				print(f"No OBS package for {rpm}")
+				infomsg(f"No OBS package for {rpm}")
 				return None
 
 			build = self.store.retrieveOBSPackageById(buildId)
 			if build is None:
-				print(f"Could not find OBS package {buildId} for {rpm.shortname}")
+				infomsg(f"Could not find OBS package {buildId} for {rpm.shortname}")
 
 			return build
 
@@ -1097,9 +1097,9 @@ class Classification:
 
 				continue
 				names = sorted(_.name for _ in labelClosure)
-				print(f"{unlabelledPackage.shortname} -> {' '.join(names)}")
+				infomsg(f"{unlabelledPackage.shortname} -> {' '.join(names)}")
 				for pkg in incrementalPackageClosure:
-					print(f"  {pkg.shortname} [{pkg.sourceName}]")
+					infomsg(f"  {pkg.shortname} [{pkg.sourceName}]")
 
 		@property
 		def suggestions(self):
@@ -1134,15 +1134,15 @@ class Classification:
 				src = binary.sourcePackage
 				if src is None:
 					# add problem to worker
-					print(f"Warning, no source for {binary.fullname()} {binary.arch}")
+					warnmsg(f"No source for {binary.fullname()} {binary.arch}")
 					continue
 
 				if src.label and src.label is not label:
 					# add problem to worker
-					print(f"Problem with {src.fullname()}: label {label} vs {src.label}")
+					infomsg(f"Problem with {src.fullname()}: label {label} vs {src.label}")
 					continue
 
-				# print(f"label {src.name} as {label}")
+				# infomsg(f"label {src.name} as {label}")
 				src.label = label
 				src.labelReason = Classification.ReasonSourcePackage(src, binary)
 
@@ -1157,7 +1157,7 @@ class Classification:
 				binary = reason.package
 				src = binary.sourcePackage
 				if src is None:
-					print(f"No source for {binary.fullname()}")
+					infomsg(f"No source for {binary.fullname()}")
 					self.handleMissingSource(binary, reason)
 					return None
 
@@ -1207,7 +1207,7 @@ class PotentialClassification(object):
 			if self._solution and self._solution is not label:
 				raise Exception(f"Conflicting solution for {self}: label {self._solution} vs {label}")
 			if self._trace:
-				print(f" {self} set solution to {label}")
+				infomsg(f" {self} set solution to {label}")
 			self._solution = label
 
 			# update lower and upper cone here?
@@ -1270,16 +1270,16 @@ class PotentialClassification(object):
 			self._lowerCone = self.intersectCones(self.lowerCone, lowerNeighbor.lowerCone)
 
 			if self._trace:
-				print(f" {self}: add lower neighbor {lowerNeighbor}")
-				print(f"    lower cone is {self.describeCone(self.lowerCone)}")
+				infomsg(f" {self}: add lower neighbor {lowerNeighbor}")
+				infomsg(f"    lower cone is {self.describeCone(self.lowerCone)}")
 
 		def updateFromAbove(self, upperNeighbor):
 			# do NOT use update_intersection
 			self._upperCone = self.intersectCones(self.upperCone, upperNeighbor.upperCone)
 
 			if self._trace:
-				print(f" {self}: add upper neighbor {upperNeighbor}")
-				print(f"    upper cone is {self.describeCone(self.upperCone)}")
+				infomsg(f" {self}: add upper neighbor {upperNeighbor}")
+				infomsg(f"    upper cone is {self.describeCone(self.upperCone)}")
 
 		def describeCone(self, cone):
 			if cone is None:
@@ -1296,7 +1296,7 @@ class PotentialClassification(object):
 				# the ones that have a higher gravity
 				filtered = Classification.filterLabelsByGravity(candidateLabels)
 				if filtered != candidateLabels:
-					print(f"{self}: reduced set of candidates based on their gravity" + 
+					infomsg(f"{self}: reduced set of candidates based on their gravity" + 
 						f"  {' '.join(map(str, candidateLabels))} -> {' '.join(map(str, filtered))}")
 					candidateLabels = filtered
 
@@ -1581,7 +1581,7 @@ class PotentialClassification(object):
 
 		if len(cycle) > 2:
 			names =  list(map(str, cycle))
-			print(f"Detected non-trivial cycle {' -> '.join(names)}")
+			infomsg(f"Detected non-trivial cycle {' -> '.join(names)}")
 
 		labels = set()
 		for node in cycle:
@@ -1591,12 +1591,12 @@ class PotentialClassification(object):
 		label = None
 		if labels:
 			if len(labels) > 1:
-				print(f"Warning, having a hard time collapsing cycle {' '.join(cycleNames)} because it has conflicting labels")
+				warnmsg(f"Having a hard time collapsing cycle {' '.join(cycleNames)} because it has conflicting labels")
 				for node in cycle:
 					if node.solution:
-						print(f"  {node}: {node.solution}")
+						infomsg(f"  {node}: {node.solution}")
 
-				print("Picking a random label for now")
+				infomsg("Picking a random label for now")
 			label = labels.pop()
 
 		above = reduce(set.union, (node._upperNeighbors for node in cycle), set())
@@ -1704,7 +1704,7 @@ class PotentialClassification(object):
 				sibNode = self.getPackage(siblingPackage)
 
 				if sibNode.solution is not None:
-					print(f"Warning: {siblingPackage} was already placed through a different sibling (most likely it's part of a dependency cycle)")
+					warnmsg(f"{siblingPackage} was already placed through a different sibling (most likely it's part of a dependency cycle)")
 					continue
 
 				candidatePurposes = set(map(lambda label: label.getObjectPurpose(siblingPurposeLabel.name), candidateLabels))
@@ -1712,7 +1712,7 @@ class PotentialClassification(object):
 				labels = sibNode.filterCandidateLabels(candidatePurposes)
 				if not labels:
 					lnames = map(str, candidatePurposes)
-					print(f"Unable to place {siblingPackage} (obs package {siblings}): no matching label; candidates {' '.join(lnames)}")
+					infomsg(f"Unable to place {siblingPackage} (obs package {siblings}): no matching label; candidates {' '.join(lnames)}")
 
 					# put this into a separate function:
 					for cursor in self.Traversal(sibNode):
@@ -1723,7 +1723,7 @@ class PotentialClassification(object):
 							continue
 
 						match = map(str, match)
-						print(f"{cursor}; match <{' '.join(match)}>")
+						infomsg(f"{cursor}; match <{' '.join(match)}>")
 
 						if cursor.depth < 5:
 							cursor.descend()
@@ -1734,14 +1734,14 @@ class PotentialClassification(object):
 					# the user. In this case, we should try all candidate labels in turn and see if
 					# our package would fit any of these.
 					lnames = map(str, candidatePurposes)
-					print(f"Unable to place {siblingPackage} (obs package {siblings}): ambiguous labels {' '.join(lnames)}")
+					infomsg(f"Unable to place {siblingPackage} (obs package {siblings}): ambiguous labels {' '.join(lnames)}")
 					continue
 
 				purposeLabel = next(iter(labels))
 				if siblingPurposeLabel.disposition == Classification.DISPOSITION_MERGE:
 					purposeLabel = purposeLabel.flavorBase
 
-				print(f"{siblingPackage} will be placed in {purposeLabel}; close to its siblings")
+				infomsg(f"{siblingPackage} will be placed in {purposeLabel}; close to its siblings")
 				reason = Classification.ReasonPurpose(siblingPackage, str(siblingPurposeLabel), siblings.name)
 				self.recordDecision(sibNode, purposeLabel, reason)
 
@@ -1777,12 +1777,12 @@ class PotentialClassification(object):
 						missing.append(lower)
 
 				if missing:
-					print(f"{interval} has been placed in {interval.solution} by the user, but not all of its dependencies are covered:")
+					infomsg(f"{interval} has been placed in {interval.solution} by the user, but not all of its dependencies are covered:")
 					for lower in missing:
 						if lower.solution:
-							print(f" - {lower} [{lower.solution}]")
+							infomsg(f" - {lower} [{lower.solution}]")
 						else:
-							print(f" - {lower} (to be classified)")
+							infomsg(f" - {lower} (to be classified)")
 
 			# Report those packages where the lowerCone collapses to an empty set
 			# (All the packages above will naturally have an empty lower cone as well)
@@ -1817,15 +1817,15 @@ class PotentialClassification(object):
 					candidateProjects = intersectSets(candidateProjects, thisPkgProjectSet)
 
 			if candidateProjects is None:
-				print(f"Build {build} - no restrictions")
+				infomsg(f"Build {build} - no restrictions")
 			elif not candidateProjects:
-				print(f"Build {build} - conflicting placement of sibling packages")
+				infomsg(f"Build {build} - conflicting placement of sibling packages")
 				for pkg, projects in placement.items():
 					names = map(str, projects)
-					print(f"    {pkg} - {' '.join(names)}")
+					infomsg(f"    {pkg} - {' '.join(names)}")
 			else:
 				projectNames = ' '.join(map(str, candidateProjects))
-				print(f"Build {build} - can be placed in {projectNames}")
+				infomsg(f"Build {build} - can be placed in {projectNames}")
 
 		for interval in order.bottomUpTraversal():
 			# don't do anything if already solved
@@ -1852,25 +1852,25 @@ class PotentialClassification(object):
 			if baseLabel is None:
 				continue
 
-			print(f"{interval} siblings have common base label {baseLabel}")
+			infomsg(f"{interval} siblings have common base label {baseLabel}")
 			choice = None
 			if autoFlavor:
 				# this package has been labeled with a generic autoflavor like "python"
 				flavor = baseLabel.getBuildFlavor(autoFlavor.name)
 				if flavor is None:
-					print(f"{interval} cannot be placed; common base label {baseLabel} has no flavor {autoFlavor}")
+					infomsg(f"{interval} cannot be placed; common base label {baseLabel} has no flavor {autoFlavor}")
 				elif interval.labelIsValidCandidate(flavor):
-					print(f"{flavor} is a valid candidate for {interval}")
+					infomsg(f"{flavor} is a valid candidate for {interval}")
 					choice = flavor
 				else:
-					print(f"{interval} cannot be placed into {flavor} because it's not a candidate label")
-					print(f"   Conflicting lower and upper neighbors")
+					infomsg(f"{interval} cannot be placed into {flavor} because it's not a candidate label")
+					infomsg(f"   Conflicting lower and upper neighbors")
 					for below in interval._lowerNeighbors:
 						if below._lowerCone is not None and flavor not in below._lowerCone:
-							print(f"    - {below} (requires)")
+							infomsg(f"    - {below} (requires)")
 					for above in interval._upperNeighbors:
 						if above._upperCone is not None and flavor not in above._upperCone:
-							print(f"    - {above} (required by)")
+							infomsg(f"    - {above} (required by)")
 			elif interval.labelIsValidCandidate(baseLabel):
 				choice = baseLabel
 			else:
@@ -1882,13 +1882,13 @@ class PotentialClassification(object):
 				bestFlavors = intersectSets(goodFlavors, interval.candidates)
 				if bestFlavors:
 					names = ' '.join(map(str, bestFlavors))
-					print(f"   found best flavor(s) {names}")
+					infomsg(f"   found best flavor(s) {names}")
 				elif goodFlavors:
 					names = ' '.join(map(str, goodFlavors))
-					print(f"   found good flavor(s) {names}")
+					infomsg(f"   found good flavor(s) {names}")
 					bestFlavors = goodFlavors
 				else:
-					print(f"   no good flavors of {baseLabel} found")
+					infomsg(f"   no good flavors of {baseLabel} found")
 
 				if len(bestFlavors) > 1:
 					bestFlavors = self._order.minima(bestFlavors)
@@ -1897,7 +1897,7 @@ class PotentialClassification(object):
 					choice = bestFlavors.pop()
 
 			if choice:
-				print(f"{interval} - try to place into {choice}")
+				infomsg(f"{interval} - try to place into {choice}")
 				self.chooseLabelForInterval(interval, choice, f"because its siblings are in {baseLabel}")
 
 		self.placeSiblingsAccordingToPurpose(order)
@@ -1915,7 +1915,7 @@ class PotentialClassification(object):
 			if pkg.label:
 				if pkg.label.type == Classification.TYPE_AUTOFLAVOR:
 					# this package has been labeled with a generic autoflavor or purpose like "python"
-					print(f"{interval} has been marked as auto-flavor {pkg.label}")
+					infomsg(f"{interval} has been marked as auto-flavor {pkg.label}")
 					self.tryToPlaceWithSibling(interval)
 					continue
 
@@ -1928,7 +1928,7 @@ class PotentialClassification(object):
 			if candidates is None:
 				continue
 
-			print(f"-- inspecting {interval} solution {interval.solution}")
+			infomsg(f"-- inspecting {interval} solution {interval.solution}")
 			if len(candidates) == 1:
 				uniqueLabel = next(iter(candidates))
 				self.chooseLabelForInterval(interval, uniqueLabel, f"because it's the unique candidate")
@@ -1936,26 +1936,26 @@ class PotentialClassification(object):
 				def showNeighbors(tag, neighbors, getSpan = None):
 					if not neighbors:
 						return
-					print(f"    {tag}")
+					infomsg(f"    {tag}")
 
 					found = set()
 					for neigh in neighbors:
 						if neigh.solution:
-							print(f"      {neigh} [{neigh.solution}]")
+							infomsg(f"      {neigh} [{neigh.solution}]")
 							found.add(neigh.solution)
 						elif neigh.candidates is not None:
 							n = len(neigh.candidates)
-							print(f"      {neigh} [{n} candidates]")
+							infomsg(f"      {neigh} [{n} candidates]")
 						else:
-							print(f"      {neigh} [unsolveable]")
+							infomsg(f"      {neigh} [unsolveable]")
 					if found:
 						span = getSpan(found)
 						names = ' '.join(map(str, span))
-						print(f"     -> bounded by {names}")
+						infomsg(f"     -> bounded by {names}")
 
-				print(f"{interval} cannot be placed due to conflicts")
+				infomsg(f"{interval} cannot be placed due to conflicts")
 				if interval.package and interval.package.label:
-					print(f"   {interval.package} has been labelled {interval.package.label}")
+					infomsg(f"   {interval.package} has been labelled {interval.package.label}")
 				self.displayNodes("lower neighbors", interval._lowerNeighbors, self._order.maxima)
 				self.displayNodes("upper neighbors", interval._upperNeighbors, self._order.minima)
 			elif self.tryToPlaceIntoCommonBase(interval):
@@ -1978,21 +1978,21 @@ class PotentialClassification(object):
 		return set(map(lambda label: label.flavorBase or label, labels))
 
 	def reportEmptyLowerCone(self, interval):
-		print(f"{interval} has an actual conflict between its requirements")
+		infomsg(f"{interval} has an actual conflict between its requirements")
 		for lower in interval.lowerNeighbors:
 			if lower.solution:
-				print(f"    {lower} labelled {lower.solution}")
+				infomsg(f"    {lower} labelled {lower.solution}")
 			elif lower._lowerCone is not None:
 				# the lower cone is an intersection of N upward closures,
 				# recover the original labels
 				bounds = self._order.minima(lower.lowerCone)
 				if len(bounds) < 10:
 					names = ' '.join(map(str, bounds))
-					print(f"    {lower} bounded by {names}")
+					infomsg(f"    {lower} bounded by {names}")
 				else:
-					print(f"    {lower} bounded by {len(bounds)} labels")
+					infomsg(f"    {lower} bounded by {len(bounds)} labels")
 			else:
-				print(f"    {lower} unbounded")
+				infomsg(f"    {lower} unbounded")
 
 		cones = []
 		for lower in interval.lowerNeighbors:
@@ -2008,7 +2008,7 @@ class PotentialClassification(object):
 			if not any(chunk.issubset(cone) for chunk in chunks):
 				chunks.append(cone)
 
-		print(f"   Found {len(chunks)} distinct closures")
+		infomsg(f"   Found {len(chunks)} distinct closures")
 		relatedSubsets = []
 		for chunk in chunks:
 			subset = set()
@@ -2032,18 +2032,18 @@ class PotentialClassification(object):
 		if warts is None:
 			return None
 
-		print(f"   It seems we have {len(warts)} groups of packages that we need to reconcile")
+		infomsg(f"   It seems we have {len(warts)} groups of packages that we need to reconcile")
 		upwardClosure = set()
 		for wart in warts:
 			names = map(str, wart)
-			print(f"    - {' '.join(names)}")
+			infomsg(f"    - {' '.join(names)}")
 
 			for lower in wart:
 				upwardClosure.update(lower._lowerCone)
 
 		labels = self._order.minima(upwardClosure)
 		names = map(str, labels)
-		print(f"   Might be solved by a label that requires {' '.join(names)}")
+		infomsg(f"   Might be solved by a label that requires {' '.join(names)}")
 		return labels
 
 	def reportSuggestedNewLabels(self, suggestedNewLabels):
@@ -2079,12 +2079,12 @@ class PotentialClassification(object):
 				uniq[key] = newLabel
 			newLabel.add(node)
 
-		print(f"Suggesting the following new labels")
+		infomsg(f"Suggesting the following new labels")
 		for newLabel in sorted(uniq.values(), key = NewLabel.count, reverse = True):
-			print(f" - upper bound for {newLabel}")
+			infomsg(f" - upper bound for {newLabel}")
 			for node in newLabel.nodes:
-				print(f"    * {node}")
-		print()
+				infomsg(f"    * {node}")
+		infomsg("")
 
 	def reportAmbiguousLabels(self, interval, candidates):
 		if len(candidates) < 6:
@@ -2123,13 +2123,13 @@ class PotentialClassification(object):
 		else:
 			commonLabel = interval.commonLabel
 			if commonLabel is None:
-				print(f"cannot pick label for {interval} - packages have already been labelled with different labels")
+				infomsg(f"cannot pick label for {interval} - packages have already been labelled with different labels")
 				return
 
 			if commonLabel.type == Classification.TYPE_AUTOFLAVOR:
 				choice = label.getBuildFlavor(commonLabel.name)
 				if choice is None:
-					print(f"Cannot label {interval} with {label} - it should be labeled with build flavor $something+{commonLabel}")
+					infomsg(f"Cannot label {interval} with {label} - it should be labeled with build flavor $something+{commonLabel}")
 					return False
 			elif commonLabel.type == Classification.TYPE_PURPOSE:
 				# cheat a little here. The chosen label we've been given may already be
@@ -2140,14 +2140,14 @@ class PotentialClassification(object):
 					label = label.flavorBase
 				choice = label.getObjectPurpose(commonLabel.name)
 				if choice is None:
-					print(f"Cannot label {interval} with {label} - it should be labeled with purpose $something-{commonLabel}")
+					infomsg(f"Cannot label {interval} with {label} - it should be labeled with purpose $something-{commonLabel}")
 					return False
 
 		if interval.candidates is not None and choice not in interval.candidates:
-			print(f"BUMMER: made a crap choice: {label} is not a candidate label for {interval}")
+			infomsg(f"BUMMER: made a crap choice: {label} is not a candidate label for {interval}")
 			return False
 
-		print(f"{interval} is being placed into {choice} because {reasonMsg}")
+		infomsg(f"{interval} is being placed into {choice} because {reasonMsg}")
 		self.recordDecision(interval, choice)
 		return True
 
@@ -2176,7 +2176,7 @@ class PotentialClassification(object):
 		# If this OBS package produces just one binary rpm, there are no siblings to
 		# place this with
 		if len(interval.siblings) == 1:
-			print(f"{interval} looks like an only child")
+			infomsg(f"{interval} looks like an only child")
 			return
 
 		if interval.siblings.labels:
@@ -2190,14 +2190,14 @@ class PotentialClassification(object):
 		if False and interval.candidates is not None:
 			commonLabel = interval.siblings.commonLabel
 			if commonLabel is not None and commonLabel in interval.candidates:
-				print(f"{interval} is being placed into {commonLabel} because its siblings were placed there")
+				infomsg(f"{interval} is being placed into {commonLabel} because its siblings were placed there")
 				self.recordDecision(interval, commonLabel)
 				return True
 
 		baseLabel = interval.siblings.commonBaseLabel
 		if baseLabel is None:
 			names = map(str, interval.siblings.baseLabels)
-			print(f"{interval} cannot be placed with siblings (ambiguous base labels {' '.join(names)})")
+			infomsg(f"{interval} cannot be placed with siblings (ambiguous base labels {' '.join(names)})")
 			return
 
 		tryLabels = set()
@@ -2223,7 +2223,7 @@ class PotentialClassification(object):
 			raise Exception()
 
 		if not tryLabels:
-			print(f"Cannot place {interval} - unable to determine some good labels to try")
+			infomsg(f"Cannot place {interval} - unable to determine some good labels to try")
 			return
 
 		lowerMatches = []
@@ -2235,7 +2235,7 @@ class PotentialClassification(object):
 			if interval.candidates is not None and label in interval.candidates:
 				fullMatches.append(label)
 
-		print(f"{pkg} found {len(fullMatches)} full matches and {len(lowerMatches)} decent matches")
+		infomsg(f"{pkg} found {len(fullMatches)} full matches and {len(lowerMatches)} decent matches")
 		if len(fullMatches) == 1:
 			label = next(iter(fullMatches))
 
@@ -2259,7 +2259,7 @@ class PotentialClassification(object):
 		for sib in interval.siblings:
 			sibInterval = self.getPackage(sib)
 			if sibInterval is None:
-				print(f"Error: trying to place {pkg} but cannot find its sibling {sib}")
+				infomsg(f"Error: trying to place {pkg} but cannot find its sibling {sib}")
 				continue
 
 #			if sibInterval.hasPurposeLabel():
@@ -2273,21 +2273,21 @@ class PotentialClassification(object):
 			listOfCandidateSets.append(baseLabels)
 
 		if not listOfCandidateSets:
-			print(f"{interval} is not constrained by sibling placement; we could just use candidates")
+			infomsg(f"{interval} is not constrained by sibling placement; we could just use candidates")
 
 		# For all the unlabelled siblings, intersect the candidate sets
 		commonBaseLabels = reduce(intersectSets, listOfCandidateSets, None)
 		if traceme:
-			print(f"    COMMON {len(commonBaseLabels)}")
+			infomsg(f"    COMMON {len(commonBaseLabels)}")
 
 		if commonBaseLabels == None:
-			print(f"{interval} is not constrained by sibling placement; we could just use candidates")
+			infomsg(f"{interval} is not constrained by sibling placement; we could just use candidates")
 
 		if len(commonBaseLabels) > 1:
 			commonBaseLabels = interval.filterCandidateLabels(commonBaseLabels)
 			# commonBaseLabels = self._order.minima(commonBaseLabels)
 			if traceme:
-				print(f"    FILTERED {len(commonBaseLabels)}")
+				infomsg(f"    FILTERED {len(commonBaseLabels)}")
 
 		if len(commonBaseLabels) == 1:
 			baseLabel = next(iter(commonBaseLabels))
@@ -2295,9 +2295,9 @@ class PotentialClassification(object):
 			if self.chooseLabelForInterval(interval, baseLabel, f"{baseLabel} is the best candidate base label of its siblings"):
 				return True
 
-			print(f"{interval} cannot be placed with siblings - could not choose a matching label from base label {baseLabel}")
+			infomsg(f"{interval} cannot be placed with siblings - could not choose a matching label from base label {baseLabel}")
 		elif not commonBaseLabels:
-			print(f"{interval} cannot be placed with siblings - no common candidate base label")
+			infomsg(f"{interval} cannot be placed with siblings - no common candidate base label")
 
 			nodeList = []
 			for sib in interval.siblings:
@@ -2305,10 +2305,10 @@ class PotentialClassification(object):
 
 			self.displayNodes("siblings", nodeList, self._order.minima)
 		else:
-			print(f"{interval} cannot be placed with siblings - {len(commonBaseLabels)} common candidate base labels", end = '')
+			detail = ""
 			if len(commonBaseLabels) <= 5:
-				print(":", ', '.join(map(str, commonBaseLabels)), end = '')
-			print()
+				detail = ":" + ', '.join(map(str, commonBaseLabels))
+			infomsg(f"{interval} cannot be placed with siblings - {len(commonBaseLabels)} common candidate base labels{detail}")
 
 		return False
 
@@ -2323,7 +2323,7 @@ class PotentialClassification(object):
 		for sib in interval.siblings:
 			sibInterval = self.getPackage(sib)
 			if sibInterval is None:
-				print(f"Error: trying to place {pkg} but cannot find its sibling {sib}")
+				infomsg(f"Error: trying to place {pkg} but cannot find its sibling {sib}")
 				continue
 
 			if sibInterval.solution:
@@ -2345,18 +2345,18 @@ class PotentialClassification(object):
 		# Second priority: if no siblings have been labelled, 
 		if not sibLabels:
 			if not sibLabelScope:
-				print(f"{interval} cannot be placed with siblings (no common base labels found)")
+				infomsg(f"{interval} cannot be placed with siblings (no common base labels found)")
 				return
 			sibLabels = sibLabelScope
 		elif sibLabelScope is not None:
 			if not sibLabels.issubset(sibLabelScope):
-				print(f"{interval}: some siblings have been labelled already, but their labels conflict with other siblings")
+				infomsg(f"{interval}: some siblings have been labelled already, but their labels conflict with other siblings")
 
 				for interval, label in labelledSiblings:
 					for unlabelledInterval, candidates in unlabelledSiblings:
 						if label not in candidates:
 							names = ' '.join(map(str, candidates))
-							print(f"   {interval} has been labelled {interval.solution}, but is not in scope for sibling {unlabelledInterval}; candidates = {names}")
+							infomsg(f"   {interval} has been labelled {interval.solution}, but is not in scope for sibling {unlabelledInterval}; candidates = {names}")
 
 				return
 
@@ -2365,13 +2365,13 @@ class PotentialClassification(object):
 			return self.chooseLabelForInterval(interval, label, f"its siblings were placed into {label}")
 		else:
 			msg = self.reportAmbiguousLabels(interval, sibLabels)
-			print(f"{interval}: ambiguous choice of sibling labels: {msg}")
+			infomsg(f"{interval}: ambiguous choice of sibling labels: {msg}")
 
 			for interval, label in labelledSiblings:
-				print(f" - {interval} labelled {label}")
+				infomsg(f" - {interval} labelled {label}")
 			for interval, baseLabels in unlabelledSiblings:
 				min = self._order.minima(baseLabels)
-				print(f" - {interval} bounded by {' '.join(map(str, min))}")
+				infomsg(f" - {interval} bounded by {' '.join(map(str, min))}")
 
 	# Given a set of candidates like this:
 	#  @CoreLibraries+hpc, @HPC+accounts, @HPC, @HPC+devel, @HPC+python, @HPC+x86-64-v3, @HPC+doc, @HPC+i18n
@@ -2409,7 +2409,7 @@ class PotentialClassification(object):
 			for base in baseFlavors:
 				if isCommonBaseFlavor(base, interval.candidates):
 					if best:
-						print(f"{interval} has at least two \"common\" base flavors - {best} and {base}")
+						infomsg(f"{interval} has at least two \"common\" base flavors - {best} and {base}")
 						return
 					best = base
 
@@ -2463,18 +2463,18 @@ class PotentialClassification(object):
 				queue += list(interval._upperNeighbors)
 
 			if len(cluster) > 1:
-				print("Found a cluster of packages that should probably be labelled together:")
+				infomsg("Found a cluster of packages that should probably be labelled together:")
 				for i in sorted(cluster, key = str):
-					print(f"  {i}")
+					infomsg(f"  {i}")
 
 				pkgs = set()
 				for i in sorted(cluster, key = str):
 					if pkgs.intersection(i.packages):
-						print(f"{i} has duplicate package(s)")
+						infomsg(f"{i} has duplicate package(s)")
 						fail
 					pkgs.update(i.packages)
 			else:
-				# print(f"{pivot} can be placed anywhere")
+				# infomsg(f"{pivot} can be placed anywhere")
 				pass
 
 			remaining.difference_update(cluster)
@@ -2489,12 +2489,12 @@ class PotentialClassification(object):
 	def displayNodes(tag, nodeList, getSpan = None):
 		if not nodeList:
 			return
-		print(f"    {tag}")
+		infomsg(f"    {tag}")
 
 		found = set()
 		for node in nodeList:
 			if node.solution:
-				print(f"      {node} [{node.solution}]")
+				infomsg(f"      {node} [{node.solution}]")
 				found.add(node.solution)
 			elif node.candidates is not None:
 				bounds = None
@@ -2506,19 +2506,19 @@ class PotentialClassification(object):
 				n = len(node.candidates)
 				if n < 5:
 					names = map(str, node.candidates)
-					print(f"      {node} [{n} candidates {' '.join(names)}]")
+					infomsg(f"      {node} [{n} candidates {' '.join(names)}]")
 				elif bounds:
 					names = map(str, bounds)
-					print(f"      {node} [{n} candidates bounded by {' '.join(names)}]")
+					infomsg(f"      {node} [{n} candidates bounded by {' '.join(names)}]")
 				else:
-					print(f"      {node} [{n} candidates]")
+					infomsg(f"      {node} [{n} candidates]")
 			else:
-				print(f"      {node} [unsolveable]")
+				infomsg(f"      {node} [unsolveable]")
 
 		if found and getSpan:
 			span = getSpan(found)
 			names = ' '.join(map(str, span))
-			print(f"     -> bounded by {names}")
+			infomsg(f"     -> bounded by {names}")
 
 	def __iter__(self):
 		for pkg, interval in self._packages.items():
@@ -2767,7 +2767,7 @@ class FilterType(object):
 		else:
 			if self._exactMatches.get(value):
 				conflict = self._exactMatches[value]
-				print(f"OOPS: {self.type} filter is ambiguous for {value} ({group.name} vs {conflict.name})")
+				infomsg(f"OOPS: {self.type} filter is ambiguous for {value} ({group.name} vs {conflict.name})")
 				return
 			# NB: silently ignore any priority value for exact match
 			self._exactMatches[value] = group
@@ -2898,7 +2898,7 @@ class PackageFilter:
 
 		timer = ExecTimer()
 		self.load(filename)
-		print(f"Loaded filter definition from {filename}: {timer} elapsed")
+		infomsg(f"Loaded filter definition from {filename}: {timer} elapsed")
 
 	def load(self, filename):
 		with open(filename) as f:
@@ -2994,9 +2994,9 @@ class PackageFilter:
 				if autoFlavor.label.runtimeRequires.issubset(baseDependencies):
 					flavor = baseLabel.getBuildFlavor(autoFlavor.name)
 					if flavor is not None:
-						print(f"{baseLabel}+{autoFlavor.label} packages could be merged into {baseLabel}, but {flavor} exists")
+						infomsg(f"{baseLabel}+{autoFlavor.label} packages could be merged into {baseLabel}, but {flavor} exists")
 					else:
-						# print(f"{baseLabel}+{autoFlavor.label} packages will be merged into {baseLabel}")
+						# infomsg(f"{baseLabel}+{autoFlavor.label} packages will be merged into {baseLabel}")
 						baseLabel.addMergeableFlavor(autoFlavor.label)
 				else:
 					self.instantiateAutoFlavor(group, autoFlavor)
@@ -3017,7 +3017,7 @@ class PackageFilter:
 					purposeReq = req.getObjectPurpose('devel')
 					if purposeReq is None:
 						raise Exception(f"no purpose devel for {req}")
-					# print(f"{label} should require {purposeReq}")
+					# infomsg(f"{label} should require {purposeReq}")
 					label.addRuntimeDependency(purposeReq)
 
 				# XXX FIXME
@@ -3186,9 +3186,9 @@ class PackageFilter:
 
 		if buildLabel is not None:
 			if False:
-				print(f": {sourceProject} has flavor {buildLabel} type {buildLabel.type}")
+				infomsg(f": {sourceProject} has flavor {buildLabel} type {buildLabel.type}")
 				for req in buildLabel.runtimeRequires:
-					print(f"  {buildLabel} -> {req}")
+					infomsg(f"  {buildLabel} -> {req}")
 
 			# pretend that it's defined
 			buildLabel.defined = True

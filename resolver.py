@@ -140,7 +140,6 @@ class ResolverHints:
 						continue
 					for edge in self._rules:
 						if edge.greaterThan(a, b):
-							# print(f"{a} >= {b}")
 							isBelow.add(b)
 							break
 

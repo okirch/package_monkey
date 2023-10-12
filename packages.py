@@ -7,19 +7,17 @@ import xml.etree.ElementTree as ET
 import urllib.parse
 import os.path
 import os
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
 from filter import Classification
 
+dependencyLogger = loggingFacade.getLogger('dependency')
+debugDependency = dependencyLogger.debug
 
-optDebugDependency = 0
-
-def debugDependency(*args, **kwargs):
-	if optDebugDependency >= 1:
-		print(*args, **kwargs)
-
+# for now, not feeding into the logger
 def debugDependency2(*args, **kwargs):
-	if optDebugDependency >= 2:
-		print(*args, **kwargs)
+	# print(*args, **kwargs)
+	pass
 
 def isSourceArchitecture(arch):
 	return arch in ('src', 'nosrc')
@@ -108,10 +106,10 @@ class Versiontools:
 
 			result = Versiontools.dependencySatisfiedByVersion(dep, pv2)
 			if result != expected:
-				print(f"FAIL: {dep}: {pv2}: expected {expected} but got {result}")
+				errormsg(f"FAIL: {dep}: {pv2}: expected {expected} but got {result}")
 				success = False
 			else:
-				print(f"OK: {dep}: {pv2}: -> {expected}")
+				infomsg(f"OK: {dep}: {pv2}: -> {expected}")
 
 		Versiontools.tested = True
 		return success
@@ -155,31 +153,31 @@ class Versiontools:
 	@staticmethod
 	def cmp(a, b):
 		if a == b:
-			#print("%s == %s" % (a, b))
+			#infomsg("%s == %s" % (a, b))
 			return 0
 		if a < b:
-			#print("%s < %s" % (a, b))
+			#infomsg("%s < %s" % (a, b))
 			return -1
-		#print("%s > %s" % (a, b))
+		#infomsg("%s > %s" % (a, b))
 		return 1
 
 	@staticmethod
 	def compareToken(t1, t2):
 		if t1 == t2:
-			# print(f"{t1}: same")
+			# infomsg(f"{t1}: same")
 			return 0
 		if type(t1) == type(t2):
 			return Versiontools.cmp(t1, t2)
 		if t1 is None:
-			# print(f"sepa \"-\" < {t2}")
+			# infomsg(f"sepa \"-\" < {t2}")
 			return -1
 		if t2 is None:
-			# print(f"{t1} < sepa \"-\"")
+			# infomsg(f"{t1} < sepa \"-\"")
 			return 1
 		if type(t1) == int:
-			# print(f"int {t1} < other {t2}")
+			# infomsg(f"int {t1} < other {t2}")
 			return -1
-		# print(f"other {t1} > int {t2}")
+		# infomsg(f"other {t1} > int {t2}")
 		assert(type(t2) == int)
 		return 1
 
@@ -193,7 +191,7 @@ class Versiontools:
 				return r
 
 		d = len(l1) - len(l2)
-		#print("length diff=%d" % d)
+		#infomsg("length diff=%d" % d)
 		return Versiontools.cmp(d, 0)
 
 	@staticmethod
@@ -331,7 +329,7 @@ class ResolverChoice:
 			return Versiontools.comparePackages(best, cand) < 0
 
 		r = preferences.comparePackages(cand.name, best.name)
-		# print(f"Prefer {cand.name} over {best.name}? result={r}")
+		# infomsg(f"Prefer {cand.name} over {best.name}? result={r}")
 		if r == 0:
 			r = preferences.preferProductRating(productRating, self.bestProductRating)
 
@@ -341,7 +339,7 @@ class ResolverChoice:
 			return False
 
 		# We haven't recorded a preference one way or the other
-		print(f"Ambiguous resolution: {cand.name} and {best.name}")
+		infomsg(f"Ambiguous resolution: {cand.name} and {best.name}")
 		return False
 
 class ResolverPreferences:
@@ -398,10 +396,10 @@ class ResolverContext:
 				continue
 
 			if self.acceptable(cand):
-				# print(f"  {cand.fullname()}")
+				# infomsg(f"  {cand.fullname()}")
 				choice.update(preferences, cand)
 			else:
-				# print(f"  {cand.fullname()} not acceptable")
+				# infomsg(f"  {cand.fullname()} not acceptable")
 				pass
 
 		# Expand PackageInfo to full-blown Package object
@@ -413,7 +411,7 @@ class ResolverContext:
 			candidates = req.enumerateCandidateSolutions(self._resolver)
 			found = self.selectPreferredCandidate(self._preferences, candidates)
 		except Exception as e:
-			print(f"Caught exception while resolving {req}: {e}")
+			infomsg(f"Caught exception while resolving {req}: {e}")
 			found = None
 		return found
 
@@ -461,7 +459,7 @@ class ResolverWorker:
 		def showProof(self, reason, writer):
 			for why in reason.chain():
 				writer = writer.indentingWriter()
-				writer.print(why)
+				writer.infomsg(why)
 
 	class UnexpectedDependency(Problem):
 		def __init__(self, fromLabel, toLabel):
@@ -728,7 +726,7 @@ class Resolver:
 		self._conditionals = {}
 
 	def addPackage(self, pkg):
-		# print(f"Adding {pkg.fullname()} to resolver (provides {len(pkg.provides)})")
+		# infomsg(f"Adding {pkg.fullname()} to resolver (provides {len(pkg.provides)})")
 
 		b = self._createBucket(pkg.name)
 		provides = Package.VersionedPackageDependency(pkg.name, flags = 'EQ', ver = pkg.version, rel = pkg.release)
@@ -760,7 +758,7 @@ class Resolver:
 			return bucket
 
 		if self.backingStore is None:
-			print(f"Nothing provides {name}")
+			infomsg(f"Nothing provides {name}")
 			return self._nullBucket
 
 		b = self._createBucket(name)
@@ -809,13 +807,13 @@ class Resolver:
 					debugDependency(f"    {pkg.parsedVersion} does not match")
 					rejected.append(cand)
 			else:
-				print(f"Don't know how to handle Provides: {provides}")
+				infomsg(f"Don't know how to handle Provides: {provides}")
 
 		if rejected and not candidates:
-			print(f"Warning, it looks like we're not able to satisfy dependency {req}")
-			print(" - Rejected versions:")
+			warnmsg(f"It looks like we're not able to satisfy dependency {req}")
+			infomsg(" - Rejected versions:")
 			for bad in rejected:
-				print(f"    {bad.provides} provided by package {bad.pkg.fullname()}")
+				infomsg(f"    {bad.provides} provided by package {bad.pkg.fullname()}")
 
 		return candidates
 
@@ -956,11 +954,11 @@ class DependencyParser:
 			self.version = version
 			self.release = release
 
-		def print(self, ws = ""):
+		def infomsg(self, ws = ""):
 			if self.op:
-				print(f"{ws}{self.name} {self.op} {self.version}")
+				infomsg(f"{ws}{self.name} {self.op} {self.version}")
 			else:
-				print(f"{ws}{self.name}")
+				infomsg(f"{ws}{self.name}")
 
 		def build(self):
 			if self.flags is None:
@@ -972,8 +970,8 @@ class DependencyParser:
 		def __init__(self, term):
 			self.term = term
 
-		def print(self, ws = ""):
-			self.term.print(ws)
+		def infomsg(self, ws = ""):
+			self.term.infomsg(ws)
 
 		def build(self):
 			return self.term.build()
@@ -987,16 +985,16 @@ class DependencyParser:
 			assert(self.conditional is None)
 			self.conditional = child
 
-		def print(self, ws = ""):
-			print(f"{ws}IF")
+		def infomsg(self, ws = ""):
+			infomsg(f"{ws}IF")
 			if self.conditional:
-				self.conditional.print(ws + "  ")
+				self.conditional.infomsg(ws + "  ")
 			else:
-				print(f"{ws}ALWAYS FALSE")
+				infomsg(f"{ws}ALWAYS FALSE")
 			if self.inner:
-				self.inner.print(ws + "  ")
+				self.inner.infomsg(ws + "  ")
 			else:
-				print(f"{ws}NO INNER TERM")
+				infomsg(f"{ws}NO INNER TERM")
 
 		def build(self):
 			conditionalTerm = self.conditional.build()
@@ -1017,25 +1015,25 @@ class DependencyParser:
 			return result
 
 	class OrExpression(AssociativeExpression):
-		def print(self, ws = ""):
-			print(f"{ws}OR")
+		def infomsg(self, ws = ""):
+			infomsg(f"{ws}OR")
 			for child in self.children:
-				child.print(ws + "  ")
+				child.infomsg(ws + "  ")
 
 		def build(self):
 			return Package.createOrDependency(self.buildTerms())
 
 	class AndExpression(AssociativeExpression):
-		def print(self, ws = ""):
-			print(f"{ws}AND")
+		def infomsg(self, ws = ""):
+			infomsg(f"{ws}AND")
 			for child in self.children:
-				child.print(ws + "  ")
+				child.infomsg(ws + "  ")
 
 		def build(self):
 			return Package.createAndDependency(self.buildTerms())
 
 	def __init__(self, string):
-		# print(f"## Parsing \"{string}\"")
+		# infomsg(f"## Parsing \"{string}\"")
 		self.lex = self.Lexer(string)
 
 		self.lookahead = None
@@ -1050,7 +1048,7 @@ class DependencyParser:
 			return lookahead
 
 		type, value = self.lex.next()
-		# print(f"## -> type={type} value=\"{value}\"")
+		# infomsg(f"## -> type={type} value=\"{value}\"")
 		return type, value
 
 	def pushBackToken(self, *args):
@@ -1077,9 +1075,9 @@ class DependencyParser:
 			if type == endToken:
 				break
 
-			# print("# About to process next term")
+			# infomsg("# About to process next term")
 			if type == self.Lexer.RIGHTB or type == self.Lexer.EOL:
-				print(f"endToken={endToken}")
+				infomsg(f"endToken={endToken}")
 				raise self.BadExpression()
 
 			groupClass = None
@@ -1099,7 +1097,7 @@ class DependencyParser:
 				if not isinstance(leftTerm, self.AssociativeExpression):
 					leftTerm = groupClass(leftTerm)
 				elif leftTerm.__class__ != groupClass:
-					print("Cannot mix terms with different precendence")
+					infomsg("Cannot mix terms with different precendence")
 					raise self.BadExpression()
 
 				type, value = self.nextToken()
@@ -1153,14 +1151,14 @@ class DependencyParser:
 		resolver = Resolver()
 
 		for s in inputs:
-			print(f"Processing {s}")
+			infomsg(f"Processing {s}")
 			p = DependencyParser(s)
 			tree = p.process()
-			tree.print("   ")
+			tree.infomsg("   ")
 
 			dep = tree.build()
-			print(f" => {dep}")
-			print()
+			infomsg(f" => {dep}")
+			infomsg("")
 
 class Package:
 	# This special value is returned when we encounter a conditional
@@ -1306,17 +1304,17 @@ class Package:
 				self.isSUSE = False
 
 		def show(self):
-			print("  %s: %s" % (self.date, self.author))
+			infomsg("  %s: %s" % (self.date, self.author))
 
 		def show(self, indent = ""):
-			print("%s%s %s" % (indent, self.date, self.author))
+			infomsg("%s%s %s" % (indent, self.date, self.author))
 			for line in self.text.split("\n"):
-				print("%s %s" % (indent, line))
+				infomsg("%s %s" % (indent, line))
 
 		@staticmethod
 		def showChangeList(changes, indent = "", msg = None):
 			if msg:
-				print("%s %s" % (indent, msg))
+				infomsg("%s %s" % (indent, msg))
 
 			for c in changes:
 				c.show(indent + " ")
@@ -1410,7 +1408,7 @@ class Package:
 			del kwd['pre']
 
 		if kwd:
-			print(f"Cannot handle dependency {name} with {kwd}")
+			infomsg(f"Cannot handle dependency {name} with {kwd}")
 			return Package.FailingDependency(name)
 
 		parser = DependencyParser(name)
@@ -1418,8 +1416,8 @@ class Package:
 		try:
 			tree = parser.process()
 		except Exception as e:
-			print(f"Failed to parse dependency expression: {name}")
-			print(f"  -> {e}")
+			infomsg(f"Failed to parse dependency expression: {name}")
+			infomsg(f"  -> {e}")
 			return Package.FailingDependency(name)
 
 		return tree.build()
@@ -1497,13 +1495,13 @@ class Package:
 
 	def builtNoLaterThan(self, refTime):
 		if self.buildTime is None:
-			print("WARNING %s from %s-%s has no build time" % (self.fullname(), self.repo.name, self.repo.version))
+			warnmsg("%s from %s-%s has no build time" % (self.fullname(), self.repo.name, self.repo.version))
 			self.buildTime = 0
 		return self.buildTime <= refTime
 
 	def builtAfter(self, refTime):
 		if self.buildTime is None:
-			print("WARNING %s from %s-%s has no build time" % (self.fullname(), self.repo.name, self.repo.version))
+			warnmsg("%s from %s-%s has no build time" % (self.fullname(), self.repo.name, self.repo.version))
 			self.buildTime = 0
 		return self.buildTime > refTime
 
@@ -1514,7 +1512,7 @@ class Package:
 		return self._parsedVersion
 
 	def show(self):
-		print(self.fullname())
+		infomsg(self.fullname())
 		for c in self._changes:
 			c.show()
 
@@ -1559,7 +1557,7 @@ class Product:
 		try:
 			repo = self.__repoArg(repoArg)
 		except:
-			print("%s does not seem to exist" % repoArg)
+			infomsg("%s does not seem to exist" % repoArg)
 			return False
 
 		repo.load(self);
@@ -1627,7 +1625,7 @@ class Product:
 
 	def findPackagesBefore(self, refPackage):
 		if not refPackage.buildTime:
-			print("ERROR %s has no build time" % refPackage.fullname())
+			infomsg("ERROR %s has no build time" % refPackage.fullname())
 			die
 
 		packageTable = self.packageTableForArch(refPackage.arch)
@@ -1642,7 +1640,7 @@ class Product:
 	def findMostRecentBefore(self, before):
 		def debug(msg):
 			if False:
-				print(msg)
+				infomsg(msg)
 
 		packageTable = self.packageTableForArch(before.arch)
 
@@ -1692,10 +1690,10 @@ class Product:
 	@property
 	def resolver(self):
 		if self._resolver is None:
-			print("Creating resolver")
+			infomsg("Creating resolver")
 			self._resolver = Resolver()
 
-			print(self.packages)
+			infomsg(self.packages)
 			for pkg in self.packages.values():
 				self._resolver.addPackage(pkg)
 
@@ -1782,7 +1780,7 @@ class PackageSelector(dict):
 		if st == self.STRATEGY_YOUNGEST:
 			self.strategy = self.selectYoungest
 		else:
-			print(f"ERROR: {self.__class__.__name__}: unsupported strategy {st}")
+			infomsg(f"ERROR: {self.__class__.__name__}: unsupported strategy {st}")
 			fail()
 
 	def add(self, pinfo):
@@ -1827,8 +1825,8 @@ class PackageCollection:
 
 if __name__ == '__main__':
 	if Versiontools.test():
-		print("Version comparison seems to work as expected")
+		infomsg("Version comparison seems to work as expected")
 	else:
-		print("Version comparison is not working as expected")
+		infomsg("Version comparison is not working as expected")
 
 	DependencyParser.test()

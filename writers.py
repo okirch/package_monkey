@@ -184,7 +184,7 @@ class XmlWriter(BaseWriter):
 		# for now; could also have separate attrs for base name, option, pkgclass
 		labelNode.setAttribute('name', label.name)
 
-		if label.disposition:
+		if label.disposition != 'separate':
 			labelNode.setAttribute('disposition', label.disposition)
 
 		componentName = label.componentName

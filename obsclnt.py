@@ -968,17 +968,17 @@ class OBSProject:
 
 	def storePackages(self, store, processed):
 		msg = ", ".join(_.name for _ in processed)
-		print(f"Updating DB with package info for {msg}")
+		infomsg(f"Updating DB with package info for {msg}")
 		store.addPackageObjectList(processed)
 
 	def storeDependencies(self, store, processed):
 		msg = ", ".join(_.shortname for _ in processed)
-		print(f"Updating DB with build dependencies for {msg}")
+		infomsg(f"Updating DB with build dependencies for {msg}")
 		store.updatePackageDependenciesObjectList(processed)
 
 	def storeBuilds(self, store, processed):
 		msg = ", ".join(_.name for _ in processed)
-		print(f"Updating DB with package builds for {msg}")
+		infomsg(f"Updating DB with package builds for {msg}")
 		store.updateBuilds(processed)
 
 

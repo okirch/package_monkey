@@ -1189,6 +1189,7 @@ class PotentialClassification(object):
 			self._upperCone = None
 			self._candidates = None
 			self._solution = None
+			self._combinedRequirements = set()
 
 			self._trace = False
 			if self.name in []:
@@ -1200,6 +1201,18 @@ class PotentialClassification(object):
 
 		def __str__(self):
 			return self.name
+
+		@property
+		def nameWithLabelReason(self):
+			for pkg in self.packages:
+				if pkg.label != self._solution:
+					# conflict, but hush! let's not talk about it here
+					continue
+
+				if pkg.labelReason:
+					return str(pkg.labelReason)
+
+			return str(self)
 
 		@property
 		def solution(self):
@@ -1650,6 +1663,104 @@ class PotentialClassification(object):
 		order.finalize()
 		return order
 
+	class NodeVersusLabelSetReport:
+		class LabelSet:
+			def __init__(self, key):
+				self.key = key
+				self.names = []
+
+		def __init__(self):
+			self.byLabels = {}
+
+		def add(self, nodeName, labels):
+			key = ' '.join(sorted(map(str, labels)))
+			info = self.byLabels.get(key)
+			if info is None:
+				info = self.LabelSet(key)
+				self.byLabels[key] = info
+			info.names.append(nodeName)
+
+		def display(self, indent = ""):
+			output = lambda msg: infomsg(indent + msg)
+
+			for key, info in self.byLabels.items():
+				it = iter(info.names)
+				if len(key) > 20:
+					output(f"    {key}")
+				else:
+					first = next(it)
+					output(f"    {key:20} {first}")
+
+				for name in it:
+					output(f"    {'':20} {name}")
+
+	class UnsatisfiedLabelRequirementsReport:
+		class Bucket:
+			def __init__(self):
+				self.offenses = []
+
+		def __init__(self):
+			self._labels = {}
+
+		def add(self, label, offendingPackage, packageReport):
+			key = str(label)
+
+			bucket = self._labels.get(key)
+			if bucket is None:
+				bucket = self.Bucket()
+				self._labels[key] = bucket
+			bucket.offenses.append((offendingPackage, packageReport))
+
+		def display(self):
+			for labelName, bucket in sorted(self._labels.items()):
+				infomsg(f"   {labelName} has unsatisfied requirements")
+				for offendingPackage, packageReport in bucket.offenses:
+					infomsg(f"     {offendingPackage}")
+					packageReport.display("     ")
+				infomsg("")
+
+	def validateInitialPlacements(self, order):
+		errors = 0
+
+		infomsg("Validating initial package placements")
+		report = self.UnsatisfiedLabelRequirementsReport()
+		for node in order.bottomUpTraversal():
+			for lower in node.lowerNeighbors:
+				node._combinedRequirements.update(lower._combinedRequirements)
+
+			if node.solution:
+				# get the set of all labels below this node's label
+				configuredRequirements = self._order.downwardClosureFor(node.solution)
+
+				if not node._combinedRequirements.issubset(configuredRequirements):
+					packageReport = self.NodeVersusLabelSetReport()
+					for lower in node.lowerNeighbors:
+						if not lower._combinedRequirements.issubset(configuredRequirements):
+							missing = lower._combinedRequirements.difference(configuredRequirements)
+							missing = self._order.maxima(missing)
+
+							packageReport.add(lower.nameWithLabelReason, missing)
+							errors += 1
+
+					report.add(node.solution, node.nameWithLabelReason, packageReport)
+					# errormsg(f"configuration problem: {node} has been labelled as {node.solution} but not all its requirements are covered")
+					# report.display()
+
+					# FIXME: we could check for some simple cases and make suggestions, such as
+					# packages placed in @Foo that require @Foo+bar. Recommend moving them into
+					# @Foo+bar (but check for any @Foo packages above and recommend moving them
+					# as well).
+
+				node._combinedRequirements = configuredRequirements
+
+		if errors:
+			errormsg(f"Detected {errors} configuration problem(s)")
+			report.display()
+			return False
+
+		infomsg("OK, no conflicts detected in initial placement")
+		return True
+
 	def recordInitialPlacements(self):
 		# Create initial _recentlyPlaced list
 		self._recentlyPlaced = []
@@ -1757,6 +1868,9 @@ class PotentialClassification(object):
 		# collapsing one cycle may introduce a new cycle.
 		while order is None:
 			order = self.createPartialOrder()
+
+		if not self.validateInitialPlacements(order):
+			raise Exception(f"Unresolved conflicts in initial placement of packages, please fix filter rules")
 
 		# on the first pass, hide any non-essential packages
 		self.ignoreFlavoredPackages(order, ('devel', 'doc', 'i18n', 'man'))

@@ -2767,8 +2767,8 @@ class FilterType(object):
 		else:
 			if self._exactMatches.get(value):
 				conflict = self._exactMatches[value]
-				infomsg(f"OOPS: {self.type} filter is ambiguous for {value} ({group.name} vs {conflict.name})")
-				return
+				raise Exception(f"{self.type} filter is ambiguous for {value} ({group.name} vs {conflict.name})")
+
 			# NB: silently ignore any priority value for exact match
 			self._exactMatches[value] = group
 

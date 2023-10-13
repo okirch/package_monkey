@@ -1,8 +1,7 @@
-from util import CycleDetector, LoggingCycleDetector, GenerationCounter, Timestamp
+from util import CycleDetector, LoggingCycleDetector
 
 class OrderedSetMember(object):
 	def __init__(self, key):
-		self._timestamp = Timestamp()
 		self.key = key
 		self.below = []
 		self.above = []
@@ -21,10 +20,6 @@ class OrderedSetMember(object):
 	@property
 	def name(self):
 		return str(self)
-
-	@property
-	def isCurrent(self):
-		return self._timestamp.isCurrent(Label.GENERATION)
 
 	@property
 	def sortkey(self):
@@ -48,7 +43,6 @@ class PartialOrder(object):
 		self.guard = CycleDetector(name)
 		self._unsorted = {}
 		self._sorted = None
-		self._timestamp = Timestamp()
 		self._final = False
 		self._allowUnknownKeys = allowUnknownKeys
 

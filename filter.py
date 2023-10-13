@@ -1305,15 +1305,16 @@ class PotentialClassification(object):
 			names = list(map(str, cone))
 			return ' '.join(names)
 
-		def filterCandidateLabels(self, candidateLabels):
+		def filterCandidateLabels(self, candidateLabels, quiet = False):
 			candidateLabels = intersectSets(candidateLabels, self.lowerCone)
 			if candidateLabels and len(candidateLabels) > 1:
 				# Inspect the priority values of all labels involved and return
 				# the ones that have a higher gravity
 				filtered = Classification.filterLabelsByGravity(candidateLabels)
 				if filtered != candidateLabels:
-					infomsg(f"{self}: reduced set of candidates based on their gravity" + 
-						f"  {' '.join(map(str, candidateLabels))} -> {' '.join(map(str, filtered))}")
+					if not quiet:
+						infomsg(f"{self}: reduced set of candidates based on their gravity" +
+							f"  {' '.join(map(str, candidateLabels))} -> {' '.join(map(str, filtered))}")
 					candidateLabels = filtered
 
 				# disambiguate labels
@@ -1832,7 +1833,7 @@ class PotentialClassification(object):
 					for cursor in self.Traversal(sibNode):
 						neigh = cursor.node
 
-						match = neigh.filterCandidateLabels(candidatePurposes)
+						match = neigh.filterCandidateLabels(candidatePurposes, quiet = True)
 						if match == candidatePurposes:
 							continue
 
@@ -1855,6 +1856,24 @@ class PotentialClassification(object):
 				if siblingPurposeLabel.disposition == Classification.DISPOSITION_MERGE:
 					purposeLabel = purposeLabel.flavorBase
 
+				if not sibNode.labelIsValidCandidate(purposeLabel):
+					errormsg(f"Uh-oh. {purposeLabel} is not a valid candidate for {sibNode}")
+					boundingSet = sibNode.upperCone
+					if boundingSet != None and purposeLabel not in boundingSet:
+						infomsg(f"    conflicts with some package that require it")
+
+					boundingSet = sibNode.lowerCone
+					if boundingSet != None and purposeLabel not in boundingSet:
+						missing = self._order.downwardClosureFor(purposeLabel).difference(boundingSet)
+						if purposeLabel in missing:
+							missing.remove(purposeLabel)
+						missing = self._order.maxima(missing)
+						if len(missing) < 6:
+							infomsg(f"    missing requirements: {' '.join(map(str, missing))}")
+						else:
+							infomsg(f"    missing {len(missing)} requirements")
+
+
 				infomsg(f"{siblingPackage} will be placed in {purposeLabel}; close to its siblings")
 				reason = Classification.ReasonPurpose(siblingPackage, str(siblingPurposeLabel), siblings.name)
 				self.recordDecision(sibNode, purposeLabel, reason)
@@ -1863,6 +1882,8 @@ class PotentialClassification(object):
 
 	def solve(self):
 		order = None
+
+		timing = ExecTimer()
 
 		# we may have to repeat this step several times, because
 		# collapsing one cycle may introduce a new cycle.
@@ -1879,9 +1900,19 @@ class PotentialClassification(object):
 			for lower in interval.lowerNeighbors:
 				interval.updateFromBelow(lower)
 
+		for interval in order.topDownTraversal():
+			for lower in interval.lowerNeighbors:
+				lower.updateFromAbove(interval)
+
 		# populate the _recentlyPlaced list with the nodes that have been assigned
 		# a label by the admin.
 		self.recordInitialPlacements()
+
+		infomsg(f"Computed placement and computed candidates; {timing} elapsed")
+		infomsg("")
+
+		infomsg("### PLACEMENT STAGE 1 ###")
+
 		self.placeSiblingsAccordingToPurpose(order)
 
 		suggestedNewLabels = []
@@ -1914,11 +1945,9 @@ class PotentialClassification(object):
 		if suggestedNewLabels:
 			self.reportSuggestedNewLabels(suggestedNewLabels)
 
-		for interval in order.topDownTraversal():
-			for lower in interval.lowerNeighbors:
-				lower.updateFromAbove(interval)
-
 		self.reportUnplaceablePackages(order)
+
+		infomsg("### PLACEMENT STAGE 2 ###")
 
 		for build, siblingInfo in self._builds.items():
 			candidateProjects = None
@@ -2045,7 +2074,7 @@ class PotentialClassification(object):
 			if candidates is None:
 				continue
 
-			infomsg(f"-- inspecting {interval} solution {interval.solution}")
+			infomsg(f"-- inspecting {interval} solution {interval.solution}; {len(candidates)} candidates")
 			if len(candidates) == 1:
 				uniqueLabel = next(iter(candidates))
 				self.chooseLabelForInterval(interval, uniqueLabel, f"because it's the unique candidate")

@@ -26,46 +26,7 @@ class ChunkingQueue:
 			self.processingFunction(self.processed)
 			self.processed = []
 
-# Timestamp and GenerationCounter implement a simple mechanism to track
-# global modifications and trigger updates of an object. For example,
-# a change in tree topology may require each node to recompute its closure.
-#
-#  class Foo:
-#	GENERATION = GenerationCounter()
-#
-#	def __init__(self):
-#		self.timestamp = Timestamp()
-#
-#	@classmethod
-#	def topologyChanged(self):
-#		self.GENERATION.tick()
-#
-#	def getClosure(self):
-#		if not self.timestamp.isCurrent(self.GENERATION):
-#			self.closure = self.recomputeClosure()
-#		return self.closure
-class GenerationCounter:
-	def __init__(self):
-		self._generation = 1
-
-	def tick(self):
-		self._generation += 1
-
-	@property
-	def value(self):
-		return self._generation
-
-class Timestamp:
-	def __init__(self):
-		self._lastUpdated = 0
-
-	def isCurrent(self, generationCounter):
-		if self._lastUpdated == generationCounter.value:
-			return True
-
-		self._lastUpdated = generationCounter.value
-		return False
-
+##################################################################
 # Simple tool to detect cycles in a graph
 #
 # class TreeNode:
@@ -80,6 +41,7 @@ class Timestamp:
 #				self.traverse(visitor)
 #			visitor.visit(self)
 #
+##################################################################
 class CycleException(Exception):
 	def __init__(self, msg, cycle):
 		super().__init__(msg)

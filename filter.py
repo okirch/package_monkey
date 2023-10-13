@@ -7,6 +7,9 @@ from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from ordered import PartialOrder
 from functools import reduce
 
+initialPlacementLogger = loggingFacade.getLogger('initial')
+debugInitialPlacement = initialPlacementLogger.debug
+
 # fixme define a logger for this
 optPackageCycleDebug = 0
 
@@ -3031,6 +3034,12 @@ class PackageFilter:
 
 	def apply(self, pkg, product):
 		return self.filterSet.apply(pkg, product)
+
+	def performInitialPlacement(self, pkg):
+		verdict = self.apply(pkg, pkg.product)
+		if verdict is not None:
+			verdict.labelPackage(pkg)
+			debugInitialPlacement(f"{pkg} is placed in {verdict.label} by package filter rules")
 
 	def makeGroup(self, name, type = None):
 		assert(type)

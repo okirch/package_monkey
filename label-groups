@@ -3,6 +3,7 @@
 from packages import Product, Resolver, ResolverWorker, ResolverPreferences, PackageSelector, PackageCollection
 from filter import PackageFilter, Classification, PotentialClassification
 from options import Application
+from util import ExecTimer
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from writers import StandardWriter, TableWriter, XmlWriter
 
@@ -32,20 +33,13 @@ if True:
 	store.fixupRequirements()
 	# stop
 
+timing = ExecTimer()
 for pinfo in store.enumerateLatestPackages():
 	pkg = store.retrievePackage(pinfo)
-	assert(pkg.product == pinfo.product)
 
-	verdict = packageFilter.apply(pkg, pinfo.product)
-	if verdict is not None:
-		verdict.labelPackage(pkg)
-		infomsg(f"{pkg} is placed in {verdict.label} by package filter rules")
-	else:
-		# we currently have no good way to properly mark unclassified packages
-		# group = unclassified
-		pass
-
+	packageFilter.performInitialPlacement(pkg)
 	collection.add(pkg)
+infomsg(f"Performed initial placement of packages, {timing} elapsed")
 
 def flattenGroupList(type, names):
 	labelSet = set()

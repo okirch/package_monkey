@@ -3488,33 +3488,43 @@ class PackageFilter:
 		# into each add*Filter function, create a Builder object that does this transparently.
 		filterSetBuilder = FilterSetBuilder(self.filterSet, group, priority)
 
-		nameList = gd.get('products') or []
+		nameList = self.getYamlList(gd, 'products', group)
 		for name in nameList:
 			filterSetBuilder.addProductFilter(name)
 
-		nameList = gd.get('packages') or []
+		nameList = self.getYamlList(gd, 'packages', group)
 		for name in nameList:
 			filterSetBuilder.addBinaryPackageFilter(name)
 			filterSetBuilder.addSourcePackageFilter(name)
 
-		nameList = gd.get('sources') or []
+		nameList = self.getYamlList(gd, 'sources', group)
 		for name in nameList:
 			filterSetBuilder.addSourcePackageFilter(name)
 
-		nameList = gd.get('binaries') or []
+		nameList = self.getYamlList(gd, 'binaries', group)
 		for name in nameList:
 			filterSetBuilder.addBinaryPackageFilter(name)
 
-		nameList = gd.get('rpmGroups') or []
+		nameList = self.getYamlList(gd, 'rpmGroups', group)
 		for name in nameList:
 			filterSetBuilder.addRpmGroupFilter(name)
 
-		flavors = gd.get('buildflavors') or []
+		flavors = self.getYamlList(gd, 'buildflavors', group)
 		for fd in flavors:
 			self.parseBuildFlavor(group, fd)
 
-		purposes = gd.get('purposes') or []
+		purposes = self.getYamlList(gd, 'purposes', group)
 		for fd in purposes:
 			self.parseObjectPurpose(group, fd)
 
 		return group
+
+	def getYamlList(self, node, name, context):
+		value = node.get(name)
+		if value is None:
+			return []
+
+		if type(value) != list:
+			raise Exception(f"In definition of {context.label}, {name} should be a list not a {type(value)}")
+
+		return value

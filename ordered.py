@@ -147,17 +147,17 @@ class PartialOrder(object):
 	def subsetIsAbove(self, subset, key):
 		return subset.issubset(self.upwardClosureFor(key))
 
-	def minimumOf(self, subset):
-		result = None
-		for node in self.getNodesForSet(subset):
-			if node is None:
-				continue
-			if result is None or node.rank < result.rank:
-				result = node
-
-		if not result:
+	def maximumOf(self, subset):
+		found = self.maxima(subset)
+		if len(found) != 1:
 			return None
-		return result.key
+		return found[0]
+
+	def minimumOf(self, subset):
+		found = self.minima(subset)
+		if len(found) != 1:
+			return None
+		return found[0]
 
 	def minima(self, subset):
 		remaining = self.getNodesForSet(subset)

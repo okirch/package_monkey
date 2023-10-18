@@ -784,7 +784,7 @@ class Classification:
 					continue
 				alreadySeen.add(buildId)
 
-				build = self.store.retrieveOBSPackageById(buildId)
+				build = self.store.retrieveOBSPackageByPackageId(rpm.backingStoreId)
 				if build is None:
 					infomsg(f"Could not find OBS package {buildId} for {rpm.shortname}")
 					continue
@@ -1064,10 +1064,9 @@ class Classification:
 				infomsg(f"No OBS package for {rpm}")
 				return None
 
-			build = self.store.retrieveOBSPackageById(buildId)
+			build = self.store.retrieveOBSPackageByBuildId(buildId)
 			if build is None:
 				infomsg(f"Could not find OBS package {buildId} for {rpm.shortname}")
-
 			return build
 
 	class UnknownPackageClassifier(DownwardClosure):

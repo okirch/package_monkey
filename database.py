@@ -1409,7 +1409,6 @@ class BackingStoreDB(DB):
 			buildId = self.buildPkgRelation.retrieveBuildForPackage(pkgId)
 			if buildId is None:
 				warnmsg(f"Warning: {pkg.fullname()} (id {pkgId}) not tracked by any build")
-				raise Exception()
 			elif pkg.obsBuildId == buildId:
 				pass
 			elif buildId is not None:
@@ -1494,7 +1493,7 @@ class BackingStoreDB(DB):
 
 		return result
 
-	def retrieveOBSPackageById(self, buildId):
+	def retrieveOBSPackageByBuildId(self, buildId):
 		obsPackage = self.obsPackageCache.get(buildId)
 		if obsPackage is not None:
 			return obsPackage
@@ -1504,6 +1503,13 @@ class BackingStoreDB(DB):
 			return None
 
 		return self.constructOBSPackage(d)
+
+	def retrieveOBSPackageByPackageId(self, pkgId):
+		buildId = self.buildPkgRelation.retrieveBuildForPackage(pkgId)
+		if buildId is None:
+			return None
+
+		return self.retrieveOBSPackageByBuildId(buildId)
 
 	def constructOBSPackage(self, d):
 		obsPackage = self.builds.constructObject(OBSPackage, d)

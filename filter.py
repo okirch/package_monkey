@@ -30,6 +30,51 @@ def debugPackageCycles(*args, **kwargs):
 	if optPackageCycleDebug:
 		print(*args, **kwargs)
 
+def renderLabelSet(name, labels):
+	if labels is None:
+		return "[unconstrained]"
+
+	if not labels:
+		return f"[no {name}]"
+
+	if len(labels) >= 6:
+		return f"[{len(labels)} {name}]"
+
+	return f"[{name} {' '.join(map(str, labels))}]";
+
+def displayLabelSetFull(candidates, indent = ""):
+	def renderPurposes(label, labelIdent):
+		purposeSet = set(label.objectPurposes)
+		if purposeSet.issubset(candidates):
+			return [f"{labelIdent}-*"]
+
+		purposeSet.intersection_update(candidates)
+		return sorted(f"{labelIdent}-{purpose.purposeName}" for purpose in purposeSet)
+
+	if candidates is None:
+		infomsg(f"{indent}ALL")
+		return
+
+	baseLabels = set(label.baseLabel for label in candidates)
+	for baseLabel in sorted(baseLabels, key = str):
+		subs = []
+		if baseLabel in candidates:
+			subs.append('.')
+
+		for flavor in baseLabel.flavors:
+			if flavor in candidates:
+				subs.append(f"+{flavor.flavorName}")
+			subs += renderPurposes(flavor, f"+{flavor.flavorName}")
+
+		subs += renderPurposes(baseLabel, f"")
+
+		if subs:
+			subs = ' '.join(subs)
+			infomsg(f"{indent}{baseLabel}: {subs}")
+		else:
+			infomsg(f"{indent}{baseLabel}")
+
+
 class Classification:
 	TYPE_BINARY = 'binary'
 	TYPE_SOURCE = 'source'
@@ -54,6 +99,7 @@ class Classification:
 			self.buildRequires = set()
 			self.runtimeAugmentations = set()
 			self.disposition = Classification.DISPOSITION_SEPARATE
+			self.defaultLabel = None
 			self.defined = False
 
 			# This is populated for labels that represent a build flavor like @Core+python,
@@ -100,6 +146,22 @@ class Classification:
 			self.isPurpose = False
 			if self.purposeName is not None or self.type == Classification.TYPE_PURPOSE:
 				self.isPurpose = True
+
+		@property
+		def fingerprint(self):
+			values = [self.name, self.type, self.disposition, self.defaultLabel, self.gravity]
+			for attrName in ('_flavors', '_purposes', 'runtimeRequires', 'buildRequires', 'runtimeAugmentations', 'mergeableAutoFlavors'):
+				values.append(attrName)
+
+				attr = getattr(self, attrName)
+
+				# some of these are label valued dicts
+				if type(attr) == dict:
+					attr = attr.values()
+
+				values += sorted(map(str, attr))
+
+			return hash(tuple(values))
 
 		@property
 		def purposeName(self):
@@ -206,6 +268,10 @@ class Classification:
 			# we'll live with this for now
 			#otherLabel.flavorBase = self
 			#otherLabel.flavorName = flavorName
+
+		@property
+		def objectPurposes(self):
+			return sorted(self._purposes.values(), key = lambda label: label.name)
 
 		def getObjectPurpose(self, purposeName):
 			return self._purposes.get(purposeName)
@@ -383,8 +449,17 @@ class Classification:
 			self._nextLabelId = 0
 
 		@property
+		def fingerprint(self):
+			values = tuple(label.fingerprint for label in self.allLabels)
+			return hash(values)
+
+		@property
 		def allAutoPurposes(self):
 			return set(filter(lambda label: label.type == Classification.TYPE_PURPOSE, self._labels.values()))
+
+		@property
+		def allAutoFlavors(self):
+			return set(filter(lambda label: label.type == Classification.TYPE_AUTOFLAVOR, self._labels.values()))
 
 		def getLabel(self, name):
 			return self._labels.get(name)
@@ -481,6 +556,14 @@ class Classification:
 					if requirePurpose is None:
 						requirePurpose = self.createPurpose(req, purposeName, template = template)
 					label.addRuntimeDependency(requirePurpose)
+
+			# if we're currently creating Blah+flavor-devel, require Blah-devel
+			grandParent = baseLabel.flavorBase
+			if grandParent is not None:
+				gpPurpose = grandParent.getObjectPurpose(purposeName)
+				if gpPurpose is None:
+					gpPurpose = self.createPurpose(grandParent, purposeName, template = template)
+				label.addRuntimeDependency(gpPurpose)
 
 			return label
 
@@ -1032,10 +1115,10 @@ class Classification:
 
 			self.potentialClassification.addEdge(edge.dependant, edge.package)
 
-			if True:
-				build = self.getBuildForPackage(edge.package)
+			for pkg in edge.package, edge.dependant:
+				build = self.getBuildForPackage(pkg)
 				if build is not None:
-					self.potentialClassification.associateBuild(edge.package, build)
+					self.potentialClassification.addBuild(build)
 
 			return edge.package
 
@@ -1208,8 +1291,6 @@ class PotentialClassification(object):
 			self.placement = None
 
 			self._trace = False
-			if self.name in []:
-				self._trace = True
 
 		def zap(self):
 			self._lowerNeighbors = None
@@ -1302,16 +1383,16 @@ class PotentialClassification(object):
 			self._lowerCone = self.intersectCones(self.lowerCone, lowerNeighbor.lowerCone)
 
 			if self._trace:
-				infomsg(f" {self}: add lower neighbor {lowerNeighbor}")
-				infomsg(f"    lower cone is {self.describeCone(self.lowerCone)}")
+				infomsg(f" {self}: add lower neighbor {lowerNeighbor}; lower cone:")
+				displayLabelSetFull(self.lowerCone, indent = "   ")
 
 		def updateFromAbove(self, upperNeighbor):
 			# do NOT use update_intersection
 			self._upperCone = self.intersectCones(self.upperCone, upperNeighbor.upperCone)
 
 			if self._trace:
-				infomsg(f" {self}: add upper neighbor {upperNeighbor}")
-				infomsg(f"    upper cone is {self.describeCone(self.upperCone)}")
+				infomsg(f" {self}: add upper neighbor {upperNeighbor}; upper cone:")
+				displayLabelSetFull(self.upperCone, indent = "   ")
 
 		def describeCone(self, cone):
 			if cone is None:
@@ -1356,9 +1437,18 @@ class PotentialClassification(object):
 					candidateLabels = self._order.maxima(candidateLabels)
 			return candidateLabels
 
+		def constrainCandidatesFurther(self, permittedLabels):
+			if permittedLabels is None:
+				# no further constraints
+				return
+
+			self._candidates = intersectSets(self.candidates, permittedLabels)
+
 		@property
 		def candidates(self):
-			return self.intersectCones(self.lowerCone, self.upperCone)
+			if self._candidates is None:
+				self._candidates = self.intersectCones(self.lowerCone, self.upperCone)
+			return self._candidates
 
 		@property
 		def candidateProjects(self):
@@ -1564,7 +1654,7 @@ class PotentialClassification(object):
 				if pkg.label.type == Classification.TYPE_PURPOSE or \
 				   pkg.label.type == Classification.TYPE_AUTOFLAVOR:
 					continue
-				
+
 				# This can happen when we try to collapse a cycle of packages that have different
 				# labels
 				warnmsg(f"Refusing to change label of {pkg} from {pkg.label} to {label}")
@@ -1589,7 +1679,7 @@ class PotentialClassification(object):
 		upper.addLowerNeighbor(lower)
 		lower.addUpperNeighbor(upper)
 
-	def associateBuild(self, package, build):
+	def addBuild(self, build):
 		if build in self._builds:
 			return
 
@@ -1612,6 +1702,9 @@ class PotentialClassification(object):
 			# Copy already assigned labels to the newly created node
 			if pkg.label and pkg.label.type == Classification.TYPE_BINARY:
 				interval.solution = pkg.label
+
+			if pkg.trace:
+				interval._trace = True
 
 		return interval
 
@@ -1968,7 +2061,9 @@ class PotentialClassification(object):
 			self.node = node
 			self.label = label
 			self.labelReason = None
+			self.autoLabel = None
 			self.failed = False
+			self.trace = False
 
 		def __str__(self):
 			return str(self.node)
@@ -1976,6 +2071,10 @@ class PotentialClassification(object):
 		@property
 		def isSolved(self):
 			return bool(self.label)
+
+		@property
+		def isFinal(self):
+			return bool(self.label) or self.failed
 
 	class DefinitivePackagePlacement(PackagePlacement):
 		def __init__(self, labelOrder, node):
@@ -1996,6 +2095,9 @@ class PotentialClassification(object):
 			self.candidates = node.candidates
 			self.flavor = None
 			self.purpose = None
+
+			self.constrainedAbove = bool(node.upperNeighbors)
+			self.constrainedBelow = bool(node.lowerNeighbors)
 
 		def fail(self, msg):
 			errormsg(f"{self}: {msg}")
@@ -2051,6 +2153,15 @@ class PotentialClassification(object):
 					return self.fail(f"conflicting purposes {self.flavor} and {flavorName} - this will never work")
 
 				self.candidates = set(filter(lambda label: label.flavorName == flavorName, candidates))
+
+				# if the autoflavor has a disposition of maybe_merge, check for any base labels that
+				# cover all requirements of the autoflavor
+				if label.disposition == Classification.DISPOSITION_MAYBE_MERGE:
+					merged = set(filter(lambda l: l.flavorBase is None and l.autoFlavorCanBeMerged(label), candidates))
+					self.candidates.update(merged)
+					if self.trace:
+						infomsg(f"   {self}: {label} got merged into {len(merged)} candidates")
+
 				self.flavor = label
 			elif label.type == Classification.TYPE_PURPOSE:
 				purposeName = label.name
@@ -2062,7 +2173,7 @@ class PotentialClassification(object):
 			else:
 				raise Exception(f"{self}: Unexpected label {label} type {label.type}")
 
-			infomsg(f"{self} constrained by {label.type} {label}")
+			debugmsg(f"{self} constrained by {label.type} {label}")
 			return True
 
 		def trivialChecks(self):
@@ -2083,6 +2194,51 @@ class PotentialClassification(object):
 				return True
 
 			return False
+
+		def tryToPlaceTopDown(self, node):
+			if self.label is not None:
+				return
+
+			if not node.upperNeighbors:
+				if self.candidates is None:
+					infomsg(f"{node} has no parent and no constraints; please provide a hint where to place it")
+					return
+
+				if not self.candidates:
+					return
+
+				max = self.labelOrder.maxima(self.candidates)
+				if len(max) == 1:
+					maxLabel = next(iter(max))
+					infomsg(f"{self.node} has no upper neighbors; best candidate is {maxLabel}")
+					infomsg(f"   {renderLabelSet('candidates', self.candidates)}")
+					self.setSolution(maxLabel)
+					return True
+
+				baseLabels = set(label.baseLabel for label in max)
+				if len(baseLabels) == 1:
+					maxLabel = next(iter(baseLabels))
+					if maxLabel in self.candidates:
+						choice = self.deriveChoiceFromBaseLabel(maxLabel)
+
+						if choice:
+							self.setSolutionFromBaseLabel(choice, maxLabel)
+							return True
+
+				infomsg(f"{node} has no parent and ambiguous constraints {renderLabelSet('max candidates', max)}")
+				return
+
+			labels = set()
+			for neigh in node.upperNeighbors:
+				if neigh.placement is None:
+					infomsg(f"Why on earth does {neigh} not have a placement object?")
+					continue
+				if neigh.placement.label is None:
+					return
+
+				labels.add(neigh.placement.label)
+
+			# xxx
 
 		# if a build produces exactly one package, we do not have to consider any
 		# sibling constraints. Just place it
@@ -2109,13 +2265,23 @@ class PotentialClassification(object):
 
 		def deriveChoiceFromBaseLabel(self, baseLabel):
 			candidates = self.candidates
+
+			if self.trace:
+				infomsg(f"{self}: trying to derive from {baseLabel}")
+				displayLabelSetFull(candidates, indent = "   ")
+
 			if candidates is None or baseLabel in candidates:
 				# if the node can be placed anywhere, or if the base label is
 				# a candidate, choose the base label
+				if self.trace:
+					infomsg(f"{self}: {baseLabel} is a valid candidate")
 				return baseLabel
 			else:
 				# filter those candidates that have the chosen base label
 				candidates = set(filter(lambda label: label.baseLabel == baseLabel, candidates))
+
+				if self.trace:
+					infomsg(f"### {self} candidates={' '.join(map(str, candidates))}")
 
 				if not candidates:
 					return None
@@ -2126,19 +2292,18 @@ class PotentialClassification(object):
 					if minimum is not None:
 						return minimum
 
-				# If the package has not been labelled for a specific purpose, check if
-				# we get better results by hiding all candidates that do have one
-				if self.purpose is None:
-					generic = set(filter(lambda label: label.purposeName == None, candidates))
-					if generic:
-						candidates = generic
+					# If the package has not been labelled for a specific purpose, check if
+					# we get better results by hiding all candidates that do have one
+					if self.purpose is None:
+						generic = set(filter(lambda label: label.purposeName == None, candidates))
+						if generic:
+							candidates = generic
 
 #				if len(candidates) > 1:
 #					candidates = self.labelOrder.maxima(candidates)
 
 				if len(candidates) > 1:
-					# infomsg(f"{self.node} is still ambiguous [{' '.join(map(str, candidates))}], choosing one at random")
-					infomsg(f"{self.node} is still ambiguous [{' '.join(map(str, candidates))}]")
+					# infomsg(f"{self.node} is still ambiguous [{' '.join(map(str, candidates))}]")
 					return None
 
 				choice = next(iter(candidates))
@@ -2166,6 +2331,9 @@ class PotentialClassification(object):
 			self.children = []
 			self.packageDict = {}
 
+			self.triedBaseLabels = set()
+			self.goodBaseLabels = {}
+
 		def __str__(self):
 			return self.name
 
@@ -2175,16 +2343,20 @@ class PotentialClassification(object):
 			self.packageCount += 1
 
 		@property
-		def completelySolved(self):
+		def isFinal(self):
+			return all(placement.isFinal for placement in self.children)
+
+		@property
+		def isSolved(self):
 			return all(placement.isSolved for placement in self.children)
 
 		@property
 		def solved(self):
-			return list(filter(lambda p: p.label is not None, self.children))
+			return list(filter(lambda p: p.isSolved, self.children))
 
 		@property
 		def unsolved(self):
-			return list(filter(lambda p: p.label is None, self.children))
+			return list(filter(lambda p: not p.isSolved, self.children))
 
 		@property
 		def numPackages(self):
@@ -2217,8 +2389,19 @@ class PotentialClassification(object):
 				node.placement = PotentialClassification.TentativePackagePlacement(self.labelOrder, node, self.preferences)
 				if pkg.label is not None:
 					node.placement.applyFlavorOrPurpose(pkg.label)
+					if pkg.label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
+						node.placement.autoLabel = pkg.label
 
 			self.addPackagePlacement(pkg, node.placement)
+
+			if node.upperNeighbors:
+				self.constrainedAbove = True
+			if node.lowerNeighbors:
+				self.constrainedBelow = True
+
+			if pkg.trace:
+				node.placement.trace = True
+
 			return node.placement
 
 		def applyConstraints(self):
@@ -2229,32 +2412,81 @@ class PotentialClassification(object):
 			for packagePlacement in self.unsolved:
 				packagePlacement.trivialChecks()
 
-			if self.packageCount == 1 and not self.completelySolved:
+			if self.packageCount == 1 and not self.isFinal:
 				packagePlacement = self.unsolved[0]
 				packagePlacement.onlyChildCheck()
 
-			return self.completelySolved
+			return self.isFinal
 
-		def tryToSolveUsingBaseLabel(self, baseLabel, desc):
-			debugmsg(f"{self}: try to solve using {desc} {baseLabel}")
-			potentialSolutions = []
-			allGood = True
+		class BaseLabelSolution:
+			def __init__(self, baseLabel):
+				self.baseLabel = baseLabel
+				self.placements = []
 
+			def __str__(self):
+				return self.baseLabel.name
+
+			def add(self, packagePlacement, label):
+				self.placements.append((packagePlacement, label))
+
+			def __iter__(self):
+				return iter(self.placements)
+
+		def canSolveUsingBaseLabel(self, baseLabel):
+			if baseLabel in self.triedBaseLabels:
+				return self.goodBaseLabels[baseLabel]
+			self.triedBaseLabels.add(baseLabel)
+
+			result = self.BaseLabelSolution(baseLabel)
+			potentialSolution = []
 			for packagePlacement in self.unsolved:
 				choice = packagePlacement.deriveChoiceFromBaseLabel(baseLabel)
-				if choice is not None:
-					potentialSolutions.append((packagePlacement, choice))
-				else:
-					debugmsg("    {packagePlacement} cannot be placed near {baseLabel}")
-					allGood = False
+				if choice is None:
+					if packagePlacement.trace:
+						infomsg(f"{self}: incompatible base label {baseLabel} - no candidate for {packagePlacement}")
+					self.goodBaseLabels[baseLabel] = None
+					return None
 
-			if not allGood:
+				result.add(packagePlacement, choice)
+
+			self.goodBaseLabels[baseLabel] = result
+			return result
+
+		def tryToSolveUsingBaseLabel(self, baseLabel, desc):
+			infomsg(f"{self}: try to solve using {desc} {baseLabel}")
+
+			potentialSolution = self.canSolveUsingBaseLabel(baseLabel)
+			if not potentialSolution:
 				return False
 
-			for packagePlacement, choice in potentialSolutions:
+			for packagePlacement, choice in potentialSolution:
 				packagePlacement.setSolutionFromBaseLabel(choice, baseLabel) 
-
 			return True
+
+		# look for packages that have been labelled for a flavor with a defaultlabel.
+		# If so, check whether this could be a good base label for placing the entire package.
+		# Do this only for packages that have none of their rpms labelled yet
+		def solveDefaultBaseLabel(self):
+			if self.solved:
+				return
+
+			defaultLabel = None
+			for packagePlacement in self.unsolved:
+				if packagePlacement.autoLabel and packagePlacement.autoLabel.defaultLabel:
+					cand = packagePlacement.autoLabel.defaultLabel
+					if defaultLabel is None:
+						defaultLabel = cand
+					elif defaultLabel is not cand:
+						infomsg(f"{self} has packages with conflicting default labels {defaultLabel} and {cand}")
+						return False
+
+			if defaultLabel is None:
+				return False
+
+			if self.tryToSolveUsingBaseLabel(defaultLabel, "default base label"):
+				return True
+
+			return False
 
 		# we're dealing with several packages; see whether they share any common base label(s)
 		# and try to determine the "best" choice
@@ -2268,47 +2500,60 @@ class PotentialClassification(object):
 
 			if not commonBaseLabels:
 				infomsg(f"{self} has no common base labels");
-				infomsg(f"   {self.numSolved} solved packages up to now")
 				return False
 
+			trace = any(packagePlacement.trace for packagePlacement in self.children)
+
 			infomsg(f"{self} has common base labels {' '.join(map(str, commonBaseLabels))}");
+			# commonBaseLabels = self.preferences.filterCandidates(commonBaseLabels)
 
-			commonBaseLabels = self.preferences.filterCandidates(commonBaseLabels)
-
-			for attempt in range(5):
-				inspect = commonBaseLabels
-
-				inspect = self.preferences.filterCandidates(inspect)
-				if len(inspect) == 1:
-					baseLabel = next(iter(inspect))
+			goodLabels = set()
+			for baseLabel in commonBaseLabels:
+				if self.canSolveUsingBaseLabel(baseLabel):
+					if trace: infomsg(f"   + {baseLabel}")
+					goodLabels.add(baseLabel)
 				else:
-					baseLabel = self.labelOrder.minimumOf(inspect)
+					if trace: infomsg(f"   - {baseLabel}")
 
-				if baseLabel is None:
-					break
+			if not goodLabels:
+				infomsg(f"{self} has common base labels, but none of them can solve");
+				return False
 
-				infomsg(f"reduced list of base labels to {baseLabel}")
-				if self.tryToSolveUsingBaseLabel(baseLabel, "common base label"):
-					return True
+			if len(goodLabels) == 1:
+				bestLabel = next(iter(goodLabels))
+			else:
+				bestLabel = self.labelOrder.maximumOf(goodLabels)
 
-				commonBaseLabels.remove(baseLabel)
-				if not commonBaseLabels:
-					break
+			if bestLabel:
+				return self.tryToSolveUsingBaseLabel(bestLabel, "common base label")
 
-				infomsg(f"   retry without {baseLabel}")
-
+			infomsg(f"{self}: found several compatible base labels: {renderLabelSet('good', goodLabels)}")
 			return False
 
 		# for all the children that have been placed so far, loop over their base
 		# labels and see if there's a common maximum. If so, try to place all remaining
 		# packages with this base label
 		def solveCompatibleBaseLabel(self):
-			allBaseLabels = set(placement.label.baseLabel for placement in self.solved)
-
-			maxBaseLabel = self.labelOrder.maximumOf(allBaseLabels)
-			if maxBaseLabel is None:
+			if not self.solved:
 				return False
 
+			compatibleBaseLabels = set()
+			for placement in self.solved:
+				baseLabel = placement.label.baseLabel
+				if self.canSolveUsingBaseLabel(baseLabel):
+					compatibleBaseLabels.add(baseLabel)
+
+			compatibleBaseLabels = self.preferences.filterCandidates(compatibleBaseLabels)
+			infomsg(f"Trying to solve {self} using all base labels {' '.join(map(str, compatibleBaseLabels))}")
+
+			maxBaseLabel = self.labelOrder.maximumOf(compatibleBaseLabels)
+			if maxBaseLabel is None:
+				if True:
+					maxes = self.labelOrder.maxima(compatibleBaseLabels)
+					infomsg(f"   no single maximum label; max={renderLabelSet('maxima', maxes)}")
+				return False
+
+			infomsg(f"    reduced list of all base labels to {maxBaseLabel}")
 			return self.tryToSolveUsingBaseLabel(maxBaseLabel, "max base label")
 
 		# For a package like libfoo-devel, remove the suffix
@@ -2329,7 +2574,7 @@ class PotentialClassification(object):
 			namesToPlacements = {}
 			toBeExamined = []
 			for pkg, packagePlacement in self.packageDict.items():
-				if packagePlacement.isSolved:
+				if packagePlacement.label is not None:
 					namesToPlacements[pkg.name] = packagePlacement
 					label = packagePlacement.label
 
@@ -2341,17 +2586,20 @@ class PotentialClassification(object):
 						# then, see if the package name is of the form $stem-$suffix, and if
 						# so, remove the suffix
 						baseName = self.removePurposeSuffixFromPackageName(pkg, purpose)
+					else:
+						baseName = pkg.name
 
-						if baseName is not None:
+					if baseName is not None:
+						namesToPlacements[baseName] = packagePlacement
+						infomsg(f"    {baseName} -> {packagePlacement}")
+
+						# FIXME: this encodes the SUSE lib package naming convention
+						# shorten librsvg-2-2 to librsvg
+						if baseName.startswith("lib"):
+							baseName = baseName.rstrip("-0123456789")
 							namesToPlacements[baseName] = packagePlacement
-							infomsg(f"    {pkg} -> {packagePlacement}")
+							infomsg(f"    {baseName} -> {packagePlacement}")
 
-							# FIXME: this encodes the SUSE lib package naming convention
-							# shorten librsvg-2-2 to librsvg
-							if baseName.startswith("lib"):
-								baseName = baseName.rstrip("-0123456789")
-								namesToPlacements[baseName] = packagePlacement
-								infomsg(f"    {pkg} -> {packagePlacement}")
 				elif packagePlacement.purpose and packagePlacement.purpose.packageSuffixes:
 					toBeExamined.append((pkg, packagePlacement))
 
@@ -2369,9 +2617,16 @@ class PotentialClassification(object):
 				infomsg(f"    {pkg} baseName={baseName}")
 
 				favoriteSibling = namesToPlacements.get(baseName)
+				infomsg(f"       try {baseName} -> {favoriteSibling}")
 				if favoriteSibling is None and baseName.startswith("lib"):
 					baseName = baseName.rstrip("-0123456789")
 					favoriteSibling = namesToPlacements.get(baseName)
+					infomsg(f"       try {baseName} -> {favoriteSibling}")
+					if favoriteSibling is None:
+						# still no cigar; try and remove the "lib" prefix as well
+						baseName = baseName[3:]
+						favoriteSibling = namesToPlacements.get(baseName)
+						infomsg(f"       try {baseName} -> {favoriteSibling}")
 
 				if favoriteSibling is None:
 					continue
@@ -2383,41 +2638,48 @@ class PotentialClassification(object):
 
 				choice = packagePlacement.deriveChoiceFromBaseLabel(label)
 				if choice is None:
-					infomsg(f"{purpose} {pkg} has favorite sibling {favoriteSibling}, but {label} is not a good base label for it")
+					infomsg(f"{purpose} package {pkg} has favorite sibling {favoriteSibling}, but {label} is not a good base label for it")
 					continue
 
 				infomsg(f"{pkg} is placed in {choice} (based on favorite sibling {favoriteSibling} and purpose {purpose})")
 				packagePlacement.setSolution(choice)
 
-			return self.completelySolved
-
-		@staticmethod
-		def renderLabelSet(name, labels):
-			if labels is None:
-				return "[unconstrained]"
-
-			if not labels:
-				return f"[no {name}]"
-
-			if len(labels) >= 6:
-				return f"[{len(labels)} {name}]"
-
-			return f"[{name} {' '.join(map(str, labels))}]";
+			return self.isFinal
 
 		def reportRemaining(self):
 			remaining = self.unsolved
 
-			infomsg(f" - {self}: {self.numSolved} of {self.numPackages} solved; {len(remaining)} remain")
+			infomsg(f" - {self}: {self.numSolved}/{self.numPackages} solved; {len(remaining)} remain")
 			for packagePlacement in self.children:
 				if packagePlacement.label:
-					infomsg(f"    + {packagePlacement}; labelled as {packagePlacement.label}")
+					infomsg(f"    + {packagePlacement} (solved); labelled as {packagePlacement.label}")
 					continue
 
-				extra = self.renderLabelSet("candidates", packagePlacement.candidates)
-				infomsg(f"    - {packagePlacement}; {extra}")
+				status = "unsolved"
+				if packagePlacement.failed:
+					status = "FAILED"
 
-				extra = self.renderLabelSet("base labels", packagePlacement.baseLabels)
-				infomsg(f"         {extra}")
+				if packagePlacement.constrainedAbove:
+					extra = renderLabelSet("candidates", packagePlacement.candidates)
+
+					maxBaseLabels = None
+					if packagePlacement.baseLabels is not None:
+						maxBaseLabels = self.labelOrder.maxima(packagePlacement.baseLabels)
+					extra2 = renderLabelSet("max base labels", maxBaseLabels)
+				else:
+					extra = "nothing requires this package"
+
+					minBaseLabels = None
+					if packagePlacement.baseLabels is not None:
+						minBaseLabels = self.labelOrder.minima(packagePlacement.baseLabels)
+					extra2 = renderLabelSet("min base labels", minBaseLabels)
+
+				infomsg(f"    - {packagePlacement} ({status}); {extra}")
+				infomsg(f"         {extra2}")
+
+			if self.goodBaseLabels:
+				extra = renderLabelSet('compatible base labels', sorted(map(str, self.goodBaseLabels.keys())))
+				infomsg(f"   {extra}")
 
 	def definePreference(self, preferredName, otherNames):
 		def getLabel(name):
@@ -2450,15 +2712,76 @@ class PotentialClassification(object):
 		return buildPlacement
 
 	def solveBuildPlacement(self, tentativePlacement):
-		return \
+		if tentativePlacement.isFinal:
+			return
+
+		infomsg(f"{tentativePlacement}: {tentativePlacement.numSolved}/{tentativePlacement.numPackages} solved")
+
+		# it may be better to have the indent handling use "with"
+		ti = loggingFacade.temporaryIndent(3)
+		success = \
 			tentativePlacement.solveTrivialCases() or \
+			tentativePlacement.solveDefaultBaseLabel() or \
 			tentativePlacement.solveCommonBaseLabel() or \
+			tentativePlacement.solveCompatibleBaseLabel() or \
 			tentativePlacement.solvePurposeRelativeToSibling(self._classificationScheme)
+
+		if tentativePlacement.isFinal:
+			infomsg(f"{tentativePlacement}: completely solved")
+			return False
+
+		return True
+
+	def constrainPackagesWithAutomaticLabels(self, order):
+		flavorConstrained = {}
+		purposeConstrained = {}
+
+		flavorConstrained[None] = set()
+		purposeConstrained[None] = set()
+		for label in self._classificationScheme.allLabels:
+			if label.type == Classification.TYPE_AUTOFLAVOR:
+				flavorConstrained[label.name] = set()
+			elif label.type == Classification.TYPE_PURPOSE:
+				purposeConstrained[label.name] = set()
+
+		for label in self._classificationScheme.allLabels:
+			if label.type == Classification.TYPE_BINARY:
+				cons = flavorConstrained.get(label.flavorName)
+				if cons is not None:
+					cons.add(label)
+
+				purposeConstrained[label.purposeName].add(label)
+
+		packagesToBeConstrained = []
+		for node in self._packages.values():
+			constrained = None
+			for pkg in node.packages:
+				label = pkg.label
+				if label is None:
+					continue
+
+				if label.type == Classification.TYPE_BINARY:
+					cons = flavorConstrained.get(label.flavorName)
+					if cons is not None:
+						constrained = intersectSets(constrained, cons)
+
+					const = purposeConstrained[label.purposeName]
+					constrained = intersectSets(constrained, cons)
+
+			if constrained is None:
+				# no further constraints
+				pass
+
+			if not constrained:
+				errormsg(f"{node} not constraining the candidates")
+				continue
+
+			node.constrainCandidatesFurther(constrained)
 
 	def reportUnsolved(self, placements):
 		header = "Packages that have not been placed"
 		for buildPlacement in placements:
-			if buildPlacement.completelySolved:
+			if buildPlacement.isSolved:
 				continue
 
 			if header is not None:
@@ -2477,11 +2800,10 @@ class PotentialClassification(object):
 		while order is None:
 			order = self.createPartialOrder()
 
+		# self.constrainPackagesWithAutomaticLabels(order)
+
 		if not self.validateInitialPlacements(order):
 			raise Exception(f"Unresolved conflicts in initial placement of packages, please fix filter rules")
-
-		# on the first pass, hide any non-essential packages
-		self.ignoreFlavoredPackages(order, ('devel', 'doc', 'i18n', 'man'))
 
 		for interval in order.bottomUpTraversal():
 			for lower in interval.lowerNeighbors:
@@ -2505,8 +2827,17 @@ class PotentialClassification(object):
 
 		placements = []
 		for build, siblingInfo in self._builds.items():
+			debugmsg(f"Create build placement for {siblingInfo}")
 			placement = self.createBuildPlacement(siblingInfo)
 			placements.append(placement)
+
+		if False:
+			for node in order.topDownTraversal():
+				buildPlacement = node.placement
+				if buildPlacement is None or buildPlacement.label is not None:
+					continue
+
+				buildPlacement.tryToPlaceTopDown(node)
 
 		for placement in placements:
 			self.solveBuildPlacement(placement)
@@ -2809,7 +3140,7 @@ class PotentialClassification(object):
 			def __init__(self, labels, key = None):
 				self.below = labels
 				self.nodes = []
-				
+
 				if key is None:
 					key = self.makeKey(labels)
 				self.key = key
@@ -2969,7 +3300,7 @@ class PotentialClassification(object):
 				tryLabels.add(flavor)
 		elif pkg.label.type == Classification.TYPE_PURPOSE:
 			purposeName = pkg.label.name
-			
+
 			purpose = baseLabel.getObjectPurpose(purposeName)
 			if purpose:
 				tryLabels.add(purpose)
@@ -3333,7 +3664,9 @@ class PackageGroup:
 	def __init__(self, name):
 		self.name = name
 
+		# nuke
 		self.matchCount = 0
+		# nuke
 		self.expand = True
 		self.label = None
 		self._packages = []
@@ -3716,6 +4049,15 @@ class PackageFilter:
 		for group in self._groups.values():
 			label = group.label
 			validateDependencies(label.buildRequires)
+
+			# resolve the defaultlabel
+			if label.defaultLabel is not None:
+				defaultLabel = self.classificationScheme.getLabel(label.defaultLabel)
+				if defaultLabel is None or not defaultLabel.defined:
+					raise Exception(f"Label {label} specifies defaultlabel={label.defaultLabel}, which is not defined anywhere")
+				if defaultLabel.type is not Classification.TYPE_BINARY:
+					raise Exception(f"Label {label} specifies defaultlabel={label.defaultLabel}, which is of type {defaultLabel.type}")
+				label.defaultLabel = defaultLabel
 
 		# For all base labels, instantiate their auto flavors (ie for @Foo, instantiate
 		# @Foo+python, @Foo+ruby, etc)
@@ -4158,6 +4500,7 @@ class PackageFilter:
 		'buildconfig',
 		'disposition',
 		'autoselect',
+		'defaultlabel',
 	))
 
 	def processGroupDefinition(self, group, gd):
@@ -4204,6 +4547,12 @@ class PackageFilter:
 		value = getBoolean(gd, 'autoselect')
 		if value is not None:
 			group.label.autoSelect = value
+
+		value = gd.get('defaultlabel')
+		if value is not None:
+			if group.label.type != Classification.TYPE_AUTOFLAVOR:
+				raise Exception(f"Error: defaultlabel is not valid for {group.label.type} labels")
+			group.label.defaultLabel = value
 
 		priority = gd.get('priority')
 		if priority is not None:

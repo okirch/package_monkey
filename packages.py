@@ -1355,6 +1355,8 @@ class Package:
 		self.label = None
 		self.labelReason = None
 
+		self.trace = False
+
 	@staticmethod
 	def parseName(s):
 		if s.endswith('.rpm'):

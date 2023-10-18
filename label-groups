@@ -16,11 +16,16 @@ store.enableSourceLookups()
 
 classificationScheme = Classification.Scheme()
 packageFilter = PackageFilter(scheme = classificationScheme)
-unclassified = packageFilter.makeBinaryGroup("Unclassified")
+
+infomsg(f"Fingerprint hash for classificationScheme is {classificationScheme.fingerprint:#x}")
 
 labelOrder = classificationScheme.createOrdering(Classification.TYPE_BINARY)
 
-potentialClassification = PotentialClassification(labelOrder)
+potentialClassification = PotentialClassification(classificationScheme, labelOrder)
+
+# we should get this from filter.yaml
+potentialClassification.definePreference("@Gnome", ["@DesktopLibraries", ])
+potentialClassification.definePreference("@MinimalCRuntime", ["@GccRuntime", "@Glibc"])
 
 packageSelector = PackageSelector()
 collection = PackageCollection()
@@ -71,12 +76,6 @@ sourceTraversal = []
 
 worker = ResolverWorker(resolver)
 problemLog = worker.problems
-
-for labelName in ("@Gnome", "@Texlive", "@Emacs", "@Vim", "@Qt"):
-	label = classificationScheme.getLabel(labelName)
-	assert(label)
-	infomsg(f"Ignoring all problems for label {label}")
-	problemLog.ignore(label)
 
 productArchitecture = store.getProperty("arch")
 if productArchitecture is None:

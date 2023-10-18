@@ -34,8 +34,12 @@ if True:
 	# stop
 
 timing = ExecTimer()
+traceMatcher = application.traceMatcher
 for pinfo in store.enumerateLatestPackages():
 	pkg = store.retrievePackage(pinfo)
+
+	if traceMatcher and traceMatcher.match(pkg.name):
+		pkg.trace = True
 
 	packageFilter.performInitialPlacement(pkg)
 	collection.add(pkg)

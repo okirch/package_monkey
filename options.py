@@ -4,6 +4,7 @@ from products import ProductCatalog, CacheLocation
 from database import BackingStoreDB
 from util import ExecTimer, loggingFacade
 from util import debugmsg, infomsg, warnmsg, errormsg
+from util import NameMatcher
 from obsclnt import OBSClient
 
 class Application:
@@ -20,6 +21,7 @@ class Application:
 		self.args.add_argument('--arch', default = 'x86_64')
 		self.args.add_argument('--quiet', action = 'store_true', default = False)
 		self.args.add_argument('--debug', action = 'append', default = [])
+		self.args.add_argument('--trace', action = 'append', default = [])
 		self.args.add_argument('--logfile', action = 'store')
 		self.args.add_argument('--obs-host', default = Application.OBS_HOST_DEFAULT)
 		self.args.add_argument('--obs-cache-strategy', default = None)
@@ -70,6 +72,13 @@ class Application:
 			self._store = BackingStoreDB(self.opts.db)
 			infomsg(f"Loaded database {self.opts.db}: {timing} elapsed")
 		return self._store
+
+	@property
+	def traceMatcher(self):
+		if not self.opts.trace:
+			return None
+
+		return NameMatcher(self.opts.trace)
 
 	@property
 	def obsClient(self):

@@ -195,6 +195,33 @@ class ThatsProgress:
 
 ##################################################################
 #
+# A simple name matches
+#
+##################################################################
+class NameMatcher:
+	def __init__(self, names = []):
+		self.patterns = []
+		self.names = []
+
+		for name in names:
+			if '*' in name or '?' in name:
+				self.patterns.append(name)
+			else:
+				self.names.append(name)
+
+	def match(self, candidate):
+		for name in self.names:
+			if name == candidate:
+				return True
+
+		for pattern in self.patterns:
+			if fnmatch.fnmatchcase(candidate, pattern):
+				return True
+
+		return False
+
+##################################################################
+#
 # Interfacing with python's logging class
 #
 ##################################################################

@@ -104,7 +104,7 @@ class Classification:
 
 			# This is populated for labels that represent a build flavor like @Core+python,
 			# or a purpose like @Core-devel, or a flavor AND purpose, like @Core+python-devel
-			self.flavorBase = None
+			self.parent = None
 			self.flavorName = None
 			self._purposeName = None
 
@@ -184,8 +184,8 @@ class Classification:
 		@property
 		def baseLabel(self):
 			result = self
-			while result.flavorBase:
-				result = result.flavorBase
+			while result.parent:
+				result = result.parent
 			return result
 
 		def okayToAdd(self, other):
@@ -262,11 +262,11 @@ class Classification:
 			if self.sourceProject and otherLabel.sourceProject is not self.sourceProject:
 				raise Exception(f"build flavor {otherLabel} uses source project {otherLabel.sourceProject}, but {self} uses {self.sourceProject}")
 
-			assert(otherLabel.flavorBase is self and otherLabel.flavorName == flavorName)
+			assert(otherLabel.parent is self and otherLabel.flavorName == flavorName)
 
 			# This creates a circular reference that kills garbage collection, but
 			# we'll live with this for now
-			#otherLabel.flavorBase = self
+			#otherLabel.parent = self
 			#otherLabel.flavorName = flavorName
 
 		@property
@@ -293,11 +293,11 @@ class Classification:
 			if self.sourceProject and otherLabel.sourceProject is not self.sourceProject:
 				raise Exception(f"build purpose {otherLabel} uses source project {otherLabel.sourceProject}, but {self} uses {self.sourceProject}")
 
-			assert(otherLabel.flavorBase is self and otherLabel.purposeName == purposeName)
+			assert(otherLabel.parent is self and otherLabel.purposeName == purposeName)
 
 			# This creates a circular reference that kills garbage collection, but
 			# we'll live with this for now
-			# otherLabel.flavorBase = self
+			# otherLabel.parent = self
 			# otherLabel.flavorName = flavorName
 
 		def setSourceProject(self, sourceLabel):
@@ -330,8 +330,8 @@ class Classification:
 		# Starting @Foo+flavor-purpose, look up @Foo-$flavorName-$purposeName
 		def findSibling(self, flavorName, purposeName):
 			label = self
-			while label.flavorBase:
-				label = label.flavorBase
+			while label.parent:
+				label = label.parent
 			if flavorName is not None:
 				label = label.getBuildFlavor(flavorName)
 			if label and purposeName:
@@ -343,7 +343,7 @@ class Classification:
 				return False
 			if not flavor.autoSelect:
 				return False
-			if flavor.flavorBase is None:
+			if flavor.parent is None:
 				return False
 
 			# this is somewhat tricky but important.
@@ -362,7 +362,7 @@ class Classification:
 			# avoid introducing loops
 			if self in flavorClosure:
 				return False
-			if self.flavorBase and self.flavorBase in flavorClosure:
+			if self.parent and self.parent in flavorClosure:
 				return False
 
 			return True
@@ -411,9 +411,9 @@ class Classification:
 				candidateFlavors.difference_update(eligibleFlavors)
 
 		def allFlavorRequirementsSatisfied(self, myClosure, flavor, flavorBaseClosure):
-			if flavor.flavorBase is None:
+			if flavor.parent is None:
 				return False
-			if referringLabel.flavorBase == self:
+			if referringLabel.parent == self:
 				return False
 
 			missing = myClosure.difference(flavorBaseClosure)
@@ -486,7 +486,7 @@ class Classification:
 			else:
 				raise Exception(f"Cannot create flavor {flavorName} for {baseLabel.type} label {baseLabel}: unexpected type")
 
-			label.flavorBase = baseLabel
+			label.parent = baseLabel
 			label.flavorName = flavorName
 			label.purposeName = baseLabel.purposeName
 
@@ -517,7 +517,7 @@ class Classification:
 				raise Exception(f"Cannot derive purpose {purposeName} from label {baseLabel} because it already has a purpose")
 
 			label = self.createLabel(f"{baseLabel}-{purposeName}", baseLabel.type)
-			label.flavorBase = baseLabel
+			label.parent = baseLabel
 			label.flavorName = baseLabel.flavorName
 			label.purposeName = purposeName
 
@@ -558,7 +558,7 @@ class Classification:
 					label.addRuntimeDependency(requirePurpose)
 
 			# if we're currently creating Blah+flavor-devel, require Blah-devel
-			grandParent = baseLabel.flavorBase
+			grandParent = baseLabel.parent
 			if grandParent is not None:
 				gpPurpose = grandParent.getObjectPurpose(purposeName)
 				if gpPurpose is None:
@@ -601,16 +601,16 @@ class Classification:
 		def finalize(self):
 			def inheritSourceProject(label):
 				if label.sourceProject is None:
-					if label.flavorBase:
-						source = inheritSourceProject(label.flavorBase)
+					if label.parent:
+						source = inheritSourceProject(label.parent)
 						if source:
 							label.setSourceProject(source)
 				return label.sourceProject
 
 			def inheritBuildConfig(label):
 				if label.buildConfig is None:
-					if label.flavorBase:
-						source = inheritBuildConfig(label.flavorBase)
+					if label.parent:
+						source = inheritBuildConfig(label.parent)
 						if source:
 							label.setBuildConfig(source)
 				return label.buildConfig
@@ -1329,7 +1329,7 @@ class PotentialClassification(object):
 		def solutionBaseLabel(self):
 			if not self._solution:
 				return None
-			return self._solution.flavorBase or self._solution
+			return self._solution.parent or self._solution
 
 		@property
 		def packages(self):
@@ -1570,8 +1570,8 @@ class PotentialClassification(object):
 		def baseLabels(self):
 			result = set()
 			for label in self.labels:
-				while label.flavorBase:
-					label = label.flavorBase
+				while label.parent:
+					label = label.parent
 				result.add(label)
 
 			return result
@@ -1918,7 +1918,7 @@ class PotentialClassification(object):
 				if node.solution is not None:
 					label = node.solution
 					if label.isPurpose:
-						label = label.flavorBase
+						label = label.parent
 					candidateLabels.add(label)
 				else:
 					label = pkg.label
@@ -1971,7 +1971,7 @@ class PotentialClassification(object):
 
 				purposeLabel = next(iter(labels))
 				if siblingPurposeLabel.disposition == Classification.DISPOSITION_MERGE:
-					purposeLabel = purposeLabel.flavorBase
+					purposeLabel = purposeLabel.parent
 
 				if not sibNode.labelIsValidCandidate(purposeLabel):
 					errormsg(f"Uh-oh. {purposeLabel} is not a valid candidate for {sibNode}")
@@ -2157,7 +2157,7 @@ class PotentialClassification(object):
 				# if the autoflavor has a disposition of maybe_merge, check for any base labels that
 				# cover all requirements of the autoflavor
 				if label.disposition == Classification.DISPOSITION_MAYBE_MERGE:
-					merged = set(filter(lambda l: l.flavorBase is None and l.autoFlavorCanBeMerged(label), candidates))
+					merged = set(filter(lambda l: l.parent is None and l.autoFlavorCanBeMerged(label), candidates))
 					self.candidates.update(merged)
 					if self.trace:
 						infomsg(f"   {self}: {label} got merged into {len(merged)} candidates")
@@ -2634,7 +2634,7 @@ class PotentialClassification(object):
 				infomsg(f"    {pkg} favorite sibling={favoriteSibling}")
 				label = favoriteSibling.label
 				if label.isPurpose:
-					label = label.flavorBase
+					label = label.parent
 
 				choice = packagePlacement.deriveChoiceFromBaseLabel(label)
 				if choice is None:
@@ -3064,7 +3064,7 @@ class PotentialClassification(object):
 	def baseLabelsForSet(self, labels):
 		if labels is None:
 			return None
-		return set(map(lambda label: label.flavorBase or label, labels))
+		return set(map(lambda label: label.parent or label, labels))
 
 	def reportEmptyLowerCone(self, interval):
 		infomsg(f"{interval} has an actual conflict between its requirements")
@@ -3226,7 +3226,7 @@ class PotentialClassification(object):
 				# a (possibly different) purpose like "-devel".
 				# Move up to the base flavor; because there's no flavor @Core-doc-devel
 				if label.isPurpose:
-					label = label.flavorBase
+					label = label.parent
 				choice = label.getObjectPurpose(commonLabel.name)
 				if choice is None:
 					infomsg(f"Cannot label {interval} with {label} - it should be labeled with purpose $something-{commonLabel}")
@@ -3473,7 +3473,7 @@ class PotentialClassification(object):
 	def tryToPlaceIntoCommonBase(self, interval):
 		def isCommonBaseFlavor(base, candidates):
 			for label in candidates:
-				if base == label or label.flavorBase == base:
+				if base == label or label.parent == base:
 					continue
 
 				if base in label.runtimeRequires:
@@ -3484,8 +3484,8 @@ class PotentialClassification(object):
 
 		baseFlavors = set()
 		for label in interval.candidates:
-			while label.flavorBase is not None:
-				label = label.flavorBase
+			while label.parent is not None:
+				label = label.parent
 			baseFlavors.add(label)
 
 		if len(baseFlavors) == 0:
@@ -3717,7 +3717,7 @@ class PackageGroup:
 
 	@property
 	def isFlavor(self):
-		return self.label.flavorBase is not None
+		return self.label.parent is not None
 
 	@property
 	def defined(self):
@@ -4037,9 +4037,9 @@ class PackageFilter:
 					other = self.getGroup(chase.name, chase.type)
 					if other is None:
 						raise Exception(f"could not find {chase.type} group {chase.name}")
-					if not other.label.flavorBase:
+					if not other.label.parent:
 						break
-					chase = other.label.flavorBase
+					chase = other.label.parent
 
 				if not other.defined and not other.label.isPurpose:
 					raise Exception(f"filter configuration issue: group {group.label} requires {other.label}, which is not defined anywhere")
@@ -4062,7 +4062,7 @@ class PackageFilter:
 		# For all base labels, instantiate their auto flavors (ie for @Foo, instantiate
 		# @Foo+python, @Foo+ruby, etc)
 		for group in list(self._groups.values()):
-			if group.label.flavorBase is not None or \
+			if group.label.parent is not None or \
 			   group.label.type is not Classification.TYPE_BINARY:
 				continue
 
@@ -4076,7 +4076,7 @@ class PackageFilter:
 		# build flavor @Foo+python
 		preliminaryOrder = self.classificationScheme.createOrdering(Classification.TYPE_BINARY)
 		for group in list(self._groups.values()):
-			if group.label.flavorBase is not None:
+			if group.label.parent is not None:
 				continue
 
 			if group.label.type is not Classification.TYPE_BINARY:
@@ -4110,7 +4110,7 @@ class PackageFilter:
 		for group in list(self._groups.values()):
 			label = group.label
 			if label.purposeName == 'devel':
-				baseLabel = label.flavorBase
+				baseLabel = label.parent
 				for req in baseLabel.runtimeRequires:
 					if req.isPurpose:
 						continue

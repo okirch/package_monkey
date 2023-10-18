@@ -579,7 +579,7 @@ class ResolverWorker:
 		def isIgnored(self, fromLabel, toLabel):
 			if fromLabel in self._ignoreLabels:
 				return True
-			if fromLabel.flavorBase and fromLabel.flavorBase in self._ignoreLabels:
+			if fromLabel.parent and fromLabel.parent in self._ignoreLabels:
 				return True
 			return None
 

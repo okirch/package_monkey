@@ -87,7 +87,7 @@ classificationContext = Classification.ClassificationContext(worker, productArch
 def classifyAutoFlavors(label, labelledPackages):
 	# Do not apply auto-flavors to groups that are already a flavor of some other group.
 	# Otherwise, we end up with labels like @HostNetworking+gnome+devel+unused
-	if label.flavorBase is not None:
+	if label.parent is not None:
 		return
 
 	classifier = Classification.AutoflavorPackageClosure(problemLog, store)
@@ -158,8 +158,8 @@ def classifyRuntimeDependencies(label):
 	# Step N: sort all other sibling packages into $Group+unused.
 	# To avoid infinite recursion, do not perform this step for the +unused flavor itself.
 	if not label.name.endswith("unused"):
-		while group.label.flavorBase:
-			group = packageFilter.makeBinaryGroup(group.label.flavorBase.name)
+		while group.label.parent:
+			group = packageFilter.makeBinaryGroup(group.label.parent.name)
 
 		siblingGroup = packageFilter.makeFlavorGroup(group, "unused")
 		siblingGroup.label.autoSelect = False

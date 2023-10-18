@@ -228,15 +228,45 @@ class NameMatcher:
 import logging
 
 class LoggingFacade:
-	DEFAULT_FORMAT = '%(asctime)s: %(message)s'
+	DEFAULT_FORMAT = '%(asctime)s: %(prefix)s%(message)s'
 
 	class RelativeTimeFormatter(logging.Formatter):
+		class Indent:
+			def __init__(self):
+				self.value = 0
+
+			@property
+			def whitespace(self):
+				return " " * self.value
+
+		class TI:
+			def __init__(self, indent, width):
+				self.indent = indent
+				self.width = width
+
+			def __del__(self):
+				self.indent.value -= self.width
+
 		def __init__(self, *args, **kwargs):
 			super().__init__(*args, **kwargs)
 			self.timer = LoggingExecTimer()
+			self.indent = self.Indent()
 
 		def formatTime(self, record, datefmt = None):
 			return str(self.timer)
+
+		def format(self, record):
+			if record.levelname == 'ERROR':
+				record.prefix = "Error: "
+			elif record.levelname == 'WARNING':
+				record.prefix = "Warning: "
+			else:
+				record.prefix = self.indent.whitespace
+			return super().format(record)
+
+		def temporaryIndent(self, width = 3):
+			self.indent.value += width
+			return self.TI(self.indent, width)
 
 	def __init__(self):
 		self.root = logging.getLogger()
@@ -269,6 +299,9 @@ class LoggingFacade:
 	def isDebugEnabled(self, name):
 		level = self.getLogger(name).getEffectiveLevel()
 		return level <= logging.DEBUG
+
+	def temporaryIndent(self, width = 3):
+		return self.defaultFormat.temporaryIndent(width)
 
 	def getLogger(self, name = None):
 		return logging.getLogger(name)

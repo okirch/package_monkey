@@ -116,14 +116,6 @@ class Classification:
 
 			self.mergeableAutoFlavors = set()
 
-			# the closure comprises all packages of this label plus the ones
-			# referenced by subordinate labels
-			self._closure = None
-
-			# the build closure comprises the labels that were listed as
-			# build requirements, recursively.
-			self._buildClosure = None
-
 			# build config labels have a source project assigned
 			self.sourceProject = None
 
@@ -632,43 +624,6 @@ class Classification:
 			order = self.createOrdering(Classification.TYPE_BINARY)
 			for label in order.bottomUpTraversal():
 				label.autoSelectCompatibleFlavors(order)
-
-		def getExtendedClosure(self, name):
-			label = self._labels.get(name)
-			if label is None:
-				raise Exception(f"Unknown label {name}")
-
-			return label._buildClosure
-
-		def show(self):
-			for label in self.allLabels:
-				self.showLabel(label)
-
-		def showLabel(self, label):
-			if type(label) == str:
-				label = self._labels[label]
-
-			infomsg(f"Label {label.name}")
-			if label.sourceProject:
-				infomsg(f"  source project {label.sourceProject}")
-			if label.buildConfig:
-				infomsg(f"  build config {label.buildConfig}")
-			for name, lset in (("requires", label.runtimeRequires), ("buildrequires", label.buildRequires), ("closure", label._closure), ("build closure", label._buildClosure)):
-				if not lset:
-					continue
-				infomsg(f"  {name}")
-
-				if lset is not label._closure and label._closure.issubset(lset):
-					if lset == label._closure:
-						infomsg(f"    (same as closure)")
-						continue
-
-					infomsg(f"    closure plus:")
-					lset = lset.difference(label._closure)
-
-				for c in lset:
-					infomsg(f"    {c.name}")
-				infomsg("")
 
 	class Reason(object):
 		def __init__(self, pkg):

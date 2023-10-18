@@ -221,6 +221,14 @@ class PartialOrder(object):
 		# FIXME: why are we returning a list rather than a set?
 		return list(map(lambda node: node.key, result))
 
+	def unboundedElements(self, subset):
+		result = set()
+
+		for node in self.getNodesForSet(subset):
+			if not node.above:
+				result.add(node.key)
+		return result
+
 	def getSubsetToTraverse(self, subset):
 		if subset is None:
 			return self.filterNodes(self._sorted)

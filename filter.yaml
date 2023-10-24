@@ -14,6 +14,9 @@ autoflavors:
    # placing packages through this autoflavor can be overridden by
    # explicit placement in some @Topic (which has a default priority of 5)
    priority: 10
+   # place python packages in @PythonModules by default, unless they
+   # are constrained in some other way
+   defaultlabel: "@PythonModules"
    requires:
     - "@PythonStandard"
    packages:
@@ -52,6 +55,7 @@ autoflavors:
    packages:
     - typelib-*
  - name: accounts
+   defaultlabel: "@Core0"
    disposition: maybe_merge
    priority: 9
    autoselect: no
@@ -70,34 +74,34 @@ purposes:
    # recognized by this filter with a higher priority than
    # any prefix match.
    priority: 4
-   packages:
-    - "*-devel"
-    - "*-devel-static"
-    - "*-devel-extra"
-    - "*-devel-doc"
-    - "*-devel-32bit"
-    - "*-devel-static-32bit"
-    - "*-devel-x86-64-v3"
-    - "*-devel-static-x86-64-v3"
+   packagesuffixes:
+    - devel
+    - devel-static
+    - devel-extra
+    - devel-doc
+    - devel-32bit
+    - devel-static-32bit
+    - devel-x86-64-v3
+    - devel-static-x86-64-v3
  - name: doc
    priority: 4
    autoselect: no
-   packages:
-    - "*-doc"
-    - "*-doc-html"
-    - "*-doc-pdf"
-    - "*-docs"
-    - "*-docs-html"
-    - "*-docs-pdf"
-    - "*-docs-common"
-    - "*-javadoc"
-    - "*-manual"
-    - "*-examples"
+   packagesuffixes:
+    - doc
+    - doc-html
+    - doc-pdf
+    - docs
+    - docs-html
+    - docs-pdf
+    - docs-common
+    - javadoc
+    - manual
+    - examples
  - name: i18n
    priority: 4
    autoselect: no
-   packages:
-    - "*-lang"
+   packagesuffixes:
+    - lang
  - name: man
    priority: 4
    autoselect: no
@@ -109,12 +113,14 @@ purposes:
  - name: x86_64_v3
    priority: 4
    autoselect: no
-   packages:
-    - "*-x86-64-v3"
+   packagesuffixes:
+    - x86-64-v3
  - name: 32bit
    priority: 0
+   packagesuffixes:
+    - 32bit
+   # catch other 32bit stuff, but do not use this infix in placement decisions (yet)
    packages:
-    - "*-32bit"
     - "*-32bit-*"
 
 build_configs:
@@ -265,7 +271,7 @@ groups:
  - name: "@GCC"
    buildconfig: GCC/standard
    requires:
-    - "@GccRuntime"
+    - "@MinimalCRuntime"
     - "@Core0"
     - "@Glibc-devel"
    packages:
@@ -276,6 +282,7 @@ groups:
     - gmp
     - dwz
     - isl
+    - libstdc++-devel
     - libstdc++6-devel-gcc13
    purposes:
     - name: devel
@@ -284,8 +291,6 @@ groups:
        - "@Glibc-devel"
       packages:
        - gcc13-devel
-       - libstdc++-devel
-       - libstdc++6-devel-gcc*
 
  - name: "@GccCross"
    buildconfig: GCC/standard
@@ -297,7 +302,7 @@ groups:
  - name: "@Testing"
    buildconfig: GCC/standard
    requires:
-    - "@GccRuntime"
+    - "@MinimalCRuntime"
     - "@Core"
    buildflavors:
     - name: dejagnu
@@ -341,7 +346,7 @@ groups:
       augments:
        - "@SystemdLibraries"
       binaries:
-#      - python3*-psutil
+#      - python31?-psutil
 
  - name: "@StandardBuildTools"
    buildconfig: Core/standard
@@ -387,6 +392,14 @@ groups:
        - pkgconf-m4
        - pkgconf-pkg-config
 
+ # This label exists because we need to hide the fact that somewhat oddly,
+ # Glibc sits below gcc runtime
+ - name: "@MinimalCRuntime"
+   buildconfig: Core/standard
+   requires:
+    - "@Glibc"
+    - "@GccRuntime"
+
  - name: "@MinimalCDevelopment"
    description: |
      This defines the set of packages that have to be present in order
@@ -415,6 +428,8 @@ groups:
     - gettext-tools-mini
     - gettext-tools
 
+ # NOTE: This currently includes a lot of LLVM bits, which should probably be separated
+ # the way GCC is
  - name: "@CoreLibraries"
    # when deciding where to place -devel packages for a set of packages spread across
    # several labels (eg libbz2 here, bzip2 in Core0), we want this label to win
@@ -422,7 +437,7 @@ groups:
    buildconfig: Core/standard
    requires:
     - "@CoreConfig"
-    - "@GccRuntime"
+    - "@MinimalCRuntime"
    buildrequires:
     - "@BaseBuildEnv"
    binaries:
@@ -464,6 +479,8 @@ groups:
     - libbrotlienc1
     - libbsd0
     - libbz2-1
+    - libc++1
+    - libc++abi1
     - libcap2
     - libcap-ng0
     - libclang13
@@ -509,6 +526,7 @@ groups:
     - libnpth0
     - libntlm0
     - libnss_usrfiles2
+    - libonig5
     - libopenssl1_1
     - libopenssl3
     - libpci3
@@ -573,7 +591,7 @@ groups:
        - "@Python"
       packages:
        - lldb
-       - python3*-lldb*
+       - python31?-lldb*
        # python bindings for libaudit. By default, they would go to
        # HostSecurity+python, which is way too far up the stack
        - python3-audit
@@ -582,6 +600,11 @@ groups:
        - "@Java"
       binaries:
        - timezone-java
+    - name: vim
+      requires:
+       - "@Vim"
+      binaries:
+       - llvm16-vim-plugins
 
  - name: "@Core0"
    buildconfig: Core/standard
@@ -644,6 +667,8 @@ groups:
     - gzip
     - hardlink
     - hostname
+    - info
+    - info-lang # unfortunately, info requires info-lang
     - kbd
     - keyutils
     - krb5
@@ -704,6 +729,8 @@ groups:
     - zip
     - zsh
     - zstd
+    - freetype2-profile-tti35
+    - system-users
    buildflavors:
     - name: kernellibs
       requires:
@@ -735,6 +762,7 @@ groups:
     - gpg2
     - openldap2
     - openslp
+    - libslp1
     - libduktape*
     - suse-build-key
     - perl-libintl-perl
@@ -927,6 +955,7 @@ groups:
     - name: mailserver
       requires:
        - "@NetworkServices"
+       - "@NetworkServices-doc" # why does pcp-pmda-postfix require postfix-doc?!
       binaries:
        - pcp-pmda-postfix
     - name: database
@@ -970,6 +999,16 @@ groups:
     - "@CoreLibraries-devel"
    packages:
     - ocaml
+
+ - name: "@Spelling"
+   buildconfig: Core/standard
+   requires:
+    - "@Core0"
+    - "@Glib2NoDBus"
+   packages:
+    - myspell-dictionaries
+    - enchant
+    - hunspell
 
  - name: "@Kiwi"
    # maybe place in a separate project
@@ -1256,7 +1295,7 @@ groups:
     - rpm-build-perl
     - python-rpm-generators
     - python-rpm-packaging
-    - python3*-rpm
+    - python31?-rpm
     - obs-service-*
 
  - name: "@Documentation"
@@ -1324,10 +1363,12 @@ groups:
    buildconfig: X11/standard
    requires:
     - "@Core0"
+    - "@PerlCore"
     - "@FontLibraries"
    packages:
     - desktop-file-utils
     - update-desktop-files
+    - xdg-utils
 
  - name: "@DesktopBuild"
    buildconfig: X11/standard
@@ -1507,8 +1548,12 @@ groups:
     - "@PythonCore"
     - "@OpenGL"
     - "@Databases"
-    - "@Gnome"
+#   - "@Gnome"
     - "@PrintServer"
+    - "@DesktopLibraries"
+    - "@Multimedia"
+    - "@PulseAudioLibraries"
+    - "@GnomeLibraries"
    packages:
     - libQt5*
     - libQt6*
@@ -1520,8 +1565,8 @@ groups:
       requires:
        - "@Qt+nfc"
       binaries:
-       - python3*-qt5
-       - python3*-PyQt6*
+       - python31?-qt5
+       - python31?-PyQt6*
     - name: nfc
       requires:
        - "@Smartcards"
@@ -1632,6 +1677,7 @@ groups:
     - "@PrintingLibraries"
     - "@FontLibraries+gnomelibs"
     - "@GraphicsLibraries+gnomelibs"
+    - "@Spelling"
    packages:
     - gsettings-desktop-schemas
     - libgtk-3*
@@ -1706,8 +1752,12 @@ groups:
     - "@ApplicationLibraries"
 #   - "@HostNetworking+gnomelibs"
 #   - "@Flatpak"
+    - "@NetworkManager"
     - "@Bluetooth+systemd"
    packages:
+    - gtk2
+    - gtk3
+    - gtk4
     - geoclue2
     - system-user-srvGeoClue
     - gsettings-*
@@ -1716,7 +1766,6 @@ groups:
     - gnome-*
     - polkit-gnome*
     - xdg-menu
-    - xdg-utils
     - xdg-desktop-portal
     - gcr-viewer*
     - WebKitGTK*
@@ -1870,7 +1919,7 @@ groups:
     - "@SystemdLibraries"
     - "@PythonCore"
    packages:
-    - python3*-psutil
+    - python31?-psutil
 
  - name: "@MinimalDBus"
    buildconfig: Systemd/standard
@@ -2038,7 +2087,7 @@ groups:
       requires:
        - "@Python"
       binaries:
-       - python3*-zypp-plugin
+       - python31?-zypp-plugin
 
  - name: "@DirectoryIntegration"
    buildconfig: Core/standard
@@ -2067,7 +2116,7 @@ groups:
    buildconfig: Core/standard
    requires:
     - "@Core"
-    - "@HostNetworking+gnomelibs"
+    - "@NetworkManager"
    packages:
     - sysvinit
     - syslogd
@@ -2165,13 +2214,14 @@ groups:
     - pam_mount
     - kpartx
     - dmraid
+    - growpart
    buildflavors:
     - name: test
       binaries:
        - lvm2-testsuite
     - name: python
       binaries:
-       - python3*-rtslib-fb
+       - python31?-rtslib-fb
        - python-rtslib-fb-common
 
  - name: "@NetworkStorage"
@@ -2216,6 +2266,8 @@ groups:
     - corosync*
     - pacemaker*
     - cluster-glue
+    - drbd
+    - drbd-utils
 
  - name: "@PublicCloud"
    buildconfig: RobersFavoriteBeer/standard
@@ -2262,6 +2314,7 @@ groups:
     - "@TransactionalServer+systemd"
     - "@BaseBuildEnv"
     - "@HostSecurity"
+    - "@NetworkManager"
 #   - "@SELinux"
    packages:
     - autoyast2
@@ -2656,8 +2709,8 @@ groups:
       requires:
        - "@Core+systemdlibs"
       binaries:
-       - ppp
-       - rp-pppoe
+#      - ppp
+#      - rp-pppoe
     - name: gnomelibs
       requires:
        - "@PythonCore"
@@ -2666,21 +2719,65 @@ groups:
        - "@Qt+python"
        - "@HostNetworking+systemdlibs"
       binaries:
-       - NetworkManager
-       - NetworkManager-wwan
-       - NetworkManager-pppoe
-       - NetworkManager-bluetooth
-       - NetworkManager-branding-SLE
-       - NetworkManager-branding-upstream
-       - libnm0
-       - firewalld
-       - python3-firewall
-       - python3-nftables
+#      - NetworkManager
+#      - NetworkManager-wwan
+#      - NetworkManager-pppoe
+#      - NetworkManager-bluetooth
+#      - NetworkManager-branding-SLE
+#      - NetworkManager-branding-upstream
+#      - ModemManager
+#      - libnm0
+#      - firewalld
+#      - python3-firewall
+#      - python3-nftables
+#      - libmm-glib0
+#      - libqrtr
+#      - libqmi
+#      - libmbim
     - name: gui
       requires:
        - "@Gnome"
        - "@Qt+python"
        - "@HostNetworking+gnomelibs"
+       - "@PythonStandard+desktop"
+      binaries:
+#      - wpa_supplicant-gui
+#      - firewall-config
+#      - firewall-applet
+
+ - name: "@NetworkManager"
+   buildconfig: Core/standard
+   requires:
+    - "@HostNetworking"
+    - "@MinimalSystemd"
+    - "@GnomeLibraries"
+    - "@Console"
+    - "@PythonStandard+gnome"
+    - "@Qt+python"
+    - "@Kernel"         # for openvswitch
+   packages:
+    - ppp
+    - rp-pppoe
+    - NetworkManager
+    - NetworkManager-wwan
+    - NetworkManager-pppoe
+    - NetworkManager-bluetooth
+    - NetworkManager-branding-SLE
+    - NetworkManager-branding-upstream
+    - ModemManager
+    - libnm0
+    - firewalld
+    - python3-firewall
+    - python3-nftables
+    - libmm-glib0
+#   - libqrtr
+#   - libqmi
+#   - libmbim
+   buildflavors:
+    - name: gui
+      requires:
+       - "@Gnome"
+       - "@Qt+python"
        - "@PythonStandard+desktop"
       binaries:
        - wpa_supplicant-gui
@@ -2711,6 +2808,7 @@ groups:
        - libcairomm-1*
        - cairo-tools
        - libcairo-script-interpreter2
+       - netpbm
     - name: opengpl
       requires:
        - "@OpenGL"
@@ -2968,6 +3066,15 @@ groups:
        - "@Python"
       binaries:
 
+ - name: "@NetworkToys"
+   buildconfig: Network/standard
+   requires:
+    - "@NetworkCore"
+    - "@CoreServices"
+    - "@MinimalSystemd"
+    - "@Perl"
+   packages:
+
  - name: "@MailClient"
    buildconfig: Network/standard
    requires:
@@ -3017,7 +3124,6 @@ groups:
     - "@Console"
     - "@XMLPlus"
    packages:
-    - elinks
     - w3m
    buildflavors:
     - name: x11
@@ -3025,6 +3131,11 @@ groups:
        - "@X11Libraries"
       binaries:
        - w3m-inline-image
+    - name: ruby
+      requires:
+       - "@Ruby"
+      packages:
+       - elinks
 
  - name: "@SambaLibraries"
    buildconfig: Network/standard
@@ -3221,53 +3332,53 @@ groups:
     - "@TclCore"
     - "@SystemdUtilities"
    packages:
-    - python3*-alabaster
-    - python3*-apipkg
-    - python3*-Babel
-    - python3*-certifi
-    - python3*-cffi
-    - python3*-charset-normalizer
-    - python3*-cryptography
-    - python3*-cssselect
-    - python3*-curses
-    - python3*-dbus-python
-    - python3*-decorator
-    - python3*-docopt
-    - python3*-docutils
-    - python3*-future
-    - python3*-gobject
-    - python3*-idna
-    - python3*-imagesize
-    - python3*-iniconfig
-    - python3*-Jinja2
-    - python3*-langtable
-    - python3*-libxml2
-    - python3*-lxml
-    - python3*-MarkupSafe
-    - python3*-notify2
-    - python3*-packaging
-    - python3*-pexpect
-    - python3*-py
-    - python3*-pycparser
-    - python3*-pycurl
-    - python3*-Pygments
-    - python3*-pyOpenSSL
-    - python3*-python-dateutil
-    - python3*-pytz
-    - python3*-PyYAML
-    - python3*-requests
-    - python3*-slip-dbus
-    - python3*-snowballstemmer
-    - python3*-sphinx*
-    - python3*-Sphinx
-    - python3*-tk
-    - python3*-urllib3
+    - python31?-alabaster
+    - python31?-apipkg
+    - python31?-Babel
+    - python31?-certifi
+    - python31?-cffi
+    - python31?-charset-normalizer
+    - python31?-cryptography
+    - python31?-cssselect
+    - python31?-curses
+    - python31?-dbus-python
+    - python31?-decorator
+    - python31?-docopt
+    - python31?-docutils
+    - python31?-future
+    - python31?-gobject
+    - python31?-idna
+    - python31?-imagesize
+    - python31?-iniconfig
+    - python31?-Jinja2
+    - python31?-langtable
+    - python31?-libxml2
+    - python31?-lxml
+    - python31?-MarkupSafe
+    - python31?-notify2
+    - python31?-packaging
+    - python31?-pexpect
+    - python31?-py
+    - python31?-pycparser
+    - python31?-pycurl
+    - python31?-Pygments
+    - python31?-pyOpenSSL
+    - python31?-python-dateutil
+    - python31?-pytz
+    - python31?-PyYAML
+    - python31?-requests
+    - python31?-slip-dbus
+    - python31?-snowballstemmer
+    - python31?-sphinx*
+    - python31?-Sphinx
+    - python31?-tk
+    - python31?-urllib3
    buildflavors:
     - name: graphics
       augments:
        - "@GraphicsLibraries+x11"
       binaries:
-       - python3*-pycairo
+       - python31?-pycairo
       purposes:
        - name: devel
          requires:
@@ -3279,9 +3390,9 @@ groups:
        - "@DesktopLibraries"
        - "@PythonStandard+graphics"
       binaries:
-       - python3*-gobject-*
-       - python3*-Send2Trash
-       - python3*-gobject-Gdk
+       - python31?-gobject-*
+       - python31?-Send2Trash
+       - python31?-gobject-Gdk
     - name: database
       requires:
        - "@Databases"
@@ -3289,7 +3400,7 @@ groups:
       requires:
        - "@Texlive"
       packages:
-       - python3*-Sphinx-latex
+       - python31?-Sphinx-latex
 
  - name: "@PythonModules"
    buildconfig: Python/standard
@@ -3298,10 +3409,8 @@ groups:
     - "@PythonStandard"
    products:
     - SLE-Module-Python*
-   rpmGroups:
-    - Development/*/Python
    binaries:
-    - python-*
+#   - python-*
 #   - python3*
 
  - name: "@PythonMatplot"
@@ -3310,29 +3419,29 @@ groups:
     - "@PythonStandard+graphics"
     - "@SystemdUtilities"
    packages:
-    - python3*-matplotlib
-    - python3*-matplotlib-tk
+    - python31?-matplotlib
+    - python31?-matplotlib-tk
    buildflavors:
     - name: qt
       requires:
        - "@Qt+python"
       binaries:
-       - python3*-matplotlib-qt*
+       - python31?-matplotlib-qt*
     - name: gnome
       requires:
        - "@Gnome"
       binaries:
-       - python3*-gtk*
+       - python31?-matplotlib-gtk*
     - name: tex
       requires:
        - "@Texlive"
       binaries:
-       - python3*-matplotlib-latex
+       - python31?-matplotlib-latex
     - name: wxwidgets
       requires:
        - "@WxWidgets"
       binaries:
-       - python3*-matplotlib-wx
+       - python31?-matplotlib-wx
 
  - name: "@Jupyter"
    buildconfig: Python/standard
@@ -3341,12 +3450,13 @@ groups:
    packages:
     - python-nbdime
     - jupyter-*
-    - python3*-jupyter
-    - python3*-jupyter-server
-#   - python3*-jupyter*
-#   - python3*-notebook*
-#   - python3*-nbclassic
-#   - python3*-nbconvert
+    - python31?-jupyter
+    - python31?-jupyter-server
+#   - python31?-ipython
+#   - python31?-jupyter*
+#   - python31?-notebook*
+#   - python31?-nbclassic
+#   - python31?-nbconvert
    buildflavors: 
     - name: tex
       requires:
@@ -3365,6 +3475,7 @@ groups:
     - ruby
     - ruby2.5
     - ruby3.2-rubygem-gem2rpm
+    - libruby3_2*
     - rubygem-*
     - ruby-common
 
@@ -3534,6 +3645,7 @@ groups:
     - "@DrawingLibraries"
     # does it make sense to ship php without datatbase support?
     - "@Databases"
+    - "@Spelling"
    rpmGroups:
     - Development/*/PGP
    packages:
@@ -3676,7 +3788,7 @@ groups:
     - "@Kernel"
    packages:
     - salt
-    - python3*-salt priority=0
+    - python31?-salt priority=0
 
  - name: "@Texlive"
    buildconfig: Texlive/standard

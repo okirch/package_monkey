@@ -141,6 +141,12 @@ class PartialOrder(object):
 				result.update(self.upwardClosureFor(key))
 		return result
 
+	def isBelow(self, key1, key2):
+		return key1 in self.downwardClosureFor(key2)
+
+	def isAbove(self, key1, key2):
+		return key1 in self.upwardClosureFor(key2)
+
 	def subsetIsBelow(self, subset, key):
 		return subset.issubset(self.downwardClosureFor(key))
 

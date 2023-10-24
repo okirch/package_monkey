@@ -4,3 +4,5 @@ LOG
 *.csv
 .*.swp
 *.db
+*.o
+*.so

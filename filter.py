@@ -2258,7 +2258,8 @@ class PotentialClassification(object):
 #					candidates = self.labelOrder.maxima(candidates)
 
 				if len(candidates) > 1:
-					# infomsg(f"{self.node} is still ambiguous [{' '.join(map(str, candidates))}]")
+					if self.trace:
+						infomsg(f"{self.node} is still ambiguous [{' '.join(map(str, candidates))}]")
 					return None
 
 				choice = next(iter(candidates))
@@ -2289,6 +2290,8 @@ class PotentialClassification(object):
 			self.triedBaseLabels = set()
 			self.goodBaseLabels = {}
 
+			self.trace = False
+
 		def __str__(self):
 			return self.name
 
@@ -2296,6 +2299,9 @@ class PotentialClassification(object):
 			self.children.append(packagePlacement)
 			self.packageDict[pkg] = packagePlacement
 			self.packageCount += 1
+
+			if packagePlacement.trace:
+				self.trace = True
 
 		@property
 		def isFinal(self):
@@ -2397,7 +2403,7 @@ class PotentialClassification(object):
 			for packagePlacement in self.unsolved:
 				choice = packagePlacement.deriveChoiceFromBaseLabel(baseLabel)
 				if choice is None:
-					if packagePlacement.trace:
+					if self.trace:
 						infomsg(f"{self}: incompatible base label {baseLabel} - no candidate for {packagePlacement}")
 					self.goodBaseLabels[baseLabel] = None
 					return None
@@ -2457,18 +2463,16 @@ class PotentialClassification(object):
 				infomsg(f"{self} has no common base labels");
 				return False
 
-			trace = any(packagePlacement.trace for packagePlacement in self.children)
-
 			infomsg(f"{self} has common base labels {' '.join(map(str, commonBaseLabels))}");
 			# commonBaseLabels = self.preferences.filterCandidates(commonBaseLabels)
 
 			goodLabels = set()
 			for baseLabel in commonBaseLabels:
 				if self.canSolveUsingBaseLabel(baseLabel):
-					if trace: infomsg(f"   + {baseLabel}")
+					if self.trace: infomsg(f"   + {baseLabel}")
 					goodLabels.add(baseLabel)
 				else:
-					if trace: infomsg(f"   - {baseLabel}")
+					if self.trace: infomsg(f"   - {baseLabel}")
 
 			if not goodLabels:
 				infomsg(f"{self} has common base labels, but none of them can solve");

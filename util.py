@@ -2,6 +2,7 @@
 # Miscellaneous utility classes
 #
 import time
+import fnmatch
 
 # A simple class for batched processing
 # You can use this when you have a long-running data processing loop

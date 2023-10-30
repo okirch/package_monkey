@@ -1376,14 +1376,6 @@ class PotentialClassification(object):
 				infomsg(f" {self}: add upper neighbor {upperNeighbor}; upper cone:")
 				displayLabelSetFull(self.upperCone, indent = "   ")
 
-		def describeCone(self, cone):
-			if cone is None:
-				return "undefined"
-			if not cone:
-				return "empty"
-			names = list(map(str, cone))
-			return ' '.join(names)
-
 		def filterCandidateLabels(self, candidateLabels, quiet = False):
 			candidateLabels = intersectSets(candidateLabels, self.lowerCone)
 			if candidateLabels and len(candidateLabels) > 1:
@@ -1424,7 +1416,16 @@ class PotentialClassification(object):
 				# no further constraints
 				return
 
+			if self._trace:
+				before = renderLabelSet("candidates", self.candidates)
+
 			self._candidates = intersectSets(self.candidates, permittedLabels)
+
+			if self._trace:
+				after = renderLabelSet("candidates", self.candidates)
+				infomsg(f" {self}: constrained candidates from {before} to {after}")
+				cons = renderLabelSet("permitted labels", permittedLabels);
+				infomsg(f"  constraints: {cons}")
 
 		@property
 		def candidates(self):

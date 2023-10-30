@@ -13,8 +13,8 @@ import fastsets.fastsets as fastsets
 initialPlacementLogger = loggingFacade.getLogger('initial')
 debugInitialPlacement = initialPlacementLogger.debug
 
-# fixme define a logger for this
-optPackageCycleDebug = 0
+cycleLogger = loggingFacade.getLogger('cycles')
+debugPackageCycles = cycleLogger.debug
 
 def intersectSets(a, b):
 	if a is None:
@@ -28,10 +28,6 @@ def boundingSetIsEmpty(a):
 		return False
 	assert(type(a) == set)
 	return not bool(a)
-
-def debugPackageCycles(*args, **kwargs):
-	if optPackageCycleDebug:
-		print(*args, **kwargs)
 
 def renderLabelSet(name, labels):
 	if labels is None:

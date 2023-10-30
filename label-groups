@@ -21,12 +21,6 @@ infomsg(f"Fingerprint hash for classificationScheme is {classificationScheme.fin
 
 labelOrder = classificationScheme.createOrdering(Classification.TYPE_BINARY)
 
-potentialClassification = PotentialClassification(classificationScheme, labelOrder)
-
-# we should get this from filter.yaml
-potentialClassification.definePreference("@Gnome", ["@DesktopLibraries", ])
-potentialClassification.definePreference("@MinimalCRuntime", ["@GccRuntime", "@Glibc"])
-
 packageSelector = PackageSelector()
 collection = PackageCollection()
 
@@ -82,7 +76,8 @@ if productArchitecture is None:
 	raise Exception("database does not record architecture of original query")
 
 resolverContext = worker.contextForArch(productArchitecture)
-classificationContext = Classification.ClassificationContext(worker, productArchitecture, labelOrder, store)
+classificationContext = Classification.ClassificationContext(worker, productArchitecture,
+					classificationScheme, labelOrder, store)
 
 def classifyAutoFlavors(label, labelledPackages):
 	# Do not apply auto-flavors to groups that are already a flavor of some other group.
@@ -115,11 +110,6 @@ def classifyAutoFlavors(label, labelledPackages):
 			flavorLabel = label.getBuildFlavor(flavorDef.name)
 			relabeled = classifier.labelFlavoredPackages(flavorDef.name, flavorLabel)
 			packageFilter.updateGroup(flavorLabel, relabeled)
-
-def classifyRuntimeDependenciesFlexible(labelledPackages):
-	# Step 1: build the runtime dependency closure
-	classifier = Classification.FlexibleDownwardClosure(classificationContext, potentialClassification)
-	classifier.classify(labelledPackages)
 
 def classifyRuntimeDependencies(label):
 	global binaryTraversal
@@ -205,12 +195,13 @@ for label in labelOrder.bottomUpTraversal():
 	group = packageFilter.makeBinaryGroup(label.name)
 	classifyAutoFlavors(label, group.packages)
 
-classifier = Classification.FlexibleDownwardClosure(classificationContext, potentialClassification)
-#for label in labelOrder.bottomUpTraversal():
-#	group = packageFilter.makeBinaryGroup(label.name)
-#	classifier.classify(group.closure)
-classifier.classify(collection)
+solvingTree = Classification.buildSolvingTree(classificationContext, collection)
 
+potentialClassification = PotentialClassification(solvingTree)
+
+# we should get this from filter.yaml
+potentialClassification.definePreference("@Gnome", ["@DesktopLibraries", ])
+potentialClassification.definePreference("@MinimalCRuntime", ["@GccRuntime", "@Glibc"])
 verdict = potentialClassification.solve()
 
 # not very efficient

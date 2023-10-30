@@ -38,7 +38,8 @@ class OrderedSetMember(object):
 		return other.key in self._downwardClosure
 
 class PartialOrder(object):
-	def __init__(self, name, allowUnknownKeys = False):
+	def __init__(self, domain, name, allowUnknownKeys = False):
+		self.domain = domain
 		self.name = name
 		self.guard = CycleDetector(name)
 		self._unsorted = {}
@@ -48,12 +49,14 @@ class PartialOrder(object):
 
 		self._hidden = None
 
+		self._setClass = domain.set
+
 	def __contains__(self, name):
 		return node in self._unsorted
 
 	@property
 	def allkeys(self):
-		return set(self._unsorted.keys())
+		return self._setClass(self._unsorted.keys())
 
 	def add(self, key, below):
 		assert(not self._final)
@@ -71,7 +74,7 @@ class PartialOrder(object):
 
 	def hide(self, hiddenSet):
 		if self._hidden is None:
-			self._hidden = set()
+			self._hidden = self._setClass()
 
 		self._hidden.update(hiddenSet)
 		for key in hiddenSet:
@@ -128,14 +131,14 @@ class PartialOrder(object):
 		return self.filterKeys(node._upwardClosure)
 
 	def downwardClosureForSet(self, keySet):
-		result = set()
+		result = self._setClass()
 		for key in keySet:
 			if key not in result:
 				result.update(self.downwardClosureFor(key))
 		return result
 
 	def upwardClosureForSet(self, keySet):
-		result = set()
+		result = self._setClass()
 		for key in keySet:
 			if key not in result:
 				result.update(self.upwardClosureFor(key))
@@ -157,13 +160,13 @@ class PartialOrder(object):
 		found = self.maxima(subset)
 		if len(found) != 1:
 			return None
-		return found[0]
+		return found.pop()
 
 	def minimumOf(self, subset):
 		found = self.minima(subset)
 		if len(found) != 1:
 			return None
-		return found[0]
+		return found.pop()
 
 	def minima(self, subset):
 		remaining = self.getNodesForSet(subset)
@@ -197,8 +200,7 @@ class PartialOrder(object):
 					assert(not (n1 >= n2))
 					assert(not (n1 <= n2))
 
-		# FIXME: why are we returning a list rather than a set?
-		return list(map(lambda node: node.key, result))
+		return self._setClass(map(lambda node: node.key, result))
 
 	def maxima(self, subset):
 		remaining = self.getNodesForSet(subset)
@@ -224,11 +226,10 @@ class PartialOrder(object):
 			for m in dropped:
 				result.remove(m)
 
-		# FIXME: why are we returning a list rather than a set?
-		return list(map(lambda node: node.key, result))
+		return self._setClass(map(lambda node: node.key, result))
 
 	def unboundedElements(self, subset):
-		result = set()
+		result = self._setClass()
 
 		for node in self.getNodesForSet(subset):
 			if not node.above:
@@ -322,7 +323,7 @@ class PartialOrder(object):
 		# Update the downward closure of each node
 		# The closure is not a set of OrderedSetMembers, but a set of keys
 		for node in self._sorted:
-			closure = set()
+			closure = self._setClass()
 			closure.add(node.key)
 			for lower in node.below:
 				closure.update(lower._downwardClosure)
@@ -331,7 +332,7 @@ class PartialOrder(object):
 		# Update the upward closure of each node
 		# The closure is not a set of OrderedSetMembers, but a set of keys
 		for node in reversed(self._sorted):
-			closure = set()
+			closure = self._setClass()
 			closure.add(node.key)
 			for lower in node.above:
 				closure.update(lower._upwardClosure)

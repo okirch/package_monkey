@@ -7,6 +7,9 @@ from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from ordered import PartialOrder
 from functools import reduce
 
+# hack until I'm packaging fastsets properly
+import fastsets.fastsets as fastsets
+
 initialPlacementLogger = loggingFacade.getLogger('initial')
 debugInitialPlacement = initialPlacementLogger.debug
 
@@ -88,8 +91,12 @@ class Classification:
 	DISPOSITION_MAYBE_MERGE = 'maybe_merge'
 	DISPOSITION_IGNORE = 'ignore'
 
-	class Label:
+	domain = fastsets.Domain("label")
+
+	class Label(domain.member):
 		def __init__(self, name, type, id):
+			super().__init__()
+
 			self.name = name
 			self.type = type
 			self.id = id
@@ -430,6 +437,22 @@ class Classification:
 
 			return f"{self.name} ({', '.join(attrs)})"
 
+	# rather than a regular python set, this creates a fastset that will only
+	# accept members from the label domain.
+	@classmethod
+	def createLabelSet(klass, initialValues = None):
+		return klass.domain.set(initialValues)
+
+	@classmethod
+	def baseLabelsForSet(klass, labels):
+		# for a base label, return self. For a derived label, return immediate parent
+		def transform(label): return label.parent or label
+
+		# if we ever allow more than 3 components in a label name, this needs to be adjusted
+		result = klass.createLabelSet(map(transform, labels))
+		result = klass.createLabelSet(map(transform, result))
+		return result
+
 	# return the list of labels rated highest (ie with the lowest priority value)
 	@staticmethod
 	def filterLabelsByGravity(labels):
@@ -570,7 +593,7 @@ class Classification:
 
 			good = True
 
-			order = PartialOrder("runtime dependency")
+			order = PartialOrder(Classification.domain, "runtime dependency")
 			for label in self._labels.values():
 				if label.type is labelType:
 					for rt in label.runtimeRequires:
@@ -1223,20 +1246,24 @@ class Classification:
 			raise Exception()
 
 class PotentialClassification(object):
+	domain = fastsets.Domain("nodes")
+
 	# Not really an interval but a convex set
-	class LabelInterval:
+	class LabelInterval(domain.member):
 		def __init__(self, order, name, package = None, cycle = None):
 			assert(package or cycle)
+
+			super().__init__()
 
 			self.name = name
 			self.package = package
 			self.siblings = None
 			self._cycle = cycle
 			self._order = order
-			self._lowerNeighbors = set()
-			self._upperNeighbors = set()
-			self.upperBounds = set()
-			self.lowerBounds = set()
+			self._lowerNeighbors = PotentialClassification.createNodeSet()
+			self._upperNeighbors = PotentialClassification.createNodeSet()
+#			self.upperBounds = set()
+#			self.lowerBounds = set()
 			self._lowerCone = None
 			self._upperCone = None
 			self._candidates = None
@@ -1373,7 +1400,7 @@ class PotentialClassification(object):
 				# a) If we have Foo-devel, Foo+python-devel, Foo+somethingelse-devel, we want to
 				#    return Foo-devel
 				if len(candidateLabels) > 1:
-					baseLabels = set()
+					baseLabels = Classification.createLabelSet()
 					for label in candidateLabels:
 						# For @Foo+flavor-purpose, look up @Foo-purpose
 						label = label.findSibling(None, label.purposeName)
@@ -1490,7 +1517,7 @@ class PotentialClassification(object):
 			self.packages = []
 			self.sources = []
 
-			self.labels = set()
+			self.labels = Classification.createLabelSet()
 			for rpm in build.binaries:
 				if rpm.isSourcePackage:
 					self.sources.append(rpm)
@@ -1515,7 +1542,7 @@ class PotentialClassification(object):
 
 		@property
 		def sourceLabels(self):
-			result = set()
+			result = Classification.createLabelSet()
 			for pkg in self.sources:
 				if pkg.label:
 					result.add(pkg.label)
@@ -1523,7 +1550,12 @@ class PotentialClassification(object):
 
 		@property
 		def baseLabels(self):
-			result = set()
+			if len(self.labels) > 20:
+				result = Classification.createLabelSet(map(lambda label: label.parent or label, self.labels))
+				result = Classification.createLabelSet(map(lambda label: label.parent or label, result))
+				return result
+
+			result = Classification.createLabelSet()
 			for label in self.labels:
 				while label.parent:
 					label = label.parent
@@ -1619,6 +1651,10 @@ class PotentialClassification(object):
 			pkg.label = label
 			pkg.labelReason = reason
 
+	@classmethod
+	def createNodeSet(klass, initialValues = None):
+		return klass.domain.set(initialValues)
+
 	def addEdge(self, requiringPackage, requiredPackage):
 		# Do not add packages that are labeled with disposition ignored
 		if requiringPackage.label and requiringPackage.label.disposition == Classification.DISPOSITION_IGNORE:
@@ -1664,7 +1700,7 @@ class PotentialClassification(object):
 		return interval
 
 	def collapse(self, cycle):
-		cycleSet = set(cycle)
+		cycleSet = PotentialClassification.createNodeSet(cycle)
 		cyclePackages = reduce(set.union, (interval.packages for interval in cycle))
 		cycleNames = list(map(str, cyclePackages))
 
@@ -1672,7 +1708,7 @@ class PotentialClassification(object):
 			names =  list(map(str, cycle))
 			infomsg(f"Detected non-trivial cycle {' -> '.join(names)}")
 
-		labels = set()
+		labels = Classification.createLabelSet()
 		for node in cycle:
 			if node.solution is not None:
 				labels.add(node.solution)
@@ -1711,7 +1747,7 @@ class PotentialClassification(object):
 		debugPackageCycles(f"Collapsed dependency cycle {newInterval}, label {label}")
 
 	def createPartialOrder(self):
-		order = PartialOrder("node runtime dependency")
+		order = PartialOrder(self.domain, "node runtime dependency")
 
 		seen = set()
 		for interval in self._packages.values():
@@ -1866,7 +1902,7 @@ class PotentialClassification(object):
 					seen.add(node.siblings)
 
 		for siblings in builds:
-			candidateLabels = set()
+			candidateLabels = Classification.createLabelSet()
 			purposes = []
 			for pkg in siblings:
 				node = self.getPackage(pkg)
@@ -1894,7 +1930,7 @@ class PotentialClassification(object):
 					warnmsg(f"{siblingPackage} was already placed through a different sibling (most likely it's part of a dependency cycle)")
 					continue
 
-				candidatePurposes = set(map(lambda label: label.getObjectPurpose(siblingPurposeLabel.name), candidateLabels))
+				candidatePurposes = Classification.createLabelSet(map(lambda label: label.getObjectPurpose(siblingPurposeLabel.name), candidateLabels))
 
 				labels = sibNode.filterCandidateLabels(candidatePurposes)
 				if not labels:
@@ -1964,7 +2000,7 @@ class PotentialClassification(object):
 
 		def addValidBaseLabel(self, name):
 			if self.validBaseLabels is None:
-				self.validBaseLabels = set()
+				self.validBaseLabels = Classification.createLabelSet()
 			self.validBaseLabels.add(name)
 
 		def preFilterCandidateLabels(self, candidates, flavor = None, purpose = None):
@@ -1973,22 +2009,24 @@ class PotentialClassification(object):
 				return candidates
 
 			if flavor:
-				candidates = set(filter(lambda label: label.flavorName == flavor, candidates))
+				candidates = Classification.createLabelSet(filter(lambda label: label.flavorName == flavor, candidates))
 			if purpose:
-				candidates = set(filter(lambda label: label.purposeName == purpose, candidates))
+				candidates = Classification.createLabelSet(filter(lambda label: label.purposeName == purpose, candidates))
 			return candidates
 
-		def constrainComponents(self, candidates):
-			# everything goes
-			if candidates is not None and self.validComponents is not None:
-				candidates = set(filter(lambda label: label.componentName in self.validComponents, candidates))
-			return candidates
+		def constrainComponents(self, packagePlacement):
+			if packagePlacement.candidates is not None and self.validComponents is not None:
+				preferred = Classification.createLabelSet(filter(lambda label: label.componentName in self.validComponents, packagePlacement.candidates))
+				if packagePlacement.trace:
+					diff = packagePlacement.candidates.difference(preferred)
+					infomsg(f" {packagePlacement}: constraining further by removing {' '.join(map(str, diff))}")
+				packagePlacement.candidates = preferred
 
 	class PlacementPreferences(object):
 		class Hint:
 			def __init__(self, preferredLabel, others):
 				self.preferred = preferredLabel
-				self.others = others
+				self.others = Classification.createLabelSet(others)
 				if preferredLabel in self.others:
 					self.others.remove(preferredLabel)
 
@@ -2037,7 +2075,7 @@ class PotentialClassification(object):
 
 		@property
 		def baseLabels(self):
-			return set((self.label.baseLabel, ))
+			return Classification.createLabelSet((self.label.baseLabel, ))
 
 		def reportVerdict(self, node, verdict):
 			pass
@@ -2079,13 +2117,13 @@ class PotentialClassification(object):
 			if self.candidates is None:
 				return None
 
-			return set(map(lambda label: label.baseLabel, self.candidates))
+			return Classification.createLabelSet(map(lambda label: label.baseLabel, self.candidates))
 
 		def applyConstraints(self, constraints):
 			if not self.candidates:
 				return
 
-			self.candidates = constraints.constrainComponents(self.candidates)
+			constraints.constrainComponents(self)
 
 		# The node corresponds to a package that has been auto-labelled as "devel" (purpose)
 		# or "python" (flavor). Reduce the list of candidates to those that have a matching
@@ -2107,12 +2145,12 @@ class PotentialClassification(object):
 				if self.flavor is not None and self.flavor is not label:
 					return self.fail(f"conflicting purposes {self.flavor} and {flavorName} - this will never work")
 
-				self.candidates = set(filter(lambda label: label.flavorName == flavorName, candidates))
+				self.candidates = Classification.createLabelSet(filter(lambda label: label.flavorName == flavorName, candidates))
 
 				# if the autoflavor has a disposition of maybe_merge, check for any base labels that
 				# cover all requirements of the autoflavor
 				if label.disposition == Classification.DISPOSITION_MAYBE_MERGE:
-					merged = set(filter(lambda l: l.parent is None and l.autoFlavorCanBeMerged(label), candidates))
+					merged = Classification.createLabelSet(filter(lambda l: l.parent is None and l.autoFlavorCanBeMerged(label), candidates))
 					self.candidates.update(merged)
 					if self.trace:
 						infomsg(f"   {self}: {label} got merged into {len(merged)} candidates")
@@ -2123,7 +2161,7 @@ class PotentialClassification(object):
 				if self.purpose is not None and self.purpose is not label:
 					return self.fail(f"conflicting purposes {self.purpose} and {purposeName} - this will never work")
 
-				self.candidates = set(filter(lambda label: label.purposeName == purposeName, candidates))
+				self.candidates = Classification.createLabelSet(filter(lambda label: label.purposeName == purposeName, candidates))
 				self.purpose = label
 			else:
 				raise Exception(f"{self}: Unexpected label {label} type {label.type}")
@@ -2170,7 +2208,7 @@ class PotentialClassification(object):
 					self.setSolution(maxLabel)
 					return True
 
-				baseLabels = set(label.baseLabel for label in max)
+				baseLabels = Classification.createLabelSet(label.baseLabel for label in max)
 				if len(baseLabels) == 1:
 					maxLabel = next(iter(baseLabels))
 					if maxLabel in self.candidates:
@@ -2183,7 +2221,7 @@ class PotentialClassification(object):
 				infomsg(f"{node} has no parent and ambiguous constraints {renderLabelSet('max candidates', max)}")
 				return
 
-			labels = set()
+			labels = Classification.createLabelSet()
 			for neigh in node.upperNeighbors:
 				if neigh.placement is None:
 					infomsg(f"Why on earth does {neigh} not have a placement object?")
@@ -2233,7 +2271,7 @@ class PotentialClassification(object):
 				return baseLabel
 			else:
 				# filter those candidates that have the chosen base label
-				candidates = set(filter(lambda label: label.baseLabel == baseLabel, candidates))
+				candidates = Classification.createLabelSet(filter(lambda label: label.baseLabel == baseLabel, candidates))
 
 				if self.trace:
 					infomsg(f"### {self} candidates={' '.join(map(str, candidates))}")
@@ -2250,7 +2288,7 @@ class PotentialClassification(object):
 					# If the package has not been labelled for a specific purpose, check if
 					# we get better results by hiding all candidates that do have one
 					if self.purpose is None:
-						generic = set(filter(lambda label: label.purposeName == None, candidates))
+						generic = Classification.createLabelSet(filter(lambda label: label.purposeName == None, candidates))
 						if generic:
 							candidates = generic
 
@@ -2287,7 +2325,7 @@ class PotentialClassification(object):
 			self.children = []
 			self.packageDict = {}
 
-			self.triedBaseLabels = set()
+			self.triedBaseLabels = Classification.createLabelSet()
 			self.goodBaseLabels = {}
 
 			self.trace = False
@@ -2466,7 +2504,7 @@ class PotentialClassification(object):
 			infomsg(f"{self} has common base labels {' '.join(map(str, commonBaseLabels))}");
 			# commonBaseLabels = self.preferences.filterCandidates(commonBaseLabels)
 
-			goodLabels = set()
+			goodLabels = Classification.createLabelSet()
 			for baseLabel in commonBaseLabels:
 				if self.canSolveUsingBaseLabel(baseLabel):
 					if self.trace: infomsg(f"   + {baseLabel}")
@@ -2496,7 +2534,7 @@ class PotentialClassification(object):
 			if not self.solved:
 				return False
 
-			compatibleBaseLabels = set()
+			compatibleBaseLabels = Classification.createLabelSet()
 			for placement in self.solved:
 				baseLabel = placement.label.baseLabel
 				if self.canSolveUsingBaseLabel(baseLabel):
@@ -2687,9 +2725,10 @@ class PotentialClassification(object):
 
 		if tentativePlacement.isFinal:
 			infomsg(f"{tentativePlacement}: completely solved")
-			return False
+			return True
 
-		return True
+		infomsg(f"{tentativePlacement}: remains to be solved")
+		return False
 
 	def constrainPackagesWithAutomaticLabels(self, order):
 		flavorConstrained = {}
@@ -2922,7 +2961,7 @@ class PotentialClassification(object):
 			elif interval.labelIsValidCandidate(baseLabel):
 				choice = baseLabel
 			else:
-				goodFlavors = set()
+				goodFlavors = Classification.createLabelSet()
 				for flavor in baseLabel.flavors:
 					if interval.labelIsValidCandidate(flavor):
 						goodFlavors.add(flavor)
@@ -2986,7 +3025,7 @@ class PotentialClassification(object):
 						return
 					infomsg(f"    {tag}")
 
-					found = set()
+					found = Classification.createLabelSet()
 					for neigh in neighbors:
 						if neigh.solution:
 							infomsg(f"      {neigh} [{neigh.solution}]")
@@ -3023,7 +3062,7 @@ class PotentialClassification(object):
 	def baseLabelsForSet(self, labels):
 		if labels is None:
 			return None
-		return set(map(lambda label: label.parent or label, labels))
+		return Classification.createLabelSet(map(lambda label: label.parent or label, labels))
 
 	def reportEmptyLowerCone(self, interval):
 		infomsg(f"{interval} has an actual conflict between its requirements")
@@ -3917,7 +3956,30 @@ class PackageFilterSet:
 				filterSet.finalize()
 				self._applicableFilters.append(filterSet)
 
+	def applyVerbosely(self, pkg, product):
+		matches = []
+		for filterSet in self._applicableFilters:
+			verdict = filterSet.apply(pkg, product)
+			if verdict is not None:
+				matches.append(verdict)
+
+		if not matches:
+			infomsg(f"{pkg}: no match by package filter")
+			return None
+
+		verdict = matches.pop(0)
+		infomsg(f"{pkg}: {verdict.label} {verdict.reason}")
+
+		if matches:
+			infomsg(f"   {len(matches)} lower priority matches were ignored:")
+			for other in matches:
+				infomsg(f"      {other.label} {other.reason}")
+
+		return verdict
+
 	def apply(self, pkg, product):
+		if pkg.trace:
+			return self.applyVerbosely(pkg, product)
 		for filterSet in self._applicableFilters:
 			verdict = filterSet.apply(pkg, product)
 			if verdict is not None:

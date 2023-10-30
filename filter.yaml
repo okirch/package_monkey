@@ -5,6 +5,8 @@ autoflavors:
    # labelled Foo+perl into Foo itself. Otherwise, behave like
    # disposition "separate"
    disposition: maybe_merge
+   # A perl package that do not have special dependencies go to @Perl
+   defaultlabel: "@Perl"
    requires:
     - "@PerlCore"
    packages:
@@ -62,6 +64,9 @@ autoflavors:
    # these shouldn't really end up in a different multibuild flavor
    packages:
     - system-user-*
+    # prevent system-user-man from being mis-classified as a man package.
+    # Took me some time to figure out why the algorithm couldn't place it at all
+    - system-user-man priority=0
 
 purposes:
  - name: devel
@@ -767,9 +772,9 @@ groups:
     - suse-build-key
     - perl-libintl-perl
    buildflavors:
-    - name: gnome
+    - name: glib2
       requires:
-       - "@GnomeLibraries"
+       - "@Glib2"
       packages:
        - tpm2.0-abrmd
        - libtss2-tcti-tabrmd0
@@ -960,9 +965,10 @@ groups:
        - pcp-pmda-postfix
     - name: database
       requires:
-       - "@Databases+perl"
+       - "@Databases"
       binaries:
        - pcp-pmda-mysql
+       - pcp-pmda-oracle
     - name: qt
       requires:
        - "@Qt"
@@ -1047,6 +1053,12 @@ groups:
     - selinux-policy-sandbox
     - policycoreutils-python-utils
     - python3-policycoreutils
+   buildflavors:
+    - name: glib
+      requires:
+       - "@Glib2"
+      packages:
+       - restorecond
 
  - name: "@Console"
    buildconfig: Core/standard
@@ -1454,6 +1466,13 @@ groups:
     - util-macros
     - xkeyboard-config
     - xbitmaps
+    - libXevie
+    - libXfontcache
+    - libXfont
+    - libxkbui
+    - libXprintAppUtil
+    - libXvMC
+    - fontcacheproto
    purposes:
     - name: devel
       requires:
@@ -1506,6 +1525,8 @@ groups:
     - xsetroot
     - xterm
     - xtermset
+    - xcursorgen
+    - xeyes
    purposes:
     - name: devel
       requires:
@@ -2158,6 +2179,8 @@ groups:
     - pcsc-lite
     - pam_pkcs11
     - opensc
+# pcsc-tools requires perl-Glib which includes stuff that requires pkgconfig and hence @Glibc-devel
+#   - pcsc-tools
 
  - name: "@HostSecurity"
    requires:
@@ -3672,10 +3695,13 @@ groups:
     - "@GCC"
    packages:
     - rust
+    - rust-bindgen
+    - rust-cbindgen
     - rust1.*
     - cargo
     - cargo1.*
     - cargo-c
+#   - rust-keylime # requires tpm2.0-abrmd
 
  - name: "@Boot"
    buildconfig: KernelPlus/standard

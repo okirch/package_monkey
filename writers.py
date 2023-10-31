@@ -27,6 +27,12 @@ class BaseWriter:
 			self.writeLabelDescription(label, runtimeRequires)
 			self.writePackagesForGroup(label, members)
 
+		for label, buildInfo in result.enumerateBuilds():
+			if label is not None and label.name in self._excluded:
+				continue
+
+			self.writeBuild(label, buildInfo)
+
 		self.flush()
 
 	def flush(self):
@@ -54,6 +60,9 @@ class StandardWriter(BaseWriter):
 	def writePackagesForGroup(self, label, packages):
 		for pkg in sorted(packages, key = lambda p: p.name):
 			print(f"  {pkg}")
+
+	def writeBuild(self, label, buildInfo):
+		pass
 
 	def indentingWriter(self):
 		return StandardWriter.IndentingWriter()
@@ -163,6 +172,9 @@ class TableWriter(BaseWriter):
 		for pkg in sorted(packages, key = lambda p: p.name):
 			self.csv.write([component, topic, pkg.shortname])
 
+	def writeBuild(self, label, buildInfo):
+		pass
+
 	def writeProblems(self, problemLog):
 		raise Exception("CSV writer does not support problem log")
 
@@ -212,11 +224,29 @@ class XmlWriter(BaseWriter):
 		labelNode = self._labels[label.name]
 
 		for rpm in sorted(packages, key = lambda p: p.name):
-			rpmNode = labelNode.addChild('rpm')
-			rpmNode.setAttribute('name', rpm.name)
-			rpmNode.setAttribute('arch', rpm.arch)
+			rpmNode = self.writeRPM(labelNode, rpm)
 
 			# FIXME: would be good if we could add the OBS package name here
+
+	def writeBuild(self, label, buildInfo):
+		buildNode = self.xmltree.root.addChild('build')
+		buildNode.setAttribute('name', buildInfo.name)
+
+		# ignore label for now
+
+		for rpm in buildInfo.sources + buildInfo.binaries:
+			self.writeRPM(buildNode, rpm)
+
+		if buildInfo.buildRequires:
+			bdepNode = buildNode.addChild('buildrequires')
+			for rpm in buildInfo.buildRequires:
+				self.writeRPM(bdepNode, rpm)
+
+	def writeRPM(self, parent, rpm):
+		rpmNode = parent.addChild('rpm')
+		rpmNode.setAttribute('name', rpm.name)
+		rpmNode.setAttribute('arch', rpm.arch)
+		return rpmNode
 
 	def writeProblems(self, problemLog):
 		raise Exception("XML writer does not support problem log")

@@ -1532,6 +1532,7 @@ class ClassificationResult(object):
 			self.name = name
 			self.binaries = []
 			self.sources = []
+			self.buildRequires = []
 			self.label = None
 
 	def __init__(self, labelOrder):
@@ -1559,8 +1560,18 @@ class ClassificationResult(object):
 
 	def labelOneBuild(self, name, label, binaries, sources):
 		buildInfo = self.BuildInfo(name)
+		self._builds.append(buildInfo)
+
 		buildInfo.binaries += binaries
 		buildInfo.sources += sources
+
+		for rpm in sources:
+			if rpm.resolvedRequires is None:
+				infomsg(f"Missing build requirements for {rpm}")
+				continue
+
+			for dep, required in rpm.resolvedRequires:
+				buildInfo.buildRequires.append(required)
 
 		if label is not None:
 			self.projectMembership(label).track(buildInfo)
@@ -1569,6 +1580,11 @@ class ClassificationResult(object):
 		for label in self._labelOrder.bottomUpTraversal():
 			members = self.packageMembership(label).packages
 			yield label, members
+
+	def enumerateBuilds(self):
+		infomsg(f"result contains {len(self._builds)} builds")
+		for buildInfo in self._builds:
+			yield buildInfo.label, buildInfo
 
 	# initially, we create the label tree with a maximum of edges
 	# When reporting it in the output, we want to cut this down

@@ -237,12 +237,26 @@ FastsetDomain_unregister(fastset_Domain *self, fastset_Member *member)
 	self->count -= 1;
 }
 
+int
+FastsetDomain_Check(PyObject *ob)
+{
+	return PyType_IsSubtype(Py_TYPE(ob), &fastset_DomainType);
+}
+
 bool
 FastsetDomain_IsMember(fastset_Domain *self, PyObject *object)
 {
 	const fastset_DomainSpecificType *dst;
 
 	return ((dst = Fastset_DSTGetType(object)) != NULL && &dst->base == self->member_class);
+}
+
+bool
+FastsetDomain_IsSet(fastset_Domain *self, PyObject *object)
+{
+	const fastset_DomainSpecificType *dst;
+
+	return ((dst = Fastset_DSTGetType(object)) != NULL && &dst->base == self->set_class);
 }
 
 PyObject *

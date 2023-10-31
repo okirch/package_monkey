@@ -560,6 +560,24 @@ Fastset_isdisjoint(fastset_Set *self, PyObject *args, PyObject *kwds)
 }
 
 /*
+ * fast transforms of sets
+ */
+PyObject *
+FastsetSet_TransformBitvec(fastset_Set *self, const fastset_bitvec_transform_t *trans)
+{
+	fastset_bitvec_t *res;
+
+	res = fastset_bitvec_transform(self->bitvec, trans);
+	if (res == NULL) {
+		PyErr_SetString(PyExc_ValueError, "transformation failed");
+		return NULL;
+	}
+
+	return Fastset_buildResult(self->ob_base.ob_type, res);
+}
+
+
+/*
  * Iteration
  */
 static PyObject *	FastsetIterator_new(PyTypeObject *type, PyObject *args, PyObject *kwds);

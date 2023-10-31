@@ -8,6 +8,7 @@ OBJS	= extension.o \
 	  domain.o \
 	  set.o \
 	  member.o \
+	  transform.o \
 	  bitvec.o
 
 all:	fastsets.so

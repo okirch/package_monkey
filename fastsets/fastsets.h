@@ -24,11 +24,16 @@ typedef struct fastset_bitvec {
 	fastset_bitvec_word_t *words;
 } fastset_bitvec_t;
 
+typedef struct fastset_bitvec_transform {
+	unsigned int	max_index;
+	int *		mapping;
+} fastset_bitvec_transform_t;
 
 extern PyTypeObject	fastset_DomainType;
 extern PyTypeObject	fastset_SetIteratorType;
 extern PyTypeObject	fastset_SetTypeTemplate;
 extern PyTypeObject	fastset_MemberTypeTemplate;
+extern PyTypeObject	fastset_TransformType;
 
 typedef struct {
 	PyObject_HEAD
@@ -72,6 +77,15 @@ typedef struct {
 	fastset_Domain *domain;
 } fastset_DomainSpecificType;
 
+typedef struct {
+	PyObject_HEAD
+
+	char *		name;
+
+	fastset_Domain *domain;
+	fastset_bitvec_transform_t *bittrans;
+} fastset_Transform;
+
 #define FASTSET_DST_MAGIC	0xfaded0ddbeefcafe
 
 extern fastset_bitvec_t *fastset_bitvec_new(unsigned int size);
@@ -98,6 +112,11 @@ extern fastset_bitvec_t *fastset_bitvec_union(const fastset_bitvec_t *arg1, cons
 extern fastset_bitvec_t *fastset_bitvec_intersection(const fastset_bitvec_t *arg1, const fastset_bitvec_t *arg2);
 extern fastset_bitvec_t *fastset_bitvec_difference(const fastset_bitvec_t *arg1, const fastset_bitvec_t *arg2);
 extern fastset_bitvec_t *fastset_bitvec_symmetric_difference(const fastset_bitvec_t *arg1, const fastset_bitvec_t *arg2);
+extern fastset_bitvec_t *fastset_bitvec_transform(const fastset_bitvec_t *arg, const fastset_bitvec_transform_t *);
+
+extern fastset_bitvec_transform_t *fastset_bitvec_transform_new(unsigned int);
+extern void		fastset_bitvec_transform_add(fastset_bitvec_transform_t *, unsigned int arg_index, int res_index);
+extern void		fastset_bitvec_transform_free(fastset_bitvec_transform_t *);
 
 static inline void
 fastset_bitvec_drop(fastset_bitvec_t **var)
@@ -114,9 +133,12 @@ extern PyObject *	fastset_callType(PyTypeObject *typeObject, PyObject *args, PyO
 
 extern int		FastsetDomain_Check(PyObject *self);
 extern bool		FastsetDomain_IsMember(fastset_Domain *self, PyObject *object);
+extern bool		FastsetDomain_IsSet(fastset_Domain *self, PyObject *object);
 extern void		FastsetDomain_register(fastset_Domain *self, fastset_Member *member);
 extern void		FastsetDomain_unregister(fastset_Domain *self, fastset_Member *member);
 extern PyObject *	FastsetDomain_GetMember(fastset_Domain *self, unsigned int index);
+
+extern PyObject *	FastsetSet_TransformBitvec(fastset_Set *self, const fastset_bitvec_transform_t *);
 
 extern fastset_Domain *	Fastset_DSTGetDomain(PyObject *obj);
 

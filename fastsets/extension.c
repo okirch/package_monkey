@@ -106,6 +106,7 @@ PyInit_fastsets(void)
 	m = PyModule_Create(&fastset_module_def);
 
 	fastset_registerType(m, "Domain", &fastset_DomainType);
+	fastset_registerType(m, "Transform", &fastset_TransformType);
 	fastset_registerType(m, "iterator", &fastset_SetIteratorType);
 	return m;
 }

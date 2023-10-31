@@ -27,6 +27,7 @@ class Classification:
 	DISPOSITION_MAYBE_MERGE = 'maybe_merge'
 	DISPOSITION_IGNORE = 'ignore'
 
+	# should this be a member of the classification scheme?
 	domain = fastsets.Domain("label")
 
 	class Label(domain.member):
@@ -379,15 +380,15 @@ class Classification:
 	def createLabelSet(klass, initialValues = None):
 		return klass.domain.set(initialValues)
 
-	@classmethod
-	def baseLabelsForSet(klass, labels):
-		# for a base label, return self. For a derived label, return immediate parent
-		def transform(label): return label.parent or label
-
-		# if we ever allow more than 3 components in a label name, this needs to be adjusted
-		result = klass.createLabelSet(map(transform, labels))
-		result = klass.createLabelSet(map(transform, result))
-		return result
+#	@classmethod
+#	def baseLabelsForSet(klass, labels):
+#		# for a base label, return self. For a derived label, return immediate parent
+#		def transform(label): return label.parent or label
+#
+#		# if we ever allow more than 3 components in a label name, this needs to be adjusted
+#		result = klass.createLabelSet(map(transform, labels))
+#		result = klass.createLabelSet(map(transform, result))
+#		return result
 
 	# return the list of labels rated highest (ie with the lowest priority value)
 	@staticmethod
@@ -588,6 +589,9 @@ class Classification:
 			order = self.createOrdering(Classification.TYPE_BINARY)
 			for label in order.bottomUpTraversal():
 				label.autoSelectCompatibleFlavors(order)
+
+			# ugly...
+			Classification.baseLabelsForSet = fastsets.Transform(Classification.domain, lambda label: label.baseLabel)
 
 	class Reason(object):
 		def __init__(self, pkg):

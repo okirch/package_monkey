@@ -497,3 +497,73 @@ fastset_bitvec_test_bit(const fastset_bitvec_t *vec, unsigned int index)
 		return false;
 	return !!(vec->words[word_index] & mask);
 }
+
+/*
+ * precomputed transforms
+ */
+fastset_bitvec_transform_t *
+fastset_bitvec_transform_new(unsigned int max_index)
+{
+	fastset_bitvec_transform_t *trans;
+	unsigned int i;
+
+	trans = calloc(1, sizeof(*trans));
+	trans->max_index = max_index;
+	trans->mapping = calloc(max_index, sizeof(int));
+
+	for (i = 0; i < max_index; ++i)
+		trans->mapping[i] = -1;
+
+	return trans;
+}
+
+void
+fastset_bitvec_transform_add(fastset_bitvec_transform_t *trans, unsigned int arg_index, int res_index)
+{
+	assert(arg_index < trans->max_index);
+
+	trans->mapping[arg_index] = res_index;
+}
+
+void
+fastset_bitvec_transform_free(fastset_bitvec_transform_t *trans)
+{
+	free(trans->mapping);
+	trans->mapping = NULL;
+	trans->max_index = 0;
+
+	free(trans);
+}
+
+fastset_bitvec_t *
+fastset_bitvec_transform(const fastset_bitvec_t *vec, const fastset_bitvec_transform_t *trans)
+{
+	unsigned int max_index = MIN(vec->max_index, trans->max_index);
+	fastset_bitvec_t *res;
+	unsigned int from_index = 0;
+
+	res = fastset_bitvec_new(max_index);
+	while (true) {
+		int arg_bit, res_bit;
+
+		/* Find the next bit in the argument bitvec */
+		arg_bit = fastset_bitvec_find_next_bit(vec, from_index);
+		if (arg_bit < 0)
+			break;
+
+		from_index = arg_bit + 1;
+
+		assert((unsigned int) arg_bit < max_index);
+
+		/* transform using the given mapping. a negative value means
+		 * the mapping is not defined for this bit.
+		 * We choose to ignore this. Alternatively, we could error out.
+		 */
+		res_bit = trans->mapping[arg_bit];
+		if (res_bit >= 0)
+			fastset_bitvec_set(res, res_bit);
+	}
+
+	return res;
+}
+

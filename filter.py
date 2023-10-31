@@ -1199,8 +1199,6 @@ class PotentialClassification(object):
 		self.solvingTree = solvingTree
 		self._preferences = self.PlacementPreferences()
 
-		self._recentlyPlaced = []
-
 	@property
 	def labelOrder(self):
 		return self.solvingTree._order
@@ -1243,15 +1241,6 @@ class PotentialClassification(object):
 				for name in it:
 					output(f"    {'':20} {name}")
 
-	def recordInitialPlacements(self):
-		# Create initial _recentlyPlaced list
-		self._recentlyPlaced = []
-		for node in self.solvingTree.randomWalk():
-			if node.solution:
-				self._recentlyPlaced.append(node)
-				if node.siblings is not None:
-					node.siblings.recordDecision(node, node.solution)
-
 	class PlacementConstraints:
 		def __init__(self):
 			self.validComponents = None
@@ -1267,6 +1256,7 @@ class PotentialClassification(object):
 				self.validBaseLabels = Classification.createLabelSet()
 			self.validBaseLabels.add(name)
 
+		# currently unused
 		def preFilterCandidateLabels(self, candidates, flavor = None, purpose = None):
 			# everything goes
 			if candidates is None:
@@ -2054,10 +2044,6 @@ class PotentialClassification(object):
 
 	def solve(self):
 		infomsg("### PLACEMENT STAGE 1 ###")
-
-		# populate the _recentlyPlaced list with the nodes that have been assigned
-		# a label by the admin.
-		self.recordInitialPlacements()
 
 		placements = []
 		for siblingInfo in self.solvingTree.allBuilds:

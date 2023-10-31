@@ -669,6 +669,10 @@ class SolvingTree(object):
 			for lower in node.lowerNeighbors:
 				lower.updateFromAbove(node)
 
+		for node in self.randomWalk():
+			if node.solution and node.siblings is not None:
+				node.siblings.recordDecision(node, node.solution)
+
 		infomsg(f"Computed candidates; {timing} elapsed")
 		infomsg("")
 

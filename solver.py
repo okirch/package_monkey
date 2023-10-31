@@ -11,6 +11,7 @@ from util import ExecTimer
 from util import filterHighestRanking
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from filter import Classification
+from filter import ClassificationResult
 
 def intersectSets(a, b):
 	if a is None:
@@ -66,19 +67,6 @@ def displayLabelSetFull(candidates, indent = ""):
 
 
 class PotentialClassification(object):
-	class Verdict:
-		def __init__(self):
-			self._placements = []
-
-		def add(self, node):
-			assert(node.solution)
-			for pkg in node.packages:
-				# third element in tuple should be the label reason
-				self._placements.append((pkg, node.solution, None))
-
-		def __iter__(self):
-			return iter(self._placements)
-
 	def __init__(self, solvingTree):
 		self.solvingTree = solvingTree
 		self._preferences = self.PlacementPreferences()
@@ -207,6 +195,19 @@ class PotentialClassification(object):
 		def isFinal(self):
 			return bool(self.label) or self.failed
 
+		def reportVerdict(self, node, result):
+			# FIXME: this is really just the reporting stage, so no idea why we're trying to update
+			# the node's solution here.
+			if node.solution and node.solution is not self.label:
+				errormsg(f"BUG: Placement algorithm is trying to change label for {node} from {node.solution} to {self.label}")
+			node.solution = self.label
+
+			for pkg in self.node.packages:
+				if pkg.label is self.label:
+					result.labelOnePackage(pkg, pkg.label, pkg.labelReason)
+				else:
+					result.labelOnePackage(pkg, self.label, self.labelReason)
+
 	class DefinitivePackagePlacement(PackagePlacement):
 		def __init__(self, labelOrder, node):
 			super().__init__(labelOrder, node, label = node.solution)
@@ -214,9 +215,6 @@ class PotentialClassification(object):
 		@property
 		def baseLabels(self):
 			return Classification.createLabelSet((self.label.baseLabel, ))
-
-		def reportVerdict(self, node, verdict):
-			pass
 
 	class TentativePackagePlacement(PackagePlacement):
 		def __init__(self, labelOrder, node, preferences):
@@ -243,7 +241,7 @@ class PotentialClassification(object):
 			infomsg(f"{self} is placed in {choice} (optimal label based on base label {baseLabel})")
 			self.setSolution(choice)
 
-		def reportVerdict(self, node, verdict):
+		def xxx_reportVerdict(self, node, verdict):
 			if self.label:
 				if node.solution and node.solution is not self.label:
 					errormsg(f"BUG: Placement algorithm is trying to change label for {node} from {node.solution} to {self.label}")
@@ -255,7 +253,7 @@ class PotentialClassification(object):
 			if self.candidates is None:
 				return None
 
-			return Classification.createLabelSet(map(lambda label: label.baseLabel, self.candidates))
+			return Classification.baseLabelsForSet(self.candidates)
 
 		def applyConstraints(self, constraints):
 			if not self.candidates:
@@ -948,17 +946,21 @@ class PotentialClassification(object):
 
 		self.reportUnsolved(placements)
 
-		verdict = self.Verdict()
+		# FIXME: should these two loops actually move into SolvingTree?
+		result = ClassificationResult(self.solvingTree._order)
 		for node in self.solvingTree.bottomUpTraversal():
 			if node.placement:
-				node.placement.reportVerdict(node, verdict)
+				node.placement.reportVerdict(node, result)
 
-		return verdict
+		for build in self.solvingTree.builds:
+			label = None
+			result.labelOneBuild(build.name, label, build.packages, build.sources)
+
+		return result
 
 	def baseLabelsForSet(self, labels):
-		if labels is None:
-			return None
-		return Classification.createLabelSet(map(lambda label: label.parent or label, labels))
+		if labels is not None:
+			return Classification.baseLabelsForSet(labels)
 
 	def __iter__(self):
 		for pkg, interval in self._packages.items():

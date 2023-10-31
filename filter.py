@@ -1497,6 +1497,150 @@ class PackageFilterSet:
 				break
 		return verdict
 
+class ClassificationResult(object):
+	class PackageMembership(object):
+		def __init__(self, label):
+			self.label = label
+			self.packages = set()
+
+		def track(self, pkg, reason):
+			self.packages.add(pkg)
+
+			if pkg.label is None or pkg.label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
+				pkg.label = self.label
+				pkg.labelReason = reason
+			elif pkg.label is self.label:
+				pass
+			else:
+				errormsg(f"Refusing to change {pkg} change label from {pkg.label} to {self.label}")
+
+	class ProjectMembership(object):
+		def __init__(self, label):
+			self.label = label
+			self.packages = set()
+
+		def track(self, build):
+			self.packages.add(build)
+			build.label = self.label
+
+	class BuildInfo(object):
+		def __init__(self, name):
+			self.name = name
+			self.binaries = []
+			self.sources = []
+			self.label = None
+
+	def __init__(self, labelOrder):
+		self._labelOrder = labelOrder
+		self._packages = {}
+		self._projects = {}
+		self._builds = []
+
+	def packageMembership(self, label):
+		m = self._packages.get(label)
+		if m is None:
+			m = self.PackageMembership(label)
+			self._packages[label] = m
+		return m
+
+	def projectMembership(self, label):
+		m = self._builds.get(label)
+		if m is None:
+			m = self.ProjectMembership(label)
+			self._builds[label] = m
+		return m
+
+	def labelOnePackage(self, pkg, label, reason):
+		self.packageMembership(label).track(pkg, reason)
+
+	def labelOneBuild(self, name, label, binaries, sources):
+		buildInfo = self.BuildInfo(name)
+		buildInfo.binaries += binaries
+		buildInfo.sources += sources
+
+		if label is not None:
+			self.projectMembership(label).track(buildInfo)
+
+	def enumeratePackages(self):
+		for label in self._labelOrder.bottomUpTraversal():
+			members = self.packageMembership(label).packages
+			yield label, members
+
+	# initially, we create the label tree with a maximum of edges
+	# When reporting it in the output, we want to cut this down
+	# to a reasonable complexity
+	def getMinimalRuntimeRequirements(self, label):
+		if not label.runtimeRequires:
+			return set()
+
+		order = self._labelOrder
+
+		actualRequirements = set()
+		fullRequirements = order.downwardClosureForSet(label.runtimeRequires)
+
+		members = self.packageMembership(label).packages
+		for pkg in members:
+			if pkg.resolvedRequires is None:
+				infomsg(f"Unable to compute minimal requirements for {label}: requirements for {pkg} have not been resolved")
+				return None
+
+			for dep, required in pkg.resolvedRequires:
+				requiredLabel = required.label
+				if requiredLabel is None:
+					infomsg(f"Unable to compute minimal requirements for {label}: {pkg} requires {required} which has not been labelled")
+					return None
+
+				if requiredLabel is label:
+					continue
+
+				if requiredLabel.type is Classification.TYPE_AUTOFLAVOR or \
+				   requiredLabel.type is Classification.TYPE_PURPOSE:
+					infomsg(f"Unable to compute minimal requirements for {label}: {pkg} requires {required} has automatic label {requiredLabel}")
+					return None
+
+				if requiredLabel not in fullRequirements:
+					# either the user's input created a contradction, or we made a bad decision somewhere along the way
+					warnmsg(f"CONFLICT: {pkg} has been placed in {label}, but it requires {required} which is in {requiredLabel}")
+					return None
+
+				actualRequirements.add(requiredLabel)
+
+		if not actualRequirements:
+			return actualRequirements
+
+		def BUG(msg):
+			warnmsg(f"BUG in computing minimal requirements for {label}: {msg}")
+			infomsg(f"  actual requirements: {' '.join(map(str, actualRequirements))}")
+			infomsg(f"  effective requirements: {' '.join(map(str, effectiveRequirements))}")
+
+		# reduce the set to its maxima.
+		# We have to bloat the set first, then reduce it again
+		actualRequirements = order.downwardClosureForSet(actualRequirements)
+
+		# FIXME: right now, order.maxima() returns a list rather than a set.
+		effectiveRequirements = set(order.maxima(actualRequirements))
+
+		if not effectiveRequirements:
+			BUG("effective set is empty")
+
+		if False:
+			if label in effectiveRequirements:
+				effectiveRequirements.remove(label)
+
+		if not actualRequirements.issubset(fullRequirements):
+			BUG("actual reqs not a subset of fullReqs")
+
+		if not effectiveRequirements.issubset(fullRequirements):
+			delta = effectiveRequirements.difference(fullRequirements)
+			names = map(str, delta)
+			warnmsg(f"{label} lacks some requirements: {' '.join(names)}")
+
+		infomsg(f"Effective requirements for {label}: reduced from {len(label.runtimeRequires)} to {len(effectiveRequirements)} labels")
+		if len(label.runtimeRequires) < 10 and len(effectiveRequirements) < 10:
+			infomsg(f"  orig:    {' '.join(map(str, label.runtimeRequires))}")
+			infomsg(f"  reduced: {' '.join(map(str, effectiveRequirements))}")
+		return effectiveRequirements
+
 class PackageFilter:
 	class Verdict:
 		def __init__(self, group, reason):
@@ -1891,80 +2035,6 @@ class PackageFilter:
 	def getGroupPackages(self, label):
 		group = self.getGroupForLabel(label)
 		return group.closure
-
-	# initially, we create the label tree with a maximum of edges
-	# When reporting it in the output, we want to cut this down
-	# to a reasonable complexity
-	def getMinimalRuntimeRequirements(self, label, order):
-		if not label.runtimeRequires:
-			return set()
-
-		group = self.getGroupForLabel(label)
-
-		actualRequirements = set()
-		fullRequirements = order.downwardClosureForSet(label.runtimeRequires)
-
-		for pkg in group.closure:
-			if pkg.resolvedRequires is None:
-				infomsg(f"Unable to compute minimal requirements for {label}: requirements for {pkg} have not been resolved")
-				return None
-
-			for dep, required in pkg.resolvedRequires:
-				requiredLabel = required.label
-				if requiredLabel is None:
-					infomsg(f"Unable to compute minimal requirements for {label}: {pkg} requires {required} which has not been labelled")
-					return None
-
-				if requiredLabel is label:
-					continue
-
-				if requiredLabel.type is Classification.TYPE_AUTOFLAVOR or \
-				   requiredLabel.type is Classification.TYPE_PURPOSE:
-					infomsg(f"Unable to compute minimal requirements for {label}: {pkg} requires {required} has automatic label {requiredLabel}")
-					return None
-
-				if requiredLabel not in fullRequirements:
-					# either the user's input created a contradction, or we made a bad decision somewhere along the way
-					warnmsg(f"CONFLICT: {pkg} has been placed in {label}, but it requires {required} which is in {requiredLabel}")
-					return None
-
-				actualRequirements.add(requiredLabel)
-
-		if not actualRequirements:
-			return actualRequirements
-
-		def BUG(msg):
-			warnmsg(f"BUG in computing minimal requirements for {label}: {msg}")
-			infomsg(f"  actual requirements: {' '.join(map(str, actualRequirements))}")
-			infomsg(f"  effective requirements: {' '.join(map(str, effectiveRequirements))}")
-
-		# reduce the set to its maxima.
-		# We have to bloat the set first, then reduce it again
-		actualRequirements = order.downwardClosureForSet(actualRequirements)
-
-		# FIXME: right now, order.maxima() returns a list rather than a set.
-		effectiveRequirements = set(order.maxima(actualRequirements))
-
-		if not effectiveRequirements:
-			BUG("effective set is empty")
-
-		if False:
-			if label in effectiveRequirements:
-				effectiveRequirements.remove(label)
-
-		if not actualRequirements.issubset(fullRequirements):
-			BUG("actual reqs not a subset of fullReqs")
-
-		if not effectiveRequirements.issubset(fullRequirements):
-			delta = effectiveRequirements.difference(fullRequirements)
-			names = map(str, delta)
-			warnmsg(f"{label} lacks some requirements: {' '.join(names)}")
-
-		infomsg(f"Effective requirements for {label}: reduced from {len(label.runtimeRequires)} to {len(effectiveRequirements)} labels")
-		if len(label.runtimeRequires) < 10 and len(effectiveRequirements) < 10:
-			infomsg(f"  orig:    {' '.join(map(str, label.runtimeRequires))}")
-			infomsg(f"  reduced: {' '.join(map(str, effectiveRequirements))}")
-		return effectiveRequirements
 
 	@property
 	def packagePreferences(self):

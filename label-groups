@@ -203,38 +203,13 @@ potentialClassification = PotentialClassification(solvingTree)
 # we should get this from filter.yaml
 potentialClassification.definePreference("@Gnome", ["@DesktopLibraries", ])
 potentialClassification.definePreference("@MinimalCRuntime", ["@GccRuntime", "@Glibc"])
-verdict = potentialClassification.solve()
-
-# not very efficient
-for pkg, label, labelReason in verdict:
-	packageFilter.labelOnePackage(pkg, label, labelReason)
-
-for label in binaryTraversal:
-	# classifyBuildDependencies(label)
-	pass
-
-if False:
-	for label in sourceTraversal:
-		group = packageFilter.makeSourceGroup(label.name)
-
-		infomsg(f"Classify packages belonging to source project {group.label}")
-
-		classifier = Classification.BuildRequireClosure(worker, productArchitecture, label)
-		assert(classifier)
-		for component in label.buildRequires:
-			componentGroup = packageFilter.makeBinaryGroup(component.name)
-			assert(componentGroup)
-			classifier.classify(componentGroup.packages)
-
-		closure[label.name] = classifier.result
-
-	closure[label.name] = classifier.result
+result = potentialClassification.solve()
 
 writer = TableWriter("packages.csv")
-writer.write(packageFilter, labelOrder)
+writer.write(result)
 
 writer = XmlWriter("packages.xml")
-writer.write(packageFilter, labelOrder)
+writer.write(result)
 
 if False and problemLog:
 	writer.writeProblems(problemLog)

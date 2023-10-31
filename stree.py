@@ -485,6 +485,10 @@ class SolvingTree(object):
 		for pkg in siblings.packages:
 			self.getPackage(pkg).siblings = siblings
 
+	@property
+	def builds(self):
+		return iter(self._builds.values())
+
 	def setSolution(self, pkg, label):
 		node = self.getPackage(pkg)
 		node.recordDecision(label)

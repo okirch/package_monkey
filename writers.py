@@ -14,19 +14,15 @@ class BaseWriter:
 	def excludeLabel(self, labelName):
 		self._excluded.add(labelName)
 
-	def write(self, packageFilter, order = None):
-		if order is None:
-			order = packageFilter.defaultOrder()
-
-		for label in order.bottomUpTraversal():
+	def write(self, result):
+		for label, members in result.enumeratePackages():
 			if label.name in self._excluded:
 				continue
 
-			members = packageFilter.getGroupPackages(label)
 			if not members and not self._writeEmptyGroups:
 				continue
 
-			runtimeRequires = packageFilter.getMinimalRuntimeRequirements(label, order)
+			runtimeRequires = result.getMinimalRuntimeRequirements(label)
 
 			self.writeLabelDescription(label, runtimeRequires)
 			self.writePackagesForGroup(label, members)

@@ -396,9 +396,9 @@ class Classification:
 		return set(filterHighestRanking(labels, lambda l: l.gravity))
 
 	@staticmethod
-	def buildSolvingTree(classificationContext, packages):
+	def buildSolvingTree(classificationContext, packages, **kwargs):
 		builder = SolvingTreeBuilder(classificationContext)
-		return builder.buildTree(packages)
+		return builder.buildTree(packages, **kwargs)
 
 	@staticmethod
 	def parseBinaryLabel(name):

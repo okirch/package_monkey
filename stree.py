@@ -145,6 +145,7 @@ class SolvingTree(object):
 			self.placement = None
 
 			self._trace = False
+			self._trargetLabels = None
 
 		def zap(self):
 			self._lowerNeighbors = None
@@ -233,20 +234,73 @@ class SolvingTree(object):
 			return intersectSets(a, b)
 
 		def updateFromBelow(self, lowerNeighbor):
-			# do NOT use update_intersection
-			self._lowerCone = self.intersectCones(self.lowerCone, lowerNeighbor.lowerCone)
-
-			if self._trace:
-				infomsg(f" {self}: add lower neighbor {lowerNeighbor}; lower cone:")
-				displayLabelSetFull(self.lowerCone, indent = "   ")
+			if not self._trace:
+				# do NOT use update_intersection
+				self._lowerCone = self.intersectCones(self.lowerCone, lowerNeighbor.lowerCone)
+			else:
+				before = self.lowerCone
+				self._lowerCone = self.intersectCones(self.lowerCone, lowerNeighbor.lowerCone)
+				self.traceConeUpdate(lowerNeighbor, "lower", before, self._lowerCone)
 
 		def updateFromAbove(self, upperNeighbor):
-			# do NOT use update_intersection
-			self._upperCone = self.intersectCones(self.upperCone, upperNeighbor.upperCone)
+			if not self._trace:
+				# do NOT use update_intersection
+				self._upperCone = self.intersectCones(self.upperCone, upperNeighbor.upperCone)
+			else:
+				before = self._upperCone
+				self._upperCone = self.intersectCones(self.upperCone, upperNeighbor.upperCone)
+				self.traceConeUpdate(upperNeighbor, "upper", before, self._upperCone)
 
-			if self._trace:
-				infomsg(f" {self}: add upper neighbor {upperNeighbor}; upper cone:")
-				displayLabelSetFull(self.upperCone, indent = "   ")
+		def traceConeUpdate(self, neighbor, howRelated, beforeCone, afterCone):
+			if self._focusLabels is None:
+				infomsg(f" {self}: add {howRelated} neighbor {neighbor}; {howRelated} cone:")
+				displayLabelSetFull(afterCone, indent = "   ")
+			else:
+				inFocusBefore = intersectSets(beforeCone, self._focusLabels)
+				if afterCone is None or inFocusBefore.issubset(afterCone):
+					infomsg(f" {self}: add {howRelated} neighbor {neighbor}; {howRelated} cone no change of focus labels {' '.join(map(str, inFocusBefore))}")
+				else:
+					lost = inFocusBefore.difference(afterCone)
+					infomsg(f" {self}: add {howRelated} neighbor {neighbor}; {howRelated} cone loses focus labels {' '.join(map(str, lost))}")
+
+					# chase up/down the tree to find out where they get lost
+					self.chaseConeUpdates(neighbor, howRelated, inFocusBefore, indent = "      ")
+
+		def chaseConeUpdates(self, neighbor, howRelated, focusLabels, indent):
+			neighAttrName = f"{howRelated}Neighbors"
+			coneAttrName = f"{howRelated}Cone"
+
+			queue = [neighbor]
+			scapegoats = set()
+			while queue:
+				node = queue.pop(0)
+
+				if node._solution:
+					if howRelated == 'upper':
+						cone = self._order.downwardClosureFor(node._solution)
+					else:
+						cone = self._order.upwardClosureFor(node._solution)
+					if not focusLabels.issubset(cone):
+						scapegoats.add(node)
+
+				nodeNeighbors = getattr(node, neighAttrName)
+				if not nodeNeighbors:
+					scapegoats.add(node)
+					continue
+
+				for neigh in nodeNeighbors:
+					cone = getattr(neigh, coneAttrName)
+					if not focusLabels.issubset(cone):
+						queue.append(neigh)
+
+			infomsg(f"{indent}due to the following {howRelated} relative(s)")
+			for node in scapegoats:
+				cone = getattr(node, coneAttrName)
+				missing = focusLabels.difference(cone)
+				if node._solution:
+					infomsg(f"{indent} {node} ({node._solution}) lacks {' '.join(map(str, missing))}")
+				else:
+					infomsg(f"{indent} {node} lacks {' '.join(map(str, missing))}")
 
 		def filterCandidateLabels(self, candidateLabels, quiet = False):
 			candidateLabels = intersectSets(candidateLabels, self.lowerCone)
@@ -478,7 +532,7 @@ class SolvingTree(object):
 		def allBaseLabels(self):
 			return self.baseLabels
 
-	def __init__(self, classificationScheme, order = None):
+	def __init__(self, classificationScheme, order = None, focusLabels = None):
 		self._classificationScheme = classificationScheme
 
 		if order is None:
@@ -488,6 +542,10 @@ class SolvingTree(object):
 		self._packages = {}
 		self._builds = {}
 		self._nodeOrder = None
+
+		self._focusLabels = None
+		if focusLabels:
+			self._focusLabels = Classification.createLabelSet(focusLabels)
 
 	@classmethod
 	def createNodeSet(klass, initialValues = None):
@@ -537,6 +595,7 @@ class SolvingTree(object):
 			if pkg.trace:
 				infomsg(f" {interval} [{pkg.label}] added to solving tree")
 				interval._trace = True
+				interval._focusLabels = self._focusLabels
 
 		return interval
 
@@ -773,8 +832,8 @@ class SolvingTreeBuilder(object):
 
 		return edge.package
 
-	def buildTree(self, packages):
-		solvingTree = SolvingTree(self.classificationScheme, self.labelOrder)
+	def buildTree(self, packages, **kwargs):
+		solvingTree = SolvingTree(self.classificationScheme, order = self.labelOrder, **kwargs)
 
 		worker = self.worker
 		worker.update(packages)

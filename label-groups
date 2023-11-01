@@ -196,7 +196,11 @@ for label in labelOrder.bottomUpTraversal():
 	group = packageFilter.makeBinaryGroup(label.name)
 	classifyAutoFlavors(label, group.packages)
 
-solvingTree = Classification.buildSolvingTree(classificationContext, collection)
+focusLabels = None
+if traceMatcher:
+	focusLabels = set(filter(lambda label: traceMatcher.match(label.name), labelOrder.bottomUpTraversal()))
+
+solvingTree = Classification.buildSolvingTree(classificationContext, collection, focusLabels = focusLabels)
 
 potentialClassification = PotentialClassification(solvingTree)
 

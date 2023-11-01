@@ -400,6 +400,28 @@ class Classification:
 		builder = SolvingTreeBuilder(classificationContext)
 		return builder.buildTree(packages)
 
+	@staticmethod
+	def parseBinaryLabel(name):
+		purposeName = None
+		flavorName = None
+
+		if '-' in name:
+			(name, purposeName) = name.split('-')
+
+		if '+' in name:
+			(name, flavorName) = name.split('+')
+
+		return (name, flavorName, purposeName)
+
+	@staticmethod
+	def parseBuildconfigLabel(name):
+		flavorName = 'standard'
+
+		if '/' in name:
+			(name, flavorName) = name.split('/')
+
+		return (name, flavorName)
+
 	class Scheme:
 		def __init__(self):
 			self._labels = {}
@@ -524,6 +546,14 @@ class Classification:
 
 			return label
 
+		def resolveBinaryLabel(self, name):
+			baseName, flavorName, purposeName = Classification.parseBinaryLabel(name)
+			label = self.createLabel(baseName, Classification.TYPE_BINARY)
+			if flavorName:
+				label = self.createFlavor(label, flavorName)
+			if purposeName:
+				label = self.createPurpose(label, purposeName)
+			return label
 
 		@property
 		def allLabels(self):
@@ -1840,17 +1870,11 @@ class PackageFilter:
 		assert(type)
 		return self.makeGroupInternal(name, type)
 
-	def resolveGroupReference(self, name, type = None):
-		purposeName = None
-		flavorName = None
+	def resolveBinaryReference(self, name):
+		baseName, flavorName, purposeName = Classification.parseBinaryLabel(name)
 
-		if '-' in name:
-			(name, purposeName) = name.split('-')
-
-		if '+' in name:
-			(name, flavorName) = name.split('+')
-
-		group = self.makeGroupInternal(name, type)
+		baseLabel = self.classificationScheme.createLabel(baseName, Classification.TYPE_BINARY)
+		group = self.getGroupForLabel(baseLabel, create = True);
 
 		if flavorName is not None:
 			group = self.makeFlavorGroup(group, flavorName)
@@ -1860,12 +1884,8 @@ class PackageFilter:
 
 		return group
 
-	def resolveBuildReference(self, name, type = None):
-		if '/' not in name:
-			sourceProjectName = name
-			flavorName = 'standard'
-		else:
-			(sourceProjectName, flavorName) = name.split('/')
+	def resolveBuildReference(self, name):
+		sourceProjectName, flavorName = Classification.parseBuildconfigLabel(name)
 
 		group = self.makeGroupInternal(sourceProjectName, Classification.TYPE_SOURCE)
 		return self.makeFlavorGroup(group, flavorName)
@@ -2195,7 +2215,7 @@ class PackageFilter:
 		if group.label:
 			nameList = gd.get('requires') or []
 			for name in nameList:
-				otherGroup = self.resolveGroupReference(name, Classification.TYPE_BINARY)
+				otherGroup = self.resolveBinaryReference(name)
 				group.addRequires(otherGroup)
 
 			# 'augments' are like runtime requirements, except they also flags the
@@ -2213,12 +2233,12 @@ class PackageFilter:
 			# @Gnome+python auto-selecting @Python+gnome rather than the other way around
 			nameList = gd.get('augments') or []
 			for name in nameList:
-				otherGroup = self.resolveGroupReference(name, Classification.TYPE_BINARY)
+				otherGroup = self.resolveBinaryReference(name)
 				group.addAugmentation(otherGroup)
 
 			nameList = gd.get('buildrequires') or []
 			for name in nameList:
-				otherGroup = self.resolveGroupReference(name, Classification.TYPE_BINARY)
+				otherGroup = self.resolveBinaryReference(name)
 				group.addBuildRequires(otherGroup)
 
 		# The yaml file may specify per-group priorities for filters, but there is just

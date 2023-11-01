@@ -461,20 +461,18 @@ class SolvingTree(object):
 	def createNodeSet(klass, initialValues = None):
 		return klass.domain.set(initialValues)
 
-	def addEdge(self, requiringPackage, requiredPackage):
+	def addPackage(self, pkg):
 		# Do not add packages that are labeled with disposition ignored
-		if requiringPackage.label and requiringPackage.label.disposition == Classification.DISPOSITION_IGNORE:
-			return
+		if pkg.label and pkg.label.disposition == Classification.DISPOSITION_IGNORE:
+			return None
+		return self.getPackage(pkg)
 
-		# A package that is not ignored MUST NOT require an ignored package
-		if requiredPackage.label and requiredPackage.label.disposition == Classification.DISPOSITION_IGNORE:
-			raise Exception(f"{requiringPackage} requires {requiredPackage} [requiredPackage.label] with disposition 'ignore'")
-
-		assert(requiringPackage is not requiredPackage)
-		upper = self.getPackage(requiringPackage)
-		lower = self.getPackage(requiredPackage)
-		upper.addLowerNeighbor(lower)
-		lower.addUpperNeighbor(upper)
+	def addEdge(self, requiringNode, requiredNode):
+		assert(requiringNode is not requiredNode)
+		assert(isinstance(requiringNode, self.LabelInterval))
+		assert(isinstance(requiredNode, self.LabelInterval))
+		requiringNode.addLowerNeighbor(requiredNode)
+		requiredNode.addUpperNeighbor(requiringNode)
 
 	def addBuild(self, build):
 		if build in self._builds:
@@ -505,6 +503,7 @@ class SolvingTree(object):
 				interval.solution = pkg.label
 
 			if pkg.trace:
+				infomsg(f" {interval} [{pkg.label}] added to solving tree")
 				interval._trace = True
 
 		return interval
@@ -707,6 +706,21 @@ class SolvingTreeBuilder(object):
 		self.labelOrder = classificationContext.labelOrder
 		self.store = classificationContext.store
 
+		self.pkgToNode = {}
+
+	def addPackage(self, solvingTree, pkg):
+		node = self.pkgToNode.get(pkg)
+
+		if node is None:
+			node = solvingTree.addPackage(pkg)
+			if node is not None:
+				build = self.getBuildForPackage(pkg)
+				if build is not None:
+					solvingTree.addBuild(build)
+				self.pkgToNode[pkg] = node
+
+		return node
+
 	def edges(self, pkg):
 		result = []
 		for dep, target in self.context.resolveDownward(pkg):
@@ -716,6 +730,8 @@ class SolvingTreeBuilder(object):
 		return result
 
 	def followEdge(self, edge, solvingTree):
+		# some of the logic from addEdge might as well live here and save us a few
+		# cycles
 		solvingTree.addEdge(edge.dependant, edge.package)
 
 		for pkg in edge.package, edge.dependant:
@@ -744,11 +760,24 @@ class SolvingTreeBuilder(object):
 			if pkg.isSourcePackage:
 				continue
 
-			edges = self.edges(pkg)
-			for e in edges:
-				tgt = self.followEdge(e, solvingTree)
-				if tgt is not None:
-					worker.add(tgt)
+			requiringNode = self.addPackage(solvingTree, pkg)
+			if requiringNode is None:
+				# we're actively ignoring this package - it has been labelled with
+				# disposition ignore
+				continue
+
+			for dep, target in self.context.resolveDownward(pkg):
+				if target is pkg:
+					continue
+
+				requiredNode = self.addPackage(solvingTree, target)
+				if requiredNode is None:
+					# A package that is not ignored MUST NOT require an ignored package
+					raise Exception(f"{pkg} requires {target} [target.label] with disposition 'ignore'")
+
+				solvingTree.addEdge(requiringNode, requiredNode)
+
+				worker.add(target)
 
 		solvingTree.finalize()
 

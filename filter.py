@@ -1593,10 +1593,25 @@ class ClassificationResult(object):
 		if not label.runtimeRequires:
 			return set()
 
-		order = self._labelOrder
+		actualRequirements = self.collectActualRuntimeRequirements(label)
+		if actualRequirements is None:
+			# at least return something, even if it may be inconsistent
+			return label.runtimeRequires
 
+		effectiveRequirements = self.reduceRequirements(label, actualRequirements)
+
+		infomsg(f"Effective requirements for {label}: reduced from {len(label.runtimeRequires)} to {len(effectiveRequirements)} labels")
+		if len(label.runtimeRequires) < 10 and len(effectiveRequirements) < 10:
+			infomsg(f"  orig:    {' '.join(map(str, label.runtimeRequires))}")
+			infomsg(f"  reduced: {' '.join(map(str, effectiveRequirements))}")
+
+		return effectiveRequirements
+
+	def collectActualRuntimeRequirements(self, label):
+		# Should really be a fastset not a set
 		actualRequirements = set()
-		fullRequirements = order.downwardClosureForSet(label.runtimeRequires)
+
+		fullRequirements = self._labelOrder.downwardClosureForSet(label.runtimeRequires)
 
 		members = self.packageMembership(label).packages
 		for pkg in members:
@@ -1625,40 +1640,27 @@ class ClassificationResult(object):
 
 				actualRequirements.add(requiredLabel)
 
+		return actualRequirements
+
+	def reduceRequirements(self, what, actualRequirements):
 		if not actualRequirements:
 			return actualRequirements
 
 		def BUG(msg):
-			warnmsg(f"BUG in computing minimal requirements for {label}: {msg}")
+			warnmsg(f"BUG in computing minimal requirements for {what}: {msg}")
 			infomsg(f"  actual requirements: {' '.join(map(str, actualRequirements))}")
 			infomsg(f"  effective requirements: {' '.join(map(str, effectiveRequirements))}")
+			raise Exception()
 
 		# reduce the set to its maxima.
 		# We have to bloat the set first, then reduce it again
-		actualRequirements = order.downwardClosureForSet(actualRequirements)
+		actualRequirements = self._labelOrder.downwardClosureForSet(actualRequirements)
 
-		# FIXME: right now, order.maxima() returns a list rather than a set.
-		effectiveRequirements = set(order.maxima(actualRequirements))
+		effectiveRequirements = self._labelOrder.maxima(actualRequirements)
 
 		if not effectiveRequirements:
 			BUG("effective set is empty")
 
-		if False:
-			if label in effectiveRequirements:
-				effectiveRequirements.remove(label)
-
-		if not actualRequirements.issubset(fullRequirements):
-			BUG("actual reqs not a subset of fullReqs")
-
-		if not effectiveRequirements.issubset(fullRequirements):
-			delta = effectiveRequirements.difference(fullRequirements)
-			names = map(str, delta)
-			warnmsg(f"{label} lacks some requirements: {' '.join(names)}")
-
-		infomsg(f"Effective requirements for {label}: reduced from {len(label.runtimeRequires)} to {len(effectiveRequirements)} labels")
-		if len(label.runtimeRequires) < 10 and len(effectiveRequirements) < 10:
-			infomsg(f"  orig:    {' '.join(map(str, label.runtimeRequires))}")
-			infomsg(f"  reduced: {' '.join(map(str, effectiveRequirements))}")
 		return effectiveRequirements
 
 class PackageFilter:

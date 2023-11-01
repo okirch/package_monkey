@@ -82,37 +82,6 @@ class PotentialClassification(object):
 	def getPackageNode(self, pkg):
 		return self.solvingTree.getPackage(pkg)
 
-	class NodeVersusLabelSetReport:
-		class LabelSet:
-			def __init__(self, key):
-				self.key = key
-				self.names = []
-
-		def __init__(self):
-			self.byLabels = {}
-
-		def add(self, nodeName, labels):
-			key = ' '.join(sorted(map(str, labels)))
-			info = self.byLabels.get(key)
-			if info is None:
-				info = self.LabelSet(key)
-				self.byLabels[key] = info
-			info.names.append(nodeName)
-
-		def display(self, indent = ""):
-			output = lambda msg: infomsg(indent + msg)
-
-			for key, info in self.byLabels.items():
-				it = iter(info.names)
-				if len(key) > 20:
-					output(f"    {key}")
-				else:
-					first = next(it)
-					output(f"    {key:20} {first}")
-
-				for name in it:
-					output(f"    {'':20} {name}")
-
 	class PlacementConstraints:
 		def __init__(self):
 			self.validComponents = None

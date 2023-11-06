@@ -1755,12 +1755,7 @@ class PackageInfo:
 		return f"{self.name}/{self.arch}"
 
 	def __str__(self):
-		result = f"{self.name}-{self.version}-{self.release}.{self.arch}"
-		if self.productName:
-			result += f" from {self.productName}"
-		elif self.productId:
-			result += f" from product {self.productId}"
-		return result
+		return self.shortname
 
 	def fullname(self):
 		return f"{self.name}-{self.version}-{self.release}.{self.arch}.rpm"

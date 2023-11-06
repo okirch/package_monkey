@@ -387,7 +387,7 @@ class PotentialClassification(object):
 
 			if self.trace:
 				infomsg(f"{self}: trying to derive from {baseLabel}")
-				displayLabelSetFull(candidates, indent = "   ")
+				# displayLabelSetFull(candidates, indent = "   ")
 
 			if candidates is None or baseLabel in candidates:
 				# if the node can be placed anywhere, or if the base label is
@@ -936,11 +936,16 @@ class PotentialClassification(object):
 	def solve(self):
 		infomsg("### PLACEMENT STAGE 1 ###")
 
+		timing = ExecTimer()
+
 		placements = []
 		for siblingInfo in self.solvingTree.allBuilds:
 			debugmsg(f"Create build placement for {siblingInfo}")
 			placement = self.createBuildPlacement(siblingInfo)
 			placements.append(placement)
+
+		infomsg(f"Created placement objects; {timing} elapsed")
+		infomsg("")
 
 		if False:
 			for node in self.solvingTree.topDownTraversal():

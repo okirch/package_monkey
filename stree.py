@@ -836,8 +836,25 @@ class SolvingTree(object):
 			if node.solution and node.siblings is not None:
 				node.siblings.recordDecision(node, node.solution)
 
+		self.reportFocusNodesAndLabels()
+
 		infomsg(f"Computed candidates; {timing} elapsed")
 		infomsg("")
+
+	def reportFocusNodesAndLabels(self):
+		if self._focusLabels:
+			infomsg("")
+			infomsg(f"Traced nodes and focus labels")
+			for node in self.randomWalk():
+				if not node._trace:
+					continue
+
+				if node.candidates is not None:
+					focusCandidates = self._focusLabels.intersection(node.candidates)
+					infomsg(f" {node}: {' '.join(map(str, focusCandidates))}")
+				else:
+					infomsg(f" {node}: unconstrained")
+			infomsg("")
 
 	def randomWalk(self):
 		return iter(self._packages.values())

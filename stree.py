@@ -85,6 +85,72 @@ def displayLabelSetFull(candidates, indent = ""):
 		else:
 			infomsg(f"{indent}{baseLabel}")
 
+class Tracer:
+	def __init__(self, focusLabels = None):
+		self.focusLabels = focusLabels
+
+		emptySet = Classification.createLabelSet()
+		self.labelSetClass = emptySet.__class__
+
+	def focus(self, labels):
+		if self.focusLabels is not None:
+			return intersectSets(labels, self.focusLabels)
+		return labels
+
+	def renderLabelSet(self, labels):
+		what = "labels"
+		if self.focusLabels is not None and labels is not None:
+			labels = intersectSets(labels, self.focusLabels)
+			what = "focus labels"
+
+		if labels is None:
+			return "[unconstrained]"
+
+		if not labels:
+			return f"[no {what}]"
+
+		if len(labels) >= 10:
+			return f"[{len(labels)} {what}]"
+
+		return f"[{what} {' '.join(map(str, labels))}]";
+
+	def describeLabelSetChange(self, after, before):
+		if self.focusLabels is not None:
+			after = intersectSets(after, self.focusLabels)
+			before = intersectSets(before, self.focusLabels)
+
+		if after == before:
+			return f"no change of {what}"
+
+		words = []
+
+		removed = before.difference(after)
+		if removed:
+			words.append(f"removed {self.renderLabelSet(removed)}")
+
+		added = after.difference(before)
+		if added:
+			words.append(f"added {self.renderLabelSet(added)}")
+
+		words.append(f"resulting {self.renderLabelSet(after)}")
+
+		return "; ".join(words)
+
+	def labelSetMessage(self, object, labels, msg, indent = ''):
+		change = self.renderLabelSet(labels)
+		infomsg(f"{indent}{object}: {msg}: {change}")
+
+	def updateCandidates(self, object, candidates, before = None, msg = None, indent = ''):
+		if msg is None:
+			msg = "updated candidates"
+
+		if before is not None:
+			change = self.describeLabelSetChange(candidates, before)
+		else:
+			change = self.renderLabelSet(candidates)
+
+		infomsg(f"{indent}{object}: {msg}: {change}")
+
 class NodeVersusLabelSetReport:
 	class LabelSet:
 		def __init__(self, key):
@@ -145,7 +211,7 @@ class SolvingTree(object):
 			self.placement = None
 
 			self._trace = False
-			self._trargetLabels = None
+			self._tracer = None
 
 		def zap(self):
 			self._lowerNeighbors = None
@@ -547,6 +613,8 @@ class SolvingTree(object):
 		if focusLabels:
 			self._focusLabels = Classification.createLabelSet(focusLabels)
 
+		self._tracer = Tracer(self._focusLabels)
+
 	@classmethod
 	def createNodeSet(klass, initialValues = None):
 		return klass.domain.set(initialValues)
@@ -595,6 +663,7 @@ class SolvingTree(object):
 			if pkg.trace:
 				infomsg(f" {interval} [{pkg.label}] added to solving tree")
 				interval._trace = True
+				interval._tracer = self._tracer
 				interval._focusLabels = self._focusLabels
 
 		return interval

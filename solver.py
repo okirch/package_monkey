@@ -112,9 +112,12 @@ class PotentialClassification(object):
 		def constrainComponents(self, packagePlacement):
 			if packagePlacement.candidates is not None and self.validComponents is not None:
 				preferred = Classification.createLabelSet(filter(lambda label: label.componentName in self.validComponents, packagePlacement.candidates))
-				if packagePlacement.trace:
-					diff = packagePlacement.candidates.difference(preferred)
-					infomsg(f" {packagePlacement}: constraining further by removing {' '.join(map(str, diff))}")
+				if packagePlacement.tracer:
+					compList = ' '.join(map(str, self.validComponents))
+					packagePlacement.tracer.updateCandidates(packagePlacement, preferred,
+							before = packagePlacement.candidates,
+							msg = f"constrained by components {compList}",
+							indent = '   ')
 				packagePlacement.candidates = preferred
 
 	class PlacementPreferences(object):
@@ -151,7 +154,8 @@ class PotentialClassification(object):
 			self.labelReason = None
 			self.autoLabel = None
 			self.failed = False
-			self.trace = False
+			self.trace = node._trace
+			self.tracer = node._tracer
 
 		def __str__(self):
 			return str(self.node)
@@ -268,6 +272,12 @@ class PotentialClassification(object):
 
 				self.candidates = Classification.createLabelSet(filter(lambda label: label.purposeName == purposeName, candidates))
 				self.purpose = label
+
+				if self.tracer:
+					self.tracer.updateCandidates(self, self.candidates,
+						before = candidates,
+						msg = f"constrained by purpose {label}",
+						indent = '   ')
 			else:
 				raise Exception(f"{self}: Unexpected label {label} type {label.type}")
 

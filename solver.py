@@ -724,7 +724,7 @@ class PotentialClassification(object):
 						# FIXME: this encodes the SUSE lib package naming convention
 						# shorten librsvg-2-2 to librsvg
 						if baseName.startswith("lib"):
-							baseName = baseName.rstrip("-0123456789")
+							baseName = baseName.rstrip("-0123456789_")
 							namesToPlacements[baseName] = packagePlacement
 							infomsg(f"    {baseName} -> {packagePlacement}")
 
@@ -746,7 +746,9 @@ class PotentialClassification(object):
 
 				favoriteSibling = namesToPlacements.get(baseName)
 				infomsg(f"       try {baseName} -> {favoriteSibling}")
-				if favoriteSibling is None and baseName.startswith("lib"):
+				if favoriteSibling is not None:
+					pass
+				elif baseName.startswith("lib"):
 					baseName = baseName.rstrip("-0123456789")
 					favoriteSibling = namesToPlacements.get(baseName)
 					infomsg(f"       try {baseName} -> {favoriteSibling}")
@@ -755,6 +757,11 @@ class PotentialClassification(object):
 						baseName = baseName[3:]
 						favoriteSibling = namesToPlacements.get(baseName)
 						infomsg(f"       try {baseName} -> {favoriteSibling}")
+
+						# we could also try to replace hyphen with underscore
+				else:
+					# if we have "foo", try "libfoo"
+					favoriteSibling = namesToPlacements.get("lib" + baseName)
 
 				if favoriteSibling is None:
 					continue
@@ -767,6 +774,13 @@ class PotentialClassification(object):
 				choice = packagePlacement.deriveChoiceFromBaseLabel(label)
 				if choice is None:
 					infomsg(f"{purpose} package {pkg} has favorite sibling {favoriteSibling}, but {label} is not a good base label for it")
+					desiredCandidate = label.getObjectPurpose(purpose.name)
+					if desiredCandidate is not None:
+						closure = self.labelOrder.downwardClosureFor(desiredCandidate)
+						for neigh in packagePlacement.node.lowerNeighbors:
+							if desiredCandidate in neigh.lowerCone:
+								continue
+							infomsg(f"     {packagePlacement} requires {neigh}, which is not in scope of {desiredCandidate}")
 					continue
 
 				infomsg(f"{pkg} is placed in {choice} (based on favorite sibling {favoriteSibling} and purpose {purpose})")

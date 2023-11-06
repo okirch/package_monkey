@@ -257,12 +257,23 @@ class PotentialClassification(object):
 				self.candidates = Classification.createLabelSet(filter(lambda label: label.flavorName == flavorName, candidates))
 
 				# if the autoflavor has a disposition of maybe_merge, check for any base labels that
-				# cover all requirements of the autoflavor
+				# cover all requirements of the autoflavor, and add them back in
 				if label.disposition == Classification.DISPOSITION_MAYBE_MERGE:
-					merged = Classification.createLabelSet(filter(lambda l: l.parent is None and l.autoFlavorCanBeMerged(label), candidates))
+					# filter out those candidates that provide all the runtime requirements that this autoflavor needs
+					# (which is the condition for merging this autoflavor).
+					merged = Classification.createLabelSet(filter(
+							lambda cand: label.runtimeRequires.issubset(self.labelOrder.downwardClosureFor(cand)),
+							candidates))
 					self.candidates.update(merged)
-					if self.trace:
-						infomsg(f"   {self}: {label} got merged into {len(merged)} candidates")
+					if merged and self.tracer:
+						self.tracer.labelSetMessage(self, merged, f"{label} can be merged into",
+							indent = '   ')
+
+				if self.tracer:
+					self.tracer.updateCandidates(self, self.candidates,
+						before = candidates,
+						msg = f"constrained by autoflavor {label}",
+						indent = '   ')
 
 				self.flavor = label
 			elif label.type == Classification.TYPE_PURPOSE:
@@ -385,8 +396,13 @@ class PotentialClassification(object):
 					infomsg(f"{self}: {baseLabel} is a valid candidate")
 				return baseLabel
 			else:
-				# filter those candidates that have the chosen base label
-				candidates = Classification.createLabelSet(filter(lambda label: label.baseLabel == baseLabel, candidates))
+				# filter those candidates that have the chosen base label or parent
+				if baseLabel.parent is None:
+					# This is truly a base label
+					candidates = Classification.createLabelSet(filter(lambda label: label.baseLabel == baseLabel, candidates))
+				else:
+					# We're trying to derive from a sibling package that has been placed in, say "@GraphicsLibraries+glib2"
+					candidates = Classification.createLabelSet(filter(lambda label: label.parent == baseLabel, candidates))
 
 				if self.trace:
 					infomsg(f"### {self} candidates={' '.join(map(str, candidates))}")

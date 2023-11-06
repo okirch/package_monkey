@@ -1725,6 +1725,11 @@ class PackageInfo:
 		self.productName = None
 		self.parsedVersion = parsedVersion
 
+		self.isSourcePackage = isSourceArchitecture(arch)
+
+		self.label = None
+		self.labelReason = None
+
 	@staticmethod
 	def fromNameAndParsedVersion(name, arch, parsedVersion, **kwd):
 		return PackageInfo(name, parsedVersion.epoch, parsedVersion.version, parsedVersion.release, arch, None, **kwd)

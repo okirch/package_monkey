@@ -356,12 +356,14 @@ class SolvingTree(object):
 
 				for neigh in nodeNeighbors:
 					cone = getattr(neigh, coneAttrName)
-					if not focusLabels.issubset(cone):
+					if cone is not None and not focusLabels.issubset(cone):
 						queue.append(neigh)
 
 			infomsg(f"{indent}due to the following {howRelated} relative(s)")
 			for node in scapegoats:
 				cone = getattr(node, coneAttrName)
+				if cone is None:
+					continue
 				missing = focusLabels.difference(cone)
 				if node._solution:
 					infomsg(f"{indent} {node} ({node._solution}) lacks {' '.join(map(str, missing))}")

@@ -1675,6 +1675,7 @@ class ClassificationResult(object):
 	def collectActualRuntimeRequirements(self, label):
 		# Should really be a fastset not a set
 		actualRequirements = set()
+		failed = False
 
 		fullRequirements = self._labelOrder.downwardClosureForSet(label.runtimeRequires)
 
@@ -1682,13 +1683,15 @@ class ClassificationResult(object):
 		for pkg in members:
 			if pkg.resolvedRequires is None:
 				infomsg(f"Unable to compute minimal requirements for {label}: requirements for {pkg} have not been resolved")
-				return None
+				failed = True
+				continue
 
 			for dep, required in pkg.resolvedRequires:
 				requiredLabel = required.label
 				if requiredLabel is None:
 					infomsg(f"Unable to compute minimal requirements for {label}: {pkg} requires {required} which has not been labelled")
-					return None
+					failed = True
+					continue
 
 				if requiredLabel is label:
 					continue
@@ -1696,14 +1699,19 @@ class ClassificationResult(object):
 				if requiredLabel.type is Classification.TYPE_AUTOFLAVOR or \
 				   requiredLabel.type is Classification.TYPE_PURPOSE:
 					infomsg(f"Unable to compute minimal requirements for {label}: {pkg} requires {required} has automatic label {requiredLabel}")
-					return None
+					failed = True
+					continue
 
 				if requiredLabel not in fullRequirements:
 					# either the user's input created a contradction, or we made a bad decision somewhere along the way
 					warnmsg(f"CONFLICT: {pkg} has been placed in {label}, but it requires {required} which is in {requiredLabel}")
-					return None
+					failed = True
+					continue
 
 				actualRequirements.add(requiredLabel)
+
+		if failed:
+			return None
 
 		return actualRequirements
 

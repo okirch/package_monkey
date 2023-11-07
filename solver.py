@@ -456,7 +456,11 @@ class PotentialClassification(object):
 			self.children = []
 			self.packageDict = {}
 
-			self.triedBaseLabels = Classification.createLabelSet()
+			# Do NOT initialize self._commonBaseLabels; the commonBaseLabels
+			# property relies on this attribute not being present
+			# Do NOT initialize self._compatibleBaseLabels either
+
+			# FIXME: rename to baseLabelSolutions
 			self.goodBaseLabels = {}
 
 			self.trace = False
@@ -562,10 +566,23 @@ class PotentialClassification(object):
 			def __iter__(self):
 				return iter(self.placements)
 
+			@property
+			def isPureBaseLabelSolution(self):
+				# return true iff this solution uses only @Label or @Label-purpose,
+				# and no @Label+flavor* style labels
+				if not self.placements:
+					return False
+
+				for (packagePlacement, label) in self.placements:
+					if label.flavorName:
+						return False
+				return True
+
 		def canSolveUsingBaseLabel(self, baseLabel):
-			if baseLabel in self.triedBaseLabels:
+			try:
 				return self.goodBaseLabels[baseLabel]
-			self.triedBaseLabels.add(baseLabel)
+			except:
+				pass
 
 			result = self.BaseLabelSolution(baseLabel)
 			potentialSolution = []
@@ -618,33 +635,79 @@ class PotentialClassification(object):
 
 			return False
 
-		# we're dealing with several packages; see whether they share any common base label(s)
-		# and try to determine the "best" choice
-		def solveCommonBaseLabel(self):
+		@property
+		def commonBaseLabels(self):
+			try:
+				return self._commonBaseLabels
+			except:
+				pass
+
 			commonBaseLabels = None
 			for packagePlacement in self.children:
 				commonBaseLabels = intersectSets(commonBaseLabels, packagePlacement.baseLabels)
 
+			# Filter common base labels by preference
+			# commonBaseLabels = self.preferences.filterCandidates(commonBaseLabels)
+
+			self._commonBaseLabels = commonBaseLabels
+			return self._commonBaseLabels
+
+		@property
+		def compatibleBaseLabels(self):
+			try:
+				return self._compatibleBaseLabels
+			except:
+				pass
+
+			commonBaseLabels = self.commonBaseLabels
+			self._compatibleBaseLabels = Classification.createLabelSet()
+
 			if commonBaseLabels is None:
-				return False
+				return self._compatibleBaseLabels
 
 			if not commonBaseLabels:
 				infomsg(f"{self} has no common base labels");
-				return False
+				return self._compatibleBaseLabels
 
 			infomsg(f"{self} has common base labels {' '.join(map(str, commonBaseLabels))}");
-			# commonBaseLabels = self.preferences.filterCandidates(commonBaseLabels)
-
-			goodLabels = Classification.createLabelSet()
 			for baseLabel in commonBaseLabels:
 				if self.canSolveUsingBaseLabel(baseLabel):
-					if self.trace: infomsg(f"   + {baseLabel}")
-					goodLabels.add(baseLabel)
+					if self.trace:
+						infomsg(f"   + {baseLabel}")
+					self._compatibleBaseLabels.add(baseLabel)
 				else:
-					if self.trace: infomsg(f"   - {baseLabel}")
+					if self.trace:
+						infomsg(f"   - {baseLabel}")
+
+			if not self._compatibleBaseLabels:
+				infomsg(f"{self} has common base labels, but none of them can solve");
+
+			return self._compatibleBaseLabels
+
+		@property
+		def compatiblePureBaseLabels(self):
+			try:
+				return self._compatiblePureBaseLabels
+			except:
+				pass
+
+			baseLabels = self.compatibleBaseLabels
+			if not baseLabels:
+				self._compatiblePureBaseLabels = None
+			else:
+				self._compatiblePureBaseLabels = set()
+				for label in baseLabels:
+					if self.goodBaseLabels[label].isPureBaseLabelSolution:
+						self._compatiblePureBaseLabels.add(label)
+
+			return self._compatiblePureBaseLabels
+
+		# we're dealing with several packages; see whether they share any common base label(s)
+		# and try to determine the "best" choice
+		def solveCommonBaseLabel(self):
+			goodLabels = self.compatibleBaseLabels
 
 			if not goodLabels:
-				infomsg(f"{self} has common base labels, but none of them can solve");
 				return False
 
 			if len(goodLabels) == 1:

@@ -484,38 +484,6 @@ class SolvingTree(object):
 			if self.siblings is not None:
 				self.siblings.recordDecision(node, label)
 
-	class Traversal:
-		class Cursor:
-			def __init__(self, queue, node, depth):
-				self.queue = queue
-				self.node = node
-				self.depth = depth
-
-			def descend(self):
-				entries = []
-				for neigh in self.node.lowerNeighbors:
-					entries.append(self.__class__(self.queue, neigh, self.depth + 1))
-				self.queue[:0] = entries
-				return True
-
-			def __str__(self):
-				result = (self.depth * "   ") + f" - {self.node}"
-				if self.node.solution:
-					result += f" [{self.node.solution}]"
-				return result
-
-		def __init__(self, node):
-			self.queue = []
-			self.seen = set()
-			self.Cursor(self.queue, node, 0).descend()
-
-		def __iter__(self):
-			while self.queue:
-				next = self.queue.pop(0)
-				if next.node not in self.seen:
-					self.seen.add(next.node)
-					yield next
-
 	class SiblingInfo:
 		def __init__(self, build):
 			self.name = build.name

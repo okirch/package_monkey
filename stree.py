@@ -854,6 +854,7 @@ class SolvingTreeBuilder(object):
 		self.store = classificationContext.store
 
 		self.pkgToNode = {}
+		self.builds = set()
 
 	def addPackage(self, solvingTree, pkg):
 		node = self.pkgToNode.get(pkg)
@@ -871,9 +872,20 @@ class SolvingTreeBuilder(object):
 	def buildTree(self, packages, **kwargs):
 		solvingTree = SolvingTree(self.classificationScheme, order = self.labelOrder, **kwargs)
 
+		seen = set()
+
+		self.buildTreePartial(solvingTree, packages, seen)
+
+		# Add the source packages as well
+		sources = set(filter(bool, (build.sourcePackage for build in self.builds)))
+		self.buildTreePartial(solvingTree, sources, seen)
+
+		solvingTree.finalize()
+		return solvingTree
+
+	def buildTreePartial(self, solvingTree, packages, seen):
 		worker = self.worker
 		worker.update(packages)
-		seen = set()
 
 		while True:
 			pkg = worker.next()
@@ -883,9 +895,6 @@ class SolvingTreeBuilder(object):
 			if pkg in seen:
 				continue
 			seen.add(pkg)
-
-			if pkg.isSourcePackage:
-				continue
 
 			requiringNode = self.addPackage(solvingTree, pkg)
 			if requiringNode is None:
@@ -906,10 +915,6 @@ class SolvingTreeBuilder(object):
 
 				worker.add(target)
 
-		solvingTree.finalize()
-
-		return solvingTree
-
 	def getBuildForPackage(self, rpm):
 		buildId = rpm.obsBuildId
 		if buildId is None:
@@ -919,6 +924,9 @@ class SolvingTreeBuilder(object):
 		build = self.store.retrieveOBSPackageByBuildId(buildId)
 		if build is None:
 			infomsg(f"Could not find OBS package {buildId} for {rpm.shortname}")
+		else:
+			self.builds.add(build)
+
 		return build
 
 

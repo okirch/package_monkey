@@ -1404,8 +1404,9 @@ class BackingStoreDB(DB):
 			if src:
 				pkg.setSourcePackage(src)
 
+		# FIXME: cleanup
 		# locate the OBS package from which this was built
-		if not pkg.isSourcePackage:
+		if True:
 			buildId = self.buildPkgRelation.retrieveBuildForPackage(pkgId)
 			if buildId is None:
 				warnmsg(f"Warning: {pkg.fullname()} (id {pkgId}) not tracked by any build")

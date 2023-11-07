@@ -463,6 +463,8 @@ class PotentialClassification(object):
 			# FIXME: rename to baseLabelSolutions
 			self.goodBaseLabels = {}
 
+			self.solvingBaseLabel = None
+
 			self.trace = False
 
 		def __str__(self):
@@ -608,6 +610,8 @@ class PotentialClassification(object):
 
 			for packagePlacement, choice in potentialSolution:
 				packagePlacement.setSolutionFromBaseLabel(choice, baseLabel) 
+
+			self.solvingBaseLabel = baseLabel
 			return True
 
 		# look for packages that have been labelled for a flavor with a defaultlabel.

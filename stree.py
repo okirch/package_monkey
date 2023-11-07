@@ -492,12 +492,17 @@ class SolvingTree(object):
 
 			self.labels = Classification.createLabelSet()
 			for rpm in build.binaries:
+				label = rpm.label
+
+				# Do not add packages that are labeled with disposition ignored
+				if label and label.disposition == Classification.DISPOSITION_IGNORE:
+					continue
+
 				if rpm.isSourcePackage:
 					self.sources.append(rpm)
 				else:
 					self.packages.append(rpm)
 
-					label = rpm.label
 					if label and label.type == Classification.TYPE_BINARY:
 						self.labels.add(label)
 
@@ -592,6 +597,7 @@ class SolvingTree(object):
 	def addPackage(self, pkg):
 		# Do not add packages that are labeled with disposition ignored
 		if pkg.label and pkg.label.disposition == Classification.DISPOSITION_IGNORE:
+			infomsg(f"{pkg} is label {pkg.label} with disposition {pkg.label.disposition}")
 			return None
 		return self.getPackage(pkg)
 

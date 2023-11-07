@@ -1736,6 +1736,46 @@ class ClassificationResult(object):
 
 		return effectiveRequirements
 
+	def getMinimalBuildRequirements(self, buildInfo):
+		actualRequirements = self.collectActualBuildRequirements(buildInfo)
+
+		if actualRequirements is None:
+			return None
+
+		return self.reduceRequirements(buildInfo.name, actualRequirements)
+
+	def collectActualBuildRequirements(self, buildInfo):
+		# Should really be a fastset not a set
+		actualRequirements = set()
+		failed = False
+
+		buildName = buildInfo.name
+		for pkg in buildInfo.sources:
+			if pkg.resolvedRequires is None:
+				infomsg(f"Unable to compute minimal requirements for {buildName}: requirements for {pkg} have not been resolved")
+				failed = True
+				continue
+
+			for dep, required in pkg.resolvedRequires:
+				requiredLabel = required.label
+				if requiredLabel is None:
+					infomsg(f"Unable to compute minimal requirements for {buildName}: {pkg} requires {required} which has not been labelled")
+					failed = True
+					continue
+
+				if requiredLabel.type is Classification.TYPE_AUTOFLAVOR or \
+				   requiredLabel.type is Classification.TYPE_PURPOSE:
+					infomsg(f"Unable to compute minimal requirements for {buildName}: {pkg} requires {required} has automatic label {requiredLabel}")
+					failed = True
+					continue
+
+				actualRequirements.add(requiredLabel)
+
+		if failed:
+			return None
+
+		return actualRequirements
+
 class PackageFilter:
 	class Verdict:
 		def __init__(self, group, reason):

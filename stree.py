@@ -868,26 +868,6 @@ class SolvingTreeBuilder(object):
 
 		return node
 
-	def edges(self, pkg):
-		result = []
-		for dep, target in self.context.resolveDownward(pkg):
-			if target is not pkg:
-				result.append(Classification.ReasonRequires(target, pkg, dep))
-
-		return result
-
-	def followEdge(self, edge, solvingTree):
-		# some of the logic from addEdge might as well live here and save us a few
-		# cycles
-		solvingTree.addEdge(edge.dependant, edge.package)
-
-		for pkg in edge.package, edge.dependant:
-			build = self.getBuildForPackage(pkg)
-			if build is not None:
-				solvingTree.addBuild(build)
-
-		return edge.package
-
 	def buildTree(self, packages, **kwargs):
 		solvingTree = SolvingTree(self.classificationScheme, order = self.labelOrder, **kwargs)
 

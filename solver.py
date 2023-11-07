@@ -64,8 +64,46 @@ def displayLabelSetFull(candidates, indent = ""):
 		else:
 			infomsg(f"{indent}{baseLabel}")
 
+##################################################################
+# Solvers - for now, these are used only during stage 2
+##################################################################
+class Solver(object):
+	pass
 
+class SourceHintsSolver(Solver):
+	def __init__(self, componentLabel, potentialClassification):
+		self.componentLabel = componentLabel
+		self.closure = potentialClassification.labelOrder.downwardClosureForSet(componentLabel.buildRequires)
 
+		if not componentLabel.buildRequires:
+			warnmsg(f"Created {self} with empty build requirements set")
+		if not self.closure:
+			warnmsg(f"Created {self} with empty build requirements closure")
+
+	def __str__(self):
+		return f"source component solver for {self.componentLabel}"
+
+	def tryToSolve(self, buildPlacement):
+		return buildPlacement.solveWithConstraints(self.closure)
+
+class SolverFactory(object):
+	def __init__(self, potentialClassification):
+		self.potentialClassification = potentialClassification
+		self.componentSolvers = {}
+
+	def sourceHintsSolver(self, label):
+		try:
+			return self.componentSolvers[label]
+		except:
+			pass
+
+		solver = SourceHintsSolver(label, self.potentialClassification)
+		self.componentSolvers[label] = solver
+		return solver
+
+##################################################################
+# The actual solving algorithm
+##################################################################
 class PotentialClassification(object):
 	def __init__(self, solvingTree):
 		self.solvingTree = solvingTree
@@ -189,6 +227,9 @@ class PotentialClassification(object):
 		def baseLabels(self):
 			return Classification.createLabelSet((self.label.baseLabel, ))
 
+		def addSolver(self, solver):
+			pass
+
 	class TentativePackagePlacement(PackagePlacement):
 		def __init__(self, labelOrder, node, preferences):
 			super().__init__(labelOrder, node)
@@ -200,6 +241,8 @@ class PotentialClassification(object):
 
 			self.constrainedAbove = bool(node.upperNeighbors)
 			self.constrainedBelow = bool(node.lowerNeighbors)
+
+			self.solvers = set()
 
 		def fail(self, msg):
 			errormsg(f"{self}: {msg}")
@@ -233,6 +276,23 @@ class PotentialClassification(object):
 				return
 
 			constraints.constrainComponents(self)
+
+		# After the first stage, we look at the build requirements of all source packages
+		# and use the component label to constrain its build requirements
+		def addSolver(self, solver):
+			if self.label is None:
+				self.solvers.add(solver)
+				if self.trace:
+					infomsg(f"{self} added {solver}")
+
+		def propagateSolvers(self):
+			if not solvers:
+				return
+
+			for lower in self.node.lowerNeighbors:
+				buildPlacement = lower.placement
+				if lower.label is None:
+					lower.solvers.update(self.solvers)
 
 		# The node corresponds to a package that has been auto-labelled as "devel" (purpose)
 		# or "python" (flavor). Reduce the list of candidates to those that have a matching
@@ -739,6 +799,8 @@ class PotentialClassification(object):
 					compatibleBaseLabels.add(baseLabel)
 
 			compatibleBaseLabels = self.preferences.filterCandidates(compatibleBaseLabels)
+			self.compatibleBaseLabels.update(compatibleBaseLabels)
+
 			infomsg(f"Trying to solve {self} using all base labels {' '.join(map(str, compatibleBaseLabels))}")
 
 			maxBaseLabel = self.labelOrder.maximumOf(compatibleBaseLabels)
@@ -855,6 +917,40 @@ class PotentialClassification(object):
 
 			return self.isFinal
 
+		def solveWithConstraints(self, constrainingSet):
+			# see if we have any base labels that produce a solution that
+			# does not require @Foo+flavor style labes, but requires only
+			# @Foo and @Foo-purpose labels
+			baseLabels = self.compatiblePureBaseLabels
+
+			if not baseLabels:
+				# Nope, try all base labels
+				baseLabels = self.compatibleBaseLabels
+
+				if not baseLabels:
+					return False
+
+			baseLabels = baseLabels.intersection(constrainingSet)
+
+			display = renderLabelSet("constrained base labels", baseLabels)
+			infomsg(f"Trying to solve {self} using {display}")
+
+			if not baseLabels:
+				return False
+
+			# it does not make sense to look at the maximum of these constrained base labels.
+			# in way too many cases, the maximum ends up being @BaseBuildEnv, resulting
+			# in countless bad decisions
+			if len(baseLabels) != 1:
+				return False
+
+			bestLabel = next(iter(baseLabels))
+			return self.tryToSolveUsingBaseLabel(bestLabel, "source constrained base label")
+
+		def propagateSolvers(self):
+			for packagePlacement in self.children:
+				packagePlacement.propagateSolvers()
+
 		def reportRemaining(self):
 			remaining = self.unsolved
 
@@ -920,7 +1016,7 @@ class PotentialClassification(object):
 		buildPlacement.applyConstraints()
 		return buildPlacement
 
-	def solveBuildPlacement(self, tentativePlacement):
+	def solveBuildPlacementStage1(self, tentativePlacement):
 		if tentativePlacement.isFinal:
 			return
 
@@ -940,6 +1036,91 @@ class PotentialClassification(object):
 				return True
 
 			infomsg(f"{tentativePlacement}: remains to be solved")
+
+		return False
+
+	# For a solved build placement, this tries to figure out the buildConfig and component
+	# In addition, if the source package for this build has any build requirements that could
+	# not be solved, attach a solver to it that tries to use the the buildConfig to find a
+	# unique solving label
+	def postProcessSolvedBuildPlacement(self, buildPlacement, build, solverFactory):
+		if len(build.sources) != 1:
+			warnmsg(f"{build} has {len(build.sources)} sources")
+
+		buildLabel = None
+		componentLabel = None
+		if buildPlacement.solvingBaseLabel:
+			buildLabel = buildPlacement.solvingBaseLabel.buildConfig
+			componentLabel = buildLabel.baseLabel
+		else:
+			solutions = [p.label for p in buildPlacement.solved]
+
+			buildConfigs = set(label.buildConfig for label in solutions)
+			if len(buildConfigs) == 1:
+				buildLabel = next(iter(buildConfigs))
+
+			components = set(label.baseLabel for label in buildConfigs)
+			if len(components) == 1:
+				componentLabel = next(iter(components))
+
+		if buildLabel and not componentLabel:
+			componentLabel = buildLabel.baseLabel
+
+		if componentLabel is None:
+			warnmsg(f"{build} unable to determine unique component label")
+			return False
+
+		if buildLabel is None:
+			warnmsg(f"{build} unable to determine unique build label")
+			return False
+
+		# buildPlacement.setSolution(buildLabel, componentLabel)
+		if buildPlacement.trace:
+			infomsg(f"{build} will be placed in component {componentLabel}")
+
+		with loggingFacade.temporaryIndent(3):
+			buildPlacement.buildConfig = buildLabel
+			buildPlacement.componentLabel = componentLabel
+
+			for rpm in build.sources:
+				node = self.solvingTree.getPackage(rpm)
+				if node is None:
+					continue
+
+				for lower in node.lowerNeighbors:
+					if lower.placement is None:
+						warnmsg("{lower} has no placement handle")
+						continue
+
+					solver = solverFactory.sourceHintsSolver(buildLabel)
+					lower.placement.addSolver(solver)
+
+			return True
+
+	# We get here when we were unable to solve this OBS package during the first stage.
+	# After stage 1, we look at the build requirements of solved packages, and use these
+	# to put additional constraints on them. Such as the component (aka OBS project)
+	def solveBuildPlacementStage2(self, buildPlacement):
+		solvers = set()
+		for packagePlacement in buildPlacement.unsolved:
+			solvers.update(packagePlacement.solvers)
+
+		if not solvers:
+			return False
+
+		infomsg(f"{buildPlacement}: {buildPlacement.numSolved}/{buildPlacement.numPackages} solved")
+		with loggingFacade.temporaryIndent(3):
+			for solver in solvers:
+				infomsg(f"{buildPlacement}: trying to solve using {solver}")
+
+				with loggingFacade.temporaryIndent(3):
+					success = solver.tryToSolve(buildPlacement)
+
+				if success:
+					infomsg(f"{buildPlacement}: successfully solved")
+					return True
+
+			infomsg(f"{buildPlacement} remains to be solved")
 
 		return False
 
@@ -991,8 +1172,15 @@ class PotentialClassification(object):
 
 	def reportUnsolved(self, placements):
 		header = "Packages that have not been placed"
+		numSolved = 0
+		numSolvedPackages = 0
+		totalPackages = 0
 		for buildPlacement in placements:
+			totalPackages += buildPlacement.numPackages
+			numSolvedPackages += buildPlacement.numSolved
+
 			if buildPlacement.isSolved:
+				numSolved += 1
 				continue
 
 			if header is not None:
@@ -1001,16 +1189,23 @@ class PotentialClassification(object):
 
 			buildPlacement.reportRemaining()
 
+		infomsg("")
+		infomsg(f"Solved {numSolved}/{len(placements)} builds")
+		infomsg(f"Solved {numSolvedPackages}/{totalPackages} packages")
+		infomsg("")
+
 	def solve(self):
 		infomsg("### PLACEMENT STAGE 1 ###")
 
 		timing = ExecTimer()
 
 		placements = []
-		for siblingInfo in self.solvingTree.allBuilds:
-			debugmsg(f"Create build placement for {siblingInfo}")
-			placement = self.createBuildPlacement(siblingInfo)
+		placementMap = {}
+		for build in self.solvingTree.allBuilds:
+			debugmsg(f"Create build placement for {build}")
+			placement = self.createBuildPlacement(build)
 			placements.append(placement)
+			placementMap[build] = placement
 
 		infomsg(f"Created placement objects; {timing} elapsed")
 		infomsg("")
@@ -1024,7 +1219,22 @@ class PotentialClassification(object):
 				buildPlacement.tryToPlaceTopDown(node)
 
 		for placement in placements:
-			self.solveBuildPlacement(placement)
+			self.solveBuildPlacementStage1(placement)
+
+		infomsg("### PLACEMENT STAGE 2 ###")
+		solverFactory = SolverFactory(self)
+		for build in self.solvingTree.topDownBuildTraversal():
+			buildPlacement = placementMap[build]
+
+			if not buildPlacement.isFinal:
+				self.solveBuildPlacementStage2(buildPlacement)
+
+			if buildPlacement.isFinal:
+				self.postProcessSolvedBuildPlacement(buildPlacement, build, solverFactory)
+			else:
+				# if we were still unable to place this build, we should at least propagate
+				# any solvers to unsolved lower neighbors
+				buildPlacement.propagateSolvers()
 
 		self.reportUnsolved(placements)
 
@@ -1035,6 +1245,7 @@ class PotentialClassification(object):
 				node.placement.reportVerdict(node, result)
 
 		for build in self.solvingTree.builds:
+			# We do not place the builds in components yet
 			label = None
 			result.labelOneBuild(build.name, label, build.packages, build.sources)
 

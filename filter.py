@@ -440,6 +440,10 @@ class Classification:
 		def allAutoFlavors(self):
 			return set(filter(lambda label: label.type == Classification.TYPE_AUTOFLAVOR, self._labels.values()))
 
+		@property
+		def allBuildConfigs(self):
+			return set(filter(lambda label: label.type == Classification.TYPE_BUILDCONFIG, self._labels.values()))
+
 		def getLabel(self, name):
 			return self._labels.get(name)
 
@@ -620,8 +624,39 @@ class Classification:
 			for label in order.bottomUpTraversal():
 				label.autoSelectCompatibleFlavors(order)
 
-			# ugly...
+			# A build config like Java/standard should buildrequire binary labels like @Java or @Core, but
+			# it can also reference another buildconfig like Core/python. In this case, we want to expand
+			# that reference to the actual binary labels that are used by Core/python.
+			resolved = set()
+			for label in self.allBuildConfigs:
+				self.resolveBuildConfigDependencies(label, resolved)
+
+			# ugly... this should really be attached to the classificationScheme *instance*
 			Classification.baseLabelsForSet = fastsets.Transform(Classification.domain, lambda label: label.baseLabel)
+
+		def resolveBuildConfigDependencies(self, buildConfig, resolved, resolving = None):
+			if resolving is None:
+				resolving = set()
+
+			assert(buildConfig not in resolving)
+			resolving.add(buildConfig)
+
+			resolvedSet = Classification.createLabelSet()
+			for label in buildConfig.buildRequires:
+				if label.type == Classification.TYPE_BUILDCONFIG or \
+				   label.type == Classification.TYPE_BUILDCONFIG_FLAVOR:
+					if label not in resolved:
+						self.resolveBuildConfigDependencies(label, resolved, resolving)
+					infomsg(f"{buildConfig} requires {label.type} {label}: resolved to {len(label.buildRequires)} labels")
+					resolvedSet.update(label.buildRequires)
+				elif label.type == Classification.TYPE_BINARY:
+					resolvedSet.add(label)
+				else:
+					raise Exception(f"{label} references invalid {label.type} label {label}")
+
+			buildConfig.buildRequires = resolvedSet
+
+			resolving.discard(buildConfig)
 
 	class Reason(object):
 		def __init__(self, pkg):

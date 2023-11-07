@@ -461,7 +461,7 @@ class PotentialClassification(object):
 			# Do NOT initialize self._compatibleBaseLabels either
 
 			# FIXME: rename to baseLabelSolutions
-			self.goodBaseLabels = {}
+			self.baseLabelSolutions = {}
 
 			self.solvingBaseLabel = None
 
@@ -582,7 +582,7 @@ class PotentialClassification(object):
 
 		def canSolveUsingBaseLabel(self, baseLabel):
 			try:
-				return self.goodBaseLabels[baseLabel]
+				return self.baseLabelSolutions[baseLabel]
 			except:
 				pass
 
@@ -593,12 +593,12 @@ class PotentialClassification(object):
 				if choice is None:
 					if self.trace:
 						infomsg(f"{self}: incompatible base label {baseLabel} - no candidate for {packagePlacement}")
-					self.goodBaseLabels[baseLabel] = None
+					self.baseLabelSolutions[baseLabel] = None
 					return None
 
 				result.add(packagePlacement, choice)
 
-			self.goodBaseLabels[baseLabel] = result
+			self.baseLabelSolutions[baseLabel] = result
 			return result
 
 		def tryToSolveUsingBaseLabel(self, baseLabel, desc):
@@ -701,7 +701,7 @@ class PotentialClassification(object):
 			else:
 				self._compatiblePureBaseLabels = set()
 				for label in baseLabels:
-					if self.goodBaseLabels[label].isPureBaseLabelSolution:
+					if self.baseLabelSolutions[label].isPureBaseLabelSolution:
 						self._compatiblePureBaseLabels.add(label)
 
 			return self._compatiblePureBaseLabels
@@ -886,8 +886,8 @@ class PotentialClassification(object):
 				infomsg(f"    - {packagePlacement} ({status}); {extra}")
 				infomsg(f"         {extra2}")
 
-			if self.goodBaseLabels:
-				extra = renderLabelSet('compatible base labels', sorted(map(str, self.goodBaseLabels.keys())))
+			if self.baseLabelSolutions:
+				extra = renderLabelSet('compatible base labels', sorted(map(str, self.baseLabelSolutions.keys())))
 				infomsg(f"   {extra}")
 
 	def definePreference(self, preferredName, otherNames):

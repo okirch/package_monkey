@@ -244,9 +244,21 @@ class LoggingFacade:
 			def __init__(self, indent, width):
 				self.indent = indent
 				self.width = width
+				self.active = False
+
+			def __enter__(self):
+				if not self.active:
+					self.indent.value += self.width
+					self.active = True
+				return self
+
+			def __exit__(self, *args):
+				if self.active:
+					self.indent.value -= self.width
+					self.active = False
 
 			def __del__(self):
-				self.indent.value -= self.width
+				assert(not self.active)
 
 		def __init__(self, *args, **kwargs):
 			super().__init__(*args, **kwargs)
@@ -266,7 +278,6 @@ class LoggingFacade:
 			return super().format(record)
 
 		def temporaryIndent(self, width = 3):
-			self.indent.value += width
 			return self.TI(self.indent, width)
 
 	def __init__(self):

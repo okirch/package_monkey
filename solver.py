@@ -860,19 +860,20 @@ class PotentialClassification(object):
 		infomsg(f"{tentativePlacement}: {tentativePlacement.numSolved}/{tentativePlacement.numPackages} solved")
 
 		# it may be better to have the indent handling use "with"
-		ti = loggingFacade.temporaryIndent(3)
-		success = \
-			tentativePlacement.solveTrivialCases() or \
-			tentativePlacement.solveDefaultBaseLabel() or \
-			tentativePlacement.solveCommonBaseLabel() or \
-			tentativePlacement.solveCompatibleBaseLabel() or \
-			tentativePlacement.solvePurposeRelativeToSibling(self.classificationScheme)
+		with loggingFacade.temporaryIndent(3):
+			success = \
+				tentativePlacement.solveTrivialCases() or \
+				tentativePlacement.solveDefaultBaseLabel() or \
+				tentativePlacement.solveCommonBaseLabel() or \
+				tentativePlacement.solveCompatibleBaseLabel() or \
+				tentativePlacement.solvePurposeRelativeToSibling(self.classificationScheme)
 
-		if tentativePlacement.isFinal:
-			infomsg(f"{tentativePlacement}: completely solved")
-			return True
+			if tentativePlacement.isFinal:
+				infomsg(f"{tentativePlacement}: completely solved")
+				return True
 
-		infomsg(f"{tentativePlacement}: remains to be solved")
+			infomsg(f"{tentativePlacement}: remains to be solved")
+
 		return False
 
 	def constrainPackagesWithAutomaticLabels(self, order):

@@ -251,3 +251,80 @@ class XmlWriter(BaseWriter):
 	def writeProblems(self, problemLog):
 		raise Exception("XML writer does not support problem log")
 
+class XmlReader:
+	from filter import Classification
+
+	from packages import Versiontools
+
+	nullVersion = Versiontools.ParsedVersion(None, None)
+
+	def __init__(self, classificationScheme):
+		from filter import ClassificationResult
+
+		self.classificationScheme = classificationScheme
+		self.result = ClassificationResult(classificationScheme.defaultOrder())
+
+		self._packages = {}
+
+	def read(self, path):
+		import xml.etree.ElementTree as ET
+		from xmltree import parse as XmlLoad
+
+		tree = ET.parse(path)
+		root = tree.getroot()
+		if root.tag != "components":
+			raise Exception(f"invalid root element <{root.tag}> in {path}")
+
+		for node in root:
+			if node.tag == 'topic':
+				self.processTopic(node)
+			elif node.tag == 'build':
+				self.processBuild(node)
+			else:
+				raise Exception(f"unsupported element <{node.tag}> in {path}")
+
+		return self.result
+
+	def processTopic(self, labelNode):
+		name = labelNode.attrib['name']
+
+		label = self.classificationScheme.getLabel(name)
+
+		for rpm in self.processAllRpmChildren(labelNode):
+			self.result.labelOnePackage(rpm, label, None)
+
+	def processBuild(self, buildNode):
+		name = buildNode.attrib['name']
+
+		binaries = []
+		sources = []
+		for rpm in self.processAllRpmChildren(buildNode):
+			if rpm.isSourcePackage:
+				sources.append(rpm)
+			else:
+				binaries.append(rpm)
+			rpm.resolvedRequires = []
+
+		buildReqNode = buildNode.find('buildrequires')
+		if buildReqNode is not None and sources:
+			for rpm in self.processAllRpmChildren(buildReqNode):
+				sources[0].resolvedRequires.append((None, rpm))
+
+		self.result.labelOneBuild(name, None, binaries, sources)
+
+	def processAllRpmChildren(self, node):
+		for rpmNode in node.findall('rpm'):
+			yield self.processRpm(rpmNode)
+
+	def processRpm(self, rpmNode):
+		from packages import PackageInfo
+
+		name = rpmNode.attrib['name']
+		arch = rpmNode.attrib['arch']
+
+		key = f"{name}.{arch}"
+		rpm = self._packages.get(key)
+		if rpm is None:
+			rpm = PackageInfo.fromNameAndParsedVersion(name, arch, self.nullVersion)
+			self._packages[key] = rpm
+		return rpm

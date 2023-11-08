@@ -13,6 +13,9 @@ application = Application('obs-download-data')
 
 store = application.backingStore
 
+# Make sure we have all the products that we use recorded in the database
+application.catalog.updateBackingStore(store)
+
 # store the arch we're asked to look at, so that we don't
 # have to play guessing games later on
 store.putProperty("arch", application.architecture)

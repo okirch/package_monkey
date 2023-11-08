@@ -15,6 +15,21 @@ def splitDictKeyValues(d):
 
 	return keys, values
 
+class GenericCache(dict):
+	def put(self, id, dep):
+		self[id] = dep
+
+class GenericSetCache(dict):
+	def put(self, id, dep):
+		try:
+			self[id].add(dep)
+		except:
+			self[id] = set()
+			self[id].add(dep)
+
+	def get(self, id, default = None):
+		res = super().get(id, default)
+		return res or []
 
 class DB(object):
 	class CommitLock:
@@ -144,11 +159,20 @@ class Table(object):
 		self.db = db
 		self.name = name
 		self.objectTemplate = None
+		self.readonly = False
 
 	def setObjectTemplate(self, templ):
 		self.objectTemplate = templ
 
+	def setReadonly(self):
+		self.readonly = True
+
 	def execute(self, sqlStatement, values = []):
+		if self.readonly:
+			verb = sqlStatement.split(maxsplit = 1)[0].upper()
+			if verb not in ('SELECT', ):
+				raise Exception(f"operation refused on read-only table: {sqlStatement}")
+
 		try:
 			c = self.db.conn.cursor()
 
@@ -830,10 +854,37 @@ class FilesTable(UniqueTable):
 				path text
 			);"""
 
+	def __init__(self, db):
+		super().__init__(db)
+		self._cacheByPkgId = None
+		self._cacheByPath = None
+
+	def setReadonly(self):
+		super().setReadonly()
+
+		self._cacheByPkgId = GenericSetCache()
+		self._cacheByPath = GenericSetCache()
+
+		for d in self.fetchAll():
+			self._cacheByPkgId.put(d['pkgId'], d['path'])
+			self._cacheByPath.put(d['path'], d['pkgId'])
+
 	def addFiles(self, pathList, pkgID):
 		keys = ('pkgId', 'path')
 		for path in pathList:
 			self.insertKeysAndValues(keys, (pkgID, path))
+
+	def pathsForPackage(self, pkgId):
+		if self._cacheByPkgId is not None:
+			return self._cacheByPkgId.get(pkgId)
+
+		return self.fetchColumn('path', pkgId = pkgId)
+
+	def packagesForPath(self, path):
+		if self._cacheByPath is not None:
+			return self._cacheByPath.get(path)
+
+		return self.fetchColumn('pkgId', path = path)
 
 class DependencyTable(UniqueTable):
 	TABLE_FIELDS = """
@@ -846,14 +897,31 @@ class DependencyTable(UniqueTable):
 			release text
 		"""
 
-	class Cache(dict):
-		def put(self, id, dep):
-			self[id] = dep
+	Cache = GenericCache
 
 	def __init__(self, *args):
 		super().__init__(*args)
-		self._cache = self.Cache()
+		self._cacheById = self.Cache()
+		self._cacheByPkgId = None
+		self._cacheByPkgName = None
 		self._knownPackages = []
+		self._allCached = False
+
+	def setReadonly(self):
+		super().setReadonly()
+
+		for d in self.fetchAll():
+			self.constructDependency(d)
+
+		self._cacheByPkgId = GenericSetCache()
+		for dep in self._cacheById.values():
+			self._cacheByPkgId.put(dep.pkgId, dep)
+
+		self._cacheByPkgName = GenericSetCache()
+		for dep in self._cacheById.values():
+			self._cacheByPkgName.put(dep.name, dep)
+
+		self._allCached = True
 
 	def fetchKnownPackages(self):
 		self._knownPackages = set(self.fetchColumn('pkgId'))
@@ -891,12 +959,19 @@ class DependencyTable(UniqueTable):
 		return pkgId in self._knownPackages
 
 	def retrieveDependencyById(self, id):
+		dep = self._cacheById.get(id)
+		if dep or self._allCached:
+			return dep
+
 		d = self.fetchOne(id = id)
 		if d is None:
 			return None
 		return self.constructDependency(d)
 
 	def retrieveDependenciesByPkgId(self, pkgId):
+		if self._cacheByPkgId is not None:
+			return self._cacheByPkgId.get(pkgId)
+
 		result = []
 
 		for d in self.fetchAll(pkgId = pkgId):
@@ -904,6 +979,9 @@ class DependencyTable(UniqueTable):
 		return result
 
 	def retrieveDependenciesByPkgName(self, name):
+		if self._cacheByPkgName is not None:
+			return self._cacheByPkgName.get(name)
+
 		result = []
 
 		for d in self.fetchAll(name = name):
@@ -913,7 +991,7 @@ class DependencyTable(UniqueTable):
 	def constructDependency(self, d):
 		id = d['id']
 
-		dep = self._cache.get(id)
+		dep = self._cacheById.get(id)
 		if dep is not None:
 			return dep
 
@@ -930,7 +1008,7 @@ class DependencyTable(UniqueTable):
 
 		# infomsg(args)
 		dep = Package.createDependency(**args)
-		self._cache.put(id, dep)
+		self._cacheById.put(id, dep)
 		return dep
 
 class RequiresTable(DependencyTable):
@@ -950,6 +1028,14 @@ class DirectedGraphTable(UniqueTable):
 	def __init__(self, *args):
 		super().__init__(*args)
 		self._knownPackages = []
+		self._cacheByRequringPkg = None
+
+	def setReadonly(self):
+		super().setReadonly()
+
+		self._cacheByRequringPkg = GenericSetCache()
+		for d in self.fetchAll():
+			self._cacheByRequringPkg.put(d['requiringPkgId'], (d['dependencyId'], d['requiredPkgId']))
 
 	def fetchKnownPackages(self):
 		self._knownPackages = set(self.fetchColumn('requiringPkgId'))
@@ -967,6 +1053,9 @@ class DirectedGraphTable(UniqueTable):
 		self.insert(**kwargs)
 
 	def retrieveRequired(self, pkgId):
+		if self._cacheByRequringPkg is not None:
+			return self._cacheByRequringPkg.get(pkgId)
+
 		c = self.selectFrom(fields = ('dependencyId', 'requiredPkgId'), selector = {'requiringPkgId':  pkgId})
 		if c is None:
 			return None
@@ -995,6 +1084,17 @@ class BuildPackageRelationTable(UniqueTable):
 	def __init__(self, *args):
 		super().__init__(*args)
 		self._knownBuilds = []
+		self._cacheByBuildId = None
+		self._cacheByPkgId = None
+
+	def setReadonly(self):
+		super().setReadonly()
+
+		self._cacheByBuildId = GenericSetCache()
+		self._cacheByPkgId = GenericCache()
+		for d in self.fetchAll():
+			self._cacheByBuildId.put(d['buildId'], d['pkgId'])
+			self._cacheByPkgId.put(d['pkgId'], d['buildId'])
 
 	def fetchKnownBuilds(self):
 		self._knownBuilds = set(self.fetchColumn('buildId'))
@@ -1014,6 +1114,9 @@ class BuildPackageRelationTable(UniqueTable):
 		self.delete(buildId = buildId, pkgId = pkgId)
 
 	def retrievePackagesForBuild(self, buildId):
+		if self._cacheByBuildId is not None:
+			return self._cacheByBuildId.get(buildId)
+
 		c = self.selectFrom(fields = ('pkgId', ), selector = {'buildId':  buildId})
 		if c is None:
 			raise Exception(f"SQL query failed")
@@ -1021,6 +1124,9 @@ class BuildPackageRelationTable(UniqueTable):
 		return [row[0] for row in c.fetchall()]
 
 	def retrieveBuildForPackage(self, pkgId):
+		if self._cacheByPkgId is not None:
+			return self._cacheByPkgId.get(pkgId)
+
 		c = self.selectFrom(fields = ('buildId', ), selector = {'pkgId':  pkgId})
 		if c is None:
 			raise Exception(f"SQL query failed")
@@ -1080,6 +1186,8 @@ class ProvidesCache(dict):
 class BackingStoreDB(DB):
 	def __init__(self, path):
 		super().__init__()
+
+		self.readonly = False
 
 		if not self.connect(path):
 			barf()
@@ -1144,6 +1252,31 @@ class BackingStoreDB(DB):
 
 		self._allowDepTreeLookups = False
 		self._requireSourceLookups = False
+
+	def setReadonly(self):
+		if self.readonly:
+			return
+		self.readonly = True
+
+		self.packages.setReadonly()
+		self.latest.setReadonly()
+		self.builds.setReadonly()
+		self.requires.setReadonly()
+		self.provides.setReadonly()
+		self.files.setReadonly()
+		self.buildPkgRelation.setReadonly()
+		self.buildDep.setReadonly()
+		self.tree.setReadonly()
+
+		packages = []
+		for d in self.packages.fetchAll():
+			pkg = self.constructPackage(d['id'], d, deferCompleteInitialization = True)
+			packages.append(pkg)
+
+		for pkg in packages:
+			self.constructPackageInternal(pkg.backingStoreId, pkg)
+
+		self.enumerateOBSPackages()
 
 	def putProperty(self, name, value):
 		self.keyValueStore.set(name, value)
@@ -1368,7 +1501,7 @@ class BackingStoreDB(DB):
 
 		return self.constructPackage(pkgId, d, product)
 
-	def constructPackage(self, pkgId, d, product = None):
+	def constructPackage(self, pkgId, d, product = None, deferCompleteInitialization = False):
 		if product is None:
 			product = self.getCachedProductInfo(d.get('productId'))
 
@@ -1382,12 +1515,18 @@ class BackingStoreDB(DB):
 			return pkg
 
 		pkg = self.packages.constructObject(Package, d)
+		pkg.product = product
+
 		self.packageCache.put(pkg)
 
-		if d['arch'] not in ('src', 'nosrc'):
-			pkg.sourcePackage = self.retrieveSourcePackage(d, product)
+		if not deferCompleteInitialization:
+			self.constructPackageInternal(pkgId, pkg)
 
-		pkg.product = product
+		return pkg
+
+	def constructPackageInternal(self, pkgId, pkg):
+		if not pkg.isSourcePackage:
+			pkg.sourcePackage = self.retrieveSourcePackage(pkg.sourceBackingStoreId, pkg.product)
 
 		# now do the files
 		pkg.files = self.retrievePackageFiles(pkgId)
@@ -1400,7 +1539,7 @@ class BackingStoreDB(DB):
 			self.chasePackageDependencies(pkg)
 
 		if self._requireSourceLookups and pkg.sourceBackingStoreId is not None:
-			src = self.retrievePackageById(pkg.sourceBackingStoreId, product)
+			src = self.retrievePackageById(pkg.sourceBackingStoreId, pkg.product)
 			if src:
 				pkg.setSourcePackage(src)
 
@@ -1416,8 +1555,6 @@ class BackingStoreDB(DB):
 				pkg.obsBuildId = buildId
 			else:
 				warnmsg(f"Warning: {pkg.fullname()} (id {pkgId}) does not seem to belong to any build (previously {pkg.obsBuildId})")
-
-		return pkg
 
 	def chasePackageDependencies(self, pkg):
 		resolved = set()
@@ -1466,22 +1603,21 @@ class BackingStoreDB(DB):
 
 		return result
 
-	def retrieveSourcePackage(self, d, product = None):
-		src = None
+	def retrieveSourcePackage(self, sourceId, product = None):
+		if sourceId is None:
+			return None
 
-		sourceId = d.get('sourceId')
-		if sourceId is not None:
-			del d['sourceId']
+		src = self.packageCache.get(sourceId)
+		if src is None:
 			sd = self.packages.fetchOne(id = sourceId)
 			if sd is not None:
 				src = self.constructPackage(sourceId, sd, product)
 
-		if src is None:
-			pass
-
 		return src
 
 	def enumerateOBSPackages(self):
+		# FIXME: in readonly mode, once we've completed all loads, this routine should just
+		# iteratre over obsPackageCache
 		result = []
 		for d in self.builds.fetchAll():
 			buildId = d['id']
@@ -1550,11 +1686,10 @@ class BackingStoreDB(DB):
 		return obsPackage
 
 	def retrievePackageFiles(self, pkgId):
-		result = self.files.fetchColumn('path', pkgId = pkgId)
-		return result
+		return self.files.pathsForPackage(pkgId)
 
 	def retrieveFileProviders(self, path):
-		return self.files.fetchColumn('pkgId', path = path)
+		return self.files.packagesForPath(path)
 
 	def retrievePackageInfo(self, pkgId):
 		d = self.packages.fetchOne(id = pkgId)

@@ -55,8 +55,10 @@ class Application:
 	def catalog(self):
 		if self._catalog is None:
 			self._catalog = ProductCatalog(cacheLocation = self.cache)
+
+			# FIXME: this is bogus; it should happen elsewhere
 			# Make sure we have all the products that we use recorded in the database
-			self._catalog.updateBackingStore(self.backingStore)
+			# self._catalog.updateBackingStore(self.backingStore)
 		return self._catalog
 
 	@property
@@ -67,11 +69,32 @@ class Application:
 
 	@property
 	def backingStore(self):
+		return self.loadBackingStore()
+
+	def loadBackingStore(self, readonly = False, dependencyTreeLookups = False, sourceLookups = False):
 		if self._store is None and self.opts.db:
 			timing = ExecTimer()
-			self._store = BackingStoreDB(self.opts.db)
+			store = BackingStoreDB(self.opts.db)
+
+			# FIXME: this should depend either on an argument to this function, or
+			# on a command line switch
+			if True:
+				store.fixupLatest()
+				store.fixupBuilds()
+				store.fixupRequirements()
+				# stop
+
+			if dependencyTreeLookups:
+				store.enableDependencyTreeLookups()
+			if sourceLookups:
+				store.enableSourceLookups()
+			if readonly:
+				store.setReadonly()
+
 			infomsg(f"Loaded database {self.opts.db}: {timing} elapsed")
+			self._store = store
 		return self._store
+
 
 	@property
 	def traceMatcher(self):

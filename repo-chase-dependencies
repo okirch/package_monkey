@@ -8,9 +8,11 @@ import sys
 from options import Application
 
 application = Application('repo-chase-dependencies')
-dummy = application.catalog
 
 store = application.backingStore
+
+# Make sure we have all the products that we use recorded in the database
+application.catalog.updateBackingStore(store)
 
 # Load the default package filter and labelling
 # We need this for package preferences

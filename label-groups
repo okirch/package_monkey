@@ -11,9 +11,9 @@ from writers import StandardWriter, TableWriter, XmlWriter
 application = Application('build-dependency-tree')
 dummy = application.catalog
 
-store = application.backingStore
-store.enableDependencyTreeLookups()
-store.enableSourceLookups()
+store = application.loadBackingStore(readonly = True,
+		dependencyTreeLookups = True,
+		sourceLookups = True)
 
 classificationScheme = Classification.Scheme()
 packageFilter = PackageFilter(scheme = classificationScheme)
@@ -26,12 +26,6 @@ packageSelector = PackageSelector()
 collection = PackageCollection()
 
 resolver = Resolver(backingStore = store)
-
-if True:
-	store.fixupLatest()
-	store.fixupBuilds()
-	store.fixupRequirements()
-	# stop
 
 timing = ExecTimer()
 traceMatcher = application.traceMatcher

@@ -6,3 +6,4 @@ LOG
 *.db
 *.o
 *.so
+*.log

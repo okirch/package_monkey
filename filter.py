@@ -1353,48 +1353,6 @@ class PackageGroup:
 	def update(self, packages):
 		self._closure.update(packages)
 
-class StringMatchBuilder(object):
-	def __init__(self, stringMatcher, group, priority = None):
-		self.stringMatcher = stringMatcher
-		self.group = group
-
-		if priority is None:
-			priority = PackageLabelling.PRIORITY_DEFAULT
-		self.priority = priority
-
-	def addBinaryPackageFilter(self, name):
-		pattern, priority, group = self.processPattern(name)
-		self.stringMatcher.addBinaryMatch(pattern, priority, group)
-
-	def addSourcePackageFilter(self, name):
-		pattern, priority, group = self.processPattern(name)
-		self.stringMatcher.addSourceMatch(pattern, priority, group)
-
-	def processPattern(self, value):
-		group = self.group
-		priority = self.priority
-
-		# A match may come with additional parameters, as in 
-		#
-		#	postgresql-* priority=8
-		#
-		if ' ' in value:
-			words = value.split()
-			value = words[0]
-			for param in words[1:]:
-				(argName, argValue) = param.split('=')
-				if argName == 'priority':
-					priority = int(argValue)
-				elif argName == 'purpose':
-					subGroup = group.getObjectPurpose(argValue)
-					if argValue is None:
-						raise Exception(f"Cannot add filter for \"{value}\" - unknown purpose {argValue} in group {group.label}")
-					group = subGroup
-				else:
-					raise Exception(f"Unknown match parameter {param} in {self.filterSet} expression \"{value}\" for group {group.name}");
-
-		return (value, priority, group)
-
 class ClassificationResult(object):
 	class PackageMembership(object):
 		def __init__(self, label):
@@ -1681,6 +1639,48 @@ class PackageLabelling(object):
 				infomsg(f"{pkg}: {m.group} matched by {m.type} filter {m.pattern}")
 
 		return PackageFilter.Verdict(m.group, f"{m.type} filter {m.pattern}")
+
+class StringMatchBuilder(object):
+	def __init__(self, stringMatcher, group, priority = None):
+		self.stringMatcher = stringMatcher
+		self.group = group
+
+		if priority is None:
+			priority = PackageLabelling.PRIORITY_DEFAULT
+		self.priority = priority
+
+	def addBinaryPackageFilter(self, name):
+		pattern, priority, group = self.processPattern(name)
+		self.stringMatcher.addBinaryMatch(pattern, priority, group)
+
+	def addSourcePackageFilter(self, name):
+		pattern, priority, group = self.processPattern(name)
+		self.stringMatcher.addSourceMatch(pattern, priority, group)
+
+	def processPattern(self, value):
+		group = self.group
+		priority = self.priority
+
+		# A match may come with additional parameters, as in
+		#
+		#	postgresql-* priority=8
+		#
+		if ' ' in value:
+			words = value.split()
+			value = words[0]
+			for param in words[1:]:
+				(argName, argValue) = param.split('=')
+				if argName == 'priority':
+					priority = int(argValue)
+				elif argName == 'purpose':
+					subGroup = group.getObjectPurpose(argValue)
+					if argValue is None:
+						raise Exception(f"Cannot add filter for \"{value}\" - unknown purpose {argValue} in group {group.label}")
+					group = subGroup
+				else:
+					raise Exception(f"Unknown match parameter {param} in {self.filterSet} expression \"{value}\" for group {group.name}");
+
+		return (value, priority, group)
 
 class PackageFilter:
 	class Verdict:

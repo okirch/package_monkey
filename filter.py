@@ -1245,8 +1245,6 @@ class PackageGroup:
 
 		# nuke
 		self.matchCount = 0
-		# nuke
-		self.expand = True
 		self.label = None
 		self._packages = []
 		self._buildFlavors = {}
@@ -1355,27 +1353,6 @@ class PackageGroup:
 	def update(self, packages):
 		self._closure.update(packages)
 
-class GlobMatch:
-	PRIORITY_DEFAULT = 5
-
-	def __init__(self, value, group, priority = PRIORITY_DEFAULT):
-		self.value = value
-		self.group = group
-		self.priority = priority
-
-	def __str__(self):
-		if self.priority == self.PRIORITY_DEFAULT:
-			return self.value
-		return f"{self.value} (priority {self.priority})"
-
-	@property
-	def key(self):
-		return (self.priority, -len(self.value), self.value)
-
-	def match(self, name):
-		return fnmatch.fnmatchcase(name, self.value)
-
-
 class StringMatchBuilder(object):
 	def __init__(self, stringMatcher, group, priority = None):
 		self.stringMatcher = stringMatcher
@@ -1417,151 +1394,6 @@ class StringMatchBuilder(object):
 					raise Exception(f"Unknown match parameter {param} in {self.filterSet} expression \"{value}\" for group {group.name}");
 
 		return (value, priority, group)
-
-class FilterType(object):
-	def __init__(self, type):
-		self.type = type
-		self._exactMatches = {}
-		self._globMatches = []
-
-	def __str__(self):
-		return f"{self.type} filter"
-
-	def addMatch(self, value, group, priority):
-		if '*' in value or '?' in value:
-			self._globMatches.append(GlobMatch(value, group, priority))
-		else:
-			if self._exactMatches.get(value):
-				conflict = self._exactMatches[value]
-				raise Exception(f"{self.type} filter is ambiguous for {value} ({group.name} vs {conflict.name})")
-
-			# NB: silently ignore any priority value for exact match
-			self._exactMatches[value] = group
-
-	def finalize(self):
-		self._globMatches.sort(key = lambda m: m.key)
-
-	def tryFastMatch(self, name):
-		group = self._exactMatches.get(name)
-		if group is not None:
-			return PackageFilter.Verdict(group, f"{self.type} filter {name}")
-
-		return None
-
-	def trySlowNameMatch(self, name):
-		for glob in self._globMatches:
-			if glob.match(name):
-				return PackageFilter.Verdict(glob.group, f"{self.type} filter {glob}")
-
-		return None
-
-	def applyName(self, name):
-		verdict = self.tryFastMatch(name)
-		if verdict is None:
-			verdict = self.trySlowNameMatch(name)
-		return verdict
-
-class RpmGroupFilters(FilterType):
-	def __init__(self):
-		super().__init__('rpmgroup')
-
-	def apply(self, pkg, product):
-		return self.applyName(pkg.group)
-
-class ProductFilters(FilterType):
-	def __init__(self):
-		super().__init__('product')
-
-	def apply(self, pkg, product):
-		if product is None:
-			return None
-		return self.applyName(product.name)
-
-class PackageFilters(FilterType):
-	def __init__(self):
-		super().__init__('binary')
-
-	def apply(self, pkg, product):
-		return self.applyName(pkg.name)
-
-class SourcePackageFilters(FilterType):
-	def __init__(self):
-		super().__init__('source')
-
-	def apply(self, pkg, product):
-		src = pkg.sourcePackage
-		if src is None:
-			return None
-		return self.applyName(src.name)
-
-class PackageFilterSet:
-	def __init__(self):
-		self._productFilters = None
-		self._binaryPkgFilters = None
-		self._sourcePkgFilters = None
-		self._rpmGroupFilters = None
-		self._applicableFilters = None
-
-	@property
-	def productFilters(self):
-		if not self._productFilters:
-			self._productFilters = ProductFilters()
-		return self._productFilters
-
-	@property
-	def binaryPkgFilters(self):
-		if not self._binaryPkgFilters:
-			self._binaryPkgFilters = PackageFilters()
-		return self._binaryPkgFilters
-
-	@property
-	def sourcePkgFilters(self):
-		if not self._sourcePkgFilters:
-			self._sourcePkgFilters = SourcePackageFilters()
-		return self._sourcePkgFilters
-
-	@property
-	def rpmGroupFilters(self):
-		if not self._rpmGroupFilters:
-			self._rpmGroupFilters = RpmGroupFilters()
-		return self._rpmGroupFilters
-
-	def finalize(self):
-		self._applicableFilters = []
-		for filterSet in (self._productFilters, self._binaryPkgFilters, self._sourcePkgFilters, self._rpmGroupFilters):
-			if filterSet is not None:
-				filterSet.finalize()
-				self._applicableFilters.append(filterSet)
-
-	def applyVerbosely(self, pkg, product):
-		matches = []
-		for filterSet in self._applicableFilters:
-			verdict = filterSet.apply(pkg, product)
-			if verdict is not None:
-				matches.append(verdict)
-
-		if not matches:
-			infomsg(f"{pkg}: no match by package filter")
-			return None
-
-		verdict = matches.pop(0)
-		infomsg(f"{pkg}: {verdict.label} {verdict.reason}")
-
-		if matches:
-			infomsg(f"   {len(matches)} lower priority matches were ignored:")
-			for other in matches:
-				infomsg(f"      {other.label} {other.reason}")
-
-		return verdict
-
-	def apply(self, pkg, product):
-		if pkg.trace:
-			return self.applyVerbosely(pkg, product)
-		for filterSet in self._applicableFilters:
-			verdict = filterSet.apply(pkg, product)
-			if verdict is not None:
-				break
-		return verdict
 
 class ClassificationResult(object):
 	class PackageMembership(object):
@@ -2283,7 +2115,6 @@ class PackageFilter:
 	VALID_GROUP_FIELDS = set((
 		'name',
 		'description',
-		'expand',
 		'priority',
 		'gravity',
 		'requires',
@@ -2330,10 +2161,6 @@ class PackageFilter:
 		if name is not None:
 			buildConfig = self.resolveBuildReference(name)
 			group.label.setBuildConfig(buildConfig.label)
-
-		value = gd.get('expand')
-		if type(value) == bool:
-			group.expand = value
 
 		value = gd.get('disposition')
 		if value is not None:

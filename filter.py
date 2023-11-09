@@ -7,6 +7,7 @@ from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from ordered import PartialOrder
 from functools import reduce
 from stree import SolvingTreeBuilder
+from pmatch import ParallelStringMatcher
 
 # hack until I'm packaging fastsets properly
 import fastsets.fastsets as fastsets
@@ -1375,25 +1376,24 @@ class GlobMatch:
 		return fnmatch.fnmatchcase(name, self.value)
 
 
-class FilterSetBuilder(object):
-	def __init__(self, filterSet, group, priority = None):
-		self.filterSet = filterSet
+class StringMatchBuilder(object):
+	def __init__(self, stringMatcher, group, priority = None):
+		self.stringMatcher = stringMatcher
 		self.group = group
+
+		if priority is None:
+			priority = PackageLabelling.PRIORITY_DEFAULT
 		self.priority = priority
 
-	def addProductFilter(self, name):
-		self.addMatch(self.filterSet.productFilters, name)
-
 	def addBinaryPackageFilter(self, name):
-		self.addMatch(self.filterSet.binaryPkgFilters, name)
+		pattern, priority, group = self.processPattern(name)
+		self.stringMatcher.addBinaryMatch(pattern, priority, group)
 
 	def addSourcePackageFilter(self, name):
-		self.addMatch(self.filterSet.sourcePkgFilters, name)
+		pattern, priority, group = self.processPattern(name)
+		self.stringMatcher.addSourceMatch(pattern, priority, group)
 
-	def addRpmGroupFilter(self, name):
-		self.addMatch(self.filterSet.rpmGroupFilters, name)
-
-	def addMatch(self, filterSet, value):
+	def processPattern(self, value):
 		group = self.group
 		priority = self.priority
 
@@ -1416,10 +1416,7 @@ class FilterSetBuilder(object):
 				else:
 					raise Exception(f"Unknown match parameter {param} in {self.filterSet} expression \"{value}\" for group {group.name}");
 
-		if priority is None:
-			priority = GlobMatch.PRIORITY_DEFAULT
-
-		filterSet.addMatch(value, group, priority)
+		return (value, priority, group)
 
 class FilterType(object):
 	def __init__(self, type):
@@ -1482,14 +1479,14 @@ class ProductFilters(FilterType):
 
 class PackageFilters(FilterType):
 	def __init__(self):
-		super().__init__('package')
+		super().__init__('binary')
 
 	def apply(self, pkg, product):
 		return self.applyName(pkg.name)
 
 class SourcePackageFilters(FilterType):
 	def __init__(self):
-		super().__init__('source package')
+		super().__init__('source')
 
 	def apply(self, pkg, product):
 		src = pkg.sourcePackage
@@ -1776,6 +1773,83 @@ class ClassificationResult(object):
 
 		return actualRequirements
 
+class PackageLabelling(object):
+	PRIORITY_DEFAULT = 5
+
+	class Match:
+		def __init__(self, pattern, type, priority, group):
+			self.type = type # binary or source
+			self.pattern = pattern
+			self.group = group
+
+			assert(priority <= 10)
+			precedence = (10 - priority) * 100
+
+			# non-wildcard matches have a higher precedence than wildcarded ones
+			if '?' not in pattern and '*' not in pattern:
+				precedence += 1000
+
+			# longer patterns have higher precedence than shorter ones
+			precedence += len(pattern)
+
+			self.precedence = precedence
+
+		def __str__(self):
+			return f"{self.group}/{self.precedence}"
+
+	def __init__(self):
+		self.binaryMatcher = ParallelStringMatcher()
+		self.sourceMatcher = ParallelStringMatcher()
+
+	# FIXME: rather than sorting each and every result of the table, we could
+	# sort ALL matches by precedence once and then feed the patterns to the
+	# ParallelMatcher in order.
+	# However, that does not really address the problem as a shorter match may
+	# return less important results before a longer match with a higher precedence
+	# result.
+	def addBinaryMatch(self, pattern, priority, group):
+		m = self.Match(pattern, 'binary', priority, group)
+		self.binaryMatcher.add(pattern, m)
+
+	def addSourceMatch(self, pattern, priority, group):
+		m = self.Match(pattern, 'source', priority, group)
+		self.sourceMatcher.add(pattern, m)
+
+	def finalize(self):
+		pass
+
+	def apply(self, pkg):
+		if not pkg.isSourcePackage:
+			matches = self.binaryMatcher.match(pkg.name)
+			if not matches:
+				src = pkg.sourcePackage
+				if src is not None:
+					matches = self.sourceMatcher.match(src.name)
+		else:
+			matches = self.sourceMatcher.match(pkg.name)
+
+		if not matches:
+			if pkg.trace:
+				infomsg(f"{pkg}: no match by package filter")
+			return None
+
+		if len(matches) > 1:
+			matches = sorted(matches, key = lambda m: m.precedence, reverse = True)
+			m = matches.pop(0)
+
+			if pkg.trace:
+				infomsg(f"{pkg}: {m.group} matched by {m.type} filter {m.pattern}")
+				infomsg(f"   {len(matches)} lower priority matches were ignored:")
+				for other in matches:
+					infomsg(f"      {other.group} {other.type} {other.pattern}")
+		else:
+			m = next(iter(matches))
+
+			if pkg.trace:
+				infomsg(f"{pkg}: {m.group} matched by {m.type} filter {m.pattern}")
+
+		return PackageFilter.Verdict(m.group, f"{m.type} filter {m.pattern}")
+
 class PackageFilter:
 	class Verdict:
 		def __init__(self, group, reason):
@@ -1796,7 +1870,7 @@ class PackageFilter:
 		self._autoflavors = []
 		self._purposes = []
 
-		self.filterSet = PackageFilterSet()
+		self.stringMatcher = PackageLabelling()
 
 		timer = ExecTimer()
 		self.load(filename)
@@ -1855,7 +1929,7 @@ class PackageFilter:
 				if not other.defined and not other.label.isPurpose:
 					raise Exception(f"filter configuration issue: group {group.label} requires {other.label}, which is not defined anywhere")
 
-		self.filterSet.finalize()
+		self.stringMatcher.finalize()
 
 		for group in self._groups.values():
 			label = group.label
@@ -1941,7 +2015,7 @@ class PackageFilter:
 		return
 
 	def apply(self, pkg, product):
-		return self.filterSet.apply(pkg, product)
+		return self.stringMatcher.apply(pkg)
 
 	def performInitialPlacement(self, pkg):
 		verdict = self.apply(pkg, pkg.product)
@@ -2327,11 +2401,11 @@ class PackageFilter:
 		# The yaml file may specify per-group priorities for filters, but there is just
 		# one global set of filters. Rather than passing the group and priority argument
 		# into each add*Filter function, create a Builder object that does this transparently.
-		filterSetBuilder = FilterSetBuilder(self.filterSet, group, priority)
+		filterSetBuilder = StringMatchBuilder(self.stringMatcher, group, priority)
 
 		nameList = self.getYamlList(gd, 'products', group)
 		for name in nameList:
-			filterSetBuilder.addProductFilter(name)
+			raise Exception(f"package filter 'products' no longer supported")
 
 		# Specifying a packagesuffix "foo" does the same thing as specifying
 		# a package pattern "*-foo", except that the suffix is recorded in
@@ -2360,7 +2434,7 @@ class PackageFilter:
 
 		nameList = self.getYamlList(gd, 'rpmGroups', group)
 		for name in nameList:
-			filterSetBuilder.addRpmGroupFilter(name)
+			raise Exception(f"package filter 'rpmGroups' no longer supported")
 
 		flavors = self.getYamlList(gd, 'buildflavors', group)
 		for fd in flavors:

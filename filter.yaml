@@ -5,7 +5,7 @@ autoflavors:
    # labelled Foo+perl into Foo itself. Otherwise, behave like
    # disposition "separate"
    disposition: maybe_merge
-   # A perl package that do not have special dependencies go to @Perl
+   # A perl package that does not have special dependencies goes to @Perl
    defaultlabel: "@Perl"
    requires:
     - "@PerlCore"
@@ -18,7 +18,9 @@ autoflavors:
    priority: 10
    # place python packages in @PythonModules by default, unless they
    # are constrained in some other way
-   defaultlabel: "@PythonModules"
+   defaultlabels:
+    - "@PythonStandard"
+    - "@PythonModules"
    requires:
     - "@PythonStandard"
    packages:
@@ -132,93 +134,125 @@ build_configs:
  - name: Core/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Core-devel"
  - name: GCC/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@GCC-devel"
  - name: KernelPlus/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Kernel-devel"
  - name: Security/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Security-devel"
  - name: AppArmor/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@AppArmor-devel"
  - name: Databases/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Databases-devel"
  - name: Systemd/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@MinimalSystemd-devel"
  - name: Network/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@NetworkLibraries-devel"
  - name: Host/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@HostSecurity-devel"
+    - "@HostStorage-devel"
+    - "@HostNetworking-devel"
  - name: UpdateStack/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@UpdateStack-devel"
  - name: Management/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Management-devel"
  - name: Gnome/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@GnomeLibraries-devel"
+    - "@Gnome-devel"
  - name: X11/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@X11Libraries-devel"
  - name: Webserver/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Apache-devel"
  - name: Java/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Java-devel"
  - name: Perl/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Perl-devel"
  - name: Ruby/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Ruby-devel"
  - name: Python/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Python-devel"
  - name: Rust/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Rust-devel"
  - name: Go/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Go-devel"
  - name: Javascript/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Javascript-devel"
  - name: HPC/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@HPC-devel"
  - name: Typesetting/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Fonts-devel"
  - name: Texlive/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Texlive-devel"
  - name: Qt/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Qt-devel"
  - name: RobersFavoriteBeer/standard
    buildrequires:
     - "@BaseBuildEnv"
  - name: Multimedia/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Multimedia-devel"
  - name: Container/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Container-devel"
  - name: Virtualization/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@Virtualization-devel"
  - name: HA/standard
    buildrequires:
     - "@BaseBuildEnv"
+    - "@HA-devel"
 
 buildconfig_flavors:
  - name: systemdlibs
@@ -336,6 +370,8 @@ groups:
     # do these really belong here?
     - cscope
     - ctags
+    - unifdef
+    - cppunit
    buildflavors:
     - name: vim
       augments:
@@ -374,10 +410,17 @@ groups:
 #  sources:
 #   - system-users
 
+ - name: "@CoreKernelBuildDeps"
+   buildconfig: Core/standard
+   packages:
+    - systemtap-headers
+
  - name: "@Glibc"
    buildconfig: Core/standard
    # when deciding where to place -devel packages for a set of packages spread across
    # several labels (eg glibc here, nscd in Core0), we want this label to win
+   buildrequires:
+    - "@CoreKernelBuildDeps"
    gravity: 100
    binaries:
     - glibc
@@ -423,6 +466,7 @@ groups:
     - libtool
     - automake
     - autoconf
+    - autoconf213
     - autoconf-archive
     - autogen
     # libssh-devel requires cmake
@@ -494,6 +538,7 @@ groups:
     - libcrack2
     - libdb-4_8
 #   - libdevmapper*
+    - libdouble-conversion3
     - libeconf0
     - libedit0
     - libelf1
@@ -506,15 +551,18 @@ groups:
     - libfreetype6
     - libfribidi0
     - libicu*
+    - libiniparser1
     # libpng is required by libfreetype6
     - libpng16
     - libgdbm6
     - libgdbm_compat4
+    - libibmtss1
     - libjson-c5
     - libldap-*
     - libldap2
     - libLLVM15
     - libLLVM16
+    - liblmdb-0*
     - libltdl7
     - liblua5*
     - libluajit*
@@ -525,6 +573,7 @@ groups:
     - libmpc3
     - libmpdec3
     - libmpfr6
+    - libmspack0
     - libncurses6
     - libnl3-200
     - libnl-config
@@ -551,20 +600,27 @@ groups:
     - libsemanage2
     - libsemanage-conf
     - libsepol2
+    - libsha1detectcoll1
     - libsigc-2*
     - libsigc-3*
+    - libsnappy1
     - libsqlite3*
     - libssh-config
     - libunistring5
     - libunwind8
+    - liburing2
     - libuuid1
     - libuv1
     - libverto1
+    - libverto-libev1
     - libwtmpdb0
     - libxml2-2
+    - libxxhash0
     - libyaml
     - libz1
     - libzio1
+    - libzopfli1
+    - libzopflipng1
     - libzstd1
     - llvm
     - llvm15
@@ -579,6 +635,13 @@ groups:
     - name: devel
       requires:
        - "@MinimalCDevelopment"
+      binaries:
+       - libbz2-devel
+       - libelf-devel
+       - libbsd-devel
+#      - libxml2-devel
+       - libcom_err-devel
+       - libboost_*-devel
    buildflavors:
     - name: odbc
       binaries:
@@ -602,7 +665,7 @@ groups:
        - python3-audit
     - name: java
       requires:
-       - "@Java"
+       - "@JDK"
       binaries:
        - timezone-java
     - name: vim
@@ -639,6 +702,7 @@ groups:
     - bzip2
     - ca-certificates
     - ca-certificates-mozilla
+    - chrpath
     - coreutils
     - coreutils-single
     - cpio
@@ -654,6 +718,7 @@ groups:
     - dialog
     - diffutils
     - dosfstools
+    - dwarves
     - e2fsprogs
     - ed
     - elfutils
@@ -674,6 +739,7 @@ groups:
     - hostname
     - info
     - info-lang # unfortunately, info requires info-lang
+    - jq
     - kbd
     - keyutils
     - krb5
@@ -698,6 +764,8 @@ groups:
     - libpcre16-0
     - libpsl5
     - libidn12
+    - lmdb
+    - lndir
     - logrotate
     - lz4
     - m4
@@ -747,6 +815,10 @@ groups:
        - name: devel
          requires:
 #         - "@HostStorage-devel"
+   purposes:
+    - name: devel
+      binaries:
+       - libxml2-devel
 
  - name: "@Core1"
    buildconfig: Core/standard
@@ -771,6 +843,9 @@ groups:
     - libduktape*
     - suse-build-key
     - perl-libintl-perl
+    - ibmtss
+    - git-core
+    - checkmedia
    buildflavors:
     - name: glib2
       requires:
@@ -782,6 +857,12 @@ groups:
        - name: devel
          binaries:
           - libgpgme-devel priority=0
+    - name: perl
+      requires:
+       - "@Perl"
+      packages:
+       - git-email
+       - git-svn
     - name: test
       packages:
 #      - libglib-testing-0-0
@@ -791,6 +872,7 @@ groups:
    requires:
     - "@Core0"
     - "@UdevLibraries"
+    - "@Glib2NoDBus"
    binaries:
     # these don't actually need systemd, the only depend on udev
     # one way or other
@@ -800,6 +882,10 @@ groups:
     - libfido2-1
     - btrfsprogs
     - btrfsprogs-udev-rules
+    - libinput10
+    - libstoragemgmt1
+    - libconfig11
+    - libwacom-data
 
  - name: "@CoreServices"
    buildconfig: Core/standard
@@ -817,6 +903,7 @@ groups:
     - util-linux-systemd
     # it's not a service but it links against libsystemd
     - procps
+    - cronie
    buildflavors:
     - name: gnome
       requires:
@@ -945,10 +1032,12 @@ groups:
    requires:
     - "@Core"
     - "@Perl"
-    - "@PythonStandard"
+    - "@PythonModules"
+    - "@AvahiLibraries"
     - "@GCC"
    packages:
     - pcp
+    - pcp-conf
     - libpcp3*
     - libpcp_*
    buildflavors:
@@ -1005,6 +1094,18 @@ groups:
     - "@CoreLibraries-devel"
    packages:
     - ocaml
+    - ocaml-rpm-macros
+   buildflavors:
+    - name: virt
+      requires:
+       - "@Virtualization"
+      binaries:
+       - ocaml-libvirt
+   purposes:
+    - name: devel
+      binaries:
+       - ocaml-ocamldoc
+       - ocaml-dune
 
  - name: "@Spelling"
    buildconfig: Core/standard
@@ -1014,7 +1115,15 @@ groups:
    packages:
     - myspell-dictionaries
     - enchant
+    - enchant-2-backend-*
+    - enchant-data
+    - enchant-tools
     - hunspell
+    - hyphen
+   purposes:
+    - name: devel
+      requires:
+       - "@Glib2-devel"
 
  - name: "@Kiwi"
    # maybe place in a separate project
@@ -1028,12 +1137,14 @@ groups:
     - "@Kernel"
     - "@Boot"
     - "@MinimalSystemd"
-    - "@PythonStandard"
+    - "@PythonModules"
     - "@TransactionalServer"
     - "@Console"
    packages:
     - kiwi
     - python3-kiwi
+    - pv
+    - jeos-firstboot
 
  - name: "@SELinux"
    buildconfig: Core/standard
@@ -1053,12 +1164,19 @@ groups:
     - selinux-policy-sandbox
     - policycoreutils-python-utils
     - python3-policycoreutils
+    - python3-selinux
+    - python3??-semanage
+    - python3??-setools
    buildflavors:
     - name: glib
       requires:
        - "@Glib2"
       packages:
        - restorecond
+   purposes:
+    - name: devel
+      requires:
+       - "@PythonStandard"
 
  - name: "@Console"
    buildconfig: Core/standard
@@ -1071,6 +1189,9 @@ groups:
     - newt
    purposes:
     - name: devel
+      requires:
+       # newt-devel wants python-devel
+       - "@PythonCore-devel"
       binaries:
        # misnamed package (should have been static-devel)
        - newt-static
@@ -1112,9 +1233,10 @@ groups:
    buildflavors:
     - name: x11
       requires:
-       - "@DesktopLibraries"
+       - "@DesktopUtilities"
        - "@KernelAudio"
        - "@DrawingLibraries"
+       - "@Bubblewrap"
       binaries:
        - emacs-x11
 
@@ -1153,6 +1275,29 @@ groups:
        - "@X11Libraries"
       binaries:
        - ghostscript-x11
+
+ - name: "@PDF"
+   buildconfig: Core/standard
+   requires:
+    - "@Core"
+    - "@Fonts"
+    - "@GraphicsLibraries"
+    - "@PrintingLibraries"
+   packages:
+    - poppler
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - poppler-tools
+    - name: glib2
+      requires:
+       - "@Glib2"
+       - "@X11Libraries"
+      binaries:
+       - libpoppler-glib8
+       - typelib-1_0-Poppler* priority=0
 
  - name: "@Texinfo"
    buildconfig: Core/standard
@@ -1309,22 +1454,21 @@ groups:
     - python-rpm-packaging
     - python31?-rpm
     - obs-service-*
+    - uasm
+    - yasm
 
  - name: "@Documentation"
    buildconfig: Core/standard
-   rpmGroups:
-    - Documentation/*
    packages:
     - release-notes-*
 
  - name: "@Databases"
    buildconfig: Databases/standard
-   rpmGroups:
-    - Productivity/Databases*
    requires:
     - "@Core0"
     - "@NetworkServices"
     - "@ApplicationLibraries"
+    - "@Python"
    packages:
     - postgresql-*
     - postgresql15-*
@@ -1334,6 +1478,12 @@ groups:
     - rsyslog-module-mysql
     - rsyslog-module-pgsql
     - libmariadb3
+    - postgresql-plpython
+    - postgresql-contrib
+    - postgresql15-plpython
+    - postgresql15-contrib
+    - python31?-mysqlclient
+    - perl-DBD-mysql
    purposes:
     - name: devel
       requires:
@@ -1346,14 +1496,6 @@ groups:
       binaries:
        - postgresql-docs
    buildflavors:
-    - name: python
-      requires:
-       - "@Python"
-      binaries:
-       - postgresql-plpython
-       - postgresql-contrib
-       - postgresql15-plpython
-       - postgresql15-contrib
     - name: tcl
       requires:
        - "@TclCore"
@@ -1375,7 +1517,7 @@ groups:
    buildconfig: X11/standard
    requires:
     - "@Core0"
-    - "@PerlCore"
+    - "@Perl"
     - "@FontLibraries"
    packages:
     - desktop-file-utils
@@ -1394,6 +1536,9 @@ groups:
     - "@FontLibraries"
     - "@Fonts"
     - "@DesktopCore"
+    # the only reason this is here is imlib2-loaders which requires libheif1
+    # which implements AVIF by using libdav1d
+    - "@AVLibrariesLight"
    buildrequires:
     - "@DesktopBuild"
    packages:
@@ -1418,11 +1563,16 @@ groups:
     - libxcb-dpms0
     - libxcb-dri2-0
     - libxcb-dri3-0
+    - libxcb-ewmh2
     - libxcb-glx0
+    - libxcb-keysyms1
+    - libxcb-icccm4
+    - libxcb-image0
     - libxcb-present0
     - libxcb-randr0
     - libxcb-record0
     - libxcb-render0
+    - libxcb-render-util0
     - libxcb-res0
     - libxcb-screensaver0
     - libxcb-shape0
@@ -1466,13 +1616,18 @@ groups:
     - util-macros
     - xkeyboard-config
     - xbitmaps
-    - libXevie
-    - libXfontcache
-    - libXfont
-    - libxkbui
-    - libXprintAppUtil
-    - libXvMC
-    - fontcacheproto
+    - libXevie1
+    - libXfontcache1
+    - libXfont1
+    - libXfont2
+    - libxkbui1
+    - libXprintAppUtil1
+    - libXvMC1
+    - libdmx1
+    - liblbxutil1
+    - liboldX6
+    - libXss1
+    - xtrans
    purposes:
     - name: devel
       requires:
@@ -1485,11 +1640,12 @@ groups:
        - xorgproto-devel
        - util-macros-devel
        - python3-xcb-proto-devel
+       - pthread-stubs-devel
+       - fontcacheproto-devel
+       - printproto-devel
 
  - name: "@X11"
    buildconfig: X11/standard
-   rpmGroups:
-    - System/X11/*
    requires:
     - "@X11Libraries"
    buildrequires:
@@ -1502,6 +1658,7 @@ groups:
     - wayland*
     - xauth
     - xcb-*
+    - xclip
     - xconsole
     - xdmbgrd
     - xdpyinfo
@@ -1521,6 +1678,7 @@ groups:
     - xrdp
     - xrefresh
     - xscreensaver
+    - xsel
     - xset
     - xsetroot
     - xterm
@@ -1554,6 +1712,7 @@ groups:
         - "@FontLibraries-devel"
        binaries:
         - xorg-x11-server-sdk
+        - xorg-x11-devel
 
  - name: "@X11Applications"
    buildconfig: X11/standard
@@ -1575,10 +1734,13 @@ groups:
     - "@Multimedia"
     - "@PulseAudioLibraries"
     - "@GnomeLibraries"
+    - "@SpeechSynthesis"
    packages:
     - libQt5*
+    - libqt5-*
     - libQt6*
     - qt6-sql-*
+    - qt6-*
    buildflavors:
     - name: python
       augments:
@@ -1593,6 +1755,11 @@ groups:
        - "@Smartcards"
       packages:
        - libQt6Nfc6
+    - name: meta
+      requires:
+       - "@Qt-doc"
+      packages:
+       - qt6-tools
    purposes:
     - name: devel
       requires:
@@ -1600,6 +1767,10 @@ groups:
        - "@GPU-devel"
       binaries:
        - libQt5Charts5-designer
+       - qt6-macros
+    - name: doc
+      binaries:
+       - qt6-tools-helpgenerators
 
  - name: "@Glib2NoDBus"
    buildconfig: Gnome/standard
@@ -1611,6 +1782,9 @@ groups:
     - libgobject-2*
     - libgthread-2*
     - libglibmm-2*
+    # these do not really belong here
+    - libxml++-3*
+    - libxml++-5*
 
  - name: "@Glib2"
    buildconfig: Gnome/standard
@@ -1626,16 +1800,20 @@ groups:
     - libgirepository-1*
     - girepository-1*
     - glib2-tools
+    - libdbus-glib-1*
    buildflavors:
-#   - name: dbus
-#     requires:
-#      - "@X11Libraries"
-#      - "@DBus"
-#     packages:
-#      - dbus-1-glib
-#     binaries:
-#      - libgio-2*
-#      - dconf
+    - name: python
+      requires:
+       - "@PythonCore"
+      binaries:
+       - gobject-introspection
+    - name: test
+      # there should be a way to say "I want this to require the label that contains libpcap"
+      requires:
+       - "@Core+systemdlibs"
+      binaries:
+       - libumockdev0
+       - umockdev
    purposes:
     - name: devel
       requires:
@@ -1647,6 +1825,7 @@ groups:
 #      - "@X11Libraries-devel"
       binaries:
        - glib2-devel
+       - vala
 
  - name: "@PulseAudioLibraries"
    buildconfig: Gnome/standard
@@ -1663,6 +1842,26 @@ groups:
        - "@X11Libraries"
       binaries:
        - libopenal1
+
+ - name: "@SpeechSynthesis"
+   buildconfig: Gnome/standard
+   requires:
+    - "@AudioLibraries"
+    - "@MinimalSystemd"
+    - "@PulseAudioLibraries"
+    # We have a circular dependency python3-speechd -> speech-dispatcher
+    - "@PythonStandard"
+#   - "@SpeechSynthesis"
+   packages:
+    - speech-dispatcher
+    - libspeechd2
+    - speech-dispatcher-module-espeak
+   buildflavors:
+    - name: desktop
+      requires:
+       - "@PythonStandard+desktop"
+      binaries: 
+       - speech-dispatcher-configure
 
  - name: "@GnomeLibraries"
    buildconfig: Gnome/standard
@@ -1697,6 +1896,7 @@ groups:
     - "@OpenGL"
     - "@PrintingLibraries"
     - "@FontLibraries+gnomelibs"
+    - "@GraphicsLibraries+glib2"
     - "@GraphicsLibraries+gnomelibs"
     - "@Spelling"
    packages:
@@ -1715,7 +1915,6 @@ groups:
     - gtk4-tools
     - gtk4-data
     - gettext-its-gtk*
-    - libgdk_pixbuf-2*
     - libjson-glib-1*
     - libnice10
     - libnotify4
@@ -1724,12 +1923,22 @@ groups:
     - gstreamer-plugins-vaapi
     - libgstgl-*
     - libgstcuda-*
-    - pango
-    - pangomm
-    - libcanberra
+    - libpango-1*
+    - libpangomm-1*
+    - libcanberra0
     - libgcr3
     # or move to AudioLibraries:
     - libgstvulkan-1*
+    - libcolord2
+    - colord-color-profiles
+    - gcab
+    - appstream-glib
+    - libical3
+    - libsecret-1*
+    - libmanette
+    - libdecor
+    - librevenge-0*
+    - libsoup-2*
    buildflavors:
     - name: qt
       requires:
@@ -1757,6 +1966,33 @@ groups:
       binaries:
        - gstreamer-devtools
 
+ # could possibly be folded into @Desktop* or @Gnome*
+ - name: "@CJK"
+   buildconfig: Gnome/standard
+   requires:
+    - "@DesktopLibraries"
+   packages:
+    - libfcitx-gclient1
+    - libfcitx-core0
+    - libfcitx-config4
+    - libfcitx-utils0
+    - fcitx
+    - fcitx-table
+#   - fcitx-table-*
+#   - fcitx-pinyin*
+#   - fcitx-quwei
+   buildflavors:
+    - name: gnome
+      binaries:
+       - citx-gtk*
+
+ - name: "@DesktopUtilities"
+   buildconfig: Gnome/standard
+   requires:
+    - "@DesktopLibraries"
+   packages:
+    - xdg-dbus-proxy
+
  - name: "@PolicyKit"
    buildconfig: Gnome/standard
    requires:
@@ -1768,6 +2004,7 @@ groups:
    buildconfig: Gnome/standard
    requires:
     - "@DesktopLibraries"
+    - "@DesktopUtilities"
     - "@X11Server"
     - "@PolicyKit"
     - "@ApplicationLibraries"
@@ -1775,10 +2012,14 @@ groups:
 #   - "@Flatpak"
     - "@NetworkManager"
     - "@Bluetooth+systemd"
+    # for pulseaudio
+    - "@SambaLibraries"
+    - "@Bubblewrap"
    packages:
     - gtk2
     - gtk3
     - gtk4
+    - gtk-doc
     - geoclue2
     - system-user-srvGeoClue
     - gsettings-*
@@ -1795,6 +2036,10 @@ groups:
     - pulseaudio
     - pulseaudio-module-bluetooth
     - gnome-bluetooth
+    - AppStream
+#   - appstream-glib
+    - gspell
+    - libgsound0
    buildflavors:
     - name: texlive
       requires:
@@ -1818,7 +2063,7 @@ groups:
        # gtkmm3-doc requires glibmm2-devel
        - "@Gnome-devel"
 
- - name: "@GnomeControlcenter"
+ - name: "@GnomeEverythingElse"
    buildconfig: Gnome/standard
    requires:
     - "@Gnome"
@@ -1826,6 +2071,7 @@ groups:
     - "@SambaLibraries"
     - "@FullSystemd"
    binaries:
+    - gdm
     - gnome-control-center
     - gnome-control-center-*
     - gnome-settings-daemon
@@ -1840,12 +2086,13 @@ groups:
  - name: "@GnomeApplications"
    buildconfig: Gnome/standard
    requires:
-    - "@Glib2"
-    - "@DrawingLibraries"
-    - "@LUA"
-    - "@Guile"
+    - "@Gnome"
+    - "@PDF+glib2"
+    - "@Postscript"
+    - "@HPCCoreLibraries"
    packages:
     - graphviz
+    - inkscape
    buildflavors:
     - name: php
       requires:
@@ -1855,11 +2102,15 @@ groups:
     - name: gnome
       requires:
        - "@Gnome"
-       - "@Postscript"
        - "@PythonCore"
     - name: tcl
       requires:
        - "@TclCore"
+    - name: tex
+      requires:
+       - "@Texlive"
+      binaries:
+       - inkscape-extensions-fig
 
  - name: "@ApplicationLibraries"
    buildconfig: Gnome/standard
@@ -1878,12 +2129,17 @@ groups:
  - name: "@WxWidgets"
    buildconfig: Gnome/standard
    requires:
-    - "@DesktopLibraries"
+    - "@DesktopUtilities"
     - "@Qt"
+    - "@Bubblewrap"
    packages:
     - libwx_gtk2u*
     - libwx_gtk3u*
     - libwx_qtu*
+   purposes:
+    - name: devel
+      requires:
+       - "@Gnome-devel"
 
  - name: "@AppArmor"
    buildconfig: AppArmor/standard
@@ -1896,7 +2152,7 @@ groups:
    buildflavors:
     - name: utils
       requires:
-       - "@PythonStandard"
+       - "@PythonModules"
        - "@PerlCore"
       binaries:
        - python3-apparmor
@@ -2103,18 +2359,27 @@ groups:
     - libsolv
     - perl-solv
     - ruby-solv
+    - createrepo_c
+    - libcreaterepo_c0
+    - librepo0
    buildflavors:
     - name: python
       requires:
        - "@Python"
       binaries:
        - python31?-zypp-plugin
+   purposes:
+    - name: devel
+      requires:
+       # building libzipp requires rpm-devel
+       - "@BaseBuildEnv-devel"
 
  - name: "@DirectoryIntegration"
    buildconfig: Core/standard
    requires:
     - "@Core"
     - "@Core+networkServices"
+    - "@SambaLibraries"
    packages:
     - sssd
    buildflavors:
@@ -2181,6 +2446,7 @@ groups:
     - opensc
 # pcsc-tools requires perl-Glib which includes stuff that requires pkgconfig and hence @Glibc-devel
 #   - pcsc-tools
+    - libcacard0
 
  - name: "@HostSecurity"
    requires:
@@ -2193,7 +2459,6 @@ groups:
     - audit
     - audit-secondary
     - ibmswtpm2
-    - ibmtss
     - ima-evm-utils
     - ima-inspect
     - pam_u2f
@@ -2247,6 +2512,15 @@ groups:
        - python31?-rtslib-fb
        - python-rtslib-fb-common
 
+ - name: "@HostWorkloads"
+   buildconfig: Host/standard
+   requires:
+    - "@Core"
+    - "@Glib2" # required by slirp
+   packages:
+    - libslirp0
+    - slirp4netns
+
  - name: "@NetworkStorage"
    buildconfig: Host/standard
    requires:
@@ -2256,19 +2530,22 @@ groups:
     - cachefilesd
     - fcoe-utils
     - nfs4-acl-tools
+    - libnfs14
     - nfsidmap
     - nfs-utils
     - open-iscsi
     - open-isns
     - pam_cifscreds
     - target-isns
+    - glusterfs
+    - ntfs-3g_ntfsprogs
 
  - name: "@Rados"
    buildconfig: Host/standard
    requires:
     - "@HostStorage"
     - "@HostNetworking"
-    - "@PythonStandard"
+    - "@PythonModules"
     - "@Kernel"
     - "@OATH"
     - "@GCC"
@@ -2291,14 +2568,15 @@ groups:
     - cluster-glue
     - drbd
     - drbd-utils
+    - sanlock
+    - libsanlock1
+    - libdlm
+    - libdlm3
 
  - name: "@PublicCloud"
    buildconfig: RobersFavoriteBeer/standard
-   expand: no
-   products:
-    - SLE-Module-Public-Cloud
    requires:
-    - "@PythonStandard"
+    - "@PythonModules"
     - "@ManDoc"
    packages:
     - cloud-init
@@ -2322,7 +2600,6 @@ groups:
 
  - name: "@Yast2"
    buildconfig: Management/standard
-   expand: no
    requires:
     - "@Core"
     - "@FullSystemd"
@@ -2395,6 +2672,8 @@ groups:
     - libharfbuzz0
     - libharfbuzz-icu0
     - libharfbuzz-subset0
+    - woff2
+    - t1utils
    buildflavors:
     - name: x11
       augments:
@@ -2420,6 +2699,12 @@ groups:
    packages:
     - "*-fonts"
     - xorg-x11-fonts*
+    - font-util
+    - bdftopcf
+   purposes:
+    - name: devel
+      binaries:
+       - fontpackages-devel
 
  - name: "@DrawingLibraries"
    buildconfig: Multimedia/standard
@@ -2436,6 +2721,16 @@ groups:
    packages:
     - xxx
 
+ # No idea for a better name. This is the single piece of container stuff
+ # that gets sucked into a lot of different desktop-ish packages. And emacs
+ # Maybe DesktopUtilities would be a good place.
+ - name: "@Bubblewrap"
+   buildconfig: Container/standard
+   requires:
+    - "@Core"
+   packages:
+    - bubblewrap
+
  - name: "@Container"
    buildconfig: Container/standard
    requires:
@@ -2444,10 +2739,9 @@ groups:
     - "@HostNetworking"
     - "@FullSystemd"
     - "@SELinux"
-    - "@Glib2" # required by slirp
     - "@ManDoc"
-   products:
-    - SLE-Module-Containers
+    - "@HostWorkloads"
+#   - "@Bubblewrap"
    packages:
     - skopeo
     - podman
@@ -2465,14 +2759,17 @@ groups:
     - kubevirt
     - container-selinux
 #   - systemd-container
+    - umoci
 
  - name: "@Flatpak"
    buildconfig: Container/standard
    requires:
     - "@Core"
     - "@Gnome"
+    - "@Bubblewrap"
    sources:
     - flatpak
+    - libostree-1*
 
  - name: "@KernelLibraries"
    description: |
@@ -2488,10 +2785,19 @@ groups:
     - libkmod2
     - libnuma1
     - libfuse2
+    - libfuse3*
     - libsgutils2
     - libnftnl11
     - libpciaccess0
     - libhwloc15
+    - libsensors4
+    - libell0
+    - libraw1394
+    - libiec61883
+    - libtracefs1
+    - libtraceevent1
+    - libtraceevent1-plugins
+    - libkcapi1
    buildflavors:
     - name: udev
       requires:
@@ -2528,6 +2834,7 @@ groups:
     - alsa
     - alsa-plugins
     - alsa-utils
+    - libasound2
 
  - name: "@KernelBuild"
    buildconfig: KernelPlus/standard
@@ -2550,8 +2857,6 @@ groups:
     - "@NetworkCore"
     - "@PerlCore"
     - "@Boot"
-   rpmGroups:
-    - System/Kernel
    packages:
     - cpupower
     - dmidecode
@@ -2581,7 +2886,7 @@ groups:
        - kernel-source
        - kernel-syms
        - kernel-syms-*
-       - systemtap-headers
+#      - systemtap-headers
        - systemtap-dtrace
        # do not ship this, ever:
        - cpupower-rebuild
@@ -2646,12 +2951,22 @@ groups:
     - libtirpc3
     - libxtables12
     - libbluetooth3
+    - libpgm-5*
+    - libsodium
+    - libzmq5
+    - libmaxminddb0
+   purposes:
+    - name: devel
+      binaries:
+       - rpcgen
 
  - name: "@Bluetooth"
    buildconfig: Core/standard
    requires:
     - "@NetworkLibraries"
     - "@Glib2"
+   buildrequires:
+    - "@DesktopLibraries-devel"
    buildflavors:
     - name: systemd
       requires:
@@ -2671,6 +2986,12 @@ groups:
        - "@PythonStandard"
       binaries:
        - bluez-test
+    - name: desktop
+      requires:
+       - "@Bluetooth+systemd"
+       - "@DesktopLibraries"
+      binaries:
+       - bluez-obexd
 
  - name: "@NetworkCore"
    buildconfig: Core/standard
@@ -2768,11 +3089,23 @@ groups:
 #      - firewall-config
 #      - firewall-applet
 
+ - name: "@AvahiLibraries"
+   buildconfig: Core/standard
+   requires:
+    - "@NetworkLibraries"
+    - "@SystemdLibraries"
+   packages:
+    - libavahi-client3
+    - libavahi-common3
+    - libavahi-core7
+    - libavahi-libevent1
+
  - name: "@NetworkManager"
    buildconfig: Core/standard
    requires:
     - "@HostNetworking"
     - "@MinimalSystemd"
+    - "@AvahiLibraries"
     - "@GnomeLibraries"
     - "@Console"
     - "@PythonStandard+gnome"
@@ -2796,6 +3129,10 @@ groups:
 #   - libqrtr
 #   - libqmi
 #   - libmbim
+    - avahi
+    - avahi-autoipd
+    - avahi-utils
+    - libhowl0
    buildflavors:
     - name: gui
       requires:
@@ -2806,11 +3143,21 @@ groups:
        - wpa_supplicant-gui
        - firewall-config
        - firewall-applet
+    - name: python
+      binaries:
+       - python31?-avahi
+
+ - name: "@MultimediaCore"
+   buildconfig: Multimedia/standard
+   requires:
+    - "@Core0"
+   packages:
+    - libid3tag0*
 
  - name: "@GraphicsLibraries"
    buildconfig: Multimedia/standard
    requires:
-    - "@Core0"
+    - "@MultimediaCore"
    packages:
     - libjpeg8
     - libturbojpeg0
@@ -2821,6 +3168,13 @@ groups:
     - libopenjp2-*
     - libtiff6
     - cairo
+    - liblcms2-2
+    - libjasper7
+    - libdjvulibre2*
+    - libraw23
+    - libexif12
+    - pngquant
+    - libpotrace0
    buildflavors:
     - name: x11
       requires:
@@ -2832,11 +3186,32 @@ groups:
        - cairo-tools
        - libcairo-script-interpreter2
        - netpbm
+       - libwmf-0*
     - name: opengpl
       requires:
        - "@OpenGL"
       binaries:
        - libwebp-tools
+    - name: glib2
+      requires:
+       - "@Glib2"
+       - "@GraphicsLibraries+x11"
+      augments:
+       - "@GnomeLibraries"
+      binaries:
+       - libwmf-gnome
+       - libgdk_pixbuf-2*
+       - libgdk_pixbuf_xlib-2*
+       - gdk-pixbuf-query-loaders
+       - liblqr-1*
+      packages:
+       - gdk-pixbuf
+      purposes:
+       - name: devel
+         binaries:
+          - gdk-pixbuf-devel
+          - libwmf-devel
+          - liblqr-devel
     - name: gnomelibs
       augments:
        - "@GnomeLibraries"
@@ -2848,7 +3223,7 @@ groups:
  - name: "@AudioLibraries"
    buildconfig: Multimedia/standard
    requires:
-    - "@Core0"
+    - "@MultimediaCore"
     - "@KernelAudio"
    buildrequires:
     - "@BaseBuildEnv"
@@ -2869,12 +3244,20 @@ groups:
     - liblilv-0*
     - libmysofa1
     - libcdio_paranoia2
-    - librav1d
-    - libdav1d
     - libjack0
     - libopenmpt0
     - libmpg123-0
     - libmp3lame0
+    - libportaudio2
+    - libreplaygain1
+    - lv2
+    - musepack-r*
+   buildflavors:
+    - name: desktop
+      requires:
+       - "@DesktopLibraries"
+      binaries:
+       - lv2-examples
 
  - name: "@OpenGL"
    buildconfig: X11/standard
@@ -2887,6 +3270,24 @@ groups:
     - libglvnd
     - libGLU1
     - libGLEW2*
+   purposes:
+     - name: devel
+       binaries:
+        - DirectX-Headers
+        - spirv-headers
+        - spirv-llvm-translator
+
+ # FFmpeg is a beast in terms of dependencies. However, we have imlib2 -> libheif1 -> librav1e.
+ # Unless we want to pull all of FFmpeg into @X11Libraries, we need to put the AVIF libraries
+ # into a small bucket of their own.
+ - name: "@AVLibrariesLight"
+   buildconfig: Multimedia/standard
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - librav1e0
+    - libdav1d6
+    - libSvtAv1Enc1
 
  - name: "@AVLibraries"
    buildconfig: Multimedia/standard
@@ -2894,10 +3295,10 @@ groups:
     - "@GraphicsLibraries"
     - "@AudioLibraries"
     - "@FontLibraries"
+    - "@AVLibrariesLight"
     - "@GPU"
     - "@CoreHardware"
-    # ugly, but I'll not shoot for more sophistication for now
-    - "@X11"
+    - "@X11Libraries"
     - "@SystemdLibraries"
    packages:
     - libavcodec5*
@@ -2907,13 +3308,10 @@ groups:
     - libva2
     - libavif15
     - libspandsp3
+    - libva-x11-2
+    - libva-wayland2
+    - libbluray2
    buildflavors:
-    - name: x11
-      requires:
-       - "@X11Libraries"
-      binaries:
-       - libva-x11-2
-       - libva-wayland2
     - name: pulseaudio
       requires:
        - "@PulseAudioLibraries"
@@ -2940,14 +3338,19 @@ groups:
    packages:
     - lame
     - mpg123
+    - djvulibre*
+    - dcraw
+    - jack
+    # libjack0 itself needs to be in AudioLibraries, while libjacknet and libjackserver can go here:
+    - libjack*0
    buildflavors:
     - name: desktop
       requires:
        - "@DesktopLibraries"
       binaries:
        - ImageMagick
-#      - libMagickCore-7_Q16HDRI10
-#      - libMagickWand-7_Q16HDRI10
+       - libMagickCore-7*
+       - libMagickWand-7*
 #      - libMagick++-7_Q16HDRI5
        - ImageMagick-extra
        - perl-PerlMagick
@@ -2957,19 +3360,26 @@ groups:
        - "@X11Libraries"
       binaries:
        - openmpt123
-       - libespeak-ng1
        - mpg123-openal
        - mpg123-pulse
 
  - name: "@HPCCoreLibraries"
    buildconfig: Core/standard
    requires:
-    - "@HostNetworking"
-    - "@LUA"
+    - "@CoreLibraries"
    packages:
-    - libfftw3*-hpc
+    - libgsl27
+
+ - name: "@HPCCore"
+   buildconfig: Core/standard
+   requires:
+    - "@HPCCoreLibraries"
+    - "@LUA"
+    - "@HostNetworking"
+   packages:
     - lua-lmod
     - gnu-compilers-hpc
+    - libfftw3*-hpc
    buildflavors:
     - name: python
       binaries:
@@ -2979,12 +3389,10 @@ groups:
    # try to get -devel packages to be placed here rather than
    # in @HPCCoreLibraries
    gravity: 4
-   products:
-    - SLE-Module-HPC
    requires:
     - "@Core"
     - "@Core+networkServices"
-    - "@HPCCoreLibraries"
+    - "@HPCCore"
     - "@HostNetworking"
     - "@TclCore"
    packages:
@@ -3033,6 +3441,7 @@ groups:
     - telnet
     - nmap
     - mutt
+    - socat
    buildflavors:
     - name: gnomelibs
       requires:
@@ -3048,6 +3457,7 @@ groups:
     - "@NetworkCore"
     - "@CoreServices"
     - "@MinimalSystemd"
+    - "@AvahiLibraries"
     - "@Perl"
    binaries:
    packages:
@@ -3152,6 +3562,7 @@ groups:
     - name: x11
       requires:
        - "@X11Libraries"
+       - "@AVLibrariesLight"
       binaries:
        - w3m-inline-image
     - name: ruby
@@ -3167,10 +3578,15 @@ groups:
     - "@Core"
     - "@SystemdLibraries"
 #   - "@PrintingLibraries"
+    - "@AvahiLibraries"
    packages:
     - samba-client-libs
     - samba-libs
     - samba-ad-dc-libs
+    - libtalloc2
+    - libtevent0
+    - libtdb1
+    - libldb2
 
  - name: "@Samba"
    buildconfig: Network/standard
@@ -3181,6 +3597,7 @@ groups:
     - "@SambaLibraries"
    packages:
     - samba
+    - samba-client
     - cifs-utils
    buildflavors:
     - name: python
@@ -3223,6 +3640,7 @@ groups:
        - "@Vim"
       binaries:
        - nginx-source
+       - nginx-macros
 
  - name: "@Apache"
    buildconfig: Webserver/standard
@@ -3230,6 +3648,8 @@ groups:
     - "@NetworkServices"
    packages:
     - apache2*
+    - apache-rpm-macros
+    - apache-rpm-macros-control
    buildflavors:
     - name: php
       requires:
@@ -3241,8 +3661,6 @@ groups:
    buildconfig: Network/standard
    requires:
     - "@HostNetworking"
-   rpmGroups:
-    - Productivity/Networking/*
    packages:
     - rsyslog-module-snmp
 
@@ -3269,6 +3687,7 @@ groups:
     - "@OpenGL"
     - "@Vim"
     - "@NetworkUtils+gnomelibs"
+    - "@HostWorkloads"
    packages:
     - xen
     - kvm_state
@@ -3280,7 +3699,6 @@ groups:
     - ovmf
     - hyper-v
     - libvmtools
-#   - system-group-libvirt
     - virt-install
     - virt-manager
     - virt-manager-common
@@ -3293,6 +3711,13 @@ groups:
     - qemu-headless
     - qemu-ui-gtk
     - libvirt-daemon-driver-qemu
+    - libvirglrenderer1
+    - virtiofsd
+    - spice-vdagent
+    - python31?-libvirt-python
+    - libgrpc1*
+    - libgrpc3*
+    - libgrpc++*
    buildflavors:
     - name: audio
       requires:
@@ -3320,20 +3745,21 @@ groups:
     - python3
     - python310
     - python311
-    - python3-base
-    - python3-future
+    - python3??-base
+    - python3??-future
     - libpython*
     - python*-base
+   purposes:
+    - name: devel
+      binaries:
+       - python31?-devel
 
  # We should probably define separate @Topics for different python versions
  # and have the generic @Python reference a specific version
  - name: "@Python"
    buildconfig: Python/standard
-   expand: no
    requires:
     - "@PythonCore"
-   rpmGroups:
-    - Development/*/Python
    packages:
     - python
     - python310-setuptools
@@ -3396,9 +3822,16 @@ groups:
     - python31?-Sphinx
     - python31?-tk
     - python31?-urllib3
+    - python31?-numpy
    buildflavors:
+    - name: x11
+      augments:
+       - "@X11"
+      binaries:
+       - python31?-pyperclip
     - name: graphics
       augments:
+       - "@Glib2+python"
        - "@GraphicsLibraries+x11"
       binaries:
        - python31?-pycairo
@@ -3409,13 +3842,15 @@ groups:
           - "@X11Libraries"
     - name: desktop
       augments:
+       - "@Glib2+python"
        - "@GnomeLibraries"
        - "@DesktopLibraries"
        - "@PythonStandard+graphics"
       binaries:
-       - python31?-gobject-*
        - python31?-Send2Trash
-       - python31?-gobject-Gdk
+       - python31?-gobject-*
+       - python31?-pyxdg
+       - python31?-atspi
     - name: database
       requires:
        - "@Databases"
@@ -3427,11 +3862,8 @@ groups:
 
  - name: "@PythonModules"
    buildconfig: Python/standard
-   expand: no
    requires:
     - "@PythonStandard"
-   products:
-    - SLE-Module-Python*
    binaries:
 #   - python-*
 #   - python3*
@@ -3439,6 +3871,7 @@ groups:
  - name: "@PythonMatplot"
    buildconfig: Python/standard
    requires:
+    - "@PythonModules"
     - "@PythonStandard+graphics"
     - "@SystemdUtilities"
    packages:
@@ -3470,11 +3903,14 @@ groups:
    buildconfig: Python/standard
    requires:
     - "@PythonStandard+desktop"
+    - "@PythonModules"
    packages:
     - python-nbdime
     - jupyter-*
     - python31?-jupyter
+    - python31?-jupyter-core
     - python31?-jupyter-server
+    - python31?-jupyter-client*
 #   - python31?-ipython
 #   - python31?-jupyter*
 #   - python31?-notebook*
@@ -3488,12 +3924,18 @@ groups:
        - jupyter-nbconvert-latex
        - jupyter-notebook-latex
 
+ - name: "@Cython"
+   buildconfig: Python/standard
+   requires:
+    - "@PythonCore-devel"
+   packages:
+    - python31?-Cython
+    - python31?-Cython3
+
  - name: "@Ruby"
    buildconfig: Ruby/standard
    requires:
     - "@Core0"
-   rpmGroups:
-    - Development/*/Ruby
    packages:
     - ruby
     - ruby2.5
@@ -3544,9 +3986,9 @@ groups:
    buildconfig: Perl/standard
    requires:
     - "@PerlCore"
-   rpmGroups:
-    - Development/*/Perl
    packages:
+    - perl-libwww-perl
+    - strip-nondeterminism
 
  - name: "@Javascript"
    buildconfig: Javascript/standard
@@ -3554,17 +3996,40 @@ groups:
     - "@Core"
    packages:
     - npm
-    - nodejs
+    - nodejs20
+    - nodejs-default
+   purposes:
+    - name: devel
+      binaries:
+       # would have been easier if this was named nodejs-default-devel
+       - nodejs-devel-default
 
- - name: "@Java"
+ - name: "@JDK"
    buildconfig: Java/standard
    requires:
     - "@Core"
     - "@X11Libraries"
-    - "@KernelAudio"
+#   - "@KernelAudio"
+    - "@AudioLibraries"
     - "@Smartcards"
-   rpmGroups:
-    - Development/*/Java
+   packages:
+    - java-17-openjdk
+    - java-17-openjdk-demo
+    - java-17-openjdk-headless
+    - java-17-openjdk-src
+    - java-1_8_0-openjdk
+    - java-1_8_0-openjdk-accessibility
+    - java-1_8_0-openjdk-demo
+    - java-1_8_0-openjdk-headless
+    - java-1_8_0-openjdk-src
+    - javapackages-filesystem
+    - javapackages-tools
+
+ - name: "@Java"
+   buildconfig: Java/standard
+   requires:
+    - "@JDK"
+    - "@CoreLibraries+java"
    packages:
     - mx4j
     - java-*
@@ -3572,8 +4037,27 @@ groups:
     - qdox
     - glassfish-servlet-api
     - slf4j
+    - reload4j
     - picocli
     - scala
+    - osgi-core
+    - osgi-compendium
+    - osgi-annotation
+    - antlr
+    - jdepend
+    - jakarta-mail
+    - regexp
+    - bcel
+    - servletapi5
+    - jlex
+    - junit5
+    - ecj
+    - oro
+    - xpp3
+    - avalon-logkit
+    - mysql-connector-java
+    - jline1
+    - libreadline-java
    purposes:
     - name: devel
       requires:
@@ -3582,6 +4066,10 @@ groups:
        - java-17-openjdk-jmods
        - javapackages-local
        - javapackages-ivy
+#      - jython
+    - name: doc
+      binaries:
+       - junit5-guide
 
  - name: "@ApacheCommons"
    buildconfig: Java/standard
@@ -3598,6 +4086,10 @@ groups:
     - httpcomponents-core
     - httpcomponents-client
     - slf4j-jcl
+   purposes:
+    - name: devel
+      binaries:
+       - xml-commons-apis-bootstrap
 
  - name: "@ApacheAnt"
    buildconfig: Java/standard
@@ -3620,6 +4112,8 @@ groups:
     - maven-local
     - maven-surefire
     - maven-wagon*
+    - maven-shared
+    - maven-parent
 
  - name: "@Plexus"
    buildconfig: Java/standard
@@ -3669,8 +4163,6 @@ groups:
     # does it make sense to ship php without datatbase support?
     - "@Databases"
     - "@Spelling"
-   rpmGroups:
-    - Development/*/PGP
    packages:
     - php*
    buildflavors:
@@ -3688,8 +4180,6 @@ groups:
 
  - name: "@Rust"
    buildconfig: Rust/standard
-   rpmGroups:
-    - Development/*/Rust
    requires:
     - "@Core0"
     - "@GCC"
@@ -3782,8 +4272,6 @@ groups:
     - "@Core"
     - "@DesktopLibraries"
     - "@TclCore"
-   rpmGroups:
-    - Productivity/Scientific/*
    packages:
     - rrdtool
 
@@ -3808,7 +4296,7 @@ groups:
    buildconfig: Management/standard
    requires:
     - "@Management"
-    - "@PythonStandard"
+    - "@PythonModules"
     - "@FullSystemd"
     - "@BaseBuildEnv"
     - "@Kernel"
@@ -3821,7 +4309,7 @@ groups:
    priority: 3
    requires:
     - "@Core"
-    - "@PerlCore"
+    - "@Perl"
     - "@Fonts"
     - "@FontLibraries"
     - "@DrawingLibraries"
@@ -3834,20 +4322,13 @@ groups:
     - "@Java"
     - "@OpenGL"
     - "@PythonStandard"
+    # texlive-asymptote
+    - "@HPCCoreLibraries"
    packages:
     - texlive-*
     - perl-biber
-   buildflavors:
-#   - name: postscript
-#     requires:
-#      - "@Postscript"
-#     binaries:
-#      - texlive-extratools
-#      - texlive-collection-fontutils
-#      - texlive-scheme-gust
-#      - texlive-scheme-medium
-#      - texlive-scheme-tetex
-#      - texlive-scheme-full
+    - perl-Text-BibTeX
+    - transfig
    purposes:
     - name: devel
       binaries:

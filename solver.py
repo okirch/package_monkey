@@ -674,28 +674,29 @@ class PotentialClassification(object):
 			self.solvingBaseLabel = baseLabel
 			return True
 
-		# look for packages that have been labelled for a flavor with a defaultlabel.
+		# look for packages that have been labelled for a flavor with a defaultlabel or a list
+		# of preferredlabels.
 		# If so, check whether this could be a good base label for placing the entire package.
 		# Do this only for packages that have none of their rpms labelled yet
 		def solveDefaultBaseLabel(self):
 			if self.solved:
 				return
 
-			defaultLabel = None
+			autoLabel = None
 			for packagePlacement in self.unsolved:
-				if packagePlacement.autoLabel and packagePlacement.autoLabel.defaultLabel:
-					cand = packagePlacement.autoLabel.defaultLabel
-					if defaultLabel is None:
-						defaultLabel = cand
-					elif defaultLabel is not cand:
-						infomsg(f"{self} has packages with conflicting default labels {defaultLabel} and {cand}")
+				if packagePlacement.autoLabel:
+					if autoLabel is None:
+						autoLabel = packagePlacement.autoLabel
+					elif autoLabel is not packagePlacement.autoLabel:
+						infomsg(f"{self} has packages with different auto labels {autoLabel} and {packagePlacement.autoLabel}")
 						return False
 
-			if defaultLabel is None:
+			if autoLabel is None or not autoLabel.preferredLabels:
 				return False
 
-			if self.tryToSolveUsingBaseLabel(defaultLabel, "default base label"):
-				return True
+			for preferredLabel in autoLabel.preferredLabels:
+				if self.tryToSolveUsingBaseLabel(preferredLabel, "preferred base label"):
+					return True
 
 			return False
 

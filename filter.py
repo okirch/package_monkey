@@ -44,7 +44,8 @@ class Classification:
 			self.buildRequires = set()
 			self.runtimeAugmentations = set()
 			self.disposition = Classification.DISPOSITION_SEPARATE
-			self.defaultLabel = None
+			# This is used in autoflavor labels only
+			self.preferredLabels = []
 			self.defined = False
 
 			# This is populated for labels that represent a build flavor like @Core+python,
@@ -86,7 +87,7 @@ class Classification:
 
 		@property
 		def fingerprint(self):
-			values = [self.name, self.type, self.disposition, self.defaultLabel, self.gravity]
+			values = [self.name, self.type, self.disposition, tuple(self.preferredLabels), self.gravity]
 			for attrName in ('_flavors', '_purposes', 'runtimeRequires', 'buildRequires', 'runtimeAugmentations', 'mergeableAutoFlavors'):
 				values.append(attrName)
 
@@ -1767,14 +1768,17 @@ class PackageFilter:
 			label = group.label
 			validateDependencies(label.buildRequires)
 
-			# resolve the defaultlabel
-			if label.defaultLabel is not None:
-				defaultLabel = self.classificationScheme.getLabel(label.defaultLabel)
-				if defaultLabel is None or not defaultLabel.defined:
-					raise Exception(f"Label {label} specifies defaultlabel={label.defaultLabel}, which is not defined anywhere")
-				if defaultLabel.type is not Classification.TYPE_BINARY:
-					raise Exception(f"Label {label} specifies defaultlabel={label.defaultLabel}, which is of type {defaultLabel.type}")
-				label.defaultLabel = defaultLabel
+			# resolve the preferred labels
+			if label.preferredLabels:
+				resolved = []
+				for labelName in label.preferredLabels:
+					defaultLabel = self.classificationScheme.getLabel(labelName)
+					if defaultLabel is None or not defaultLabel.defined:
+						raise Exception(f"Label {label} specifies preferred label {labelName}, which is not defined anywhere")
+					if defaultLabel.type is not Classification.TYPE_BINARY:
+						raise Exception(f"Label {label} specifies preferred label {labelName}, which is of type {defaultLabel.type}")
+					resolved.append(defaultLabel)
+				label.preferredLabels = resolved
 
 		# For all base labels, instantiate their auto flavors (ie for @Foo, instantiate
 		# @Foo+python, @Foo+ruby, etc)
@@ -2133,6 +2137,7 @@ class PackageFilter:
 		'disposition',
 		'autoselect',
 		'defaultlabel',
+		'defaultlabels',
 	))
 
 	def processGroupDefinition(self, group, gd):
@@ -2180,7 +2185,15 @@ class PackageFilter:
 		if value is not None:
 			if group.label.type != Classification.TYPE_AUTOFLAVOR:
 				raise Exception(f"Error: defaultlabel is not valid for {group.label.type} labels")
-			group.label.defaultLabel = value
+			group.label.preferredLabels.insert(0, value)
+
+		nameList = self.getYamlList(gd, 'defaultlabels', group)
+		for name in nameList:
+			if group.label.type != Classification.TYPE_AUTOFLAVOR:
+				raise Exception(f"Error: defaultlabels is not valid for {group.label.type} labels")
+			if type(name) != str:
+				raise Exception(f"Error: unexpected {type(name)} in list of default labels")
+			group.label.preferredLabels.append(name)
 
 		priority = gd.get('priority')
 		if priority is not None:

@@ -1301,9 +1301,6 @@ class BackingStoreDB(DB):
 
 		return entry.id
 
-	def xaddProduct(self, **kwargs):
-		return self.products.addProduct(**kwargs)
-
 	def addPackage(self, **kwargs):
 		assert('id' not in kwargs)
 		return self.packages.insert(**kwargs)

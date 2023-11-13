@@ -157,7 +157,7 @@ class Classification:
 			self.buildRequires.add(other)
 
 		def addMergeableFlavor(self, autoFlavor):
-			assert(autoFlavor.type == Classification.TYPE_AUTOFLAVOR)
+			assert(autoFlavor.type == Classification.TYPE_AUTOFLAVOR and self.parent is None)
 			self.mergeableAutoFlavors.add(autoFlavor)
 
 		def autoFlavorCanBeMerged(self, autoFlavor):

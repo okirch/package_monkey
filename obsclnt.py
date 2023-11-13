@@ -777,7 +777,7 @@ class OBSProject:
 			return False
 
 		if info.requires_ext:
-			requires = self.disambiguateRequires(info.requires_ext)
+			requires = self.disambiguateRequires(packageName, info.requires_ext)
 			rpm.updateResolvedRequires(resolvePackageInfo(requires))
 		else:
 			for expr in info.requires:
@@ -796,7 +796,7 @@ class OBSProject:
 	# In OBS fileinfo_ext data, resolved requirements are represented showing all possible
 	# candidates. However, for good results, we should use only _one_ resolution, which
 	# is the one with fewer dependencies.
-	def disambiguateRequires(self, requires):
+	def disambiguateRequires(self, packageName, requires):
 		if self.resolverHints is None:
 			raise Exception(f"No resolver hints to resolve ambiguity in requirements")
 
@@ -808,6 +808,12 @@ class OBSProject:
 
 			nameToPackage = dict((pinfo.name, pinfo) for pinfo in dep.packages)
 			names = set(nameToPackage.keys())
+
+			# libomp16-devel requires libomp.so which expands to either
+			# libomp15-devel or libomp16-devel. Obviously, we should not
+			# pick libomp15-devel in this case.
+			if packageName in names:
+				continue
 
 			preferred = self.resolverHints.getPreferred(names)
 			if len(preferred) == 1:

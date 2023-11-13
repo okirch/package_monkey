@@ -184,7 +184,7 @@ class Table(object):
 		except sqlite3.Error as e:
 			errormsg(f"SQL Error: {e} - {type(e)}")
 			errormsg(f"The offending statement was: {sqlStatement}")
-			return None
+			raise Exception(f"SQL Error: {e}")
 
 		return c
 

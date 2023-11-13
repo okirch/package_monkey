@@ -1453,10 +1453,11 @@ class ClassificationResult(object):
 
 		effectiveRequirements = self.reduceRequirements(label, actualRequirements)
 
-		infomsg(f"Effective requirements for {label}: reduced from {len(label.runtimeRequires)} to {len(effectiveRequirements)} labels")
-		if len(label.runtimeRequires) < 10 and len(effectiveRequirements) < 10:
-			infomsg(f"  orig:    {' '.join(map(str, label.runtimeRequires))}")
-			infomsg(f"  reduced: {' '.join(map(str, effectiveRequirements))}")
+		if False:
+			infomsg(f"Effective requirements for {label}: reduced from {len(label.runtimeRequires)} to {len(effectiveRequirements)} labels")
+			if len(label.runtimeRequires) < 10 and len(effectiveRequirements) < 10:
+				infomsg(f"  orig:    {' '.join(map(str, label.runtimeRequires))}")
+				infomsg(f"  reduced: {' '.join(map(str, effectiveRequirements))}")
 
 		return effectiveRequirements
 
@@ -1629,7 +1630,7 @@ class PackageLabelling(object):
 			m = matches.pop(0)
 
 			if pkg.trace:
-				infomsg(f"{pkg}: {m.group} matched by {m.type} filter {m.pattern}")
+				infomsg(f"{pkg}: {m.group.label} matched by {m.type} filter {m.pattern}")
 				infomsg(f"   {len(matches)} lower priority matches were ignored:")
 				for other in matches:
 					infomsg(f"      {other.group} {other.type} {other.pattern}")
@@ -1637,7 +1638,7 @@ class PackageLabelling(object):
 			m = next(iter(matches))
 
 			if pkg.trace:
-				infomsg(f"{pkg}: {m.group} matched by {m.type} filter {m.pattern}")
+				infomsg(f"{pkg}: {m.group.label} matched by {m.type} filter {m.pattern}")
 
 		return PackageFilter.Verdict(m.group, f"{m.type} filter {m.pattern}")
 

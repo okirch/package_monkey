@@ -864,6 +864,8 @@ class PotentialClassification(object):
 			if not toBeExamined:
 				return False
 
+			obsPackageName = self.name
+
 			for pkg, packagePlacement in toBeExamined:
 				purpose = packagePlacement.purpose
 				infomsg(f"{pkg} is a {purpose} package; look for favorite siblings")
@@ -872,26 +874,31 @@ class PotentialClassification(object):
 				if baseName is None:
 					continue
 
-				infomsg(f"    {pkg} baseName={baseName}")
-
-				favoriteSibling = namesToPlacements.get(baseName)
-				infomsg(f"       try {baseName} -> {favoriteSibling}")
-				if favoriteSibling is not None:
-					pass
-				elif baseName.startswith("lib"):
+				transformedNames = [baseName]
+				if baseName.startswith("lib"):
 					baseName = baseName.rstrip("-0123456789")
-					favoriteSibling = namesToPlacements.get(baseName)
-					infomsg(f"       try {baseName} -> {favoriteSibling}")
-					if favoriteSibling is None:
-						# still no cigar; try and remove the "lib" prefix as well
-						baseName = baseName[3:]
-						favoriteSibling = namesToPlacements.get(baseName)
-						infomsg(f"       try {baseName} -> {favoriteSibling}")
+					transformedNames.append(baseName)
 
-						# we could also try to replace hyphen with underscore
+					# strip off "lib" prefix
+					transformedNames.append(baseName[3:])
 				else:
-					# if we have "foo", try "libfoo"
-					favoriteSibling = namesToPlacements.get("lib" + baseName)
+					# try with lib prefix
+					transformedNames.append("lib" + baseName)
+
+				# try with the obs package name prefixed
+				# This is the "lex ffmpeg" where we hav libfoo123 correspond to ffmpeg4-libfoo-devel
+				if baseName.startswith(obsPackageName):
+					strippedName = baseName[len(obsPackageName):].lstrip("-")
+					if strippedName:
+						transformedNames.append(strippedName)
+
+				for tryName in transformedNames:
+					favoriteSibling = namesToPlacements.get(tryName)
+					if favoriteSibling is not None:
+						infomsg(f"       try {tryName} -> {favoriteSibling}")
+						break
+
+					infomsg(f"       try {tryName} -> [no match]")
 
 				if favoriteSibling is None:
 					continue

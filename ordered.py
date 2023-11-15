@@ -171,6 +171,23 @@ class PartialOrder(object):
 	def minima(self, subset):
 		remaining = self.getNodesForSet(subset)
 
+		aboveClosure = self._setClass()
+
+		for node in remaining:
+			# if the node is above one of the previous minima, ignore it
+			if node.key not in aboveClosure:
+				# get the set of all elements > this node
+				nodeClosure = node._upwardClosure.copy()
+				nodeClosure.discard(node.key)
+
+				# enlarge the upward closure of result
+				aboveClosure.update(nodeClosure)
+
+		return subset.difference(aboveClosure)
+
+	def oldMinima(self, subset):
+		remaining = self.getNodesForSet(subset)
+
 		result = set()
 		while remaining:
 			node = remaining.pop()
@@ -192,41 +209,24 @@ class PartialOrder(object):
 			for m in dropped:
 				result.remove(m)
 
-		if False:
-			for n1 in result:
-				for n2 in result:
-					if n1 is n2:
-						continue
-					assert(not (n1 >= n2))
-					assert(not (n1 <= n2))
-
 		return self._setClass(map(lambda node: node.key, result))
 
 	def maxima(self, subset):
 		remaining = self.getNodesForSet(subset)
 
-		result = set()
-		while remaining:
-			node = remaining.pop()
+		belowClosure = self._setClass()
 
-			ignore = False
-			dropped = []
-			for m in result:
-				if node <= m:
-					# node is below one of the maxima we have so far. ignore it.
-					ignore = True
-					break
-				if m <= node:
-					# node is above one of the maxima we have so far. replace the existing
-					# maximum, and continue.
-					dropped.append(m)
+		for node in remaining:
+			# if the node is below one of the previous maxima, ignore it
+			if node.key not in belowClosure:
+				# get the set of all elements < this node
+				nodeClosure = node._downwardClosure.copy()
+				nodeClosure.discard(node.key)
 
-			if not ignore:
-				result.add(node)
-			for m in dropped:
-				result.remove(m)
+				# enlarge the downward closure of result
+				belowClosure.update(nodeClosure)
 
-		return self._setClass(map(lambda node: node.key, result))
+		return subset.difference(belowClosure)
 
 	def unboundedElements(self, subset):
 		result = self._setClass()

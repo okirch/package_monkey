@@ -608,9 +608,10 @@ class PotentialClassification(object):
 			for packagePlacement in self.unsolved:
 				packagePlacement.trivialChecks()
 
-			if self.packageCount == 1 and not self.isFinal:
-				packagePlacement = self.unsolved[0]
-				packagePlacement.onlyChildCheck()
+# This is too aggressive; if at all, this should be a last resort
+#			if self.packageCount == 1 and not self.isFinal:
+#				packagePlacement = self.unsolved[0]
+#				packagePlacement.onlyChildCheck()
 
 			return self.isFinal
 

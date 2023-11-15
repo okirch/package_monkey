@@ -31,7 +31,11 @@ timing = ExecTimer()
 traceMatcher = application.traceMatcher
 for pinfo in store.enumerateLatestPackages():
 	pkg = store.retrievePackage(pinfo)
+	collection.add(pkg)
+infomsg(f"Loaded all packages, {timing} elapsed")
 
+timing = ExecTimer()
+for pkg in collection:
 	if traceMatcher and traceMatcher.match(pkg.name):
 		pkg.trace = True
 

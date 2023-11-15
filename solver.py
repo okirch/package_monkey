@@ -206,6 +206,9 @@ class PotentialClassification(object):
 		def isFinal(self):
 			return bool(self.label) or self.failed
 
+		def propagateSolvers(self):
+			pass
+
 		def reportVerdict(self, node, result):
 			# FIXME: this is really just the reporting stage, so no idea why we're trying to update
 			# the node's solution here.
@@ -286,13 +289,13 @@ class PotentialClassification(object):
 					infomsg(f"{self} added {solver}")
 
 		def propagateSolvers(self):
-			if not solvers:
+			if not self.solvers:
 				return
 
 			for lower in self.node.lowerNeighbors:
 				buildPlacement = lower.placement
-				if lower.label is None:
-					lower.solvers.update(self.solvers)
+				if buildPlacement.label is None:
+					lower.placement.solvers.update(self.solvers)
 
 		# The node corresponds to a package that has been auto-labelled as "devel" (purpose)
 		# or "python" (flavor). Reduce the list of candidates to those that have a matching

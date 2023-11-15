@@ -590,6 +590,14 @@ class SolvingTree(object):
 
 		self._tracer = Tracer(self._focusLabels)
 
+	@property
+	def numPackages(self):
+		return len(self._packages)
+
+	@property
+	def numBuilds(self):
+		return len(self._builds)
+
 	@classmethod
 	def createNodeSet(klass, initialValues = None):
 		return klass.domain.set(initialValues)
@@ -844,6 +852,22 @@ class SolvingTree(object):
 	@property
 	def allBuilds(self):
 		return iter(self._builds.values())
+
+	def topDownBuildTraversal(self):
+		seen = set()
+		for node in self.topDownTraversal():
+			# ignore .src rpms, they are not really part of the ordering as they're
+			# never dominated from above
+			if node.package and node.package.isSourcePackage:
+				continue
+
+			build = node.siblings
+			if build is None:
+				warnmsg(f"package {node} - cannot determine OBS build")
+				continue
+			if build not in seen:
+				seen.add(build)
+				yield build
 
 class SolvingTreeBuilder(object):
 	def __init__(self, classificationContext):

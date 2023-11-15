@@ -678,13 +678,22 @@ class PotentialClassification(object):
 		# of preferredlabels.
 		# If so, check whether this could be a good base label for placing the entire package.
 		# Do this only for packages that have none of their rpms labelled yet
+		#
+		# In order for this heuristic to deliver sane results, we ignore builds that have
+		# packages without autolabel (for example, a libfoobar and some python3xx-foobar binding).
+		# However, we do want to accept builds that have different autolabels as long as there's
+		# a unique preferredLabel (for example, some python3xx-foobar module plus a -doc package
+		# that goes along).
 		def solveDefaultBaseLabel(self):
 			if self.solved:
 				return
 
 			autoLabel = None
 			for packagePlacement in self.unsolved:
-				if packagePlacement.autoLabel:
+				if packagePlacement.autoLabel is None:
+					return False
+
+				if packagePlacement.autoLabel.preferredLabels:
 					if autoLabel is None:
 						autoLabel = packagePlacement.autoLabel
 					elif autoLabel is not packagePlacement.autoLabel:

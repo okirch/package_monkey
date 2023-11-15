@@ -385,3 +385,233 @@ class TopDownTraversal:
 	def __iter__(self):
 		return iter(self.keys)
 
+if __name__ == '__main__':
+	from util import ExecTimer
+	import random
+	# hack until I'm packaging fastsets properly
+	import fastsets.fastsets as fastsets
+
+	domain = fastsets.Domain("pairs")
+	class Pair(domain.member):
+		def __init__(self, a, b):
+			super().__init__()
+			self.a = a
+			self.b = b
+
+		def __hash__(self):
+			return hash((self.a, self.b))
+
+		def __eq__(self, other):
+			return self is other
+
+		def __le__(self, other):
+			return self.a <= other.a and self.b <= other.b
+
+		def __lt__(self, other):
+			return (self is not other) and (self <= other)
+
+		def __str__(self):
+			return f"({self.a}, {self.b})"
+
+	class TestLattice:
+		def __init__(self, max):
+			self.max = max
+
+			self._pairs = []
+			self._lookup = {}
+			for a in range(max):
+				for b in range(max):
+					pair = Pair(a, b)
+					self._lookup[a, b] = pair
+					self._pairs.append(pair)
+			self._numPairs = len(self._pairs)
+			self._indexPermutation = list(range(self._numPairs))
+
+			self.order = PartialOrder(domain, "lattice")
+			for p1 in self._pairs:
+				below = domain.set()
+				for p2 in self._pairs:
+					if p2 < p1:
+						below.add(p2)
+				self.order.add(p1, below)
+			self.order.finalize()
+
+			self.numFailures = 0
+			self.numFailuresTotal = 0
+			self.numTests = 0
+			self.numTestsTotal = 0
+
+		def supOfSet(self, input):
+			if not input:
+				return None
+			aMax = max(p.a for p in input)
+			bMax = max(p.b for p in input)
+			return self._lookup[aMax, bMax]
+
+		def infOfSet(self, input):
+			if not input:
+				return None
+			aMax = min(p.a for p in input)
+			bMax = min(p.b for p in input)
+			return self._lookup[aMax, bMax]
+
+		def createRandomSet(self, numElements = None):
+			if numElements is None:
+				numElements = random.randrange(self._numPairs)
+
+			random.shuffle(self._indexPermutation)
+
+			result = domain.set()
+			for i in range(numElements):
+				k = self._indexPermutation[i]
+				result.add(self._pairs[k])
+
+			return result
+
+		def beginTest(self):
+			self.testTimer = ExecTimer()
+
+		def fail(self, msg):
+			print(f"FAIL: {msg}")
+			self.numFailures += 1
+
+		def reportSingleTest(self, name):
+			timer = self.testTimer
+			del self.testTimer
+
+			if self.numFailures:
+				print(f"FAIL: {name} [{timer}]: {self.numFailures}/{self.numTests} tests failed")
+				self.numFailuresTotal += self.numFailures
+				self.numFailures = 0
+			else:
+				print(f"PASS: {name} [{timer}]: {self.numTests} tests passed")
+
+			self.numTestsTotal += self.numTests
+			self.numTests = 0
+
+		def validateExtrema(self, testSet):
+			for a in testSet:
+				for b in testSet:
+					if a is b:
+						continue
+					if a <= b or b <= a:
+						print(a, b)
+						return False
+			return True
+
+		def testMaxima(self, count, testSetSize = None):
+			self.beginTest()
+			for i in range(count):
+				self.numTests += 1
+
+				input = self.createRandomSet(numElements = testSetSize)
+				# print(f"input={' '.join(map(str, input))}")
+
+				maxes = self.order.maxima(input)
+				# print(f"maxes={' '.join(map(str, maxes))}")
+
+				if not maxes.issubset(input):
+					self.fail("result of maxima() is not a subset of input")
+					continue
+
+				closure = self.order.downwardClosureForSet(maxes)
+				if not input.issubset(closure):
+					self.fail("result of maxima() does not contain all maxima")
+					continue
+
+				if not self.validateExtrema(maxes):
+					self.fail("result of maxima() contains elements that are <= each other")
+					continue
+
+			self.reportSingleTest("maxima()")
+
+		def testMaximum(self, count, testSetSize = None):
+			self.beginTest()
+			for i in range(count):
+				self.numTests += 1
+
+				input = self.createRandomSet(numElements = testSetSize)
+
+				sup = self.supOfSet(input)
+				max = self.order.maximumOf(input)
+
+				if sup is None and max is not None:
+					self.fail(f"result of maximumOf() should have been {sup} but was {max}")
+					continue
+
+				# print(f"input {' '.join(map(str, input))} max={max}; sup={sup}")
+				if max is not None:
+					if max not in input:
+						self.fail(f"result of maximumOf() is not a member of input set")
+						continue
+					if max is not sup:
+						self.fail(f"result of maximumOf() should have been {sup}")
+						continue
+				elif sup in input:
+					self.fail(f"result of maximumOf() should have been {sup} but was {max}")
+					continue
+
+			self.reportSingleTest("maximumOf()")
+
+		def testMinima(self, count, testSetSize = None):
+			self.beginTest()
+			for i in range(count):
+				self.numTests += 1
+
+				input = self.createRandomSet(numElements = testSetSize)
+				# print(f"input={' '.join(map(str, input))}")
+
+				mins = self.order.minima(input)
+				# print(f"mins={' '.join(map(str, mins))}")
+
+				if not mins.issubset(input):
+					self.fail("result of minima() is not a subset of input")
+					continue
+
+				closure = self.order.upwardClosureForSet(mins)
+				if not input.issubset(closure):
+					self.fail("result of minima() does not contain all minima")
+					continue
+
+				if not self.validateExtrema(mins):
+					self.fail("result of minima() contains elements that are <= each other")
+					continue
+
+			self.reportSingleTest("minima()")
+
+		def testMinimum(self, count, testSetSize = None):
+			self.beginTest()
+			for i in range(count):
+				self.numTests += 1
+
+				input = self.createRandomSet(numElements = testSetSize)
+
+				inf = self.infOfSet(input)
+				min = self.order.minimumOf(input)
+
+				if inf is None and min is not None:
+					self.fail(f"result of minimumOf() should have been {inf} but was {min}")
+					continue
+
+				# print(f"input {' '.join(map(str, input))} min={min}; inf={inf}")
+				if min is not None:
+					if min not in input:
+						self.fail(f"result of minimumOf() is not a member of input set")
+						continue
+					if min is not inf:
+						self.fail(f"result of minimumOf() should have been {inf}")
+						continue
+				elif inf in input:
+					self.fail(f"result of minimumOf() should have been {inf} but was {min}")
+					continue
+
+			self.reportSingleTest("minimumOf()")
+
+		def testAll(self, count = 500):
+			self.testMaxima(count)
+			self.testMaximum(count, testSetSize = int(self.max / 6))
+			self.testMinima(count)
+			self.testMinimum(count, testSetSize = int(self.max / 6))
+
+	test = TestLattice(47)
+	test.testAll()

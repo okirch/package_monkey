@@ -22,7 +22,7 @@ def intersectSets(a, b):
 
 def renderLabelSet(name, labels):
 	if labels is None:
-		return "[unconstrained]"
+		return f"[unconstrained {name}]"
 
 	if not labels:
 		return f"[no {name}]"
@@ -747,7 +747,7 @@ class PotentialClassification(object):
 				infomsg(f"{self} has no common base labels");
 				return self._compatibleBaseLabels
 
-			infomsg(f"{self} has common base labels {' '.join(map(str, commonBaseLabels))}");
+			infomsg(f"{self} has {renderLabelSet('common base labels', commonBaseLabels)}");
 			for baseLabel in commonBaseLabels:
 				if self.canSolveUsingBaseLabel(baseLabel):
 					if self.trace:
@@ -864,7 +864,7 @@ class PotentialClassification(object):
 						namesToPlacements[baseName] = packagePlacement
 						infomsg(f"    {baseName} -> {packagePlacement}")
 
-						# FIXME: this encodes the SUSE lib package naming convention
+						# FIXME: this relies on the SUSE lib package naming convention
 						# shorten librsvg-2-2 to librsvg
 						if baseName.startswith("lib"):
 							baseName = baseName.rstrip("-0123456789_")

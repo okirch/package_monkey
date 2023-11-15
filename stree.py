@@ -605,7 +605,8 @@ class SolvingTree(object):
 	def addPackage(self, pkg):
 		# Do not add packages that are labeled with disposition ignored
 		if pkg.label and pkg.label.disposition == Classification.DISPOSITION_IGNORE:
-			infomsg(f"{pkg} is label {pkg.label} with disposition {pkg.label.disposition}")
+			if pkg.trace:
+				infomsg(f"{pkg} is label {pkg.label} with disposition {pkg.label.disposition}")
 			return None
 		return self.getPackage(pkg)
 

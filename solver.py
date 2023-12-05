@@ -260,13 +260,6 @@ class PotentialClassification(object):
 			infomsg(f"{self} is placed in {choice} (optimal label based on base label {baseLabel})")
 			self.setSolution(choice)
 
-		def xxx_reportVerdict(self, node, verdict):
-			if self.label:
-				if node.solution and node.solution is not self.label:
-					errormsg(f"BUG: Placement algorithm is trying to change label for {node} from {node.solution} to {self.label}")
-				node.solution = self.label
-				verdict.add(node)
-
 		@property
 		def baseLabels(self):
 			if self.candidates is None:

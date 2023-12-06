@@ -585,14 +585,18 @@ class OBSPackage:
 		return s or "undefined"
 
 class OBSProject:
-	def __init__(self, name, product):
+	def __init__(self, name, product = None):
 		self.name = name
 		self.product = product
-		self.resolverHints = product.resolverHints
+		self.resolverHints = None
 		self.buildRepository = "standard"
-		self.buildArch = product.arch
+		self.buildArch = None
 		self._packages = {}
 		self._binaries = BinaryMap()
+
+		if product:
+			self.resolverHints = product.resolverHints
+			self.buildArch = product.arch
 
 		self._obsCache = None
 

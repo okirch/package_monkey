@@ -361,8 +361,8 @@ class OBSClient(object):
 			return None
 		return self._cache.getEntry(*args, **kwargs)
 
-	def apiCallRaw(self, path, method = "GET", cachingOff = False, cacheEntry = None, progressMeter = None, **params):
-		assert(method in ('GET', 'POST'))
+	def apiCallRaw(self, path, method = "GET", cachingOff = False, cacheEntry = None, progressMeter = None, xmldoc = None, **params):
+		assert(method in ('GET', 'POST', 'PUT'))
 
 		if type(path) == list:
 			path = "/".join(path)
@@ -376,6 +376,10 @@ class OBSClient(object):
 					param_list.append(f"{key}={value}")
 			param_string = "&".join(param_list)
 			path += "?" + param_string
+
+		extra_args = {}
+		if xmldoc is not None:
+			extra_args['data'] = xmltree.toString(xmldoc)
 
 		fullUrl = self._apiurl + "/" + path
 		if method == "GET" and cacheEntry is None and not cachingOff:
@@ -394,7 +398,7 @@ class OBSClient(object):
 		debugOBS(f"OBS API Call {path}", prefix = progressMeter)
 
 		try:
-			res = http_request(method, fullUrl)
+			res = http_request(method, fullUrl, **extra_args)
 		except HTTPError as e:
 			# We could try to catch the HTTPError exception
 			# (apparently defined in urllib.error) but why
@@ -410,7 +414,7 @@ class OBSClient(object):
 
 		return res
 
-	def apiCallXML(self, function, *args, **params):
+	def apiMakePath(self, function, *args):
 		path = [function]
 		for arg in args:
 			if type(arg) == list:
@@ -418,6 +422,10 @@ class OBSClient(object):
 			else:
 				path.append(arg)
 		path = "/".join(path)
+		return path
+
+	def apiCallXML(self, function, *args, **params):
+		path = self.apiMakePath(function, *args)
 
 		res = self.apiCallRaw(path, **params)
 		if not res:
@@ -428,6 +436,16 @@ class OBSClient(object):
 			raise ValueError(f"OBS: cannot parse response to GET {path}")
 
 		return tree.getroot()
+
+	def apiCallPUT(self, function, *args, **params):
+		path = self.apiMakePath(function, *args)
+
+		res = self.apiCallRaw(path, method = 'PUT', **params)
+		if not res:
+			raise Exception(f"Failed to PUT {path}")
+
+		# FIXME: inspect the result?
+		return True
 
 	def queryBuildResult(self, project, **params):
 		xml = self.apiCallXML('build', project, "_result", **params)

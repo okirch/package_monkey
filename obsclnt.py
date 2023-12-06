@@ -361,7 +361,7 @@ class OBSClient(object):
 			return None
 		return self._cache.getEntry(*args, **kwargs)
 
-	def apiCallRaw(self, path, method = "GET", cachingOff = False, cacheEntry = None, progressMeter = None, xmldoc = None, **params):
+	def apiCallRaw(self, path, method = "GET", cachingOff = False, cacheEntry = None, progressMeter = None, xmldoc = None, quiet = False, **params):
 		assert(method in ('GET', 'POST', 'PUT'))
 
 		if type(path) == list:
@@ -400,10 +400,8 @@ class OBSClient(object):
 		try:
 			res = http_request(method, fullUrl, **extra_args)
 		except HTTPError as e:
-			# We could try to catch the HTTPError exception
-			# (apparently defined in urllib.error) but why
-			# bother
-			errormsg("OBS: Unable to get %s - HTTP error %d" % (path, e.code))
+			if e.code != 404 or not quiet:
+				errormsg(f"OBS: Unable to get {path}: HTTP error {e.code}")
 			if e.code == 404:
 				return None
 			raise e

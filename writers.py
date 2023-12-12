@@ -5,6 +5,7 @@
 from csvio import CSVWriter
 from xmltree import XMLTree
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from filter import Classification, ClassificationResult
 
 class BaseWriter:
 	def __init__(self):
@@ -253,19 +254,15 @@ class XmlWriter(BaseWriter):
 		raise Exception("XML writer does not support problem log")
 
 class XmlReader:
-	from filter import Classification
-
 	from packages import Versiontools
 
 	nullVersion = Versiontools.ParsedVersion(None, None)
 
 	def __init__(self, classificationScheme):
-		from filter import ClassificationResult
-
 		self.classificationScheme = classificationScheme
-		self.result = ClassificationResult(classificationScheme.defaultOrder())
 
 		self._packages = {}
+		self._builds = []
 
 	def read(self, path):
 		import xml.etree.ElementTree as ET
@@ -284,18 +281,52 @@ class XmlReader:
 			else:
 				raise Exception(f"unsupported element <{node.tag}> in {path}")
 
-		return self.result
+		result = ClassificationResult(self.classificationScheme.defaultOrder())
+		for rpm in self._packages.values():
+			result.labelOnePackage(rpm, rpm.label, None)
+		for name, component, binaries, sources in self._builds:
+			result.labelOneBuild(name, component, binaries, sources)
+
+		return result
 
 	def processTopic(self, labelNode):
 		name = labelNode.attrib['name']
 
-		label = self.classificationScheme.getLabel(name)
+		label = self.validateLabel(name, Classification.TYPE_BINARY)
+		self.validateComponent(label, labelNode.attrib.get('component'))
 
 		for rpm in self.processAllRpmChildren(labelNode):
-			self.result.labelOnePackage(rpm, label, None)
+			rpm.label = label
+
+	def validateComponent(self, label, componentName):
+		if componentName is None:
+			return None
+
+		component = self.validateLabel(componentName, Classification.TYPE_SOURCE)
+		if label.sourceProject is None:
+			label.sourceProject = component
+		elif label.sourceProject != component:
+			raise Exception(f"incompatible component {component} for topic {label} (already set to {label.sourceProject})")
+		return component
+
+	def validateLabel(self, name, type):
+		label = self.classificationScheme.getLabel(name)
+		if label is not None:
+			if label.type is not type:
+				raise Exception(f"incompatible {label.type} label {name} - expected {type}")
+		elif self.classificationScheme.isFinal:
+			raise Exception(f"unknown label {name}")
+		else:
+			label = self.classificationScheme.resolveLabel(name, type)
+		return label
 
 	def processBuild(self, buildNode):
 		name = buildNode.attrib['name']
+
+		component = None
+		componentName = buildNode.attrib.get('component')
+		if componentName is not None:
+			component = self.validateLabel(componentName, Classification.TYPE_SOURCE)
 
 		binaries = []
 		sources = []
@@ -311,7 +342,7 @@ class XmlReader:
 			for rpm in self.processAllRpmChildren(buildReqNode):
 				sources[0].resolvedRequires.append((None, rpm))
 
-		self.result.labelOneBuild(name, None, binaries, sources)
+		self._builds.append((name, component, binaries, sources))
 
 	def processAllRpmChildren(self, node):
 		for rpmNode in node.findall('rpm'):

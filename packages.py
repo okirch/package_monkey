@@ -342,6 +342,7 @@ class ResolverChoice:
 		infomsg(f"Ambiguous resolution: {cand.name} and {best.name}")
 		return False
 
+# FIXME: obsolete
 class ResolverPreferences:
 	def __init__(self):
 		self._packagePreferences = None
@@ -366,7 +367,8 @@ class ResolverPreferences:
 class ResolverContext:
 	def __init__(self, worker, arch):
 		self._resolver = worker._resolver
-		self._preferences = worker._preferences
+		# FIXME: obsolete
+		self._preferences = None
 		self._problems = worker._problems
 
 		if arch in ('src', 'nosrc'):
@@ -658,13 +660,11 @@ class ResolverWorker:
 				for key, problem in sorted(category.items()):
 					problem.show(categoryReport)
 
-	def __init__(self, resolver, processfn = None, preferences = None):
+	def __init__(self, resolver):
 		self._resolver = resolver
 		self._queue = []
 		self._packages = set()
-		self._process = processfn
 		self._problems = self.Problems()
-		self._preferences = preferences
 		self._contexts = {}
 
 		self.debugMsg = debugDependency

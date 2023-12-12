@@ -428,6 +428,7 @@ class Classification:
 		def __init__(self):
 			self._labels = {}
 			self._nextLabelId = 0
+			self._final = False
 
 		@property
 		def fingerprint(self):
@@ -445,6 +446,10 @@ class Classification:
 		@property
 		def allBuildConfigs(self):
 			return set(filter(lambda label: label.type == Classification.TYPE_BUILDCONFIG, self._labels.values()))
+
+		@property
+		def isFinal(self):
+			return self._final
 
 		def getLabel(self, name):
 			return self._labels.get(name)
@@ -552,13 +557,48 @@ class Classification:
 
 			return label
 
+		def resolveLabel(self, name, type):
+			if type is Classification.TYPE_BINARY:
+				return self.resolveBinaryLabel(name)
+			if type is Classification.TYPE_SOURCE:
+				return self.resolveSourceLabel(name)
+			raise Exception(f"Classification.resolveLabel: unsupported label type {type}")
+
 		def resolveBinaryLabel(self, name):
 			baseName, flavorName, purposeName = Classification.parseBinaryLabel(name)
 			label = self.createLabel(baseName, Classification.TYPE_BINARY)
 			if flavorName:
-				label = self.createFlavor(label, flavorName)
+				label = self.resolveBuildFlavor(label, flavorName)
 			if purposeName:
-				label = self.createPurpose(label, purposeName)
+				label = self.resolvePurpose(label, purposeName)
+			return label
+
+		def resolveBuildFlavor(self, label, flavorName):
+			flavor = label.getBuildFlavor(flavorName)
+			if flavor is None:
+				assert(not self._final)
+				flavor = self.createFlavor(label, flavorName)
+			return flavor
+
+		def resolvePurpose(self, label, purposeName):
+			purpose = label.getObjectPurpose(purposeName)
+			if purpose is None:
+				assert(not self._final)
+				purpose = self.createPurpose(label, purposeName)
+			return purpose
+
+		def resolveSourceLabel(self, name):
+			# if it has a '/' in the name, it's a buildconfig not a source project
+			if '/' in name:
+				return None
+			return self.createLabel(name, Classification.TYPE_SOURCE)
+
+		def resolveBuildConfigLabel(self, name):
+			baseName, flavorName = Classification.parseBuildconfigLabel(name)
+
+			label = self.createLabel(baseName, Classification.TYPE_SOURCE)
+			if flavorName:
+				label = self.resolveBuildFlavor(label, flavorName)
 			return label
 
 		@property
@@ -608,6 +648,9 @@ class Classification:
 							label.setBuildConfig(source)
 				return label.buildConfig
 
+			if self._final:
+				raise Exception(f"Duplicate call to ClassificationScheme.finalize()")
+
 			for label in self._labels.values():
 				if label.sourceProject is None:
 					inheritSourceProject(label)
@@ -635,6 +678,8 @@ class Classification:
 
 			# ugly... this should really be attached to the classificationScheme *instance*
 			Classification.baseLabelsForSet = fastsets.Transform(Classification.domain, lambda label: label.baseLabel)
+
+			self._final = True
 
 		def resolveBuildConfigDependencies(self, buildConfig, resolved, resolving = None):
 			if resolving is None:
@@ -1387,6 +1432,9 @@ class ClassificationResult(object):
 			self.sources = []
 			self.buildRequires = []
 			self.label = None
+
+		def __str__(self):
+			return self.name
 
 	def __init__(self, labelOrder):
 		self._labelOrder = labelOrder

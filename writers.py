@@ -232,7 +232,8 @@ class XmlWriter(BaseWriter):
 		buildNode = self.xmltree.root.addChild('build')
 		buildNode.setAttribute('name', buildInfo.name)
 
-		# ignore label for now
+		if label is not None:
+			buildNode.setAttribute('component', label)
 
 		for rpm in buildInfo.sources + buildInfo.binaries:
 			self.writeRPM(buildNode, rpm)

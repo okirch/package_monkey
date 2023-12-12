@@ -558,6 +558,24 @@ class PotentialClassification(object):
 		def numSolved(self):
 			return self.packageCount - len(self.unsolved)
 
+		@property
+		def uniqueSourceProject(self):
+			result = None
+			for placement in self.children:
+				label = placement.label
+				if label is None:
+					continue
+
+				label = label.sourceProject
+				if result is label:
+					continue
+
+				if result is not None:
+					return None
+
+				result = label
+			return result
+
 		def addDefinitivePlacement(self, pkg, node, label):
 			component = label.componentName
 			if component is not None:
@@ -1259,8 +1277,12 @@ class PotentialClassification(object):
 				node.placement.reportVerdict(node, result)
 
 		for build in self.solvingTree.builds:
-			# We do not place the builds in components yet
 			label = None
+
+			buildPlacement = placementMap[build]
+			if buildPlacement.isFinal:
+				label = buildPlacement.uniqueSourceProject
+
 			result.labelOneBuild(build.name, label, build.packages, build.sources)
 
 		return result

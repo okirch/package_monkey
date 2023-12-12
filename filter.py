@@ -1402,10 +1402,10 @@ class ClassificationResult(object):
 		return m
 
 	def projectMembership(self, label):
-		m = self._builds.get(label)
+		m = self._projects.get(label)
 		if m is None:
 			m = self.ProjectMembership(label)
-			self._builds[label] = m
+			self._projects[label] = m
 		return m
 
 	def labelOnePackage(self, pkg, label, reason):
@@ -1417,6 +1417,7 @@ class ClassificationResult(object):
 
 		buildInfo.binaries += binaries
 		buildInfo.sources += sources
+		buildInfo.label = label
 
 		for rpm in sources:
 			if rpm.resolvedRequires is None:

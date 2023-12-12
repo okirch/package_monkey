@@ -115,6 +115,9 @@ class ResolverHints:
 		self._rules = []
 		self._cache = {}
 
+		self._ignoredDependencies = {}
+		self._ignoredTargets = None
+
 	def addNameOrder(self, words):
 		self._rules.append(self.NameOrderRule(words))
 
@@ -147,6 +150,26 @@ class ResolverHints:
 			self._cache[key] = result
 
 		return result
+
+	##########################################################
+	# Handling of ignored dependencies
+	##########################################################
+	def addIgnoredDependency(self, packageName, targetName):
+		if packageName == '*':
+			if self._ignoredTargets is None:
+				self._ignoredTargets = set()
+			self._ignoredTargets.add(targetName)
+		else:
+			if targetName not in self._ignoredDependencies:
+				self._ignoredDependencies[targetName] = set()
+			self._ignoredDependencies[targetName].add(packageName)
+
+	def dependencyIsIgnored(self, packageName, targetName):
+		if self._ignoredTargets is not None and targetName in self._ignoredTargets:
+			return True
+
+		ignoredNames = self._ignoredDependencies.get(targetName)
+		return ignoredNames is not None and packageName in ignoredNames
 
 	# not really a self test yet
 	def selfTest(self):

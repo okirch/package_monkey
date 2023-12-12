@@ -20,6 +20,20 @@ products:
    obsname:     Dolomite
 
 resolverhints:
+  ignore:
+    # we want to place these somewhere in Core, but dont want to pollute Core
+    # with any systemd dependencies.
+    # Maybe we should have a core package that specifies a systemd unit file version
+    - "nscd -> systemd systemd-mini"
+    - "pesign -> systemd systemd-mini"
+    - "snapper -> systemd systemd-mini"
+    - "cronie -> systemd systemd-mini"
+    - "util-linux-systemd -> systemd systemd-mini"
+    - "cyrus-sasl-saslauthd -> systemd systemd-mini"
+    - "pcp -> systemd systemd-mini"
+    - "libstoragemgmt -> systemd systemd-mini"
+    - "rdma-core -> systemd systemd-mini"
+    - "rdma-core -> udev udev-mini"
   prefer:
     - "order libcontainers-openSUSE-policy libcontainers-default-policy"
     - "order libjpeg8 libjpeg*"

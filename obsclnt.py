@@ -820,14 +820,19 @@ class OBSProject:
 		if self.resolverHints is None:
 			raise Exception(f"No resolver hints to resolve ambiguity in requirements")
 
+		def isValidTarget(targetName):
+			return not self.resolverHints.isIgnoredDependency(packageName, targetName)
+
 		result = []
 		for dep in requires:
 			if len(dep.packages) <= 1:
-				result += dep.packages
+				target = dep.packages[0]
+				if isValidTarget(target.name):
+					result.append(target)
 				continue
 
 			nameToPackage = dict((pinfo.name, pinfo) for pinfo in dep.packages)
-			names = set(nameToPackage.keys())
+			names = set(filter(isValidTarget, nameToPackage.keys()))
 
 			# libomp16-devel requires libomp.so which expands to either
 			# libomp15-devel or libomp16-devel. Obviously, we should not

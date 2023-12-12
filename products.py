@@ -168,6 +168,9 @@ class ProductFamily:
 			prefs = hints.get('prefer')
 			if prefs is not None:
 				self.expandResolverPreferences(prefs)
+			ignore = hints.get('ignore')
+			if ignore is not None:
+				self.expandIgnoredDependencies(ignore)
 			self.resolverHints.finalize()
 
 			# self.resolverHints.selfTest()
@@ -210,7 +213,7 @@ class ProductFamily:
 			return None
 
 		info = BuildServiceCollection()
-		info.ourceProjects = data.get('source') or []
+		info.sourceProjects = data.get('source') or []
 		info.buildProjects = data.get('build') or []
 		return info
 
@@ -230,6 +233,19 @@ class ProductFamily:
 			else:
 				raise Exception(f"Cannot parse resolver preference: \"{expr}\"")
 
+	def expandIgnoredDependencies(self, data):
+		for expr in data:
+			if '->' in expr:
+				(sourceNames, targetNames) = expr.split('->')
+				sourcesNames = sourcesNames.split()
+				targetNames = targetNames.split()
+				for packageName in sourceNames:
+					for targetName in targetNames:
+						self.resolverHints.addIgnoredDependency(packageName, targetName)
+			else:
+				targetNames = expr.split()
+				for targetName in targetNames:
+					self.resolverHints.addIgnoredDependency('*', targetName)
 
 	def enumerate(self, **args):
 		if args.get('version') == 'latest':

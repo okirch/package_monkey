@@ -1477,7 +1477,14 @@ class BackingStoreDB(DB):
 				requiredPkgId = requiredPkg.backingStoreId)
 
 	def enumerateLatestPackages(self):
-		return list(self.latest.knownPackages)
+		for build in self.enumerateOBSPackages():
+			src = build.sourcePackage
+			for rpm in build.binaries:
+				if rpm.isSourcePackage:
+					continue
+				if rpm.sourcePackage is None:
+					rpm.sourcePackage = src
+				yield rpm
 
 	def retrievePackage(self, pinfo):
 		pkg = self.retrievePackageById(pinfo.backingStoreId, pinfo.product)

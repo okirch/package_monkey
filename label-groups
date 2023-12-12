@@ -39,8 +39,8 @@ for pkg in collection:
 	if traceMatcher and traceMatcher.match(pkg.name):
 		pkg.trace = True
 
-	packageFilter.performInitialPlacement(pkg)
-	collection.add(pkg)
+	if not pkg.isSourcePackage:
+		packageFilter.performInitialPlacement(pkg)
 infomsg(f"Performed initial placement of packages, {timing} elapsed")
 
 def flattenGroupList(type, names):

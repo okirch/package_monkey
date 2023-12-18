@@ -588,6 +588,22 @@ class PotentialClassification(object):
 			self.solvingSourceLabel = result
 			return result
 
+		# verbose error reporting
+		def reportComponentPlacements(self):
+			components = {}
+			for placement in self.children:
+				label = placement.label
+				if label is None or label.sourceProject is None:
+					continue
+
+				componentName = label.sourceProject.name
+				if componentName not in components:
+					components[componentName] = set()
+				components[componentName].add(placement.name)
+
+			for name in sorted(components.keys()):
+				infomsg(f"  {name}: {' '.join(sorted(components[name]))}")
+
 		def addDefinitivePlacement(self, pkg, node, label):
 			component = label.componentName
 			if component is not None:

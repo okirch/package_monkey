@@ -961,6 +961,17 @@ class PotentialClassification(object):
 
 			return self.isFinal
 
+		# Place packages such as python bindings close to the sibling(s) they depend upon.
+		# For instance, place python3-pwquality alongside libpwquality1
+		#
+		# Inspect each unsolved node P in turn.
+		# Check whether P depends on one or more siblings. If all these siblings have
+		# been labeled, and they share the same base label, check if that base label
+		# can be used to place P as well.
+		def solveRelativeToSiblingDependencies(self, classificationScheme):
+			# To be implemented
+			return False
+
 		def solveWithConstraints(self, constrainingSet):
 			# see if we have any base labels that produce a solution that
 			# does not require @Foo+flavor style labes, but requires only
@@ -1073,7 +1084,8 @@ class PotentialClassification(object):
 				tentativePlacement.solveDefaultBaseLabel() or \
 				tentativePlacement.solveCommonBaseLabel() or \
 				tentativePlacement.solveCompatibleBaseLabel() or \
-				tentativePlacement.solvePurposeRelativeToSibling(self.classificationScheme)
+				tentativePlacement.solvePurposeRelativeToSibling(self.classificationScheme) or \
+				tentativePlacement.solveRelativeToSiblingDependencies(self.classificationScheme)
 
 			if tentativePlacement.isFinal:
 				infomsg(f"{tentativePlacement}: completely solved - component {tentativePlacement.uniqueSourceProject}")

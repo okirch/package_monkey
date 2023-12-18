@@ -3,6 +3,7 @@ import os
 import xmltree
 import posix
 import time
+import xml.etree.ElementTree as ET
 
 from packages import Package, PackageInfo, PackageInfoFactory
 from util import ChunkingQueue, ThatsProgress
@@ -216,6 +217,21 @@ class OBSSchema(object):
 
 		return result
 
+	def processDirectoryListing(self, xmlnode):
+		if not self.checkRootNodeTag(xmlnode, 'directory'):
+			return None
+
+		result = []
+		for child in xmlnode:
+			if child.tag != 'entry':
+				error(f"ignoring <{child.tag}> inside directory listing")
+				continue
+
+			name = child.attrib.get('name')
+			if name is not None:
+				result.append(name)
+
+		return result
 
 	def processSimpleXML(self, node, requiredAttrs, optionalAttrs):
 		result = OBSSchema.Dummy()
@@ -225,7 +241,6 @@ class OBSSchema(object):
 			if name not in attr:
 				suse.error("element <%s> lacks required attribute %s" % (node.tag, name))
 
-				import xml.etree.ElementTree
 				xml.etree.ElementTree.dump(xmlnode)
 
 				raise ValueError("Bad XML mojo from OBS")
@@ -237,6 +252,87 @@ class OBSSchema(object):
 			setattr(result, name, value)
 
 		return result
+
+	def processProjectConfig(self, doc):
+		if not self.checkRootNodeTag(xmlnode, 'project'):
+			return None
+
+		name = doc.attrib['name']
+		result = OBSProjectConfig(name)
+
+		for child in doc:
+			if child.tag == "repository":
+				repoNode = child
+
+				name = repoNode.attrib.get('name')
+
+				repo = result.addRepository(name)
+				repo.block = repoNode.attrib.get('block')
+				for pathNode in repoNode.findall("path"):
+					repo.addPath(pathNode.attrib['project'], pathNode.attrib['repository'])
+
+				for archNode in repoNode.findall("arch"):
+					repo.addArch(archNode.text.strip())
+			elif child.tag == "person":
+				repo.addPerson(child.attrib.get('userid'), child.attrib.get('role'))
+			else:
+				raise Exception(f"unexpected <{child.tag}> element in prjconf")
+
+		return result
+
+	def buildProjectConfig(self, prjconf, parent = None):
+		if parent is None:
+			doc = ET.Element("project")
+		else:
+			doc = ET.SubElement(parent, "project")
+
+		doc.set('name', prjconf.name)
+		ET.SubElement(doc, 'title')
+		ET.SubElement(doc, 'description')
+
+		for person in prjconf.persons:
+			personNode = ET.SubElement(doc, 'person')
+			personNode.set('userid', person.name)
+			personNode.set('role', person.role)
+
+		for repo in prjconf.repositories:
+			repoNode = ET.SubElement(doc, 'repository')
+			repoNode.set('name', repo.name)
+			if repo.block is not None:
+				repoNode.set('block', repo.block)
+
+			for projectName, repoName in repo.paths:
+				pathNode = ET.SubElement(repoNode, "path")
+				pathNode.set('project', projectName)
+				pathNode.set('repository', repoName)
+
+			for archName in repo.archs:
+				pathNode = ET.SubElement(repoNode, "arch")
+				pathNode.text = archName
+
+		return doc
+
+	def createProjectConfigDoc(self, projectName, userName):
+		doc = ET.Element("project")
+		doc.set('name', projectName)
+		ET.SubElement(doc, 'title')
+		ET.SubElement(doc, 'description')
+		personNode = ET.SubElement(doc, 'person')
+		personNode.set('userid', userName)
+		personNode.set('role', 'maintainer')
+		return doc
+
+	# <link project="SUSE:ALP:Source:Standard:1.0" package="zstd" rev="2"/>
+	def createLinkDoc(self, targetProject, targetPackage, targetRevision = None):
+		tree = xmltree.XMLTree("link")
+
+		doc = tree.root
+		doc.setAttribute('project', targetProject)
+		doc.setAttribute('package', targetPackage)
+		if targetRevision is not None:
+			doc.setAttribute('rev', targetRevision)
+		infomsg(f"Created link doc: {doc.encode()}")
+		return doc
 
 class GenericFileCache(object):
 	class Entry:
@@ -332,7 +428,9 @@ class OBSClient(object):
 		import osc.conf
 		osc.conf.get_config()
 
-		infomsg(f"Created OBS client for {self._apiurl}")
+		self._apiUser = osc.conf.config['user']
+
+		infomsg(f"Created OBS client for {self._apiurl}, user {self._apiUser}")
 		self.setCacheStrategy('default')
 
 	def setCachePath(self, path):
@@ -355,6 +453,10 @@ class OBSClient(object):
 			raise Exception(f"Unknown OBS cache strategy {name}")
 		self.cachePolicy = name
 		infomsg(f"Setting OBS cache strategy to {name}")
+
+	@property
+	def cachingEnabled(self):
+		return self._maxCacheAge != 0
 
 	def getHTTPCacheEntry(self, *args, **kwargs):
 		if self._cache is None:
@@ -382,7 +484,7 @@ class OBSClient(object):
 			extra_args['data'] = xmltree.toString(xmldoc)
 
 		fullUrl = self._apiurl + "/" + path
-		if method == "GET" and cacheEntry is None and not cachingOff:
+		if method == "GET" and cacheEntry is None and not cachingOff and self._maxCacheAge != 0:
 			cacheEntry = self.getHTTPCacheEntry(fullUrl)
 		if cacheEntry is not None and cacheEntry.exists and (self._maxCacheAge is None or cacheEntry.age < self._maxCacheAge):
 			debugOBS(f"OBS API Call {path} [cached]", prefix = progressMeter)
@@ -445,6 +547,14 @@ class OBSClient(object):
 		# FIXME: inspect the result?
 		return True
 
+	def querySourcePackages(self, project, **params):
+		xml = self.apiCallXML('source', project, **params)
+		if xml is None:
+			errormsg(f"Cannot find source/{project}")
+			return None
+
+		return self._schema.processDirectoryListing(xml)
+
 	def queryBuildResult(self, project, **params):
 		xml = self.apiCallXML('build', project, "_result", **params)
 		if xml is None:
@@ -464,6 +574,77 @@ class OBSClient(object):
 	def getFileInfoExt(self, project, repository, package, arch, filename, **kwargs):
 		res = self.apiCallXML("build", project, repository, arch, package, filename, view = 'fileinfo_ext', **kwargs)
 		return self._schema.processFileInfo(res)
+
+	def putSourcePackageXML(self, project, package, file, body):
+		return self.apiCallPUT("source", project, package, file, xmldoc = body)
+
+	def getSourcePackageXML(self, project, package, **params):
+		info = self.apiCallXML("source", project, package, **params)
+		if info is None:
+			return None
+		if info.tag != "directory":
+			raise Exception(f"{project}/{package} expected pkg info to contain a <directory> element")
+		return info
+
+	def getMetaXML(self, project, package = None, **params):
+		if package is not None:
+			meta = self.apiCallXML("source", project, package, "_meta", **params)
+			if meta is not None and meta.tag != "package":
+				raise Exception(f"{project}/{package}: expected _meta to contain a <package> element")
+		else:
+			meta = self.apiCallXML("source", project, "_meta", **params)
+			if meta is not None and meta.tag != "project":
+				raise Exception(f"{project}: expected _meta to contain a <project> element")
+		return meta
+
+	def putMetaXML(self, project, package, metaDoc):
+		return self.putSourcePackageXML(project, package, "_meta", metaDoc)
+
+	def putLinkXML(self, project, package, linkDoc):
+		return self.putSourcePackageXML(project, package, "_link", linkDoc)
+
+	def listSourcePackages(self, project):
+		res = self.apiCallXML("source", "project")
+
+	def buildInitialProjectConfig(self, projectName):
+		xmldoc = self._schema.createProjectConfigDoc(projectName, self._apiUser)
+		return OBSProjectConfig(projectName, xmldoc)
+
+	# FIXME: there should be a way to disable caching while we're modifying OBS content
+	# Right now, the individual get*XML methods enforce cachingOff=True
+	def linkpac(self, sourceProject, sourcePackage, destProject, destPackage = None, freezeRevision = False):
+		if self.cachingEnabled:
+			raise Exception(f"linkpac: you must disable caching for this operation")
+
+		if destPackage is None:
+			destPackage = sourcePackage
+
+		# check that the dest package does not exist
+		info = self.getSourcePackageXML(destProject, destPackage, quiet = True)
+		if info is not None:
+			raise Exception(f"linkpac: {destProject}/{destPackage} already exists")
+
+		info = self.getSourcePackageXML(sourceProject, sourcePackage, rev = "latest")
+		if info is None:
+			errormsg(f"{sourceProject}/{sourcePackage} does not exist!");
+			return False
+
+		sourceRevision = None
+		if freezeRevision:
+			sourceRevision = info.attrib.get('rev')
+			if sourceRevision is None:
+				raise Exception(f"linkpac: {sourceProject}/{sourcePackage} has no rev")
+
+		meta = self.getMetaXML(sourceProject, sourcePackage)
+		meta.attrib['project'] = destProject
+		meta.attrib['name'] = destPackage
+
+		self.putMetaXML(destProject, destPackage, meta)
+
+		# <link project="SUSE:ALP:Source:Standard:1.0" package="zstd" rev="2"/>
+		link = self._schema.createLinkDoc(sourceProject, sourcePackage, sourceRevision)
+
+		return self.putLinkXML(destProject, destPackage, link)
 
 class OBSBuildInfo:
 	def __init__(self, name):
@@ -584,6 +765,40 @@ class OBSPackage:
 		s = self.BUILD_STATUS_TABLE.get(self.buildStatus)
 		return s or "undefined"
 
+# All of the XML handling here should probably live in OBSSchema
+class OBSProjectConfig:
+	class Repository:
+		def __init__(self, name):
+			self.name = name
+			self.block = None
+			self.paths = []
+			self.archs = []
+
+		def addPath(self, projectName, repoName):
+			self.paths.append((projectName, repoName))
+
+		def addArch(self, archName):
+			self.archs.append(archName)
+
+	class Person:
+		def __init__(self, userName, role):
+			self.user = userName
+			self.role = role
+
+	def __init__(self, name):
+		self.name = name
+		self.title = None
+		self.repositories = []
+		self.persons = []
+
+	def addRepository(self, name):
+		repo = self.Repository(name)
+		self.repositories.append(repo)
+		return repo
+
+	def addPerson(self, userName, role):
+		self.persons.append(self.Person(userName, role))
+
 class OBSProject:
 	def __init__(self, name, product = None):
 		self.name = name
@@ -591,6 +806,7 @@ class OBSProject:
 		self.resolverHints = None
 		self.buildRepository = "standard"
 		self.buildArch = None
+		self._projectConfig = None
 		self._packages = {}
 		self._binaries = BinaryMap()
 
@@ -611,6 +827,12 @@ class OBSProject:
 	@property
 	def packages(self):
 		return sorted(self._packages.values(), key = lambda p: p.name)
+
+	@property
+	def projectConfig(self):
+		if self._projectConfig is None:
+			self._projectConfig = OBSProjectConfig(self.name)
+		return self._projectConfig
 
 	def primeCache(self, client):
 		if client.cachePolicy == 'exclusive':
@@ -649,6 +871,27 @@ class OBSProject:
 				return True
 
 		return False
+
+	def queryProjectConfig(self, client):
+		meta = client.getMetaXML(self.name, quiet = True)
+		if meta is None:
+			return None
+
+		return OBSProjectConfig(self.name, meta)
+
+	def updateProjectConfig(self, client, prjconf):
+		infomsg(f"sending prjconf: {xmltree.toString(prjconf.xmldoc)}")
+		return client.apiCallPUT("source", self.name, "_meta", xmldoc = prjconf.xmldoc)
+
+	def querySourcePackages(self, client):
+		return client.querySourcePackages(project = self.name);
+
+	def updateSourceList(self, client):
+		debugOBS(f"Getting source packages for {self.name}")
+		names = self.querySourcePackages(client)
+
+		for name in names:
+			self.addPackage(name)
 
 	def queryBuildResults(self, client):
 		resList = client.queryBuildResult(
@@ -868,6 +1111,9 @@ class OBSProject:
 			result.add(required)
 
 		return result
+
+	def getPackage(self, name):
+		return self._packages.get(name)
 
 	def addPackage(self, name):
 		pkg = self._packages.get(name)

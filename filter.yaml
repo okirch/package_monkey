@@ -19,6 +19,7 @@ autoflavors:
    # place python packages in @PythonModules by default, unless they
    # are constrained in some other way
    defaultlabels:
+    - "@CorePythonBindings"
     - "@PythonStandard"
     - "@PythonModules"
    requires:
@@ -355,7 +356,6 @@ groups:
    requires:
     - "@MinimalCRuntime"
     - "@Core0"
-#   - "@Glibc-devel"
     - "@SystemPython"
    binaries:
     - llvm
@@ -398,11 +398,6 @@ groups:
     - unifdef
     - cppunit
    buildflavors:
-    - name: qt
-      requires:
-       - "@Qt"
-      binaries:
-       - cmake-gui
     - name: systemd
       augments:
        - "@SystemdLibraries"
@@ -430,17 +425,12 @@ groups:
 #  sources:
 #   - system-users
 
- - name: "@CoreKernelBuildDeps"
-   buildconfig: Core/standard
-   binaries:
-    - systemtap-headers
-
  - name: "@Glibc"
    buildconfig: Core/standard
    # when deciding where to place -devel packages for a set of packages spread across
    # several labels (eg glibc here, nscd in Core0), we want this label to win
    buildrequires:
-    - "@CoreKernelBuildDeps"
+    - "@KernelHeaders"
    gravity: 100
    binaries:
     - glibc
@@ -504,6 +494,12 @@ groups:
     - make
     - gettext-tools-mini
     - gettext-tools
+   buildflavors:
+    - name: qt
+      requires:
+       - "@Qt"
+      binaries:
+       - cmake-gui
 
  # NOTE: This currently includes a lot of LLVM bits, which should probably be separated
  # the way GCC is
@@ -563,7 +559,6 @@ groups:
     - libcom_err2
     - libcrack2
     - libdb-4_8
-#   - libdevmapper*
     - libdouble-conversion3
     - libeconf0
     - libedit0
@@ -571,6 +566,9 @@ groups:
     - libevent-2*
     - libext2fs2
     - libfftw3-3
+    - libfftw3_mpi3
+    - libfftw3_omp3
+    - libfftw3_threads3
     - libfl2
     - libfreebl3
     # It's a font library, but it's used in so many places that it makes sense to place it here
@@ -611,6 +609,7 @@ groups:
     - libpipeline1
     - libpopt0
     - libprotobuf3*
+    - libprotoc3*
     - libprotobuf-lite3*
     - libpsx2
     - libpwquality1
@@ -661,30 +660,35 @@ groups:
 #      - libxml2-devel
        - libcom_err-devel
        - libboost_*-devel
+       - fftw3-devel priority=0
    buildflavors:
-    - name: odbc
-      binaries:
-       - openldap2-back-sql
+    - name: database
       requires:
        - "@Databases"
       buildrequires:
        - "@Databases"
-    - name: hpc
-      requires:
-       - "@HPC"
       binaries:
-    - name: pythoncore
+       - openldap2-back-sql
+    - name: python
       requires:
-       - "@Python"
+       - "@SystemPython"
       binaries:
-       # python bindings for libaudit. By default, they would go to
-       # HostSecurity+python, which is way too far up the stack
-#      - python3-audit
+       - python3??-libxml2
     - name: java
       requires:
        - "@JDK"
       binaries:
        - timezone-java
+    - name: hpc
+      requires:
+       - "@HPC"
+      purposes:
+       - name: devel
+         requires:
+          - "@HPC-devel"
+         binaries:
+          - fftw3-mpi-devel priority=0
+          - fftw3-openmp-devel priority=0
 
  - name: "@Core0"
    buildconfig: Core/standard
@@ -854,12 +858,25 @@ groups:
     - python311
     - python3??-base
     - python3??-future
+    - python3??-extras
     - libpython*
     - python*-base
    purposes:
     - name: devel
       binaries:
        - python31?-devel
+    - name: doc
+      binaries:
+       - python31?-doc
+
+ - name: "@CorePythonBindings"
+   buildconfig: Core/standard
+   buildrequires:
+    - "@BaseDevTools"
+   requires:
+    - "@Core0"
+    - "@SystemPython"
+   binaries:
 
  - name: "@Core1"
    buildconfig: Core/standard
@@ -871,7 +888,7 @@ groups:
     - "@Core0"
     - "@PerlCore"
     - "@NetworkLibraries"
-    - "@SystemPython"
+    - "@CorePythonBindings"
    binaries:
     - gpgme
     - libgpgme11
@@ -880,6 +897,7 @@ groups:
     - openssh-clients
     - gpg2
     - openldap2
+    - libldapcpp0
     - openslp
     - libslp1
     - libduktape*
@@ -946,6 +964,7 @@ groups:
     # it's not a service but it links against libsystemd
     - procps
     - cronie
+    - lmv2
 
  - name: "@TransactionalServer"
    description: |
@@ -1163,7 +1182,6 @@ groups:
        - "@Glib2-devel"
 
  - name: "@Kiwi"
-   # maybe place in a separate project
    buildconfig: Kiwi/standard
    requires:
     - "@Core"
@@ -1178,11 +1196,11 @@ groups:
     - "@TransactionalServer"
     - "@Console"
     - "@Virtualization"
+    - "@JeOS"
    binaries:
     - kiwi
     - python3-kiwi
     - pv
-    - jeos-firstboot
     - dracut-kiwi-*
 
  - name: "@SELinux"
@@ -1192,7 +1210,6 @@ groups:
     - "@Python"
     - "@Security"
     - "@CoreLibraries+pythoncore"
-#   - "@HostSecurity+python"
    binaries:
     - checkpolicy
     - setools
@@ -1203,7 +1220,6 @@ groups:
     - selinux-policy-sandbox
     - policycoreutils-python-utils
     - python3-policycoreutils
-    - python3-selinux
     - python3??-semanage
     - python3??-setools
    buildflavors:
@@ -1973,6 +1989,8 @@ groups:
     - gstreamer
     - gstreamer-*
     - gstreamer-plugins-vaapi
+    - libappstream4
+    - libappstream-compose0
     - libgstgl-*
     - libgstcuda-*
     - libpango-1*
@@ -2036,6 +2054,7 @@ groups:
     - "@DesktopLibraries"
    binaries:
     - xdg-dbus-proxy
+    - xdg-desktop-portal
 
  - name: "@PolicyKit"
    buildconfig: Gnome/standard
@@ -2070,7 +2089,6 @@ groups:
     - gnome-*
     - polkit-gnome*
     - xdg-menu
-    - xdg-desktop-portal
     - gcr-viewer*
     - WebKitGTK*
     # pulseaudio dependency are a huge jumble of gstreamer, pango, mesa, ... due to a
@@ -2114,6 +2132,7 @@ groups:
     - "@HostNetworking+gnomelibs"
     - "@SambaLibraries"
     - "@FullSystemd"
+    - "@Flatpak"
    binaries:
     - gdm
     - gnome-control-center
@@ -2126,6 +2145,8 @@ groups:
     - gnome-shell-calendar
     - pulseaudio-gdm-hooks
     - gnome-extensions
+    - malcontent
+    - libmalcontent-0*
 
  - name: "@GnomeApplications"
    buildconfig: Gnome/standard
@@ -2525,7 +2546,6 @@ groups:
    binaries:
     - autofs
     - bcache-tools
-#   - device-mapper
     - dos2unix
     - dump
     - duperemove
@@ -2533,7 +2553,6 @@ groups:
     - hdparm
     - hfsutils
     - jfsutils
-    - lvm2
     - mdadm
     - multipath-tools
     - parted
@@ -2548,9 +2567,6 @@ groups:
     - dmraid
     - growpart
    buildflavors:
-    - name: test
-      binaries:
-       - lvm2-testsuite
     - name: python
       binaries:
        - python31?-rtslib-fb
@@ -2808,7 +2824,9 @@ groups:
    buildconfig: Container/standard
    requires:
     - "@Core"
-    - "@Gnome"
+    - "@DesktopLibraries"
+    - "@DesktopUtilities"
+    - "@PolicyKit"
     - "@Bubblewrap"
    sources:
     - flatpak
@@ -2849,6 +2867,8 @@ groups:
       binaries:
        - libdevmapper1*
        - libdevmapper-event1*
+       - device-mapper
+       - thin-provisioning-tools
     - name: x11
       requires:
        - "@GraphicsLibraries+x11"
@@ -2872,6 +2892,32 @@ groups:
     - sg3_utils
     - hwdata
     - pciutils
+   buildflavors:
+    # lvm2 is not really a proper Kernel package because it wants a lot
+    # of stuff that's only available at higher levels
+    # Maybe we need to have KernelPlus depend on Systemd
+    - name: systemdlibs
+      requires:
+       - "@SystemdLibraries"
+       - "@UdevLibraries"
+      binaries:
+       - lvm2
+       - liblvm2cmd2_03
+    - name: ha
+      requires:
+       - "@HA"
+      binaries:
+       - lvm2-lockd
+    - name: test
+      requires:
+       - "@KernelCore+systemdlibs"
+      binaries:
+       - lvm2-testsuite
+
+ - name: "@KernelHeaders"
+   buildconfig: KernelPlus/standard
+   binaries:
+    - systemtap-headers
 
  - name: "@KernelAudio"
    buildconfig: KernelPlus/standard
@@ -3828,7 +3874,6 @@ groups:
     - python31?-iniconfig
     - python31?-Jinja2
     - python31?-langtable
-    - python31?-libxml2
     - python31?-lxml
     - python31?-MarkupSafe
     - python31?-notify2
@@ -4271,6 +4316,16 @@ groups:
        - grub2-x86_64-xen
        - grub2-x86_64-xen-extras
 
+ - name: "@JeOS"
+   buildconfig: KernelPlus/standard
+   requires:
+    - "@NetworkCore"
+    - "@Boot"
+   binaries:
+    - jeos-firstboot
+    - fde-firstboot
+    - live-langset-data
+
  - name: "@BootBuild"
    buildconfig: KernelPlus/standard
    requires:
@@ -4290,6 +4345,7 @@ groups:
     - "@TclCore"
    binaries:
     - rrdtool
+    - libgrpc1*
 
  - name: "@Management"
    buildconfig: Management/standard

@@ -94,7 +94,7 @@ class Application:
 
 			# FIXME: this should depend either on an argument to this function, or
 			# on a command line switch
-			if True:
+			if False:
 				store.fixupLatest()
 				store.fixupBuilds()
 				store.fixupRequirements()

@@ -20,8 +20,6 @@ application.catalog.updateBackingStore(store)
 # have to play guessing games later on
 store.putProperty("arch", application.architecture)
 
-obsInstanceHostname = "api.suse.de"
-
 obs = application.obsClient
 
 for release in application.enumerateProducts():

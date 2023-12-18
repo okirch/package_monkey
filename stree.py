@@ -203,7 +203,7 @@ class BuildComponentsReport:
 		for labelName, pkgList in sorted(self._labels.items()):
 			infomsg(f"   {labelName}:")
 			for pkg in pkgList:
-				if pkg.labelReason:
+				if pkg.labelReason is None:
 					infomsg(f"     {pkg}")
 				else:
 					infomsg(f"     {pkg} {pkg.labelReason}")

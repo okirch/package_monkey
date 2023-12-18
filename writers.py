@@ -218,6 +218,8 @@ class XmlWriter(BaseWriter):
 		for req in sorted(runtimeRequires, key = lambda l: l.name):
 			reqNode = runtimeNode.addChild('requires')
 			reqNode.setAttribute('topic', req.name)
+			if req.sourceProject is not None:
+				reqNode.setAttribute('component', req.sourceProject.name)
 
 		self._labels[label.name] = labelNode
 
@@ -226,6 +228,22 @@ class XmlWriter(BaseWriter):
 
 		for rpm in sorted(packages, key = lambda p: p.name):
 			rpmNode = self.writeRPM(labelNode, rpm)
+
+			reqNodes = {}
+			for dep, required in rpm.resolvedRequires:
+				if required.label is None or \
+				   required.label.sourceProject is label.sourceProject:
+					continue
+
+				topicName = required.label.name
+				reqNode = reqNodes.get(topicName)
+				if reqNode is None:
+					reqNode = rpmNode.addChild('requires')
+					reqNode.setAttribute('topic', topicName)
+					reqNode.setAttribute('component', required.label.sourceProject.name)
+					reqNodes[topicName] = reqNode
+
+				self.writeRPM(reqNode, required)
 
 			# FIXME: would be good if we could add the OBS package name here
 
@@ -295,8 +313,21 @@ class XmlReader:
 		label = self.validateLabel(name, Classification.TYPE_BINARY)
 		self.validateComponent(label, labelNode.attrib.get('component'))
 
+		runtime = labelNode.find('runtime')
+		if runtime is not None:
+			for reqNode in runtime.findall('requires'):
+				reqLabel = self.processRequires(reqNode)
+				label.addRuntimeDependency(reqLabel)
+
 		for rpm in self.processAllRpmChildren(labelNode):
 			rpm.label = label
+
+	def processRequires(self, reqNode):
+		reqLabel = self.validateLabel(reqNode.attrib['topic'], Classification.TYPE_BINARY)
+		componentName = reqNode.attrib.get('component')
+		if componentName is not None:
+			self.validateComponent(reqLabel, componentName)
+		return reqLabel
 
 	def validateComponent(self, label, componentName):
 		if componentName is None:
@@ -335,7 +366,6 @@ class XmlReader:
 				sources.append(rpm)
 			else:
 				binaries.append(rpm)
-			rpm.resolvedRequires = []
 
 		buildReqNode = buildNode.find('buildrequires')
 		if buildReqNode is not None and sources:
@@ -358,5 +388,13 @@ class XmlReader:
 		rpm = self._packages.get(key)
 		if rpm is None:
 			rpm = PackageInfo.fromNameAndParsedVersion(name, arch, self.nullVersion)
+			rpm.resolvedRequires = []
 			self._packages[key] = rpm
+
+		for reqNode in rpmNode.findall('requires'):
+			reqLabel = self.processRequires(reqNode)
+			for required in self.processAllRpmChildren(reqNode):
+				required.label = reqLabel
+				rpm.resolvedRequires.append((None, required))
+
 		return rpm

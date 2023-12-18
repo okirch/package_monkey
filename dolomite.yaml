@@ -28,6 +28,7 @@ resolverhints:
     - "pesign -> systemd systemd-mini"
     - "snapper -> systemd systemd-mini"
     - "cronie -> systemd systemd-mini"
+    - "man -> systemd systemd-mini"
     - "util-linux-systemd -> systemd systemd-mini"
     - "cyrus-sasl-saslauthd -> systemd systemd-mini"
     - "pcp -> systemd systemd-mini"

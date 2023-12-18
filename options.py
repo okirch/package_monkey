@@ -10,7 +10,7 @@ from obsclnt import OBSClient
 class Application:
 	OBS_HOST_DEFAULT = "api.suse.de"
 
-	def __init__(self, name):
+	def __init__(self, name, extra_args = []):
 		self.name = name
 		self.args = argparse.ArgumentParser(name)
 
@@ -26,13 +26,29 @@ class Application:
 		self.args.add_argument('--obs-host', default = Application.OBS_HOST_DEFAULT)
 		self.args.add_argument('--obs-cache-strategy', default = None)
 
-		self.opts = self.args.parse_args()
+		for extra in extra_args:
+			self.args.add_argument(**extra)
+
+		self._opts = None
 
 		self._cache = None
 		self._store = None
 		self._catalog = None
 
-		self.initializeLogging()
+	@property
+	def opts(self):
+		if self._opts is None:
+			self.parseArguments()
+
+		return self._opts
+
+	def addArgument(self, *args, **kwargs):
+		self.args.add_argument(*args, **kwargs)
+
+	def parseArguments(self):
+		if self._opts is None:
+			self._opts = self.args.parse_args()
+			self.initializeLogging()
 
 	def initializeLogging(self):
 		if not self.opts.quiet:

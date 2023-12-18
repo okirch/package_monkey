@@ -18,6 +18,10 @@ class XMLNode:
 	def tag(self):
 		return self.realnode.tag
 
+	@property
+	def children(self):
+		return iter(self.realnode)
+
 	def addChild(self, name):
 		depth = self.depth + 1
 
@@ -73,6 +77,9 @@ class XMLNode:
 		for v in values:
 			self.addField(name, v)
 
+	def getAttribute(self, name):
+		return self.realnode.attrib.get(name)
+
 	def setAttribute(self, name, value):
 		if not value:
 			return
@@ -81,6 +88,9 @@ class XMLNode:
 
 	def setText(self, value):
 		self.realnode.text = value
+
+	def encode(self):
+		return ET.tostring(self.realnode, encoding = 'unicode')
 
 class XMLTree:
 	def __init__(self, name):
@@ -261,6 +271,12 @@ def fromString(xml):
 	if root is None:
 		return None
 	return ET.ElementTree(root)
+
+def toString(xmlnode):
+	if isinstance(xmlnode, XMLNode):
+		xmlnode = xmlnode.realnode
+
+	return ET.tostring(xmlnode, encoding = 'unicode')
 
 # Protect &nbsp; in product names. This happens in bugzilla quite a lot
 # Unfortunately, this is not really perfect. Thanks to duplicate

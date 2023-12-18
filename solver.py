@@ -122,13 +122,7 @@ class PotentialClassification(object):
 
 	class PlacementConstraints:
 		def __init__(self):
-			self.validComponents = None
 			self.validBaseLabels = None
-
-		def addValidComponent(self, name):
-			if self.validComponents is None:
-				self.validComponents = set()
-			self.validComponents.add(name)
 
 		def addValidBaseLabel(self, name):
 			if self.validBaseLabels is None:
@@ -146,17 +140,6 @@ class PotentialClassification(object):
 			if purpose:
 				candidates = Classification.createLabelSet(filter(lambda label: label.purposeName == purpose, candidates))
 			return candidates
-
-		def constrainComponents(self, packagePlacement):
-			if packagePlacement.candidates is not None and self.validComponents is not None:
-				preferred = Classification.createLabelSet(filter(lambda label: label.componentName in self.validComponents, packagePlacement.candidates))
-				if packagePlacement.tracer:
-					compList = ' '.join(map(str, self.validComponents))
-					packagePlacement.tracer.updateCandidates(packagePlacement, preferred,
-							before = packagePlacement.candidates,
-							msg = f"constrained by components {compList}",
-							indent = '   ')
-				packagePlacement.candidates = preferred
 
 	class PlacementPreferences(object):
 		class Hint:
@@ -267,11 +250,19 @@ class PotentialClassification(object):
 
 			return Classification.baseLabelsForSet(self.candidates)
 
-		def applyConstraints(self, constraints):
-			if not self.candidates:
+		def constraintComponent(self, componentConstraint):
+			if not self.candidates or not componentConstraint.componentLabel:
 				return
 
-			constraints.constrainComponents(self)
+			componentName = componentConstraint.componentLabel.name
+
+			preferred = Classification.createLabelSet(filter(lambda label: label.componentName == componentName, self.candidates))
+			if self.tracer:
+				self.tracer.updateCandidates(self, preferred,
+						before = self.candidates,
+						msg = f"constrained by component {componentName}",
+						indent = '   ')
+			self.candidates = preferred
 
 		# After the first stage, we look at the build requirements of all source packages
 		# and use the component label to constrain its build requirements
@@ -502,8 +493,9 @@ class PotentialClassification(object):
 			return True
 
 	class TentativeBuildPlacement:
-		def __init__(self, name, labelOrder, preferences):
-			self.name = name
+		def __init__(self, build, labelOrder, preferences):
+			self.name = build.name
+			self.componentConstraint = build.componentConstraint
 			self.labelOrder = labelOrder
 			self.preferences = preferences
 			self.constraints = PotentialClassification.PlacementConstraints()
@@ -605,9 +597,11 @@ class PotentialClassification(object):
 				infomsg(f"  {name}: {' '.join(sorted(components[name]))}")
 
 		def addDefinitivePlacement(self, pkg, node, label):
-			component = label.componentName
+			component = label.componentLabel
 			if component is not None:
-				self.constraints.addValidComponent(component)
+				assert(type(component) == Classification.Label)
+				if not self.componentConstraint.setLabel(component, self.name):
+					errormsg(f"BUG: we placed {pkg} in component {component} (via {label}) but that conflicts with given constraints {self.componentConstraint}")
 
 			# what is this supposed to do?
 			# self.constraints.addValidBaseLabel(label.baseFlavors)
@@ -644,7 +638,7 @@ class PotentialClassification(object):
 
 		def applyConstraints(self):
 			for packagePlacement in self.unsolved:
-				packagePlacement.applyConstraints(self.constraints)
+				packagePlacement.constraintComponent(self.componentConstraint)
 
 		def solveTrivialCases(self):
 			for packagePlacement in self.unsolved:
@@ -1072,7 +1066,7 @@ class PotentialClassification(object):
 		self._preferences.add(preferredLabel, others)
 
 	def createBuildPlacement(self, buildInfo):
-		buildPlacement = self.TentativeBuildPlacement(buildInfo.name, self.labelOrder, self._preferences)
+		buildPlacement = self.TentativeBuildPlacement(buildInfo, self.labelOrder, self._preferences)
 
 		# First, loop over all packages that this build produces, and add them to the
 		# build placement

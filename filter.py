@@ -120,6 +120,17 @@ class Classification:
 			return None
 
 		@property
+		def componentLabel(self):
+			if self.sourceProject is not None:
+				result = self.sourceProject
+			elif self.buildConfig is not None:
+				result = self.buildConfig.baseLabel
+			else:
+				return None
+			assert(result.type is Classification.TYPE_SOURCE)
+			return result
+
+		@property
 		def baseLabel(self):
 			result = self
 			while result.parent:

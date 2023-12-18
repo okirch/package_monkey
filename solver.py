@@ -520,6 +520,7 @@ class PotentialClassification(object):
 			self.baseLabelSolutions = {}
 
 			self.solvingBaseLabel = None
+			self.solvingSourceLabel = None
 
 			self.trace = False
 
@@ -560,10 +561,17 @@ class PotentialClassification(object):
 
 		@property
 		def uniqueSourceProject(self):
+			if not self.isFinal:
+				return None
+
+			if self.solvingSourceLabel is not None:
+				return self.solvingSourceLabel
+
 			result = None
 			for placement in self.children:
 				label = placement.label
 				if label is None:
+					errormsg(f"{self}: BAD MOJO: solver says this build has been placed, but {placement} has no label")
 					continue
 
 				label = label.sourceProject
@@ -571,9 +579,13 @@ class PotentialClassification(object):
 					continue
 
 				if result is not None:
+					errormsg(f"{self}: BAD MOJO: solver placed this package in two separate source projects - {result} and {label}")
+					self.reportComponentPlacements()
 					return None
 
 				result = label
+
+			self.solvingSourceLabel = result
 			return result
 
 		def addDefinitivePlacement(self, pkg, node, label):
@@ -1064,7 +1076,7 @@ class PotentialClassification(object):
 				tentativePlacement.solvePurposeRelativeToSibling(self.classificationScheme)
 
 			if tentativePlacement.isFinal:
-				infomsg(f"{tentativePlacement}: completely solved")
+				infomsg(f"{tentativePlacement}: completely solved - component {tentativePlacement.uniqueSourceProject}")
 				return True
 
 			infomsg(f"{tentativePlacement}: remains to be solved")
@@ -1149,7 +1161,7 @@ class PotentialClassification(object):
 					success = solver.tryToSolve(buildPlacement)
 
 				if success:
-					infomsg(f"{buildPlacement}: successfully solved")
+					infomsg(f"{buildPlacement}: successfully solved - component {buildPlacement.uniqueSourceProject}")
 					return True
 
 			infomsg(f"{buildPlacement} remains to be solved")

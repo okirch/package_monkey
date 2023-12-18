@@ -1271,46 +1271,6 @@ class Classification:
 
 			raise Exception()
 
-class PackagePreferences:
-	def __init__(self):
-		self.neverPreferPatterns = []
-		self._comparison = {}
-
-	def prefer(self, preferredName, otherName):
-		if preferredName is None:
-			self.neverPreferPatterns.append(otherName)
-		else:
-			self._comparison[preferredName, otherName] = 1
-			self._comparison[otherName, preferredName] = -1
-
-	def neverPrefer(self, pattern):
-		self.neverPreferPatterns.append(pattern)
-
-	def isNeverPreferred(self, name):
-		for pattern in self.neverPreferPatterns:
-			if fnmatch.fnmatchcase(name, pattern):
-				return True
-		return False
-
-	def compare(self, name1, name2):
-		try:
-			return self._comparison[name1, name2]
-		except: pass
-
-		bad1 = self.isNeverPreferred(name1)
-		bad2 = self.isNeverPreferred(name2)
-		if bad1 == bad2:
-			r = 0
-		elif bad1:
-			r = -1
-		else:
-			r = 1
-
-		self._comparison[name1, name2] = r
-		self._comparison[name2, name1] = -r
-		return r
-
-
 class PackageGroup:
 	def __init__(self, name):
 		self.name = name
@@ -1782,7 +1742,6 @@ class PackageFilter:
 	def __init__(self, filename = 'filter.yaml', scheme = None):
 		self.classificationScheme = scheme or Classification.Scheme()
 		self._groups = {}
-		self._preferences = PackagePreferences()
 		self._autoflavors = []
 		self._purposes = []
 
@@ -1817,15 +1776,6 @@ class PackageFilter:
 
 		for gd in data['groups']:
 			self.parseGroup(Classification.TYPE_BINARY, gd)
-
-		for pref in data.get('preferences') or []:
-			preferred = pref.get('prefer')
-			over = pref['over']
-			if isinstance(over, str):
-				self._preferences.prefer(preferred, over)
-			else:
-				for other in over:
-					self._preferences.prefer(preferred, other)
 
 		self.finalize()
 		self.classificationScheme.finalize()
@@ -2153,10 +2103,6 @@ class PackageFilter:
 	def getGroupPackages(self, label):
 		group = self.getGroupForLabel(label)
 		return group.closure
-
-	@property
-	def packagePreferences(self):
-		return self._preferences
 
 	@property
 	def autoFlavors(self):

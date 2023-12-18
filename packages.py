@@ -328,6 +328,7 @@ class ResolverChoice:
 		if cand.name == best.name:
 			return Versiontools.comparePackages(best, cand) < 0
 
+		# FIXME: the preferences stuff is all gone, need to use ResolverHints instead
 		r = preferences.comparePackages(cand.name, best.name)
 		# infomsg(f"Prefer {cand.name} over {best.name}? result={r}")
 		if r == 0:
@@ -341,28 +342,6 @@ class ResolverChoice:
 		# We haven't recorded a preference one way or the other
 		infomsg(f"Ambiguous resolution: {cand.name} and {best.name}")
 		return False
-
-# FIXME: obsolete
-class ResolverPreferences:
-	def __init__(self):
-		self._packagePreferences = None
-
-	def setPackagePreferences(self, preferences):
-		self._packagePreferences = preferences
-
-	def comparePackages(self, candidateName, bestName):
-		if self._packagePreferences is None:
-			return 0
-
-		return self._packagePreferences.compare(candidateName, bestName)
-
-	def rateProduct(self, candidateProduct):
-		# for now
-		return -1
-
-	def preferProductRating(self, candidateRating, bestRating):
-		# in particular, if neither product is preferred, we return 0
-		return bestRating - candidateRating
 
 class ResolverContext:
 	def __init__(self, worker, arch):

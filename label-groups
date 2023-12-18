@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from packages import Product, Resolver, ResolverWorker, ResolverPreferences, PackageSelector, PackageCollection
+from packages import Product, Resolver, ResolverWorker, PackageSelector, PackageCollection
 from filter import PackageFilter, Classification
 from solver import PotentialClassification
 from options import Application

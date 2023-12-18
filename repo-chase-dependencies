@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 from products import ProductCatalog, CacheLocation
-from packages import Product, Resolver, ResolverWorker, PackageSelector, ResolverPreferences, PackageCollection
+from packages import Product, Resolver, ResolverWorker, PackageSelector, PackageCollection
 from filter import PackageFilter, Classification
 from database import BackingStoreDB
 import sys
@@ -13,10 +13,6 @@ store = application.backingStore
 
 # Make sure we have all the products that we use recorded in the database
 application.catalog.updateBackingStore(store)
-
-# Load the default package filter and labelling
-# We need this for package preferences
-packageFilter = PackageFilter()
 
 needToResolve = PackageCollection()
 numInspected = 0
@@ -60,8 +56,8 @@ worker = ResolverWorker(resolver)
 
 context = worker.contextForArch(arch)
 
-preferences = ResolverPreferences()
-preferences.setPackagePreferences(packageFilter.packagePreferences)
+# Preferences handling has been removed.
+preferences = None
 alreadyResolved = set()
 
 print("=== About to resolve dependencies ===")
@@ -84,6 +80,7 @@ for pkg in needToResolve:
 			print(f"\r{counter} packages; lookup cache: {worker.formatCacheStats()} ...", end = "")
 			sys.stdout.flush()
 
+		# resolveDownward needs to be fixed so that it works with the new ResolverHints
 		for dep, target in context.resolveDownward(preferences, pkg):
 			if target not in alreadyResolved:
 				print(f"{pkg.fullname()} -> {target.fullname()}")

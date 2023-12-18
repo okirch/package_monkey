@@ -967,7 +967,7 @@ class PotentialClassification(object):
 					if desiredCandidate is not None:
 						closure = self.labelOrder.downwardClosureFor(desiredCandidate)
 						for neigh in packagePlacement.node.lowerNeighbors:
-							if desiredCandidate in neigh.lowerCone:
+							if neigh.lowerCone is None or desiredCandidate in neigh.lowerCone:
 								continue
 							infomsg(f"     {packagePlacement} requires {neigh}, which is not in scope of {desiredCandidate}")
 					continue

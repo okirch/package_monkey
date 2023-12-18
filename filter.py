@@ -447,6 +447,10 @@ class Classification:
 			return hash(values)
 
 		@property
+		def allBinaryLabels(self):
+			return set(filter(lambda label: label.type == Classification.TYPE_BINARY, self._labels.values()))
+
+		@property
 		def allAutoPurposes(self):
 			return set(filter(lambda label: label.type == Classification.TYPE_PURPOSE, self._labels.values()))
 
@@ -715,6 +719,17 @@ class Classification:
 			buildConfig.buildRequires = resolvedSet
 
 			resolving.discard(buildConfig)
+
+		def getReferencingLabels(self, target):
+			if target.type != Classification.TYPE_SOURCE:
+				raise Exception(f"getReferencingLabels({target}): label type {target.type} not implemented")
+
+			result = set()
+			for label in self.allBinaryLabels:
+				if label.sourceProject == target:
+					result.add(label)
+
+			return result
 
 	class Reason(object):
 		def __init__(self, pkg):

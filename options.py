@@ -143,10 +143,9 @@ class Application:
 		return f"cache/{subdir}"
 
 	def enumerateProducts(self):
-		args = {}
-		if self.opts.family:
-			args['family'] = self.opts.family
-			args['version'] = self.opts.version
-			args['arch'] = self.opts.arch
+		if self.opts.family is None:
+			errormsg(f"You have to specify a product family using the --family option")
 
-		return self.catalog.enumerate(**args)
+		return self.catalog.enumerate(family = self.opts.family,
+				version = self.opts.version,
+				arch = self.opts.arch)

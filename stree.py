@@ -182,6 +182,32 @@ class NodeVersusLabelSetReport:
 			for name in it:
 				output(f"    {'':20} {name}")
 
+class BuildComponentsReport:
+	def __init__(self, build):
+		self.name = build.name
+		self._labels = {}
+
+		for pkg in build.packages:
+			label = pkg.label
+			if label is not None and label.sourceProject is not None:
+				self.add(pkg, label.sourceProject)
+
+	def add(self, pkg, label):
+		key = str(label)
+
+		if key not in self._labels:
+			self._labels[key] = []
+		self._labels[key].append(pkg)
+
+	def display(self):
+		for labelName, pkgList in sorted(self._labels.items()):
+			infomsg(f"   {labelName}:")
+			for pkg in pkgList:
+				if pkg.labelReason:
+					infomsg(f"     {pkg}")
+				else:
+					infomsg(f"     {pkg} {pkg.labelReason}")
+			infomsg("")
 
 class SolvingTree(object):
 	domain = fastsets.Domain("nodes")
@@ -573,6 +599,22 @@ class SolvingTree(object):
 		def allBaseLabels(self):
 			return self.baseLabels
 
+		def validate(self):
+			# in case we want to add more checks
+			return self.validateUniqueComponent()
+
+		def validateUniqueComponent(self):
+			uniqueComponent = None
+			for pkg in self.packages:
+				label = pkg.label
+				if label is None or label.sourceProject is None:
+					continue
+				if uniqueComponent is None:
+					uniqueComponent = label.sourceProject
+				elif uniqueComponent is not label.sourceProject:
+					return BuildComponentsReport(self)
+			return None
+
 	def __init__(self, classificationScheme, order = None, focusLabels = None):
 		self._classificationScheme = classificationScheme
 
@@ -678,6 +720,19 @@ class SolvingTree(object):
 					packageReport.display("     ")
 				infomsg("")
 
+	class ConflictingComponentsReport:
+		def __init__(self):
+			self._builds = []
+
+		def add(self, buildReport):
+			self._builds.append(buildReport)
+
+		def display(self):
+			for buildReport in self._builds:
+				infomsg(f"   {buildReport.name} has been spread across separate components")
+				buildReport.display()
+				infomsg("")
+
 	def validateInitialPlacements(self, order):
 		errors = 0
 
@@ -712,9 +767,17 @@ class SolvingTree(object):
 
 				node._combinedRequirements = configuredRequirements
 
+		report2 = self.ConflictingComponentsReport()
+		for build in self.allBuilds:
+			error = build.validate()
+			if error is not None:
+				report2.add(error)
+				errors += 1
+
 		if errors:
 			errormsg(f"Detected {errors} configuration problem(s)")
 			report.display()
+			report2.display()
 			return False
 
 		infomsg("OK, no conflicts detected in initial placement")

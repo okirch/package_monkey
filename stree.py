@@ -209,6 +209,18 @@ class BuildComponentsReport:
 					infomsg(f"     {pkg} {pkg.labelReason}")
 			infomsg("")
 
+class MultiBuildComponentsReport:
+	def __init__(self, build, selectedComponent):
+		self.name = build.name
+		self.build = build
+		self.componentLabel = selectedComponent
+
+	def display(self):
+		cc = self.build.componentConstraint
+		infomsg(f"   {cc.name} is placed in {cc.componentLabel} via {cc.origin}")
+		infomsg(f"   {self.build} would be placed in {self.componentLabel}")
+		# FIXME: show which rpms cause each package to be placed in which component
+
 class SolvingTree(object):
 	domain = fastsets.Domain("nodes")
 
@@ -513,6 +525,7 @@ class SolvingTree(object):
 	class SiblingInfo:
 		def __init__(self, build):
 			self.name = build.name
+			self.basePackageName = build.basePackageName
 			self.packages = []
 			self.sources = []
 
@@ -531,6 +544,8 @@ class SolvingTree(object):
 
 					if label and label.type == Classification.TYPE_BINARY:
 						self.labels.add(label)
+
+			self.componentConstraint = SolvingTree.ComponentConstraint(self.name)
 
 		def __str__(self):
 			return self.name
@@ -613,7 +628,37 @@ class SolvingTree(object):
 					uniqueComponent = label.sourceProject
 				elif uniqueComponent is not label.sourceProject:
 					return BuildComponentsReport(self)
+
+			if uniqueComponent is not None:
+				if not self.componentConstraint.setLabel(uniqueComponent, self):
+					return MultiBuildComponentsReport(self, uniqueComponent)
+
 			return None
+
+	class ComponentConstraint:
+		def __init__(self, name):
+			self.name = name
+			self.componentLabel = None
+			self.origin = None
+
+		def setLabel(self, componentLabel, origin):
+			if self.componentLabel is not None and self.componentLabel is not componentLabel:
+				# raise Exception(f"Conflicting choice of component for {self.name}: {self.componentLabel} vs {componentLabel}")
+				errormsg(f"cannot set {self.name} to {componentLabel}; already in {self.componentLabel} via {self.origin}")
+				return False
+
+			self.componentLabel = componentLabel
+			if self.origin is None:
+				self.origin = origin
+			return True
+
+		def __str__(self):
+			if self.componentLabel:
+				return f"{self.componentLabel} via {self.name}"
+			return f"* via {self.name}"
+
+		def __bool__(self):
+			return bool(self.componentLabel)
 
 	def __init__(self, classificationScheme, order = None, focusLabels = None):
 		self._classificationScheme = classificationScheme
@@ -624,6 +669,7 @@ class SolvingTree(object):
 
 		self._packages = {}
 		self._builds = {}
+		self._buildsByName = {}
 		self._nodeOrder = None
 
 		self._focusLabels = None
@@ -667,6 +713,11 @@ class SolvingTree(object):
 		self._builds[build] = siblings
 		for pkg in siblings.packages:
 			self.getPackage(pkg).siblings = siblings
+
+		assert(build.name not in self._buildsByName)
+		self._buildsByName[build.name] = siblings
+
+		return siblings
 
 	@property
 	def builds(self):
@@ -864,10 +915,32 @@ class SolvingTree(object):
 		while self._nodeOrder is None:
 			self._nodeOrder = self.createPartialOrder()
 
+	def resolveMultiBuilds(self):
+		absentBasePackageConstraints = {}
+
+		for build in self.multiBuilds:
+			baseName = build.basePackageName
+			if build.name in ('boost:base', 'fftw3:standard'):
+				infomsg(f"HACK: we allow {build} to be placed in a different component than other {baseName}:* builds")
+				continue
+
+			baseBuild = self._buildsByName.get(baseName)
+			if baseBuild is not None:
+				cc = baseBuild.componentConstraint
+			else:
+				if baseName not in absentBasePackageConstraints:
+					debugmsg(f"{build}: cannot find base build {baseName} - faking a ComponentConstraint")
+					absentBasePackageConstraints[baseName] = SolvingTree.ComponentConstraint(baseName)
+				cc = absentBasePackageConstraints[baseName]
+
+			build.componentConstraint = cc
+
 	def finalize(self):
 		timing = ExecTimer()
 
 		self.collapseAllCycles()
+
+		self.resolveMultiBuilds()
 
 		if not self.validateInitialPlacements(self._nodeOrder):
 			raise Exception(f"Unresolved conflicts in initial placement of packages, please fix filter rules")
@@ -916,6 +989,10 @@ class SolvingTree(object):
 	@property
 	def allBuilds(self):
 		return iter(self._builds.values())
+
+	@property
+	def multiBuilds(self):
+		return filter(lambda b: b.basePackageName, self._builds.values())
 
 	def topDownBuildTraversal(self):
 		seen = set()

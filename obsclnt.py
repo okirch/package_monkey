@@ -696,6 +696,11 @@ class OBSPackage:
 		self._source = None
 		self._binaries = []
 
+		if ':' in name:
+			self._basePackageName = name.split(':')[0]
+		else:
+			self._basePackageName = None
+
 	def __str__(self):
 		return self.name
 
@@ -704,10 +709,7 @@ class OBSPackage:
 
 	@property
 	def basePackageName(self):
-		name = self.name
-		if ':' in name:
-			return name.split(':')[0]
-		return name
+		return self._basePackageName
 
 	@property
 	def sourceVersion(self):

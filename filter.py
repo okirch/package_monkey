@@ -1436,6 +1436,13 @@ class ClassificationResult(object):
 		def __str__(self):
 			return self.name
 
+		@property
+		def basePackageName(self):
+			name = self.name
+			if ':' in name:
+				return name.split(':')[0]
+			return name
+
 	def __init__(self, labelOrder):
 		self._labelOrder = labelOrder
 		self._packages = {}

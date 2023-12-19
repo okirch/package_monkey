@@ -224,8 +224,8 @@ class MultiBuildComponentsReport:
 class SolvingTree(object):
 	domain = fastsets.Domain("nodes")
 
-	# Not really an interval but a convex set
-	class LabelInterval(domain.member):
+	# lowerCone, upperCone and candidates are all convex sets
+	class PackageNode(domain.member):
 		def __init__(self, order, name, package = None, cycle = None):
 			assert(package or cycle)
 
@@ -694,8 +694,8 @@ class SolvingTree(object):
 
 	def addEdge(self, requiringNode, requiredNode):
 		assert(requiringNode is not requiredNode)
-		assert(isinstance(requiringNode, self.LabelInterval))
-		assert(isinstance(requiredNode, self.LabelInterval))
+		assert(isinstance(requiringNode, self.PackageNode))
+		assert(isinstance(requiredNode, self.PackageNode))
 		requiringNode.addLowerNeighbor(requiredNode)
 		requiredNode.addUpperNeighbor(requiringNode)
 
@@ -725,7 +725,7 @@ class SolvingTree(object):
 		try:
 			interval = self._packages[pkg]
 		except:
-			interval = self.LabelInterval(self._order, name = str(pkg), package = pkg)
+			interval = self.PackageNode(self._order, name = str(pkg), package = pkg)
 			self._packages[pkg] = interval
 
 			# Copy already assigned labels to the newly created node
@@ -856,7 +856,7 @@ class SolvingTree(object):
 		above = reduce(set.union, (node._upperNeighbors for node in cycle), set())
 		below = reduce(set.union, (node._lowerNeighbors for node in cycle), set())
 
-		newInterval = self.LabelInterval(self._order, name = f"<{' '.join(cycleNames)}>", cycle = cyclePackages)
+		newInterval = self.PackageNode(self._order, name = f"<{' '.join(cycleNames)}>", cycle = cyclePackages)
 		newInterval._lowerNeighbors = below.difference(cycleSet)
 		newInterval._upperNeighbors = above.difference(cycleSet)
 		if label:
@@ -882,7 +882,7 @@ class SolvingTree(object):
 		for interval in self._packages.values():
 			# we have to check for duplicate nodes because we may have collapsed
 			# a dependency loop, so that we have several packages point to the same
-			# LabelInterval
+			# PackageNode
 			if interval not in seen:
 				order.add(interval, interval._lowerNeighbors)
 				seen.add(interval)

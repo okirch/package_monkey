@@ -278,8 +278,7 @@ components:
     - "@Core"
  - name: BaseBuildEnv
    requires:
-    - "@GCC"
-    - "@BaseDevTools"
+    - Core
  - name: Systemd
  - name: Python
  - name: Apache

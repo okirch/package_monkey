@@ -1896,10 +1896,18 @@ class PackageFilter:
 		assert(type)
 		return self.makeGroupInternal(name, type)
 
-	def resolveBinaryReference(self, name):
-		baseName, flavorName, purposeName = Classification.parseBinaryLabel(name)
+	def resolveGroupReference(self, name, labelType = Classification.TYPE_BINARY):
+		if labelType is not Classification.TYPE_SOURCE:
+			labelType = Classification.TYPE_BINARY
 
-		baseLabel = self.classificationScheme.createLabel(baseName, Classification.TYPE_BINARY)
+		if labelType is Classification.TYPE_BINARY:
+			baseName, flavorName, purposeName = Classification.parseBinaryLabel(name)
+		elif labelType is Classification.TYPE_SOURCE:
+			baseName, flavorName, purposeName = name, None, None
+		else:
+			raise Exception(f"resolveGroupReference: {labelType} labels not supported")
+
+		baseLabel = self.classificationScheme.createLabel(baseName, labelType)
 		group = self.getGroupForLabel(baseLabel, create = True);
 
 		if flavorName is not None:
@@ -2241,7 +2249,7 @@ class PackageFilter:
 		if group.label:
 			nameList = gd.get('requires') or []
 			for name in nameList:
-				otherGroup = self.resolveBinaryReference(name)
+				otherGroup = self.resolveGroupReference(name, group.type)
 				group.addRequires(otherGroup)
 
 			# 'augments' are like runtime requirements, except they also flags the
@@ -2259,12 +2267,12 @@ class PackageFilter:
 			# @Gnome+python auto-selecting @Python+gnome rather than the other way around
 			nameList = gd.get('augments') or []
 			for name in nameList:
-				otherGroup = self.resolveBinaryReference(name)
+				otherGroup = self.resolveGroupReference(name)
 				group.addAugmentation(otherGroup)
 
 			nameList = gd.get('buildrequires') or []
 			for name in nameList:
-				otherGroup = self.resolveBinaryReference(name)
+				otherGroup = self.resolveGroupReference(name)
 				group.addBuildRequires(otherGroup)
 
 		# The yaml file may specify per-group priorities for filters, but there is just

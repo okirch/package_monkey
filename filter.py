@@ -153,6 +153,25 @@ class Classification:
 
 			return False
 
+		@property
+		def isExported(self):
+			return self.componentLabel and self in self.componentLabel.exports
+
+		def okayToAccess(self, other, componentLabelOrder):
+			if self.componentLabel is None or other.componentLabel is None:
+				return False
+
+			if self.componentLabel is other.componentLabel:
+				return True
+
+			if componentLabelOrder.isBelow(other.componentLabel, self.componentLabel):
+				return True
+
+			if other.isExported:
+				return True
+
+			return False
+
 		def addRuntimeDependency(self, other):
 			assert(isinstance(other, Classification.Label))
 			if not self.okayToAdd(other):
@@ -321,7 +340,7 @@ class Classification:
 
 			return True
 
-		def autoSelectCompatibleFlavors(self, order):
+		def autoSelectCompatibleFlavors(self, order, componentOrder):
 			if not self.autoSelect:
 				return
 
@@ -331,6 +350,9 @@ class Classification:
 				if requiredLabel is self:
 					continue
 				for flavor in requiredLabel.flavors:
+					# check whether the component model would allow us to access this flavor
+					if not self.okayToAccess(flavor, componentOrder):
+						continue
 					if self.mayAutoSelect(order, flavor):
 						availableFlavors.add(flavor)
 
@@ -626,7 +648,7 @@ class Classification:
 			return sorted(self._labels.values(), key = lambda _: _.name)
 
 		def createOrdering(self, labelType):
-			if labelType != Classification.TYPE_BINARY:
+			if labelType not in (Classification.TYPE_BINARY, Classification.TYPE_SOURCE):
 				raise Exception(f"Unable to create an ordering for {labelType} labels")
 
 			good = True
@@ -650,6 +672,9 @@ class Classification:
 
 		def defaultOrder(self):
 			return self.createOrdering(Classification.TYPE_BINARY)
+
+		def componentOrder(self):
+			return self.createOrdering(Classification.TYPE_SOURCE)
 
 		def finalize(self):
 			def inheritSourceProject(label):
@@ -685,9 +710,10 @@ class Classification:
 
 			# create a partial order but throw it away afterwards. the label hierarchy
 			# is changing as part of this exercise
-			order = self.createOrdering(Classification.TYPE_BINARY)
-			for label in order.bottomUpTraversal():
-				label.autoSelectCompatibleFlavors(order)
+			topicOrder = self.createOrdering(Classification.TYPE_BINARY)
+			componentOrder = self.componentOrder()
+			for label in topicOrder.bottomUpTraversal():
+				label.autoSelectCompatibleFlavors(topicOrder, componentOrder)
 
 			# A build config like Java/standard should buildrequire binary labels like @Java or @Core, but
 			# it can also reference another buildconfig like Core/python. In this case, we want to expand

@@ -1326,11 +1326,11 @@ class PotentialClassification(object):
 			return Classification.baseLabelsForSet(labels)
 
 	def __iter__(self):
-		for pkg, interval in self._packages.items():
-			yield pkg, self.getBestCandidate(interval)
+		for pkg, node in self._packages.items():
+			yield pkg, self.getBestCandidate(node)
 
-	def getBestCandidate(self, interval):
-		candidates = interval.candidates
+	def getBestCandidate(self, packageNode):
+		candidates = packageNode.candidates
 		if not candidates:
 			return None
 

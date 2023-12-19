@@ -723,22 +723,22 @@ class SolvingTree(object):
 
 	def getPackage(self, pkg):
 		try:
-			interval = self._packages[pkg]
+			packeNode = self._packages[pkg]
 		except:
-			interval = self.PackageNode(self._order, name = str(pkg), package = pkg)
-			self._packages[pkg] = interval
+			packeNode = self.PackageNode(self._order, name = str(pkg), package = pkg)
+			self._packages[pkg] = packeNode
 
 			# Copy already assigned labels to the newly created node
 			if pkg.label and pkg.label.type == Classification.TYPE_BINARY:
-				interval.solution = pkg.label
+				packeNode.solution = pkg.label
 
 			if pkg.trace:
-				infomsg(f" {interval} [{pkg.label}] added to solving tree")
-				interval._trace = True
-				interval._tracer = self._tracer
-				interval._focusLabels = self._focusLabels
+				infomsg(f" {packeNode} [{pkg.label}] added to solving tree")
+				packeNode._trace = True
+				packeNode._tracer = self._tracer
+				packeNode._focusLabels = self._focusLabels
 
-		return interval
+		return packeNode
 
 	class UnsatisfiedLabelRequirementsReport:
 		class Bucket:
@@ -830,7 +830,7 @@ class SolvingTree(object):
 
 	def collapse(self, cycle):
 		cycleSet = SolvingTree.createNodeSet(cycle)
-		cyclePackages = reduce(set.union, (interval.packages for interval in cycle))
+		cyclePackages = reduce(set.union, (node.packages for node in cycle))
 		cycleNames = list(map(str, cyclePackages))
 
 		if len(cycle) > 2:
@@ -856,36 +856,36 @@ class SolvingTree(object):
 		above = reduce(set.union, (node._upperNeighbors for node in cycle), set())
 		below = reduce(set.union, (node._lowerNeighbors for node in cycle), set())
 
-		newInterval = self.PackageNode(self._order, name = f"<{' '.join(cycleNames)}>", cycle = cyclePackages)
-		newInterval._lowerNeighbors = below.difference(cycleSet)
-		newInterval._upperNeighbors = above.difference(cycleSet)
+		newPackageNode = self.PackageNode(self._order, name = f"<{' '.join(cycleNames)}>", cycle = cyclePackages)
+		newPackageNode._lowerNeighbors = below.difference(cycleSet)
+		newPackageNode._upperNeighbors = above.difference(cycleSet)
 		if label:
-			newInterval.recordDecision(label)
+			newPackageNode.recordDecision(label)
 
 		for lower in below:
 			lower._upperNeighbors.difference_update(cycleSet)
-			lower._upperNeighbors.add(newInterval)
+			lower._upperNeighbors.add(newPackageNode)
 
 		for upper in above:
 			upper._lowerNeighbors.difference_update(cycleSet)
-			upper._lowerNeighbors.add(newInterval)
+			upper._lowerNeighbors.add(newPackageNode)
 
 		for pkg in cyclePackages:
-			self._packages[pkg] = newInterval
+			self._packages[pkg] = newPackageNode
 
-		debugPackageCycles(f"Collapsed dependency cycle {newInterval}, label {label}")
+		debugPackageCycles(f"Collapsed dependency cycle {newPackageNode}, label {label}")
 
 	def createPartialOrder(self):
 		order = PartialOrder(self.domain, "node runtime dependency")
 
 		seen = set()
-		for interval in self._packages.values():
+		for packageNode in self._packages.values():
 			# we have to check for duplicate nodes because we may have collapsed
 			# a dependency loop, so that we have several packages point to the same
 			# PackageNode
-			if interval not in seen:
-				order.add(interval, interval._lowerNeighbors)
-				seen.add(interval)
+			if packageNode not in seen:
+				order.add(packageNode, packageNode._lowerNeighbors)
+				seen.add(packageNode)
 
 		cycles = order.getCollapsibleCycles()
 		if cycles:

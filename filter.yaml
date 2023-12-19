@@ -267,22 +267,163 @@ components:
  - name: "Core"
    buildrequires:
     - "@BaseBuildEnv"
+ - name: "CorePlus"
+   requires:
+    - Core
  - name: "KernelPlus"
+   requires:
+    - Core
    buildrequires:
     - "@Core"
- - name: "PerlCore"
+   exports:
+    # exporting these is a bit dangerous
+    - "@KernelLibraries"
+    - "@KernelLibraries+udev"
+ - name: Perl
+   requires:
+    - Core
    buildrequires:
     - "@Core"
+ - name: Network
+   requires:
+    - CorePlus
+ - name: AppArmor
+   requires:
+    - Core
+ - name: Host
+   requires:
+    - CorePlus
  - name: Databases
+   requires:
+    - Core
+    - Network
    buildrequires:
     - "@Core"
+ - name: HA
+   requires:
+    - Core
+    - Host
+    - Network
  - name: BaseBuildEnv
    requires:
     - Core
  - name: Systemd
+   requires:
+    - CorePlus
+    - Host
+    - Network
+   exports:
+    - "@SystemdLibraries"
+    - "@UdevLibraries"
  - name: Python
- - name: Apache
+   requires:
+    - Core
+ - name: Webserver
+   requires:
+    - CorePlus
+    - Security
+    - AppArmor
+    - Perl
+    - Python
+    - Network
+    # why?
+    - Systemd
+ - name: Multimedia
+   requires:
+    - CorePlus
+    - Perl
+    - Typesetting
  - name: X11
+   requires:
+    - CorePlus
+    - Systemd
+    - Multimedia
+    - Typesetting
+    - KernelPlus
+   exports:
+    - "@X11Libraries"
+ - name: Gnome
+   requires:
+    - Multimedia
+    - X11
+    - Network
+    - Security
+    - AppArmor
+ - name: Security
+   requires:
+    - Systemd
+ - name: Java
+   requires:
+    - CorePlus
+    - Gnome
+    - Security
+    - AppArmor
+    - Systemd
+    - Perl
+    - Python
+ - name: Ruby
+   requires:
+    - Core
+ - name: Javascript
+   requires:
+    - CorePlus
+    - Systemd
+ - name: GCC
+   requires:
+    - Core
+    - LLVM
+   exports:
+    - "@GccRuntime"
+ - name: LLVM
+   requires:
+    - Core
+   exports:
+    - "@LLVMRuntime"
+ - name: BuildCore
+   requires:
+    - Core
+   exports:
+    - "@WorkbenchRuntime"
+ - name: Typesetting
+   requires:
+    - Core
+ - name: Texlive
+   requires:
+    - Core
+    - Perl
+    - Multimedia
+    - Java
+ - name: Container
+   requires:
+    - Core
+    - Network
+    - Host
+    - KernelPlus
+    - Security
+    # because flatpak is currently in the Container component
+    - Gnome
+ - name: Management
+   requires:
+    - Core
+    - Network
+    - Host
+    - Multimedia
+    - Python
+    - KernelPlus
+    - Security
+    - Gnome
+    - UpdateStack
+ - name: UpdateStack
+   requires:
+    - Core
+    - Multimedia
+    - Python
+ - name: Virtualization
+   requires:
+    - KernelPlus
+    - Host
+    - Network
+    - X11
 
 groups:
 
@@ -1014,6 +1155,11 @@ groups:
        - pesign
        - util-linux-tty-tools
        - nghttp2
+    - name: kernel
+      requires:
+       - "@KernelCore+systemdlibs"
+      binaries:
+       - e2fsprogs-scrub
     - name: networkServices
       requires:
        - "@NetworkServices"
@@ -1022,7 +1168,6 @@ groups:
        - "@Core+udevlibs"
       binaries:
        - cyrus-sasl-*
-       - e2fsprogs-scrub
        - openssh-server
        - openssh
        - uuidd
@@ -1201,6 +1346,12 @@ groups:
     - python3-kiwi
     - pv
     - dracut-kiwi-*
+   buildflavors:
+    - name: xen
+      requires:
+       - "@Kernel+xen"
+      binaries:
+       - dracut-kiwi-oem-dump
 
  - name: "@SELinux"
    buildconfig: Security/standard
@@ -1344,7 +1495,7 @@ groups:
    buildflavors:
     - name: x11
       requires:
-       - "@X11Libraries"
+       - "@GraphicsLibraries+x11"
        - "@Glib2NoDBus"
       binaries:
        - poppler-tools
@@ -2056,9 +2207,11 @@ groups:
     - xdg-desktop-portal
 
  - name: "@PolicyKit"
-   buildconfig: Gnome/standard
+   buildconfig: Systemd/standard
    requires:
-    - "@GnomeLibraries"
+    - "@Core"
+    - "@Glib2"
+    - "@SystemdLibraries"
    binaries:
     - polkit
 
@@ -2251,6 +2404,7 @@ groups:
     - libsystemd0
     - libdbus-1-*
     - dbus-1-common
+    - libbytesize1
 
  - name: "@SystemdUtilities"
    buildconfig: Systemd/standard
@@ -3450,8 +3604,7 @@ groups:
        - perl-PerlMagick
     - name: pulseaudio
       requires:
-       - "@PulseAudioLibraries"
-       - "@X11Libraries"
+       - "@PulseAudioLibraries+x11"
       binaries:
        - openmpt123
        - mpg123-openal

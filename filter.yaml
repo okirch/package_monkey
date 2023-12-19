@@ -304,6 +304,9 @@ components:
     - Core
     - Host
     - Network
+ - name: HPC
+   requires:
+    - Core
  - name: BaseBuildEnv
    requires:
     - Core
@@ -349,6 +352,8 @@ components:
     - Network
     - Security
     - AppArmor
+   exports:
+    - "@GnomeLibraries"
  - name: Security
    requires:
     - Systemd
@@ -364,6 +369,10 @@ components:
  - name: Ruby
    requires:
     - Core
+ - name: Go
+   requires:
+    - Core
+    - GCC
  - name: Javascript
    requires:
     - CorePlus
@@ -382,6 +391,8 @@ components:
  - name: BuildCore
    requires:
     - Core
+    - CorePlus
+    - GCC
    exports:
     - "@WorkbenchRuntime"
  - name: Typesetting
@@ -583,12 +594,14 @@ groups:
     - name: devel
       requires:
        - "@Core0"
+       - "@LUA"
       binaries:
        - linux-glibc-devel
        - glibc-devel
        - pkgconf
        - pkgconf-m4
        - pkgconf-pkg-config
+       - compat-usrmerge-build
 
  # This label exists because we need to hide the fact that somewhat oddly,
  # Glibc sits below gcc runtime
@@ -628,9 +641,7 @@ groups:
     - autoconf-archive
     - autogen
     # libssh-devel requires cmake
-    # unfortunately, cmake-mini needs python
     - cmake
-#   - cmake-mini
     - make
     - gettext-tools-mini
     - gettext-tools
@@ -801,6 +812,7 @@ groups:
        - libcom_err-devel
        - libboost_*-devel
        - fftw3-devel priority=0
+       - flex
    buildflavors:
     - name: database
       requires:
@@ -1483,7 +1495,7 @@ groups:
        - ghostscript-x11
 
  - name: "@PDF"
-   buildconfig: Core/standard
+   buildconfig: CorePlus/standard
    requires:
     - "@Core"
     - "@Fonts"
@@ -1595,7 +1607,7 @@ groups:
    description: |
      This defines the set of packages that will be used to build
      Core packages by default.
-   buildconfig: Core/standard
+   buildconfig: BuildCore/standard
    requires:
     - "@MinimalCDevelopment"
     - "@GCC"
@@ -1611,6 +1623,7 @@ groups:
     - "@ManDoc"
     - "@Texinfo"
     - "@Python"
+    # rpmlint-mini needs polkit-default-privs needs polkit
     - "@PolicyKit"
    binaries:
     - memory-constraints
@@ -1618,10 +1631,6 @@ groups:
     - build-compare
     - build-mkbaselibs
     - doxygen
-    - compat-usrmerge-build
-    - flex
-    # flex directly requires the devel package; it might be nicer to split off a libfl pkg
-    - libfl-devel
     - gperf
     - patch
     - patchutils
@@ -1926,6 +1935,7 @@ groups:
      - xorg-x11-server-*
      - xdm
      - xf86-input-libinput
+     - xwayland
    purposes:
      - name: devel
        requires:
@@ -2448,6 +2458,15 @@ groups:
        - "@SELinux-devel"
        - "@PythonCore"
 
+ - name: "@SystemdServices"
+   buildconfig: Systemd/standard
+   requires:
+    - "@Core0"
+    - "@KernelCore"
+   binaries:
+    - systemd-mini
+    - udev-mini
+
  - name: "@MinimalSystemd"
    buildconfig: Systemd/standard
    requires:
@@ -2461,13 +2480,13 @@ groups:
     - "@SELinux"
     - "@AppArmor"
     - "@NetworkCore"
+    - "@SystemdServices"
    binaries:
     - acct
     - biosdevname
     - blog
 #   - brltty
     - haveged
-    - iputils
     - libudisks2
     - sysconfig
     - sysconfig-netconfig
@@ -2503,9 +2522,11 @@ groups:
     - "@MinimalSystemd"
     - "@HostStorage"
     - "@Glib2"
-    - "@Python"
+#   - "@Python"
     - "@Core+kernellibs"
     - "@PolicyKit"
+    - "@KernelLibraries+udev"
+    - "@KernelCore+systemdlibs"
    binaries:
     - udisks2
     - libblockdev
@@ -2616,10 +2637,11 @@ groups:
       binaries:
        - sssd-tools
 
- - name: "@CoreLegacy"
-   buildconfig: Core/standard
+ - name: "@SystemdLegacy"
+   buildconfig: Systemd/standard
    requires:
     - "@Core"
+    - "@MinimalSystemd"
     - "@NetworkManager"
    binaries:
     - sysvinit
@@ -3248,6 +3270,7 @@ groups:
    binaries:
     - iproute2
     - iptables
+    - iputils
 
  - name: "@HostNetworking"
    buildconfig: Core/standard
@@ -3275,6 +3298,7 @@ groups:
 #   - strongswan
     - stunnel
     - nftables
+    - python3-nftables
     - radvd
     - tunctl
     - wicked
@@ -3297,48 +3321,16 @@ groups:
     - ipvsadm
     - netcat-openbsd
    buildflavors:
-    - name: systemdlibs
+    - name: desktop
       requires:
-       - "@Core+systemdlibs"
-      binaries:
-#      - ppp
-#      - rp-pppoe
-    - name: gnomelibs
-      requires:
-       - "@PythonCore"
-       - "@GnomeLibraries"
-       - "@PythonStandard+gnome"
-       - "@Qt+python"
-       - "@HostNetworking+systemdlibs"
-      binaries:
-#      - NetworkManager
-#      - NetworkManager-wwan
-#      - NetworkManager-pppoe
-#      - NetworkManager-bluetooth
-#      - NetworkManager-branding-SLE
-#      - NetworkManager-branding-upstream
-#      - ModemManager
-#      - libnm0
-#      - firewalld
-#      - python3-firewall
-#      - python3-nftables
-#      - libmm-glib0
-#      - libqrtr
-#      - libqmi
-#      - libmbim
-    - name: gui
-      requires:
-       - "@Gnome"
        - "@Qt+python"
        - "@HostNetworking+gnomelibs"
        - "@PythonStandard+desktop"
       binaries:
-#      - wpa_supplicant-gui
-#      - firewall-config
-#      - firewall-applet
+       - wpa_supplicant-gui
 
  - name: "@AvahiLibraries"
-   buildconfig: Core/standard
+   buildconfig: Network/standard
    requires:
     - "@NetworkLibraries"
     - "@SystemdLibraries"
@@ -3347,40 +3339,80 @@ groups:
     - libavahi-common3
     - libavahi-core7
     - libavahi-libevent1
+   buildflavors:
+    - name: glib
+      requires:
+       - "@Glib2"
+      binaries:
+       - libavahi-glib1
+       - libavahi-gobject0
+
+ - name: "@Avahi"
+   buildconfig: Network/standard
+   requires:
+    - "@AvahiLibraries"
+    - "@SystemPython"
+    - "@NetworkCore"
+   binaries:
+    - avahi
+    - avahi-autoipd
+    - avahi-utils
+    - libhowl0
+   buildflavors:
+    - name: python
+      binaries:
+       - python31?-avahi
+
+ - name: "@Firewall"
+   buildconfig: Systemd/standard
+   requires:
+    - "@SystemPython"
+    - "@NetworkCore"
+    - "@NetworkManager"
+   binaries:
+    - firewalld
+    - python3-firewall
+   buildflavors:
+    - name: systemdlibs
+      requires:
+       - "@Core+systemdlibs"
+      binaries:
+    - name: gui
+      requires:
+       - "@Gnome"
+       - "@Qt+python"
+       - "@PythonStandard+desktop"
+      binaries:
+       - firewall-config
+       - firewall-applet
 
  - name: "@NetworkManager"
-   buildconfig: Core/standard
+   buildconfig: Systemd/standard
    requires:
     - "@HostNetworking"
     - "@MinimalSystemd"
     - "@AvahiLibraries"
     - "@GnomeLibraries"
     - "@Console"
-    - "@PythonStandard+gnome"
-    - "@Qt+python"
+#   - "@PythonStandard+gnome"
+#   - "@Qt+python"
+    - "@PolicyKit"
     - "@Kernel"         # for openvswitch
    binaries:
-    - ppp
-    - rp-pppoe
+    - libnm0
     - NetworkManager
     - NetworkManager-wwan
     - NetworkManager-pppoe
     - NetworkManager-bluetooth
     - NetworkManager-branding-SLE
     - NetworkManager-branding-upstream
-    - ModemManager
-    - libnm0
-    - firewalld
-    - python3-firewall
-    - python3-nftables
     - libmm-glib0
+    - ModemManager
+    - ppp
+    - rp-pppoe
 #   - libqrtr
 #   - libqmi
 #   - libmbim
-    - avahi
-    - avahi-autoipd
-    - avahi-utils
-    - libhowl0
    buildflavors:
     - name: gui
       requires:
@@ -3388,12 +3420,8 @@ groups:
        - "@Qt+python"
        - "@PythonStandard+desktop"
       binaries:
-       - wpa_supplicant-gui
        - firewall-config
        - firewall-applet
-    - name: python
-      binaries:
-       - python31?-avahi
 
  - name: "@MultimediaCore"
    buildconfig: Multimedia/standard
@@ -3765,7 +3793,7 @@ groups:
    binaries:
     - mailutils
 
- - name: "@Avahi"
+ - name: "@Avahi_xxx"
    buildconfig: Network/standard
    requires:
     - "@NetworkServices"
@@ -3966,6 +3994,7 @@ groups:
     - libgrpc1*
     - libgrpc3*
     - libgrpc++*
+    - qemu-*
    buildflavors:
     - name: audio
       requires:
@@ -3973,6 +4002,11 @@ groups:
       binaries:
        - qemu-audio-pa
        - qemu-audio-pipewire
+    - name: smartcard
+      requires:
+       - "@Smartcards"
+      binaries:
+       - qemu-hw-usb-smartcard
 
  - name: "@PythonCore"
    buildconfig: Python/standard
@@ -4434,7 +4468,8 @@ groups:
     - "@CoreHardware"
     - "@NetworkCore"
     - "@PerlCore"
-    - "@MinimalSystemd"
+    - "@KernelCore"
+    - "@SystemdServices"
    binaries:
     - dracut
     - dracut-*
@@ -4467,6 +4502,16 @@ groups:
       binaries:
        - grub2-x86_64-xen
        - grub2-x86_64-xen-extras
+    - name: splash
+      requires:
+#      - "@Core"
+#      - "@Boot"
+       - "@FontLibraries"
+       - "@X11Libraries"
+       - "@DesktopLibraries"
+      binaries:
+       - plymouth
+       - plymouth-*
 
  - name: "@JeOS"
    buildconfig: KernelPlus/standard
@@ -4477,17 +4522,6 @@ groups:
     - jeos-firstboot
     - fde-firstboot
     - live-langset-data
-
- - name: "@BootBuild"
-   buildconfig: KernelPlus/standard
-   requires:
-    - "@Core"
-    - "@Boot"
-    - "@FontLibraries"
-    - "@X11Libraries"
-    - "@DesktopLibraries"
-   binaries:
-    - plymouth
 
  - name: "@Stuff"
    buildconfig: Network/standard

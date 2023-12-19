@@ -38,6 +38,10 @@ resolverhints:
     - "libstoragemgmt -> systemd systemd-mini"
     - "rdma-core -> systemd systemd-mini"
     - "rdma-core -> udev udev-mini"
+    - "mcelog -> systemd systemd-mini"
+    - "numad -> systemd systemd-mini"
+    - "xdm -> systemd systemd-mini"
+    - "e2fsprogs-scrub -> postfix"
   prefer:
     - "order libcontainers-openSUSE-policy libcontainers-default-policy"
     - "order libjpeg8 libjpeg*"

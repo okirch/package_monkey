@@ -251,6 +251,9 @@ build_configs:
    buildrequires:
     - "@BaseBuildEnv"
     - "@HA-devel"
+ - name: HardwareAccess/standard
+   buildrequires:
+    - "@BaseBuildEnv"
 
 buildconfig_flavors:
  - name: systemdlibs
@@ -264,17 +267,18 @@ buildconfig_flavors:
     - "@Gnome"
 
 components:
- - name: "Core"
+ - name: Core
    buildrequires:
     - "@BaseBuildEnv"
- - name: "CorePlus"
+ - name: CorePlus
    requires:
     - Core
- - name: "KernelPlus"
+    - Perl
+   exports:
+    - "@Glib2NoDBus"
+ - name: KernelPlus
    requires:
     - Core
-   buildrequires:
-    - "@Core"
    exports:
     # exporting these is a bit dangerous
     - "@KernelLibraries"
@@ -284,6 +288,10 @@ components:
     - Core
    buildrequires:
     - "@Core"
+ - name: HardwareAccess
+   requires:
+    - CorePlus
+    - KernelPlus
  - name: Network
    requires:
     - CorePlus
@@ -293,6 +301,10 @@ components:
  - name: Host
    requires:
     - CorePlus
+    - Network
+    - HardwareAcess
+    - KernelPlus
+    - Security
  - name: Databases
    requires:
     - Core
@@ -307,6 +319,7 @@ components:
  - name: HPC
    requires:
     - Core
+    - HardwareAccesss
  - name: BaseBuildEnv
    requires:
     - Core
@@ -315,9 +328,16 @@ components:
     - CorePlus
     - Host
     - Network
+    - KernelPlus
+    - Security
+    - AppArmor
+    - HardwareAccess
    exports:
     - "@SystemdLibraries"
     - "@UdevLibraries"
+    - "@DBusService"
+    - "@SystemdServices"
+    - "@PolicyKit"
  - name: Python
    requires:
     - Core
@@ -352,11 +372,17 @@ components:
     - Network
     - Security
     - AppArmor
+    - HardwareAccesss
    exports:
     - "@GnomeLibraries"
+    - "@PulseAudioLibraries"
+ - name: Qt
+   requires:
+    - Gnome
+    - Databases
  - name: Security
    requires:
-    - Systemd
+    - CorePlus
  - name: Java
    requires:
     - CorePlus
@@ -370,6 +396,10 @@ components:
    requires:
     - Core
  - name: Go
+   requires:
+    - Core
+    - GCC
+ - name: Rust
    requires:
     - Core
     - GCC
@@ -424,17 +454,27 @@ components:
     - Security
     - Gnome
     - UpdateStack
+    - Ruby
  - name: UpdateStack
    requires:
     - Core
     - Multimedia
     - Python
+    - Systemd
  - name: Virtualization
    requires:
     - KernelPlus
     - Host
     - Network
     - X11
+ - name: Kiwi
+   requires:
+    - Virtualization
+    - UpdateStack
+    - Container
+ - name: PublicCloud
+   requires:
+    - Python
 
 groups:
 
@@ -1239,7 +1279,7 @@ groups:
           - "@HostStorage-devel"
 
  - name: "@PCP"
-   buildconfig: Core/standard
+   buildconfig: Management/standard
    requires:
     - "@Core"
     - "@Perl"
@@ -1254,7 +1294,7 @@ groups:
    buildflavors:
     - name: infiniband
       requires:
-       - "@HostNetworking"
+       - "@Infiniband"
       binaries:
        - pcp-pmda-infiniband
     - name: mailserver
@@ -1453,7 +1493,7 @@ groups:
     - name: x11
       requires:
        - "@DesktopUtilities"
-       - "@KernelAudio"
+       - "@Sound"
        - "@DrawingLibraries"
        - "@Bubblewrap"
       binaries:
@@ -2023,7 +2063,7 @@ groups:
    buildconfig: CorePlus/standard
    requires:
     - "@Glib2NoDBus"
-    - "@MinimalDBus"
+    - "@DBusService"
     - "@SystemPython"
    binaries:
 # might be better off in DBus because it needs libdbus-glib-1-2.x86_64
@@ -2116,6 +2156,7 @@ groups:
    buildconfig: Gnome/standard
    requires:
     - "@GnomeLibraries"
+    - "@BluetoothLibraries"
     - "@AudioLibraries"
     - "@AVLibraries"
     - "@AVLibraries+x11"
@@ -2236,7 +2277,7 @@ groups:
 #   - "@HostNetworking+gnomelibs"
 #   - "@Flatpak"
     - "@NetworkManager"
-    - "@Bluetooth+systemd"
+    - "@Bluetooth"
     # for pulseaudio
     - "@SambaLibraries"
     - "@Bubblewrap"
@@ -2349,7 +2390,7 @@ groups:
     - "@X11Libraries"
     - "@GraphicsLibraries"
     - "@AudioLibraries"
-    - "@KernelAudio"
+    - "@Sound"
    binaries:
 #   - libgspell*
 
@@ -2426,7 +2467,7 @@ groups:
    binaries:
     - python31?-psutil
 
- - name: "@MinimalDBus"
+ - name: "@DBusService"
    buildconfig: Systemd/standard
    requires:
     - "@Core0"
@@ -2442,7 +2483,7 @@ groups:
     - "@UdevLibraries"
     - "@SystemdLibraries"
     - "@Glib2"
-    - "@MinimalDBus"
+    - "@DBusService"
    binaries:
     - dbus-1-glib
    buildflavors:
@@ -2485,7 +2526,6 @@ groups:
     - acct
     - biosdevname
     - blog
-#   - brltty
     - haveged
     - libudisks2
     - sysconfig
@@ -2777,6 +2817,7 @@ groups:
  - name: "@Rados"
    buildconfig: Host/standard
    requires:
+    - "@Infiniband"
     - "@HostStorage"
     - "@HostNetworking"
     - "@PythonModules"
@@ -3094,17 +3135,6 @@ groups:
    binaries:
     - systemtap-headers
 
- - name: "@KernelAudio"
-   buildconfig: KernelPlus/standard
-   requires:
-    - "@KernelCore"
-#   - "@Core+kernellibs"
-   binaries:
-    - alsa
-    - alsa-plugins
-    - alsa-utils
-    - libasound2
-
  - name: "@KernelBuild"
    buildconfig: KernelPlus/standard
    requires:
@@ -3122,7 +3152,7 @@ groups:
    requires:
     - "@Core0"
     - "@KernelCore"
-    - "@KernelAudio"
+#   - "@Sound"
     - "@NetworkCore"
     - "@PerlCore"
     - "@Boot"
@@ -3219,7 +3249,6 @@ groups:
     - libwrap0
     - libtirpc3
     - libxtables12
-    - libbluetooth3
     - libpgm-5*
     - libsodium
     - libzmq5
@@ -3229,24 +3258,42 @@ groups:
       binaries:
        - rpcgen
 
- - name: "@Bluetooth"
-   buildconfig: Core/standard
+ - name: "@Sound"
+   buildconfig: HardwareAccess/standard
    requires:
+    - "@KernelCore"
+   binaries:
+    - alsa
+    - alsa-plugins
+    - alsa-utils
+    - libasound2
+    # this should be somewhere in Kernel, but unfortunately, it requires alsa-utils to be applied
+    - alsa-firmware
+
+ - name: "@BluetoothLibraries"
+   buildconfig: HardwareAccess/standard
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libbluetooth3
+
+ - name: "@Bluetooth"
+   buildconfig: HardwareAccess/standard
+   requires:
+    - "@BluetoothLibraries"
     - "@NetworkLibraries"
     - "@Glib2"
+    - "@SystemdServices"
+    - "@UdevLibraries"
+    - "@Sound"
    buildrequires:
     - "@DesktopLibraries-devel"
+   binaries:
+    - bluez
+    - bluez-deprecated
    buildflavors:
-    - name: systemd
-      requires:
-       - "@KernelAudio"
-       - "@MinimalSystemd"
-      binaries:
-       - bluez
-       - bluez-deprecated
     - name: printing
       requires:
-       - "@Bluetooth+systemd"
        - "@PrintServer"
       binaries:
        - bluez-cups
@@ -3261,6 +3308,50 @@ groups:
        - "@DesktopLibraries"
       binaries:
        - bluez-obexd
+
+ - name: "@Infiniband"
+   buildconfig: HardwareAccess/standard
+   requires:
+    - "@NetworkLibraries"
+    - "@Glib2"
+    - "@SystemdServices"
+    - "@UdevLibraries"
+    - "@KernelCore"
+   binaries:
+    - dapl
+    - dapl-*
+    - ibutils*
+    - infinipath*
+    - qperf
+    - rdma-core
+    - rds-tools
+    - infiniband-diags
+    - libfabric1
+
+
+ - name: "@BrailleLibraries"
+   buildconfig: HardwareAccess/standard
+   requires:
+    - "@CoreLibraries"
+    - "@SystemdLibraries"
+    - "@PulseAudioLibraries"
+    - "@Core0"
+   binaries:
+    - libbrlapi0*
+
+ - name: "@Braille"
+   buildconfig: HardwareAccess/standard
+   requires:
+    - "@BrailleLibraries"
+    - "@UdevLibraries"
+    - "@SystemdServices"
+    - "@PulseAudioLibraries"
+    - "@Console"
+    - "@Glib2"
+    - "@Bluetooth"
+    - "@PolicyKit"
+   binaries:
+    - brltty
 
  - name: "@NetworkCore"
    buildconfig: Core/standard
@@ -3278,22 +3369,16 @@ groups:
     - "@Core"
     - "@NetworkCore"
     - "@PythonStandard"
-    # mostly for infiniband:
-    - "@KernelCore"
     - "@CorePlusLibraries"
    binaries:
     - arptables
     - ebtables
     - arpwatch
     - arpwatch-ethercodes
-    - dapl
-    - dapl-*
     - dhcp
     - dnsmasq
     - ethtool
     - susefirewall2-to-firewalld
-    - ibutils*
-    - infinipath*
 # this probably wants to go into its own label
 #   - strongswan
     - stunnel
@@ -3308,14 +3393,9 @@ groups:
     - vlan
     - tftp
     - quagga
-    - qperf
-    - rdma-core
-    - rds-tools
-    - libfabric1
     - nvme-*
     - dhcp-tools
     - firewalld-rpcbind-helper
-    - infiniband-diags
     - ipsec-tools
     - ipset
     - ipvsadm
@@ -3397,6 +3477,7 @@ groups:
 #   - "@PythonStandard+gnome"
 #   - "@Qt+python"
     - "@PolicyKit"
+    - "@BluetoothLibraries"
     - "@Kernel"         # for openvswitch
    binaries:
     - libnm0
@@ -3500,7 +3581,7 @@ groups:
    buildconfig: Multimedia/standard
    requires:
     - "@MultimediaCore"
-    - "@KernelAudio"
+    - "@Sound"
    buildrequires:
     - "@BaseBuildEnv"
    binaries:
@@ -3669,6 +3750,7 @@ groups:
     - "@Core+networkServices"
     - "@HPCCore"
     - "@HostNetworking"
+    - "@Infiniband"
     - "@TclCore"
    binaries:
     - mvapich2*
@@ -3730,7 +3812,7 @@ groups:
    requires:
     - "@NetworkCore"
     - "@CoreServices"
-    - "@MinimalSystemd"
+    - "@SystemdServices"
     - "@AvahiLibraries"
     - "@Perl"
    binaries:
@@ -3792,12 +3874,6 @@ groups:
     - "@PrintServer"
    binaries:
     - mailutils
-
- - name: "@Avahi_xxx"
-   buildconfig: Network/standard
-   requires:
-    - "@NetworkServices"
-    - "@DBus"
 
  - name: "@PrintingLibraries"
    buildconfig: Network/standard
@@ -3951,6 +4027,8 @@ groups:
     - "@SystemdLibraries"
     - "@Gnome"
     - "@PythonStandard+desktop"
+    - "@Infiniband"
+    - "@BrailleLibraries"
     - "@HostNetworking"
     - "@HostStorage"
     - "@NetworkStorage"
@@ -4268,7 +4346,6 @@ groups:
    requires:
     - "@Core"
     - "@X11Libraries"
-#   - "@KernelAudio"
     - "@AudioLibraries"
     - "@Smartcards"
    binaries:
@@ -4421,6 +4498,7 @@ groups:
     - "@DrawingLibraries"
     # does it make sense to ship php without datatbase support?
     - "@Databases"
+    - "@AppArmor"
     - "@Spelling"
    binaries:
     - php*

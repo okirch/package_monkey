@@ -1027,6 +1027,44 @@ class SolvingTreeBuilder(object):
 		self.pkgToNode = {}
 		self.builds = set()
 
+		self.validateComponentTree()
+
+	def validateComponentTree(self):
+		componentOrder = self.classificationScheme.componentOrder()
+		issues = 0
+
+		baseLabels = Classification.createLabelSet()
+		for label in sorted(self.classificationScheme.allBinaryLabels, key = str):
+			if label.parent is not None:
+				continue
+
+			assert(label.flavorName is None and label.purposeName is None)
+
+			if label.componentLabel is None:
+				errormsg(f"base label {label} is not assigned to any component")
+				continue
+
+			# Get the set of all components in view of this component
+			componentClosure = componentOrder.downwardClosureFor(label.componentLabel)
+
+			# Get the transitive closure of everything this base label
+			# requires
+			required = self.labelOrder.downwardClosureFor(label)
+			for req in label.runtimeRequires:
+				if req.componentLabel is None:
+					# not classified yet
+					continue
+
+				if label.okayToAccess(req, componentOrder):
+					continue
+
+				warnmsg(f"{label} [{label.componentLabel}] requires {req} which is in inaccessible component {req.componentLabel}")
+				issues += 1
+
+		if issues:
+			# raise Exception(f"Found {issues} problems with the component tree; please fix first")
+			errormsg(f"Found {issues} problems with the component tree; continuing despite these problems")
+
 	def addPackage(self, solvingTree, pkg):
 		node = self.pkgToNode.get(pkg)
 

@@ -43,6 +43,7 @@ class Classification:
 			self.runtimeRequires = set()
 			self.buildRequires = set()
 			self.runtimeAugmentations = set()
+			self.exports = set()
 			self.disposition = Classification.DISPOSITION_SEPARATE
 			# This is used in autoflavor labels only
 			self.preferredLabels = []
@@ -166,6 +167,10 @@ class Classification:
 		def addBuildDependency(self, other):
 			assert(isinstance(other, Classification.Label))
 			self.buildRequires.add(other)
+
+		def addExport(self, other):
+			assert(isinstance(other, Classification.Label))
+			self.exports.add(other)
 
 		def addMergeableFlavor(self, autoFlavor):
 			assert(autoFlavor.type == Classification.TYPE_AUTOFLAVOR and self.parent is None)
@@ -1351,6 +1356,11 @@ class PackageGroup:
 			raise Exception(f"Group {otherGroup.name} has a NULL label")
 		self.label.addBuildDependency(otherGroup.label)
 
+	def addExport(self, otherGroup):
+		if otherGroup.label is None:
+			raise Exception(f"Group {otherGroup.name} has a NULL label")
+		self.label.addExport(otherGroup.label)
+
 	@property
 	def flavors(self):
 		return map(lambda pair: pair[1], sorted(self._buildFlavors.items()))
@@ -2161,6 +2171,7 @@ class PackageFilter:
 		'requires',
 		'buildrequires',
 		'augments',
+		'exports',
 		'products',
 		'packages',
 		'packagesuffixes',
@@ -2274,6 +2285,11 @@ class PackageFilter:
 			for name in nameList:
 				otherGroup = self.resolveGroupReference(name)
 				group.addBuildRequires(otherGroup)
+
+			nameList = self.getYamlList(gd, 'exports', group)
+			for name in nameList:
+				otherGroup = self.resolveGroupReference(name)
+				group.addExport(otherGroup)
 
 		# The yaml file may specify per-group priorities for filters, but there is just
 		# one global set of filters. Rather than passing the group and priority argument

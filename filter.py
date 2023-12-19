@@ -1771,7 +1771,7 @@ class PackageFilter:
 		for gd in data.get('buildconfig_flavors') or []:
 			self.parseGroup(Classification.TYPE_BUILDCONFIG_FLAVOR, gd)
 
-		for gd in data.get('build_groups') or []:
+		for gd in data.get('components') or []:
 			self.parseGroup(Classification.TYPE_SOURCE, gd)
 
 		for gd in data['groups']:

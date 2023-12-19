@@ -263,7 +263,7 @@ buildconfig_flavors:
    requires:
     - "@Gnome"
 
-build_groups:
+components:
  - name: "Core"
    buildrequires:
     - "@BaseBuildEnv"

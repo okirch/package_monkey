@@ -224,6 +224,10 @@ build_configs:
    buildrequires:
     - "@BaseBuildEnv"
     - "@Fonts-devel"
+ - name: DocumentFormats/standard
+   buildrequires:
+    - "@BaseBuildEnv"
+    - "@Fonts-devel"
  - name: Texlive/standard
    buildrequires:
     - "@BaseBuildEnv"
@@ -252,6 +256,12 @@ build_configs:
     - "@BaseBuildEnv"
     - "@HA-devel"
  - name: HardwareAccess/standard
+   buildrequires:
+    - "@BaseBuildEnv"
+ - name: Editors/standard
+   buildrequires:
+    - "@BaseBuildEnv"
+ - name: Tcl/standard
    buildrequires:
     - "@BaseBuildEnv"
 
@@ -295,6 +305,7 @@ components:
  - name: Network
    requires:
     - CorePlus
+    - Python
  - name: AppArmor
    requires:
     - Core
@@ -302,9 +313,10 @@ components:
    requires:
     - CorePlus
     - Network
-    - HardwareAcess
+    - HardwareAccess
     - KernelPlus
     - Security
+    - GCC
  - name: Databases
    requires:
     - Core
@@ -319,7 +331,7 @@ components:
  - name: HPC
    requires:
     - Core
-    - HardwareAccesss
+    - HardwareAccess
  - name: BaseBuildEnv
    requires:
     - Core
@@ -332,6 +344,7 @@ components:
     - Security
     - AppArmor
     - HardwareAccess
+#   - Python
    exports:
     - "@SystemdLibraries"
     - "@UdevLibraries"
@@ -349,6 +362,9 @@ components:
     - Perl
     - Python
     - Network
+    - Databases
+    # PHP wants to draw images
+    - Multimedia
     # why?
     - Systemd
  - name: Multimedia
@@ -356,6 +372,7 @@ components:
     - CorePlus
     - Perl
     - Typesetting
+    - HardwareAccess
  - name: X11
    requires:
     - CorePlus
@@ -365,6 +382,7 @@ components:
     - KernelPlus
    exports:
     - "@X11Libraries"
+    - "@X11StandardUtils"
  - name: Gnome
    requires:
     - Multimedia
@@ -372,7 +390,9 @@ components:
     - Network
     - Security
     - AppArmor
-    - HardwareAccesss
+    - HardwareAccess
+    - DocumentFormats
+    - Python
    exports:
     - "@GnomeLibraries"
     - "@PulseAudioLibraries"
@@ -380,9 +400,11 @@ components:
    requires:
     - Gnome
     - Databases
+    - Python
  - name: Security
    requires:
     - CorePlus
+    - Python
  - name: Java
    requires:
     - CorePlus
@@ -403,6 +425,13 @@ components:
    requires:
     - Core
     - GCC
+ - name: Tcl
+   requires:
+    - Core
+    - Multimedia
+   exports:
+    # tcl does not change any more, so it's probably safe to export all of it
+    - "@TclCore"
  - name: Javascript
    requires:
     - CorePlus
@@ -423,15 +452,26 @@ components:
     - Core
     - CorePlus
     - GCC
+    - Tcl
+    - Python
    exports:
     - "@WorkbenchRuntime"
  - name: Typesetting
    requires:
     - Core
+    - CorePlus
+ - name: DocumentFormats
+   requires:
+    - CorePlus
+    - Typesetting
+    - Multimedia
+    # for printing:
+    - Network
  - name: Texlive
    requires:
     - Core
     - Perl
+    - DocumentFormats
     - Multimedia
     - Java
  - name: Container
@@ -461,23 +501,33 @@ components:
     - Multimedia
     - Python
     - Systemd
+    - Ruby
  - name: Virtualization
    requires:
     - KernelPlus
     - Host
     - Network
+    - Editors
+    - Gnome
     - X11
+    - Ruby
+    - Python
  - name: Kiwi
    requires:
     - Virtualization
     - UpdateStack
     - Container
+ - name: Editors
+   requires:
+    - CorePlus
+    - Typesetting
+    - Network
+    - GCC
  - name: PublicCloud
    requires:
     - Python
 
 groups:
-
  - name: "@GccRuntime"
    buildconfig: GCC/standard
    requires:
@@ -557,7 +607,7 @@ groups:
 #   - liblldb1?
 
  - name: "@Testing"
-   buildconfig: GCC/standard
+   buildconfig: BuildCore/standard
    requires:
     - "@MinimalCRuntime"
     - "@Core"
@@ -582,7 +632,6 @@ groups:
     - net-tools-deprecated
     - datefudge
     - gnu-efi
-    - makedepend
     # do these really belong here?
     - cscope
     - ctags
@@ -981,6 +1030,7 @@ groups:
     - lz4
     - m4
     - mailx
+    - makedepend
     - mkisofs
     - mozilla-nss-tools
     - mtools
@@ -1409,9 +1459,10 @@ groups:
    buildconfig: Security/standard
    requires:
     - "@Core0"
-    - "@Python"
     - "@Security"
     - "@CoreLibraries+pythoncore"
+    # we /have/ to pull in PythonCore here, unfortunately
+    - "@PythonCore"
    binaries:
     - checkpolicy
     - setools
@@ -1454,51 +1505,6 @@ groups:
        # misnamed package (should have been static-devel)
        - newt-static
 
-# why do all editors have to have such messy dependencies?
- - name: "@Vim"
-   buildconfig: CorePlus/standard
-   requires:
-    - "@Core"
-    - "@FontLibraries"
-    - "@Fonts"
-    - "@GCC"
-   binaries:
-    - vim
-   buildflavors:
-    - name: gnome
-      augments:
-       - "@Gnome"
-      requires:
-       - "@LUA-devel"
-       - "@Ruby-devel"
-       #  gvim is gnome based but still asks for libgpm2.
-       - "@Console"
-      binaries:
-       - gvim
-
- - name: "@Emacs"
-   buildconfig: CorePlus/standard
-   requires:
-    - "@Core"
-    - "@CorePlusLibraries"
-    - "@FontLibraries"
-    - "@Fonts"
-    - "@GCC"
-    - "@Console"
-    - "@MailClient"
-   binaries:
-    - emacs
-    - emacs-nox
-   buildflavors:
-    - name: x11
-      requires:
-       - "@DesktopUtilities"
-       - "@Sound"
-       - "@DrawingLibraries"
-       - "@Bubblewrap"
-      binaries:
-       - emacs-x11
-
  - name: "@ManDoc"
    buildconfig: Core/standard
    requires:
@@ -1518,7 +1524,7 @@ groups:
        - "@X11Libraries"
 
  - name: "@Postscript"
-   buildconfig: Core/standard
+   buildconfig: DocumentFormats/standard
    requires:
     - "@Core"
     - "@Fonts"
@@ -1535,7 +1541,7 @@ groups:
        - ghostscript-x11
 
  - name: "@PDF"
-   buildconfig: CorePlus/standard
+   buildconfig: DocumentFormats/standard
    requires:
     - "@Core"
     - "@Fonts"
@@ -1568,12 +1574,6 @@ groups:
       requires:
        - "@Texlive"
 
- - name: "@CorePlusLibraries"
-   buildconfig: CorePlus/standard
-   requires:
-    - "@Core0"
-   binaries:
-
  - name: "@XMLPlus"
    buildconfig: CorePlus/standard
    requires:
@@ -1591,7 +1591,7 @@ groups:
    buildconfig: CorePlus/standard
    requires:
     - "@XMLPlus"
-    - "@PythonCore"
+    - "@SystemPython"
     - "@PerlCore"
    binaries:
     - docbook_3
@@ -1616,11 +1616,12 @@ groups:
        - docbook-xsl-pdf2index
 
  - name: "@TclCore"
-   buildconfig: Core/standard
+   buildconfig: Tcl/standard
    requires:
     - "@Core0"
-    - "@X11"
     - "@GraphicsLibraries"
+    # tk wants to use xhost
+    - "@X11StandardUtils"
    buildrequires:
     - "@X11Libraries-devel"
    binaries:
@@ -1733,8 +1734,8 @@ groups:
    requires:
     - "@Core0"
     - "@NetworkServices"
-    - "@ApplicationLibraries"
-    - "@Python"
+#   - "@ApplicationLibraries"
+#   - "@Python"
    binaries:
     - postgresql-*
     - postgresql15-*
@@ -1914,10 +1915,22 @@ groups:
        - fontcacheproto-devel
        - printproto-devel
 
+ - name: "@X11StandardUtils"
+   buildconfig: X11/standard
+   requires:
+    - "@X11Libraries"
+   buildrequires:
+    - "@DesktopBuild"
+   binaries:
+    - xauth
+    - xdpyinfo
+    - xhost
+
  - name: "@X11"
    buildconfig: X11/standard
    requires:
     - "@X11Libraries"
+    - "@X11StandardUtils"
    buildrequires:
     - "@DesktopBuild"
     - "@BrowsersConsole"
@@ -1926,14 +1939,11 @@ groups:
     - mkfontscale
     - setxkbmap
     - wayland*
-    - xauth
     - xcb-*
     - xclip
     - xconsole
     - xdmbgrd
-    - xdpyinfo
     - xf86*
-    - xhost
     - xineramaproto
     - xinit
     - xkbcomp
@@ -1958,7 +1968,7 @@ groups:
    purposes:
     - name: devel
       requires:
-       - "@BaseDevTools"
+#      - "@BaseDevTools"
        - "@FontLibraries-devel"
       binaries:
        - imake
@@ -1968,8 +1978,9 @@ groups:
    buildconfig: X11/standard
    requires:
      - "@X11"
-     - "@BaseDevTools"
      - "@OpenGL"
+     # both x11-xorg-server and xwayland want pkgconfig
+     - "@MinimalCDevelopment"
    binaries:
      - xorg-x11-server
      - xorg-x11-server-*
@@ -1979,7 +1990,7 @@ groups:
    purposes:
      - name: devel
        requires:
-        - "@BaseDevTools"
+#       - "@BaseDevTools"
         - "@FontLibraries-devel"
        binaries:
         - xorg-x11-server-sdk
@@ -2315,12 +2326,14 @@ groups:
       requires:
        - "@Texlive"
        - "@Docbook+texlive"
+       - "@MinimalCDevelopment"
       binaries:
        - gnome-doc-utils
        - gnome-doc-utils-lang
        - gnome-common
        - gtk-doc
        - gtk-doc-mkpdf
+       - gnome-patch-translation
        # not sure why, but this package thinks it needs gtk4-devel for building
        - gstreamer-plugins-rs-devel
     - name: doc
@@ -2355,9 +2368,10 @@ groups:
    buildconfig: Gnome/standard
    requires:
     - "@Gnome"
-    - "@PDF+glib2"
+    - "@PDF+x11"
     - "@Postscript"
     - "@HPCCoreLibraries"
+    - "@PythonStandard"
    binaries:
     - graphviz
     - inkscape
@@ -2367,13 +2381,6 @@ groups:
        - "@PHP"
       binaries:
        - graphviz-php
-    - name: gnome
-      requires:
-       - "@Gnome"
-       - "@PythonCore"
-    - name: tcl
-      requires:
-       - "@TclCore"
     - name: tex
       requires:
        - "@Texlive"
@@ -2718,7 +2725,7 @@ groups:
    buildconfig: Security/standard
    requires:
     - "@Security"
-    - "@MinimalSystemd"
+    - "@SystemdServices"
     - "@GnomeLibraries"
     - "@PolicyKit"
    binaries:
@@ -2756,7 +2763,7 @@ groups:
    requires:
     - "@Core"
     - "@Core+glib"
-    - "@MinimalSystemd"
+    - "@SystemdServices"
     - "@KernelCore"
    binaries:
     - autofs
@@ -2930,7 +2937,7 @@ groups:
    purposes:
     - name: devel
       requires:
-       - "@BaseDevTools"
+#      - "@BaseDevTools"
       binaries:
        - yast2-buildtools
        - yast2-devtools
@@ -3224,7 +3231,7 @@ groups:
     - acpica
 
  - name: "@GPU"
-   buildconfig: KernelPlus/standard
+   buildconfig: HardwareAccess/standard
    requires:
     - "@CoreLibraries"
    binaries:
@@ -3368,8 +3375,8 @@ groups:
    requires:
     - "@Core"
     - "@NetworkCore"
-    - "@PythonStandard"
-    - "@CorePlusLibraries"
+#   - "@PythonStandard"
+#   - "@CorePlusLibraries"
    binaries:
     - arptables
     - ebtables
@@ -3449,6 +3456,7 @@ groups:
     - "@SystemPython"
     - "@NetworkCore"
     - "@NetworkManager"
+    - "@PythonStandard"
    binaries:
     - firewalld
     - python3-firewall
@@ -3732,6 +3740,7 @@ groups:
     - "@HPCCoreLibraries"
     - "@LUA"
     - "@HostNetworking"
+    - "@TclCore"
    binaries:
     - lua-lmod
     - gnu-compilers-hpc
@@ -3929,7 +3938,7 @@ groups:
     - "@SystemdLibraries"
 #   - "@PrintingLibraries"
     - "@AvahiLibraries"
-    - "@CorePlusLibraries"
+#   - "@CorePlusLibraries"
    binaries:
     - samba-client-libs
     - samba-libs
@@ -3978,11 +3987,17 @@ groups:
       binaries:
        - samba-test
 
- - name: "@Nginx"
+ - name: "@NetworkMisc"
    buildconfig: Network/standard
    requires:
+    - "@HostNetworking"
+   binaries:
+    - rsyslog-module-snmp
+
+ - name: "@Nginx"
+   buildconfig: Webserver/standard
+   requires:
     - "@NetworkServices"
-    - "@X11"
     - "@DrawingLibraries"
    binaries:
     - nginx
@@ -4008,13 +4023,6 @@ groups:
        - "@PHP"
       binaries:
        - apache2-mod_php8
-
- - name: "@NetworkMisc"
-   buildconfig: Network/standard
-   requires:
-    - "@HostNetworking"
-   binaries:
-    - rsyslog-module-snmp
 
  # Need to sort out the mess around qemu. Too much seems to depend on desktop stuff...
  - name: "@Virtualization"
@@ -4087,9 +4095,13 @@ groups:
        - qemu-hw-usb-smartcard
 
  - name: "@PythonCore"
+   description: |
+     This is where we would add future python versions
    buildconfig: Python/standard
    requires:
     - "@SystemPython"
+   sources:
+    - python-setuptools
 
  # We should probably define separate @Topics for different python versions
  # and have the generic @Python reference a specific version
@@ -4099,8 +4111,6 @@ groups:
     - "@PythonCore"
    binaries:
     - python
-    - python310-setuptools
-    - python311-setuptools
     - python310-six
     - python311-six
 
@@ -4281,8 +4291,9 @@ groups:
     - rubygem-*
     - ruby-common
 
- - name: "@RubyStuff"
-   buildconfig: Ruby/standard
+ # FIXME
+ - name: "@Guesfs"
+   buildconfig: Virtualization/standard
    requires:
     - "@Ruby"
     - "@Boot"
@@ -4670,6 +4681,51 @@ groups:
       binaries:
        - texlive-synctex-devel
        - texlive-devel
+
+# why do all editors have to have such messy dependencies?
+ - name: "@Vim"
+   buildconfig: Editors/standard
+   requires:
+    - "@Core"
+    - "@FontLibraries"
+    - "@Fonts"
+    - "@GCC"
+   binaries:
+    - vim
+   buildflavors:
+    - name: gnome
+      augments:
+       - "@Gnome"
+      requires:
+       - "@LUA-devel"
+       - "@Ruby-devel"
+       #  gvim is gnome based but still asks for libgpm2.
+       - "@Console"
+      binaries:
+       - gvim
+
+ - name: "@Emacs"
+   buildconfig: Editors/standard
+   requires:
+    - "@Core"
+#   - "@CorePlusLibraries"
+    - "@FontLibraries"
+    - "@Fonts"
+    - "@GCC"
+    - "@Console"
+    - "@MailClient"
+   binaries:
+    - emacs
+    - emacs-nox
+   buildflavors:
+    - name: x11
+      requires:
+       - "@DesktopUtilities"
+       - "@Sound"
+       - "@DrawingLibraries"
+       - "@Bubblewrap"
+      binaries:
+       - emacs-x11
 
  - name: "@Patterns"
    description: |

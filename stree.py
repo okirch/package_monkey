@@ -285,12 +285,6 @@ class SolvingTree(object):
 			# update lower and upper cone here?
 
 		@property
-		def solutionBaseLabel(self):
-			if not self._solution:
-				return None
-			return self._solution.parent or self._solution
-
-		@property
 		def packages(self):
 			if self.package:
 				return set([self.package])

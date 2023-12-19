@@ -43,30 +43,6 @@ for pkg in collection:
 		packageFilter.performInitialPlacement(pkg)
 infomsg(f"Performed initial placement of packages, {timing} elapsed")
 
-def flattenGroupList(type, names):
-	labelSet = set()
-	for name in names:
-		label = classificationScheme.getLabel(name)
-		if label is None:
-			warnmsg(f"no label {name}")
-			continue
-
-		assert(label.type == type)
-
-		belowSet = labelOrder.downwardClosureFor(label)
-		for below in belowSet:
-			if below.type != type:
-				raise Exception(f"downward closure for label {label} contains {below.type} label {below}")
-		labelSet.update(belowSet)
-
-	return labelOrder.bottomUpTraversal(labelSet)
-
-binaryGroupNames = ("@Core", "@HostCore", "@Kernel", "@UpdateStack", "@CoreLibraries+odbc", "@X11Libraries", "@MinimalSystemd", "@DesktopBuild")
-binaryGroupNames = ("@CoreLibraries", "@Core0", "@CoreLibraries+python")
-binaryTraversal = flattenGroupList(Classification.TYPE_BINARY, binaryGroupNames)
-#sourceTraversal = flattenGroupList(Classification.TYPE_SOURCE, ("Core", "KernelPlus"))
-sourceTraversal = []
-
 worker = ResolverWorker(resolver)
 problemLog = worker.problems
 
@@ -109,82 +85,6 @@ def classifyAutoFlavors(label, labelledPackages):
 			flavorLabel = label.getBuildFlavor(flavorDef.name)
 			relabeled = classifier.labelFlavoredPackages(flavorDef.name, flavorLabel)
 			packageFilter.updateGroup(flavorLabel, relabeled)
-
-def classifyRuntimeDependencies(label):
-	global binaryTraversal
-
-	group = packageFilter.makeBinaryGroup(label.name)
-	labelledPackages = group.packages
-
-	infomsg(f"Classify packages belonging to {group.label}")
-
-	# Step 0: automatically add compatible build flavors of subordinate groups
-	# iff we satisfy all their dependencies
-	if True:
-		label.autoSelectCompatibleFlavors()
-	else:
-		update = set()
-		for req in label.runtimeRequires:
-			for flavor in req.flavors:
-				if flavor.allFlavorRequirementsSatisfied(label):
-					infomsg(f"{label} auto-selected {flavor} via {req}")
-					update.add(flavor)
-		for flavor in update:
-			# infomsg(f" {label} -> enable {flavor}")
-			label.addRuntimeDependency(flavor)
-
-	# Step 1: build the runtime dependency closure
-	classifier = Classification.DownwardClosure(classificationContext, label)
-	classifier.classify(labelledPackages)
-	labelledPackages = classifier.result
-
-	packageFilter.updateGroup(label, labelledPackages)
-
-	# for each of the newly classified packages, see if we have sibling packages that
-	# we can slot into one of the autoflavors like +devel, +python etc.
-	classifyAutoFlavors(label, labelledPackages)
-
-	# Step N: sort all other sibling packages into $Group+unused.
-	# To avoid infinite recursion, do not perform this step for the +unused flavor itself.
-	if not label.name.endswith("unused"):
-		while group.label.parent:
-			group = packageFilter.makeBinaryGroup(group.label.parent.name)
-
-		siblingGroup = packageFilter.makeFlavorGroup(group, "unused")
-		siblingGroup.label.autoSelect = False
-
-		classifier = Classification.SiblingPackageClosure(problemLog, siblingGroup.label, store)
-		classifier.classify(labelledPackages)
-		siblingGroup.update(classifier.result)
-
-def classifyBuildDependencies(label):
-	global binaryTraversal
-
-	# get the build requirements of this label and make sure we've satisfied all their runtime
-	# requirements
-	for buildLabel in binaryTraversal.flattenBuildRequirements(label):
-		classifyRuntimeDependencies(buildLabel)
-
-	group = packageFilter.makeBinaryGroup(label.name)
-
-	classifier = Classification.BuildRequiresClosure(problemLog, label, store)
-	packagesNeededForBuild = classifier.classify(group.packages)
-
-	unlabelledPackages = classifier.unlabelledPackages
-	if unlabelledPackages:
-		infomsg(f"{label.name} has {len(unlabelledPackages)} unclassified build requirements")
-
-		infomsg(f"Classifying new build requirements for {label}")
-		classifier = Classification.UnknownPackageClassifier(worker, productArchitecture, label)
-		classifier.classify(unlabelledPackages)
-
-		# FIXME: This should also be part of the problem report
-		for suggestedLabel, candidatePackages in classifier.suggestions:
-			infomsg(f"   Classifier suggests label {suggestedLabel} for these package(s)")
-			for cand in candidatePackages:
-				infomsg(f"      {cand.shortname}")
-
-processedBinaryLabels = []
 
 # Having classified packages that are referenced in the filter definition,
 # inspect their sibling packages and see whether they have been identified

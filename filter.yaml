@@ -161,6 +161,10 @@ build_configs:
    buildrequires:
     - "@BaseBuildEnv"
     - "@NetworkLibraries-devel"
+ - name: Samba/standard
+   buildrequires:
+    - "@BaseBuildEnv"
+    - "@NetworkLibraries-devel"
  - name: Host/standard
    buildrequires:
     - "@BaseBuildEnv"
@@ -306,6 +310,9 @@ components:
    requires:
     - CorePlus
     - Python
+ - name: Samba
+   requires:
+    - Network
  - name: AppArmor
    requires:
     - Core
@@ -394,6 +401,7 @@ components:
     - DocumentFormats
     - Container
     - Python
+    - Samba
    exports:
     - "@GnomeLibraries"
     - "@PulseAudioLibraries"
@@ -1088,17 +1096,20 @@ groups:
    buildconfig: Core/standard
    requires:
     - "@Core0"
-    - "@BuildConfig" # for python-rpm-macros
+#   - "@BuildConfig" # for python-rpm-macros
    buildrequires:
     - "@DesktopBuild"
     - "@X11Libraries-devel"
    binaries:
+    - python-rpm-macros
+    - python-rpm-generators
     - python3
     - python310
     - python311
     - python3??-base
     - python3??-future
     - python3??-extras
+#   - python3??-setuptools
     - libpython*
     - python*-base
    purposes:
@@ -1704,7 +1715,6 @@ groups:
  - name: "@BuildConfig"
    buildconfig: BuildCore/standard
    binaries:
-    - python-rpm-macros
 
  - name: "@BaseBuildEnv"
    description: |
@@ -1718,7 +1728,6 @@ groups:
     - "@Glibc-devel"
     - "@Python"
    binaries:
-    - python-rpm-generators
     - python-rpm-packaging
     - obs-service-*
     - uasm
@@ -1751,6 +1760,8 @@ groups:
     - postgresql15-contrib
     - python31?-mysqlclient
     - perl-DBD-mysql
+    - freetds-tools
+    - libsybdb5
    purposes:
     - name: devel
       requires:
@@ -2463,6 +2474,10 @@ groups:
     - libdbus-1-*
     - dbus-1-common
     - libbytesize1
+   purposes:
+    - name: devel
+      binaries:
+       - systemd-mini-devel
 
  - name: "@SystemdUtilities"
    buildconfig: Systemd/standard
@@ -2482,6 +2497,11 @@ groups:
     - "@Glib2NoDBus"
    binaries:
     - dbus-1
+   purposes:
+    - name: devel
+      binaries:
+       # dbus-1-devel depends on dbus-1 (why?)
+       - dbus-1-devel
 
  - name: "@DBus"
    buildconfig: Systemd/standard
@@ -2499,10 +2519,6 @@ groups:
        - "@X11Libraries"
       binaries:
        - dbus-1-x11
-   purposes:
-    - name: devel
-      binaries:
-       - dbus-1-devel
 
  - name: "@SystemdServices"
    buildconfig: Systemd/standard
@@ -2657,41 +2673,6 @@ groups:
       requires:
        # building libzypp requires rpm-devel
        - "@BaseBuildEnv-devel"
-
- # For the time being, we put Directory and Samba stuff into the Network component.
- # It would make sense to place them in a component of their own
- - name: "@DirectoryIntegration"
-   buildconfig: Network/standard
-   requires:
-    - "@Core"
-    - "@Core+systemd"
-    - "@SystemPython"
-   binaries:
-    - sssd
-    - python3-sss*
-    # catch-all for all other sssd packages
-    - sssd-*
-    # These are really Samba libraries, but we put them here because all of the sssd
-    # stuff uses them, too
-    - libtalloc2
-    - libtevent0
-    - libtdb1
-    - libldb2
-   buildflavors:
-    - name: nfs
-      requires:
-       - "@NetworkStorage"
-      binaries:
-       - libnfsidmap-sss
-    - name: samba
-      requires:
-       - "@SambaLibraries"
-      binaries:
-       - sssd-ad
-       - sssd-ipa
-    - name: python
-      binaries:
-       - sssd-tools
 
  - name: "@SystemdLegacy"
    buildconfig: Systemd/standard
@@ -3940,8 +3921,52 @@ groups:
       binaries:
        - elinks
 
- - name: "@SambaLibraries"
+ - name: "@NetworkMisc"
    buildconfig: Network/standard
+   requires:
+    - "@HostNetworking"
+   binaries:
+    - rsyslog-module-snmp
+
+ # For the time being, we put Directory and Samba stuff into the Network component.
+ # It would make sense to place them in a component of their own
+ - name: "@DirectoryIntegration"
+   buildconfig: Samba/standard
+   requires:
+    - "@Core"
+    - "@Core+systemd"
+    - "@SystemPython"
+   binaries:
+    - sssd
+    - python3-sss*
+    - libsss_simpleifp0
+    - libipa_hbac0
+    # catch-all for all other sssd packages
+    - sssd-*
+    # These are really Samba libraries, but we put them here because all of the sssd
+    # stuff uses them, too
+    - libtalloc2
+    - libtevent0
+    - libtdb1
+    - libldb2
+   buildflavors:
+    - name: nfs
+      requires:
+       - "@NetworkStorage"
+      binaries:
+       - libnfsidmap-sss
+    - name: samba
+      requires:
+       - "@SambaLibraries"
+      binaries:
+       - sssd-ad
+       - sssd-ipa
+    - name: python
+      binaries:
+       - sssd-tools
+
+ - name: "@SambaLibraries"
+   buildconfig: Samba/standard
    requires:
     - "@NetworkCore"
     - "@Core"
@@ -3955,7 +3980,7 @@ groups:
     - samba-ad-dc-libs
 
  - name: "@Samba"
-   buildconfig: Network/standard
+   buildconfig: Samba/standard
    requires:
     - "@NetworkServices"
     - "@Core"
@@ -3992,13 +4017,6 @@ groups:
        - "@Samba+python"
       binaries:
        - samba-test
-
- - name: "@NetworkMisc"
-   buildconfig: Network/standard
-   requires:
-    - "@HostNetworking"
-   binaries:
-    - rsyslog-module-snmp
 
  - name: "@Nginx"
    buildconfig: Webserver/standard
@@ -4106,8 +4124,8 @@ groups:
    buildconfig: Python/standard
    requires:
     - "@SystemPython"
-   sources:
-    - python-setuptools
+   binaries:
+    - python31?-setuptools
 
  # We should probably define separate @Topics for different python versions
  # and have the generic @Python reference a specific version
@@ -4298,7 +4316,7 @@ groups:
     - ruby-common
 
  # FIXME
- - name: "@Guesfs"
+ - name: "@Guestfs"
    buildconfig: Virtualization/standard
    requires:
     - "@Ruby"
@@ -4651,7 +4669,7 @@ groups:
     - "@Management"
     - "@PythonModules"
     - "@FullSystemd"
-    - "@BaseBuildEnv"
+#   - "@BaseBuildEnv"
     - "@Kernel"
    binaries:
     - salt

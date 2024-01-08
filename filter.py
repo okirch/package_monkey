@@ -301,7 +301,7 @@ class Classification:
 			if self.buildConfig is configLabel:
 				return
 			if self.buildConfig is not None:
-				raise Exception(f"Duplicate source group for {self}: {self.buildConfig} vs {configLabel}")
+				raise Exception(f"Duplicate buildconfig for {self}: {self.buildConfig} vs {configLabel}")
 			self.buildConfig = configLabel
 			if self.sourceProject is None:
 				self.sourceProject = configLabel.sourceProject
@@ -2003,7 +2003,7 @@ class PackageFilter:
 		# When creating @Foo+blah, and @Foo has a sourceProject of FooSource, check
 		# whether there's a buildconfig for FooSource/blah.
 		# If that doesn't exist, the flavor will build using the same config as the base label.
-		buildLabel = self.getBuildConfigFlavor(baseGroup.label.sourceProject, flavorName)
+		buildLabel = baseGroup.label.getBuildConfigFlavor(flavorName)
 
 		label = self.classificationScheme.createFlavor(baseGroup.label, flavorName, buildConfig = buildLabel)
 		flavor = self.getGroupForLabel(label, create = True)
@@ -2043,31 +2043,6 @@ class PackageFilter:
 		purpose = self.getGroupForLabel(label, create = True)
 		baseGroup.addObjectPurpose(purpose)
 		return purpose
-
-	def getBuildConfigFlavor(self, sourceProject, flavorName):
-		if sourceProject is None:
-			return None
-		assert(isinstance(sourceProject, Classification.Label))
-
-		buildLabel = sourceProject.getBuildFlavor(flavorName)
-		return buildLabel
-
-# do NOT create the build config on the fly; that doesn't make sense.
-#		if buildLabel is None:
-#			buildGroup = self.instantiateBuildConfigFlavor(sourceProject, flavorName)
-#			if buildGroup is not None:
-#				buildLabel = buildGroup.label
-
-		if buildLabel is not None:
-			if False:
-				infomsg(f": {sourceProject} has flavor {buildLabel} type {buildLabel.type}")
-				for req in buildLabel.runtimeRequires:
-					infomsg(f"  {buildLabel} -> {req}")
-
-			# pretend that it's defined
-			buildLabel.defined = True
-
-		return buildLabel
 
 	def getGroup(self, name, type = None):
 		try:

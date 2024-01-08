@@ -70,10 +70,10 @@ potentialClassification.definePreference("@Gnome", ["@DesktopLibraries", ])
 potentialClassification.definePreference("@MinimalCRuntime", ["@GccRuntime", "@Glibc"])
 result = potentialClassification.solve()
 
-writer = TableWriter("packages.csv")
+writer = TableWriter(application.getOutputPath("packages.csv"))
 writer.write(result)
 
-writer = XmlWriter("packages.xml")
+writer = XmlWriter(application.getOutputPath("packages.xml"))
 writer.write(result)
 
 if False and problemLog:

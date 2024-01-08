@@ -6,6 +6,7 @@ from util import ExecTimer, loggingFacade
 from util import debugmsg, infomsg, warnmsg, errormsg
 from util import NameMatcher
 from obsclnt import OBSClient
+import os
 
 class Application:
 	OBS_HOST_DEFAULT = "api.suse.de"
@@ -14,7 +15,8 @@ class Application:
 		self.name = name
 		self.args = argparse.ArgumentParser(name)
 
-		self.args.add_argument('--db', default = 'productinfo.db')
+		self.args.add_argument('--statedir', default = '.')
+		self.args.add_argument('--db', default = None)
 		self.args.add_argument('--cache', default = '/work/projects/report/cache')
 		self.args.add_argument('--family', default = 'dolomite')
 		self.args.add_argument('--version', default = 'latest')
@@ -49,6 +51,25 @@ class Application:
 		if self._opts is None:
 			self._opts = self.args.parse_args()
 			self.initializeLogging()
+
+	@property
+	def statePath(self):
+		return f"{self.opts.statedir}/{self.opts.family}"
+
+	@property
+	def backingStorePath(self):
+		if self.opts.db:
+			return self.opts.db
+		return f"{self.statePath}/product.db"
+
+	def getOutputPath(self, basename):
+		return f"{self.statePath}/{basename}"
+
+	@property
+	def obsModelDefinition(self):
+		if self.opts.model:
+			return self.opts.model
+		return f"{self.statePath}/model.yaml"
 
 	def initializeLogging(self):
 		if not self.opts.quiet:
@@ -88,9 +109,13 @@ class Application:
 		return self.loadBackingStore()
 
 	def loadBackingStore(self, readonly = False, dependencyTreeLookups = False, sourceLookups = False):
-		if self._store is None and self.opts.db:
+		if self._store is not None:
+			return self._store
+
+		dbPath = self.backingStorePath
+		if os.path.exists(dbPath):
 			timing = ExecTimer()
-			store = BackingStoreDB(self.opts.db)
+			store = BackingStoreDB(dbPath)
 
 			# FIXME: this should depend either on an argument to this function, or
 			# on a command line switch

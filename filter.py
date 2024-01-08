@@ -1011,49 +1011,6 @@ class Classification:
 			self.result.update(result)
 			return result
 
-	class AutoflavorPackageClosure(BuildPackageClosure):
-		def __init__(self, problemLog, store, labelOrder):
-			super().__init__(problemLog, None, store)
-			self.labelOrder = labelOrder
-			self.flavors = {}
-
-		def addFlavor(self, name):
-			if self.flavors.get(name) is None:
-				self.flavors[name] = set()
-			return self.flavors[name]
-
-		def getFlavor(self, name):
-			return self.flavors.get(name)
-
-		def classify(self, packages):
-			result = set()
-			for rpm, build in self.enumerate(packages):
-				for other in build.binaries:
-					if other.label is None:
-						continue
-					if other.label.type is Classification.TYPE_AUTOFLAVOR:
-						self.addFlavor(other.label.name).add((rpm, other))
-
-		def labelFlavoredPackages(self, flavorName, label):
-			result = set()
-
-			closure = self.labelOrder.downwardClosureFor(label)
-
-			matching = self.getFlavor(flavorName)
-			if matching:
-				for rpm, other in matching:
-					# infomsg(f"::: label {other.shortname} as {label}")
-
-					# check whether all of other's requirements are satisfied
-					if not other.runtimeRequires.issubset(closure):
-						infomsg(f"refusing to label {other} as {label} due to missing dependencies")
-						continue
-
-					other.label = label
-					other.labelReason = Classification.ReasonRelatedPackage(flavorName, other, rpm)
-					result.add(other)
-			return result
-
 	class RelatedPackageClosure(BuildPackageClosure):
 		def classify(self, packages):
 			relation = self.RELATION

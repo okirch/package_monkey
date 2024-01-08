@@ -54,50 +54,6 @@ resolverContext = worker.contextForArch(productArchitecture)
 classificationContext = Classification.ClassificationContext(worker, productArchitecture,
 					classificationScheme, labelOrder, store)
 
-def classifyAutoFlavors(label, labelledPackages):
-	# Do not apply auto-flavors to groups that are already a flavor of some other group.
-	# Otherwise, we end up with labels like @HostNetworking+gnome+devel+unused
-	if label.parent is not None:
-		return
-
-	classifier = Classification.AutoflavorPackageClosure(problemLog, store, labelOrder)
-	classifier.classify(labelledPackages)
-	for flavorDef in packageFilter.autoFlavors:
-		found = classifier.getFlavor(flavorDef.name)
-		if found is None:
-			continue
-
-		if label.autoFlavorCanBeMerged(flavorDef.label):
-			# The autoflavor has a disposition of "merge", or
-			# it has a disposition of "maybe_merge" and all its requirements
-			# are already present in the base label
-			relabeled = classifier.labelFlavoredPackages(flavorDef.name, label)
-			packageFilter.updateGroup(label, relabeled)
-
-			if False:
-				infomsg(f"Merged {len(relabeled)} packages into {label}")
-				for l in relabeled:
-					infomsg(f"  {l}")
-		elif flavorDef.label.disposition == Classification.DISPOSITION_IGNORE:
-			pass
-		else:
-			flavorLabel = label.getBuildFlavor(flavorDef.name)
-			if flavorLabel is None:
-				# the filter code refused to instantiate this combination of base label
-				# and autoflavor; don't do anything
-				continue
-
-			relabeled = classifier.labelFlavoredPackages(flavorDef.name, flavorLabel)
-			packageFilter.updateGroup(flavorLabel, relabeled)
-
-# Having classified packages that are referenced in the filter definition,
-# inspect their sibling packages and see whether they have been identified
-# by one of the auto flavors like python or ruby. If that's the case
-# label them correspondingly (ie as Foo+python, Foo+ruby, etc).
-for label in labelOrder.bottomUpTraversal():
-	group = packageFilter.makeBinaryGroup(label.name)
-	classifyAutoFlavors(label, group.packages)
-
 focusLabels = None
 if traceMatcher:
 	focusLabels = set(filter(lambda label: traceMatcher.match(label.name), labelOrder.bottomUpTraversal()))

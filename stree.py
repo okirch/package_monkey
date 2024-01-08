@@ -233,8 +233,12 @@ class SolvingTree(object):
 
 			self.name = name
 			self.package = package
+			# FIXME: rename siblings to buildInfo
 			self.siblings = None
+			# FIXME: rename _cycle to _cyclePackages?
 			self._cycle = cycle
+			# This is usually None, except when representing a cycle. In which case _cycleBuilds is a list
+			self._cycleBuilds = None
 			self._order = order
 			self._lowerNeighbors = SolvingTree.createNodeSet()
 			self._upperNeighbors = SolvingTree.createNodeSet()
@@ -293,6 +297,14 @@ class SolvingTree(object):
 		@property
 		def isCollapsedCycle(self):
 			return bool(self._cycle)
+
+		@property
+		def builds(self):
+			if self._cycleBuilds is not None:
+				return self._cycleBuilds
+			if self.siblings:
+				return [self.siblings]
+			return []
 
 		def addLowerNeighbor(self, other):
 			self._lowerNeighbors.add(other)
@@ -715,6 +727,7 @@ class SolvingTree(object):
 
 	@property
 	def builds(self):
+		warnmsg(f"{self.__class__.__name__}.builds - please use allBuilds property instead")
 		return iter(self._builds.values())
 
 	def setSolution(self, pkg, label):
@@ -725,7 +738,7 @@ class SolvingTree(object):
 		try:
 			packeNode = self._packages[pkg]
 		except:
-			packeNode = self.PackageNode(self._order, name = str(pkg), package = pkg)
+			packeNode = self.PackageNode(self._order, name = pkg.name, package = pkg)
 			self._packages[pkg] = packeNode
 
 			# Copy already assigned labels to the newly created node
@@ -834,7 +847,7 @@ class SolvingTree(object):
 		cycleNames = list(map(str, cyclePackages))
 
 		if len(cycle) > 2:
-			names =  list(map(str, cycle))
+			names = list(map(str, cycle))
 			infomsg(f"Detected non-trivial cycle {' -> '.join(names)}")
 
 		labels = Classification.createLabelSet()
@@ -856,6 +869,7 @@ class SolvingTree(object):
 		above = reduce(set.union, (node._upperNeighbors for node in cycle), set())
 		below = reduce(set.union, (node._lowerNeighbors for node in cycle), set())
 
+		# FIXME: put cycle information into a Cycle object and pass that to the constructor
 		newPackageNode = self.PackageNode(self._order, name = f"<{' '.join(cycleNames)}>", cycle = cyclePackages)
 		newPackageNode._lowerNeighbors = below.difference(cycleSet)
 		newPackageNode._upperNeighbors = above.difference(cycleSet)
@@ -872,6 +886,14 @@ class SolvingTree(object):
 
 		for pkg in cyclePackages:
 			self._packages[pkg] = newPackageNode
+
+		cycleBuilds = set()
+		for oldNode in cycleSet:
+			if oldNode._cycleBuilds is not None:
+				cycleBuilds.update(set(oldNode._cycleBuilds))
+			elif oldNode.siblings:
+				cycleBuilds.add(oldNode.siblings)
+		newPackageNode._cycleBuilds = list(cycleBuilds)
 
 		debugPackageCycles(f"Collapsed dependency cycle {newPackageNode}, label {label}")
 
@@ -996,13 +1018,20 @@ class SolvingTree(object):
 			if node.package and node.package.isSourcePackage:
 				continue
 
-			build = node.siblings
-			if build is None:
+			# for a regular single-package node, this returns a list containing
+			# just the SiblingInfo object that represents the OBS build from
+			# which this package originates. In the case of a collapsed cycle,
+			# this returns the SiblingInfo objects of all packages that belong
+			# top this cycle
+			builds = node.builds
+			if not builds:
 				warnmsg(f"package {node} - cannot determine OBS build")
 				continue
-			if build not in seen:
-				seen.add(build)
-				yield build
+
+			for build in builds:
+				if build not in seen:
+					seen.add(build)
+					yield build
 
 class SolvingTreeBuilder(object):
 	def __init__(self, classificationContext):

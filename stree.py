@@ -19,6 +19,7 @@ from util import ExecTimer
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from ordered import PartialOrder
 from functools import reduce
+from profile import profiling
 
 # hack until I'm packaging fastsets properly
 import fastsets.fastsets as fastsets
@@ -734,6 +735,7 @@ class SolvingTree(object):
 		node = self.getPackage(pkg)
 		node.recordDecision(label)
 
+	@profiling
 	def getPackage(self, pkg):
 		try:
 			packeNode = self._packages[pkg]

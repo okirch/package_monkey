@@ -13,6 +13,7 @@ from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from filter import Classification
 from filter import ClassificationResult
 from functools import reduce
+from profile import profiling
 
 def intersectSets(a, b):
 	if a is None:
@@ -207,6 +208,7 @@ class PotentialClassification(object):
 					result.labelOnePackage(pkg, self.label, self.labelReason)
 
 	class DefinitivePackagePlacement(PackagePlacement):
+		@profiling
 		def __init__(self, labelOrder, node):
 			super().__init__(labelOrder, node, label = node.solution)
 
@@ -218,6 +220,7 @@ class PotentialClassification(object):
 			pass
 
 	class TentativePackagePlacement(PackagePlacement):
+		@profiling
 		def __init__(self, labelOrder, node, preferences):
 			super().__init__(labelOrder, node)
 
@@ -285,6 +288,7 @@ class PotentialClassification(object):
 		# The node corresponds to a package that has been auto-labelled as "devel" (purpose)
 		# or "python" (flavor). Reduce the list of candidates to those that have a matching
 		# purpose or flavor
+		@profiling
 		def applyFlavorOrPurpose(self, label):
 			candidates = self.candidates
 
@@ -520,6 +524,7 @@ class PotentialClassification(object):
 		def __str__(self):
 			return self.name
 
+		@profiling
 		def addPackagePlacement(self, pkg, packagePlacement):
 			self.children.append(packagePlacement)
 			self.packageDict[pkg] = packagePlacement
@@ -597,10 +602,10 @@ class PotentialClassification(object):
 			for name in sorted(components.keys()):
 				infomsg(f"  {name}: {' '.join(sorted(components[name]))}")
 
+		@profiling
 		def addDefinitivePlacement(self, pkg, node, label):
 			component = label.componentLabel
 			if component is not None:
-				assert(type(component) == Classification.Label)
 				if not self.componentConstraint.setLabel(component, self.name):
 					errormsg(f"BUG: we placed {pkg} in component {component} (via {label}) but that conflicts with given constraints {self.componentConstraint}")
 
@@ -615,6 +620,7 @@ class PotentialClassification(object):
 			self.addPackagePlacement(pkg, node.placement)
 			return node.placement
 
+		@profiling
 		def addTentativePlacement(self, pkg, node):
 			# the node may represent a collapsed cycle, in which case node.placement may already have
 			# been set. Just adopt the placement that is already there
@@ -637,6 +643,7 @@ class PotentialClassification(object):
 
 			return node.placement
 
+		@profiling
 		def applyConstraints(self):
 			for packagePlacement in self.unsolved:
 				packagePlacement.constraintComponent(self.componentConstraint)
@@ -1247,6 +1254,7 @@ class PotentialClassification(object):
 
 		self._preferences.add(preferredLabel, others)
 
+	@profiling
 	def createBuildPlacement(self, buildInfo):
 		buildPlacement = self.TentativeBuildPlacement(buildInfo, self.labelOrder, self._preferences)
 

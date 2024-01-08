@@ -1,5 +1,8 @@
 #!/usr/bin/python3
 
+# the profile module needs to be implemented before anything else
+from profile import profiling
+
 from packages import Product, Resolver, ResolverWorker, PackageSelector, PackageCollection
 from filter import PackageFilter, Classification
 from solver import PotentialClassification

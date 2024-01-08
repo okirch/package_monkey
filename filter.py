@@ -78,6 +78,13 @@ class Classification:
 			# closure
 			self.autoSelect = True
 
+			# if isFeature is true, then the solving algorithm may give
+			# this label greater significance than other labels.
+			# The idea is to distinguish between labels that exist purely
+			# for internal reasons, and those that can be considered as a
+			# user-visible feature of the distro
+			self.isFeature = False
+
 			# The may be used later to locate "favorite sibling" packages,
 			# eg systemd-mini-devel -> systemd-mini
 			self.packageSuffixes = []
@@ -2185,6 +2192,7 @@ class PackageFilter:
 		'autoselect',
 		'defaultlabel',
 		'defaultlabels',
+		'feature',
 	))
 
 	def processGroupDefinition(self, group, gd):
@@ -2227,6 +2235,10 @@ class PackageFilter:
 		value = getBoolean(gd, 'autoselect')
 		if value is not None:
 			group.label.autoSelect = value
+
+		value = getBoolean(gd, 'feature')
+		if value is not None:
+			group.label.isFeature = value
 
 		value = gd.get('defaultlabel')
 		if value is not None:

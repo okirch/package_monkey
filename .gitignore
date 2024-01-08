@@ -7,3 +7,5 @@ LOG
 *.o
 *.so
 *.log
+model.xml
+packages.xml

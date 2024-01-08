@@ -721,28 +721,32 @@ class PotentialClassification(object):
 		# However, we do want to accept builds that have different autolabels as long as there's
 		# a unique preferredLabel (for example, some python3xx-foobar module plus a -doc package
 		# that goes along).
-		def solveDefaultBaseLabel(self):
+		def getAutoLabels(self):
+			result = []
+			for packagePlacement in self.unsolved:
+				if packagePlacement.autoLabel is None:
+					return None
+
+				if packagePlacement.autoLabel.preferredLabels:
+					autoLabel = packagePlacement.autoLabel
+					if autoLabel not in result:
+						result.append(autoLabel)
+
+			return result
+
+		def solveAutoflavorPreferredLabel(self):
 			if self.solved:
 				return
 
-			autoLabel = None
-			for packagePlacement in self.unsolved:
-				if packagePlacement.autoLabel is None:
-					return False
-
-				if packagePlacement.autoLabel.preferredLabels:
-					if autoLabel is None:
-						autoLabel = packagePlacement.autoLabel
-					elif autoLabel is not packagePlacement.autoLabel:
-						infomsg(f"{self} has packages with different auto labels {autoLabel} and {packagePlacement.autoLabel}")
-						return False
-
-			if autoLabel is None or not autoLabel.preferredLabels:
+			autoLabels = self.getAutoLabels()
+			if not autoLabels:
 				return False
 
-			for preferredLabel in autoLabel.preferredLabels:
-				if self.tryToSolveUsingBaseLabel(preferredLabel, "preferred base label"):
-					return True
+			if len(autoLabels) == 1:
+				autoLabel = autoLabels[0]
+				for preferredLabel in autoLabel.preferredLabels:
+					if self.tryToSolveUsingBaseLabel(preferredLabel, f"preferred label of {autoLabel}"):
+						return True
 
 			return False
 
@@ -1130,7 +1134,7 @@ class PotentialClassification(object):
 		with loggingFacade.temporaryIndent(3):
 			success = \
 				tentativePlacement.solveTrivialCases() or \
-				tentativePlacement.solveDefaultBaseLabel() or \
+				tentativePlacement.solveAutoflavorPreferredLabel() or \
 				tentativePlacement.solveCommonBaseLabel() or \
 				tentativePlacement.solveCommonFeatureLabel() or \
 				tentativePlacement.solveCompatibleBaseLabel() or \

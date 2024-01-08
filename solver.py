@@ -12,6 +12,7 @@ from util import filterHighestRanking
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from filter import Classification
 from filter import ClassificationResult
+from functools import reduce
 
 def intersectSets(a, b):
 	if a is None:
@@ -748,7 +749,145 @@ class PotentialClassification(object):
 					if self.tryToSolveUsingBaseLabel(preferredLabel, f"preferred label of {autoLabel}"):
 						return True
 
-			return False
+			# If that fails, see if we're dealing with the Python case, where we have separate auto labels
+			# for python310 and python311, which list different preferredLabels - but these preferred labels
+			# are both instantiated from the same PythonXXX template
+			infomsg(f"{self} has packages with different auto labels {renderLabelSet('auto', autoLabels)}")
+
+			packageSolutions = []
+			remaining = []
+			failed = []
+
+			validTemplates = None
+			for packagePlacement in self.unsolved:
+				if not packagePlacement.autoLabel.preferredLabels:
+					remaining.append(packagePlacement)
+					continue
+
+				validChoices = []
+				for pref in packagePlacement.autoLabel.preferredLabels:
+					if pref in packagePlacement.candidates and pref.instanceOfTemplate:
+						infomsg(f"   {packagePlacement} + {pref} template {pref.instanceOfTemplate}")
+						validChoices.append(pref)
+					else:
+						infomsg(f"   {packagePlacement} - {pref} template {pref.instanceOfTemplate}")
+
+				if not validChoices:
+					infomsg(f"   no match for {packagePlacement}")
+					failed.append(packagePlacement)
+					continue
+
+				packageSolutions.append((packagePlacement, validChoices))
+				validTemplates = intersectSets(validTemplates, set(_.instanceOfTemplate for _ in validChoices))
+
+			if failed:
+				return False
+
+			if not validTemplates:
+				infomsg("   alas, no common templates found")
+				return False
+
+			packageChoices = []
+			selectedTemplate = None
+
+			for packagePlacement, validChoices in packageSolutions:
+				myChoice = None
+				for choice in validChoices:
+					template = choice.instanceOfTemplate
+
+					if selectedTemplate is not None:
+						if template != selectedTemplate:
+							continue
+					else:
+						if template not in validTemplates:
+							continue
+						selectedTemplate = template
+
+					myChoice = choice
+					break
+
+				if myChoice is None:
+					errormsg(f"Weird, failed to choose a label for {packagePlacement} (using template {selectedTemplate}")
+					failed.append(packagePlacement)
+				else:
+					infomsg(f"   {packagePlacement} could go into {myChoice}")
+					packageChoices.append((packagePlacement, myChoice))
+
+			if remaining:
+				# get the minimum base label that bounds all choices from above (eg if we placed the packages into
+				# Python310 and Python311, see if there's a base label that combines these two.
+				chosenLabels = set(label for (pp, label) in packageChoices)
+				supremum = self.chooseUpperBoundingBaseLabel(chosenLabels)
+
+				for packagePlacement in remaining:
+					myChoice = self.handlePythonSiblingPackage(packagePlacement, packageChoices, supremum)
+
+					if myChoice is not None:
+						packageChoices.append((packagePlacement, myChoice))
+					else:
+						infomsg(f"   TBD: place {packagePlacement} autolabel {packagePlacement.autoLabel}")
+						failed.append(packagePlacement)
+
+			if failed:
+				return False
+
+			for packagePlacement, choice in packageChoices:
+				packagePlacement.setSolution(choice)
+
+			return True
+
+		def chooseUpperBoundingBaseLabel(self, labelSet):
+			supremum = None
+			commonAbove = None
+			for label in labelSet:
+				commonAbove = intersectSets(commonAbove, self.labelOrder.upwardClosureFor(label))
+			if commonAbove is not None:
+				commonAbove = set(filter(lambda l: l.parent is None, commonAbove))
+			if commonAbove:
+				minima = self.labelOrder.minima(commonAbove)
+				if len(minima) == 1:
+					supremum = minima.pop()
+				else:
+					directParents = set(filter(lambda label: labelSet.issubset(label.runtimeRequires), minima))
+					if len(directParents) == 1:
+						supremum = directParents.pop()
+
+			infomsg(f"base label sup of {renderLabelSet('input labels', labelSet)} is {supremum}")
+			return supremum
+
+		# This function knows a lot about SUSE package naming conventions.
+		# It handles -doc and -devel packages that go with python3XX-Blah packages,
+		# but also other packages that follow the same pattern
+		def handlePythonSiblingPackage(self, packagePlacement, packageChoices, boundingBaseLabel):
+			autoLabel = packagePlacement.autoLabel
+
+			# Look for -devel and -doc packages
+			suffix = f"-{autoLabel}"
+
+			# handle the following types of names:
+			#  - python-Foo-doc (autolabel doc)
+			#  - python-Foo (common stuff shared by all pythonXXX-Foo packages)
+			#  - python-Foo-common (for any suffix that is not recognized by an autolabel pattern)
+			if (packagePlacement.name == self.name or packagePlacement.name.startswith(self.name + "-")) \
+			   and boundingBaseLabel is not None:
+				myChoice = packagePlacement.deriveChoiceFromBaseLabel(boundingBaseLabel)
+				if myChoice is not None:
+					infomsg(f"   {packagePlacement} is {self.name} plus suffix; base label {boundingBaseLabel} - place in {myChoice}")
+					return myChoice
+
+			if not packagePlacement.name.endswith(suffix):
+				return None
+
+			# handle pythonXXX-Foo-doc (ie each pythonXXX-Foo has its own -doc package)
+			infomsg(f"   {packagePlacement} is a {autoLabel} package")
+			for other, choice in packageChoices:
+				if packagePlacement.name == f"{other}{suffix}":
+					myChoice = packagePlacement.deriveChoiceFromBaseLabel(choice)
+					if myChoice is not None:
+						infomsg(f"   {packagePlacement} is {other.name} plus {suffix}; base label {choice} - place in {myChoice}")
+						return myChoice
+
+			return None
 
 		@property
 		def commonBaseLabels(self):

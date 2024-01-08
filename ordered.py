@@ -1,4 +1,5 @@
 from util import CycleDetector, LoggingCycleDetector
+from functools import reduce
 
 class OrderedSetMember(object):
 	def __init__(self, key):
@@ -167,6 +168,30 @@ class PartialOrder(object):
 		if len(found) != 1:
 			return None
 		return found.pop()
+
+	def supremum(self, subset):
+		if not subset:
+			return None
+		if len(subset) == 1:
+			return next(iter(subset))
+
+		# get the set of all elements y s.t. every y is above every x in subset
+		above = reduce(self._setClass.intersection, map(self.upwardClosureFor, subset))
+
+		# the return the minimum, if it exists
+		return self.minimumOf(above)
+
+	def infimum(self, subset):
+		if not subset:
+			return None
+		if len(subset) == 1:
+			return next(iter(subset))
+
+		# get the set of all elements y s.t. every y is below every x in subset
+		below = reduce(self._setClass.intersection, map(self.downwardClosureFor, subset))
+
+		# the return the maximum, if it exists
+		return self.maximumOf(below)
 
 	def minima(self, subset):
 		remaining = self.getNodesForSet(subset)

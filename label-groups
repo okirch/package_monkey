@@ -60,7 +60,7 @@ def classifyAutoFlavors(label, labelledPackages):
 	if label.parent is not None:
 		return
 
-	classifier = Classification.AutoflavorPackageClosure(problemLog, store)
+	classifier = Classification.AutoflavorPackageClosure(problemLog, store, labelOrder)
 	classifier.classify(labelledPackages)
 	for flavorDef in packageFilter.autoFlavors:
 		found = classifier.getFlavor(flavorDef.name)
@@ -81,8 +81,12 @@ def classifyAutoFlavors(label, labelledPackages):
 		elif flavorDef.label.disposition == Classification.DISPOSITION_IGNORE:
 			pass
 		else:
-			# we're not really instantiating a new flavor here
 			flavorLabel = label.getBuildFlavor(flavorDef.name)
+			if flavorLabel is None:
+				# the filter code refused to instantiate this combination of base label
+				# and autoflavor; don't do anything
+				continue
+
 			relabeled = classifier.labelFlavoredPackages(flavorDef.name, flavorLabel)
 			packageFilter.updateGroup(flavorLabel, relabeled)
 

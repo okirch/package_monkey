@@ -172,6 +172,14 @@ class Classification:
 
 			return False
 
+		def isCompatibleWithAutoFlavor(self, autoFlavor):
+			buildConfig = self.getBuildConfigFlavor(autoFlavor.name)
+
+			if buildConfig and self.buildConfig is not buildConfig:
+				debugmsg(f"{self} is not compatible with {autoFlavor}: my buildConfig is {self.buildConfig} while flavor would use {buildConfig}")
+				return False
+			return True
+
 		def addRuntimeDependency(self, other):
 			assert(isinstance(other, Classification.Label))
 			if not self.okayToAdd(other):
@@ -1004,8 +1012,9 @@ class Classification:
 			return result
 
 	class AutoflavorPackageClosure(BuildPackageClosure):
-		def __init__(self, problemLog, store):
+		def __init__(self, problemLog, store, labelOrder):
 			super().__init__(problemLog, None, store)
+			self.labelOrder = labelOrder
 			self.flavors = {}
 
 		def addFlavor(self, name):
@@ -1022,17 +1031,24 @@ class Classification:
 				for other in build.binaries:
 					if other.label is None:
 						continue
-					if other.label.type == Classification.TYPE_AUTOFLAVOR:
-						# infomsg(f"### identified {other.shortname} as a {other.label.name} package")
+					if other.label.type is Classification.TYPE_AUTOFLAVOR:
 						self.addFlavor(other.label.name).add((rpm, other))
 
 		def labelFlavoredPackages(self, flavorName, label):
 			result = set()
 
+			closure = self.labelOrder.downwardClosureFor(label)
+
 			matching = self.getFlavor(flavorName)
 			if matching:
 				for rpm, other in matching:
 					# infomsg(f"::: label {other.shortname} as {label}")
+
+					# check whether all of other's requirements are satisfied
+					if not other.runtimeRequires.issubset(closure):
+						infomsg(f"refusing to label {other} as {label} due to missing dependencies")
+						continue
+
 					other.label = label
 					other.labelReason = Classification.ReasonRelatedPackage(flavorName, other, rpm)
 					result.add(other)

@@ -19,13 +19,28 @@ autoflavors:
    # place python packages in @PythonModules by default, unless they
    # are constrained in some other way
    defaultlabels:
-    - "@CorePythonBindings"
-    - "@PythonStandard"
-    - "@PythonModules"
+    - "@PythonCore311"
+    - "@PythonStandard311"
+    - "@PythonModules311"
    requires:
-    - "@PythonStandard"
-   sources:
-    - python-*
+    - "@PythonStandard311"
+   binaries:
+    - python311-*
+ - name: python310
+   disposition: maybe_merge
+   # placing packages through this autoflavor can be overridden by
+   # explicit placement in some @Topic (which has a default priority of 5)
+   priority: 10
+   # place python packages in @PythonModules by default, unless they
+   # are constrained in some other way
+   defaultlabels:
+    - "@PythonCore310"
+    - "@PythonStandard310"
+    - "@PythonModules310"
+   requires:
+    - "@PythonStandard310"
+   binaries:
+    - python310-*
  - name: ruby
    requires:
     - "@Ruby"
@@ -204,6 +219,14 @@ build_configs:
    buildrequires:
     - "@BaseBuildEnv"
     - "@Ruby-devel"
+ - name: Python/python310
+   buildrequires:
+    - "@BaseBuildEnv"
+    - "@PythonCore310-devel"
+ - name: Python/python311
+   buildrequires:
+    - "@BaseBuildEnv"
+    - "@PythonCore311-devel"
  - name: Python/standard
    buildrequires:
     - "@BaseBuildEnv"
@@ -360,7 +383,7 @@ components:
     - "@PolicyKit"
  - name: Python
    requires:
-    - Core
+    - CorePlus
  - name: Webserver
    requires:
     - CorePlus
@@ -918,7 +941,7 @@ groups:
       requires:
        - "@SystemPython"
       binaries:
-       - python3??-libxml2
+       - python311-libxml2
     - name: java
       requires:
        - "@JDK"
@@ -1092,33 +1115,72 @@ groups:
        - patch
        - libxml2-devel
 
- - name: "@SystemPython"
+ - name: "@PythonBuildConfig"
    buildconfig: Core/standard
    requires:
     - "@Core0"
-#   - "@BuildConfig" # for python-rpm-macros
+   binaries:
+    - python-rpm-macros
+
+ - name: "@PythonCore311"
+   buildconfig: Core/standard
+   requires:
+    - "@PythonBuildConfig"
    buildrequires:
+    # huh?
     - "@DesktopBuild"
     - "@X11Libraries-devel"
    binaries:
-    - python-rpm-macros
     - python-rpm-generators
-    - python3
-    - python310
     - python311
-    - python3??-base
-    - python3??-future
-    - python3??-extras
-#   - python3??-setuptools
-    - libpython*
-    - python*-base
+    - python311-base
+    - python311-future
+    - python311-extras
+    - python311-setuptools
+    - python311-setuptools-wheel
+    - python311-six
+    - libpython311
+    - python311-base
    purposes:
     - name: devel
       binaries:
-       - python31?-devel
+       - python311-devel
     - name: doc
       binaries:
-       - python31?-doc
+       - python311-doc
+
+ - name: "@PythonCore310"
+   buildconfig: Core/standard
+   requires:
+    - "@PythonBuildConfig"
+   buildrequires:
+    # huh?
+    - "@DesktopBuild"
+    - "@X11Libraries-devel"
+   binaries:
+    - python310
+    - python310-base
+    - python310-future
+    - python310-extras
+    - python310-setuptools
+    - python310-setuptools-wheel
+    - python310-six
+    - libpython310
+    - python310-base
+   purposes:
+    - name: devel
+      binaries:
+       - python310-devel
+    - name: doc
+      binaries:
+       - python310-doc
+
+ - name: "@SystemPython"
+   buildconfig: Core/standard
+   requires:
+    - "@PythonCore311"
+   binaries:
+    - python3
 
  - name: "@CorePythonBindings"
    buildconfig: Core/standard
@@ -1425,6 +1487,7 @@ groups:
     - strace
 
  - name: "@Spelling"
+   feature: True
    buildconfig: CorePlus/standard
    requires:
     - "@Core0"
@@ -1444,6 +1507,7 @@ groups:
        - "@Glib2-devel"
 
  - name: "@Kiwi"
+   feature: True
    buildconfig: Kiwi/standard
    requires:
     - "@Core"
@@ -1472,6 +1536,7 @@ groups:
        - dracut-kiwi-oem-dump
 
  - name: "@SELinux"
+   feature: True
    buildconfig: Security/standard
    requires:
     - "@Core0"
@@ -1631,6 +1696,14 @@ groups:
       binaries:
        - docbook-xsl-pdf2index
 
+ - name: "@NumericLibraries"
+   buildconfig: CorePlus/standard
+   requires:
+    - "@Core"
+   binaries:
+    - libColPack0
+    - libadolc2
+
  - name: "@TclCore"
    buildconfig: Tcl/standard
    requires:
@@ -1739,12 +1812,13 @@ groups:
     - release-notes-*
 
  - name: "@Databases"
+   feature: True
    buildconfig: Databases/standard
    requires:
     - "@Core0"
     - "@NetworkServices"
 #   - "@ApplicationLibraries"
-#   - "@Python"
+    - "@SystemPythonStandard"
    binaries:
     - postgresql-*
     - postgresql15-*
@@ -1758,7 +1832,7 @@ groups:
     - postgresql-contrib
     - postgresql15-plpython
     - postgresql15-contrib
-    - python31?-mysqlclient
+    - python311-mysqlclient
     - perl-DBD-mysql
     - freetds-tools
     - libsybdb5
@@ -1936,6 +2010,10 @@ groups:
     - xauth
     - xdpyinfo
     - xhost
+    - xclip
+    - xsel
+    - xset
+    - xsetroot
 
  - name: "@X11"
    buildconfig: X11/standard
@@ -1951,7 +2029,6 @@ groups:
     - setxkbmap
     - wayland*
     - xcb-*
-    - xclip
     - xconsole
     - xdmbgrd
     - xf86*
@@ -1969,9 +2046,6 @@ groups:
     - xrdp
     - xrefresh
     - xscreensaver
-    - xsel
-    - xset
-    - xsetroot
     - xterm
     - xtermset
     - xcursorgen
@@ -2328,8 +2402,8 @@ groups:
    buildflavors:
     - name: python
       requires:
-       - "@PythonStandard+gnomelibs"
-       - "@PythonStandard+desktop"
+       - "@SystemPythonStandard+gnomelibs"
+       - "@SystemPythonStandard+desktop"
       binaries:
        - ibus
    purposes:
@@ -2781,7 +2855,7 @@ groups:
    buildflavors:
     - name: python
       binaries:
-       - python31?-rtslib-fb
+       - python311-rtslib-fb
        - python-rtslib-fb-common
 
  - name: "@HostWorkloads"
@@ -3428,17 +3502,18 @@ groups:
    buildconfig: Network/standard
    requires:
     - "@AvahiLibraries"
-    - "@SystemPython"
+    - "@SystemPythonStandard"
     - "@NetworkCore"
    binaries:
     - avahi
     - avahi-autoipd
     - avahi-utils
     - libhowl0
+    - python311-avahi
    buildflavors:
-    - name: python
+    - name: python310
       binaries:
-       - python31?-avahi
+       - python310-avahi
 
  - name: "@Firewall"
    buildconfig: Systemd/standard
@@ -3446,7 +3521,7 @@ groups:
     - "@SystemPython"
     - "@NetworkCore"
     - "@NetworkManager"
-    - "@PythonStandard"
+    - "@SystemPythonStandard"
    binaries:
     - firewalld
     - python3-firewall
@@ -3459,7 +3534,7 @@ groups:
       requires:
        - "@Gnome"
        - "@Qt+python"
-       - "@PythonStandard+desktop"
+       - "@SystemPythonStandard+desktop"
       binaries:
        - firewall-config
        - firewall-applet
@@ -4118,25 +4193,23 @@ groups:
       binaries:
        - qemu-hw-usb-smartcard
 
+ - instantiate: PythonGroups:310
+
+ - instantiate: PythonGroups:311
+
  - name: "@PythonCore"
    description: |
      This is where we would add future python versions
    buildconfig: Python/standard
    requires:
-    - "@SystemPython"
-   binaries:
-    - python31?-setuptools
+    - "@PythonCore310"
+    - "@PythonCore311"
 
- # We should probably define separate @Topics for different python versions
- # and have the generic @Python reference a specific version
  - name: "@Python"
    buildconfig: Python/standard
    requires:
-    - "@PythonCore"
-   binaries:
-    - python
-    - python310-six
-    - python311-six
+    - "@PythonCore310"
+    - "@PythonCore311"
 
  - name: "@PythonData"
    buildconfig: Python/standard
@@ -4146,129 +4219,38 @@ groups:
  - name: "@PythonStandard"
    buildconfig: Python/standard
    requires:
-    - "@Python"
-    - "@Glib2"
-    - "@PythonData"
-    - "@TclCore"
-    - "@SystemdUtilities"
-   binaries:
-    - python31?-alabaster
-    - python31?-apipkg
-    - python31?-Babel
-    - python31?-certifi
-    - python31?-cffi
-    - python31?-charset-normalizer
-    - python31?-cryptography
-    - python31?-cssselect
-#   - python31?-curses
-    - python31?-dbus-python
-    - python31?-decorator
-    - python31?-docopt
-    - python31?-docutils
-    - python31?-future
-    - python31?-gobject
-    - python31?-idna
-    - python31?-imagesize
-    - python31?-iniconfig
-    - python31?-Jinja2
-    - python31?-langtable
-    - python31?-lxml
-    - python31?-MarkupSafe
-    - python31?-notify2
-    - python31?-packaging
-    - python31?-pexpect
-    - python31?-py
-    - python31?-pycparser
-    - python31?-pycurl
-    - python31?-Pygments
-    - python31?-pyOpenSSL
-    - python31?-python-dateutil
-    - python31?-pytz
-    - python31?-PyYAML
-    - python31?-requests
-    - python31?-slip-dbus
-    - python31?-snowballstemmer
-    - python31?-sphinx*
-    - python31?-Sphinx
-    - python31?-urllib3
-    - python31?-numpy
-    - python31?-zope
-    - python31?-zope.*
+    - "@PythonStandard310"
+    - "@PythonStandard311"
    buildflavors:
-    - name: x11
-      augments:
-       - "@X11"
-      binaries:
-       - python31?-pyperclip
-    - name: graphics
-      augments:
-       - "@Glib2+python"
-       - "@GraphicsLibraries+x11"
-      binaries:
-       - python31?-pycairo
-      purposes:
-       - name: devel
-         requires:
-          # python-pycairo-common-devel requires cairo-devel which depends on various xlibs
-          - "@X11Libraries"
     - name: desktop
-      augments:
-       - "@Glib2+python"
-       - "@GnomeLibraries"
-       - "@DesktopLibraries"
-       - "@PythonStandard+graphics"
-      binaries:
-       - python31?-Send2Trash
-       - python31?-gobject-*
-       - python31?-pyxdg
-       - python31?-atspi
-    - name: database
       requires:
-       - "@Databases"
-    - name: tex
-      requires:
-       - "@Texlive"
-      binaries:
-       - python31?-Sphinx-latex
+       - "@PythonStandard310+desktop"
+       - "@PythonStandard311+desktop"
 
  - name: "@PythonModules"
    buildconfig: Python/standard
    requires:
     - "@PythonStandard"
-   binaries:
-#   - python-*
-#   - python3*
+    - "@PythonModules310"
+    - "@PythonModules311"
 
- - name: "@PythonMatplot"
+ - name: "@SystemPythonStandard"
    buildconfig: Python/standard
    requires:
-    - "@PythonModules"
-    - "@PythonStandard+graphics"
-    - "@SystemdUtilities"
-   binaries:
-    - python31?-matplotlib
-    - python31?-matplotlib-tk
+    - "@PythonStandard311"
    buildflavors:
-    - name: qt
+    - name: desktop
       requires:
-       - "@Qt+python"
-      binaries:
-       - python31?-matplotlib-qt*
-    - name: gnome
+       - "@PythonStandard311+desktop"
+
+ - name: "@SystemPythonModules"
+   buildconfig: Python/standard
+   requires:
+    - "@PythonModules311"
+   buildflavors:
+    - name: desktop
       requires:
-       - "@Gnome"
-      binaries:
-       - python31?-matplotlib-gtk*
-    - name: tex
-      requires:
-       - "@Texlive"
-      binaries:
-       - python31?-matplotlib-latex
-    - name: wxwidgets
-      requires:
-       - "@WxWidgets"
-      binaries:
-       - python31?-matplotlib-wx
+       - "@PythonModules311+desktop"
 
  - name: "@Jupyter"
    buildconfig: Python/standard
@@ -4298,10 +4280,8 @@ groups:
  - name: "@Cython"
    buildconfig: Python/standard
    requires:
-    - "@PythonCore-devel"
-   binaries:
-    - python31?-Cython
-    - python31?-Cython3
+    - "@Cython310"
+    - "@Cython311"
 
  - name: "@Ruby"
    buildconfig: Ruby/standard
@@ -4397,6 +4377,7 @@ groups:
     - javapackages-tools
 
  - name: "@Java"
+   feature: True
    buildconfig: Java/standard
    requires:
     - "@JDK"
@@ -4758,3 +4739,148 @@ groups:
    buildconfig: Core/standard
    binaries:
     - patterns-*
+
+templates:
+ - name: PythonGroups
+   substitute: XXX
+   document:
+    - name: "@PythonXXX"
+      buildconfig: Python/pythonXXX
+      requires:
+       - "@PythonCoreXXX"
+
+    - name: "@PythonStandardXXX"
+      buildconfig: Python/pythonXXX
+      requires:
+       - "@PythonXXX"
+       - "@Core0"
+       - "@Glib2"
+       - "@PythonData"
+       - "@TclCore"
+#      - "@SystemdUtilities"
+      binaries:
+       - pythonXXX-alabaster
+       - pythonXXX-apipkg
+       - pythonXXX-Babel
+       - pythonXXX-certifi
+       - pythonXXX-cffi
+       - pythonXXX-charset-normalizer
+       - pythonXXX-cryptography
+       - pythonXXX-cssselect
+   #   - pythonXXX-curses
+       - pythonXXX-dbus-python
+       - pythonXXX-decorator
+       - pythonXXX-docopt
+       - pythonXXX-docutils
+       - pythonXXX-future
+       - pythonXXX-gobject
+       - pythonXXX-idna
+       - pythonXXX-imagesize
+       - pythonXXX-iniconfig
+       - pythonXXX-Jinja2
+       - pythonXXX-langtable
+       - pythonXXX-lxml
+       - pythonXXX-MarkupSafe
+       - pythonXXX-notify2
+       - pythonXXX-packaging
+       - pythonXXX-pexpect
+       - pythonXXX-py
+       - pythonXXX-pycparser
+       - pythonXXX-pycurl
+       - pythonXXX-Pygments
+       - pythonXXX-pyperclip
+       - pythonXXX-pyOpenSSL
+       - pythonXXX-python-dateutil
+       - pythonXXX-pytz
+       - pythonXXX-PyYAML
+       - pythonXXX-requests
+       - pythonXXX-slip-dbus
+       - pythonXXX-snowballstemmer
+       - pythonXXX-sphinx*
+       - pythonXXX-Sphinx
+       - pythonXXX-urllib3
+       - pythonXXX-numpy
+       - pythonXXX-zope
+       - pythonXXX-zope.*
+      buildflavors:
+       - name: x11
+         requires:
+          - "@X11StandardUtils"
+         binaries:
+       - name: graphics
+         augments:
+          - "@Glib2+python"
+          - "@GraphicsLibraries+x11"
+         binaries:
+          - pythonXXX-pycairo
+         purposes:
+          - name: devel
+            requires:
+             # python-pycairo-common-devel requires cairo-devel which depends on various xlibs
+             - "@X11Libraries"
+       - name: desktop
+         augments:
+          - "@Glib2+python"
+          - "@GnomeLibraries"
+          - "@DesktopLibraries"
+          - "@PythonStandardXXX+graphics"
+         binaries:
+          - pythonXXX-Send2Trash
+          - pythonXXX-gobject-*
+          - pythonXXX-pyxdg
+          - pythonXXX-atspi
+       - name: database
+         requires:
+          - "@Databases"
+       - name: tex
+         requires:
+          - "@Texlive"
+         binaries:
+          - pythonXXX-Sphinx-latex
+
+    - name: "@PythonModulesXXX"
+      buildconfig: Python/pythonXXX
+      requires:
+       - "@PythonStandardXXX"
+
+    - name: "@PythonMatplotXXX"
+      buildconfig: Python/pythonXXX
+      requires:
+       - "@PythonModulesXXX"
+       - "@PythonStandardXXX+graphics"
+#      - "@SystemdUtilities"
+      binaries:
+       - pythonXXX-matplotlib
+       - pythonXXX-matplotlib-tk
+      buildflavors:
+       - name: qt
+         requires:
+          - "@Qt+python"
+         binaries:
+          - pythonXXX-matplotlib-qt*
+       - name: gnome
+         requires:
+          - "@Gnome"
+          - "@PythonStandardXXX+desktop"
+         binaries:
+          - pythonXXX-matplotlib-gtk*
+       - name: tex
+         requires:
+          - "@Texlive"
+         binaries:
+          - pythonXXX-matplotlib-latex
+       - name: wxwidgets
+         requires:
+          - "@WxWidgets"
+         binaries:
+          - pythonXXX-matplotlib-wx
+
+
+    - name: "@CythonXXX"
+      buildconfig: Python/pythonXXX
+      requires:
+       - "@PythonCore-devel"
+      binaries:
+       - pythonXXX-Cython
+       - pythonXXX-Cython3
+

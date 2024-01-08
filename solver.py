@@ -832,6 +832,45 @@ class PotentialClassification(object):
 			infomsg(f"{self}: found several compatible base labels: {renderLabelSet('good', goodLabels)}")
 			return False
 
+		def solveCommonFeatureLabel(self):
+			allRequires = Classification.createLabelSet()
+			for packagePlacement in self.unsolved:
+				node = packagePlacement.node
+
+				autoLabelClosure = None
+				if packagePlacement.autoLabel:
+					autoLabelClosure = Classification.createLabelSet()
+					for areq in packagePlacement.autoLabel.runtimeRequires:
+						autoLabelClosure.update(self.labelOrder.downwardClosureFor(areq))
+
+				for req in node.lowerNeighbors:
+					reqPlacement = req.placement
+					if reqPlacement.failed:
+						infomsg(f"   {packagePlacement} requires {req} which we failed to solve")
+						return False
+
+					reqLabel = reqPlacement.label
+					if not reqLabel:
+						infomsg(f"   {packagePlacement} requires {req} which has not been solved")
+						return False
+
+					if autoLabelClosure and reqLabel in autoLabelClosure:
+						continue
+
+					allRequires.add(reqLabel.baseLabel)
+
+			maxima = self.labelOrder.maxima(allRequires)
+			featureLabels = Classification.createLabelSet(filter(lambda label: label.isFeature, maxima))
+			if not featureLabels:
+				return False
+
+			infomsg(f"{self}: reduced base label set to {renderLabelSet('feature', featureLabels)}")
+			if len(featureLabels) != 1:
+				return False
+
+			choice = next(iter(featureLabels))
+			return self.tryToSolveUsingBaseLabel(choice, f"based on required feature {choice}")
+
 		# for all the children that have been placed so far, loop over their base
 		# labels and see if there's a common maximum. If so, try to place all remaining
 		# packages with this base label
@@ -1093,6 +1132,7 @@ class PotentialClassification(object):
 				tentativePlacement.solveTrivialCases() or \
 				tentativePlacement.solveDefaultBaseLabel() or \
 				tentativePlacement.solveCommonBaseLabel() or \
+				tentativePlacement.solveCommonFeatureLabel() or \
 				tentativePlacement.solveCompatibleBaseLabel() or \
 				tentativePlacement.solvePurposeRelativeToSibling(self.classificationScheme) or \
 				tentativePlacement.solveRelativeToSiblingDependencies(self.classificationScheme)

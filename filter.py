@@ -2237,10 +2237,6 @@ class PackageFilter:
 
 		if template is not None:
 			group.label.instanceOfTemplate = template.name
-		if group.name == '@PythonStandard310':
-			print(type(gd))
-			print(gd)
-			assert(group.label.instanceOfTemplate)
 
 		for field in gd.keys():
 			if field not in self.VALID_GROUP_FIELDS:
@@ -2401,7 +2397,6 @@ class PackageFilter:
 
 			instanceData = instance.expand()
 
-			infomsg(f"expanded {templateRef} as {type(instanceData)}")
 			if type(instanceData) is not list:
 				yield instanceData, instance.template
 			else:

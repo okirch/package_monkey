@@ -1011,8 +1011,16 @@ class SolvingTree(object):
 		return filter(lambda b: b.basePackageName, self._builds.values())
 
 	def topDownBuildTraversal(self):
+		for build in self.commonBuildTraversal(self.topDownTraversal()):
+			yield build
+
+	def bottomUpBuildTraversal(self):
+		for build in self.commonBuildTraversal(self.bottomUpTraversal()):
+			yield build
+
+	def commonBuildTraversal(self, nodeTraversal):
 		seen = set()
-		for node in self.topDownTraversal():
+		for node in nodeTraversal:
 			# ignore .src rpms, they are not really part of the ordering as they're
 			# never dominated from above
 			if node.package and node.package.isSourcePackage:

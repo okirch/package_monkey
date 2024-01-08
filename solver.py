@@ -1267,7 +1267,7 @@ class PotentialClassification(object):
 
 		placements = []
 		placementMap = {}
-		for build in self.solvingTree.allBuilds:
+		for build in self.solvingTree.bottomUpBuildTraversal():
 			debugmsg(f"Create build placement for {build}")
 			placement = self.createBuildPlacement(build)
 			placements.append(placement)
@@ -1284,6 +1284,9 @@ class PotentialClassification(object):
 
 				buildPlacement.tryToPlaceTopDown(node)
 
+		# placements are sorted in order of build dependency - ie if any rpm
+		# from OBS build A requires some package from build B, then we visit
+		# B before A.
 		for placement in placements:
 			self.solveBuildPlacementStage1(placement)
 
@@ -1313,7 +1316,11 @@ class PotentialClassification(object):
 		for build in self.solvingTree.builds:
 			label = None
 
-			buildPlacement = placementMap[build]
+			buildPlacement = placementMap.get(build)
+			if buildPlacement is None:
+				errormsg(f"{build} has not been handled by solver (because it has no packages?!)")
+				continue
+
 			if buildPlacement.isFinal:
 				label = buildPlacement.uniqueSourceProject
 

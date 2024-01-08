@@ -48,6 +48,7 @@ class Classification:
 			# This is used in autoflavor labels only
 			self.preferredLabels = []
 			self.defined = False
+			self.instanceOfTemplate = None
 
 			# This is populated for labels that represent a build flavor like @Core+python,
 			# or a purpose like @Core-devel, or a flavor AND purpose, like @Core+python-devel
@@ -1742,6 +1743,37 @@ class StringMatchBuilder(object):
 
 		return (value, priority, group)
 
+class FilterTemplate:
+	def __init__(self, name, key, document):
+		self.name = name
+		self._key = key
+		self._doc = document
+
+	class Instance:
+		def __init__(self, template, value):
+			self.template = template
+			self._key = template._key
+			self._value = value
+
+		def expand(self):
+			return self.expandData(self.template._doc)
+
+		def expandData(self, data):
+			t  = type(data)
+			if t is str:
+				return data.replace(self._key, self._value)
+			if t is list:
+				return list(map(self.expandData, data))
+			if t is dict:
+				return {name: self.expandData(value) for (name, value) in data.items()}
+			if t in (bool, int, float) or data is None:
+				return data
+
+			raise Exception(f"data type {t} not yet implemented")
+
+	def instantiate(self, arg):
+		return self.Instance(self, arg)
+
 class PackageFilter:
 	class Verdict:
 		def __init__(self, group, reason):
@@ -1760,6 +1792,7 @@ class PackageFilter:
 		self._groups = {}
 		self._autoflavors = []
 		self._purposes = []
+		self._templates = {}
 
 		self.stringMatcher = PackageLabelling()
 
@@ -1771,27 +1804,30 @@ class PackageFilter:
 		with open(filename) as f:
 			data = yaml.full_load(f)
 
+		for gd in data.get('templates') or []:
+			self.parseTemplate(gd)
+
 		# Parse autoflavors *before* everything else so that we can populate
 		# newly created flavors from default settings.
-		for gd in data.get('autoflavors') or []:
-			group = self.parseGroup(Classification.TYPE_AUTOFLAVOR, gd)
+		for gd, template in self.expandYamlObjectList(data, 'autoflavors'):
+			group = self.parseGroup(Classification.TYPE_AUTOFLAVOR, gd, template)
 			self._autoflavors.append(group)
 
-		for gd in data.get('purposes') or []:
-			group = self.parseGroup(Classification.TYPE_PURPOSE, gd)
+		for gd, template in self.expandYamlObjectList(data, 'purposes'):
+			group = self.parseGroup(Classification.TYPE_PURPOSE, gd, template)
 			self._purposes.append(group)
 
-		for gd in data.get('build_configs') or []:
-			self.parseGroup(Classification.TYPE_BUILDCONFIG, gd)
+		for gd, template in self.expandYamlObjectList(data, 'build_configs'):
+			self.parseGroup(Classification.TYPE_BUILDCONFIG, gd, template)
 
-		for gd in data.get('buildconfig_flavors') or []:
-			self.parseGroup(Classification.TYPE_BUILDCONFIG_FLAVOR, gd)
+		for gd, template in self.expandYamlObjectList(data, 'buildconfig_flavors'):
+			self.parseGroup(Classification.TYPE_BUILDCONFIG_FLAVOR, gd, template)
 
-		for gd in data.get('components') or []:
-			self.parseGroup(Classification.TYPE_SOURCE, gd)
+		for gd, template in self.expandYamlObjectList(data, 'components'):
+			self.parseGroup(Classification.TYPE_SOURCE, gd, template)
 
-		for gd in data['groups']:
-			self.parseGroup(Classification.TYPE_BINARY, gd)
+		for gd, template in self.expandYamlObjectList(data, 'groups'):
+			self.parseGroup(Classification.TYPE_BINARY, gd, template)
 
 		self.finalize()
 		self.classificationScheme.finalize()
@@ -1838,7 +1874,7 @@ class PackageFilter:
 
 			for autoFlavor in self.autoFlavors:
 				if autoFlavor.label.disposition is Classification.DISPOSITION_SEPARATE:
-					self.instantiateAutoFlavor(group, autoFlavor)
+					self.maybeInstantiateAutoFlavor(group, autoFlavor)
 
 		# Loop over all @Foo labels and look for auto flavors with disposition maybe_merge, such as python
 		# If @Foo requires everything that the auto flavor requires (in the case of python, this would
@@ -1869,7 +1905,7 @@ class PackageFilter:
 						# infomsg(f"{baseLabel}+{autoFlavor.label} packages will be merged into {baseLabel}")
 						baseLabel.addMergeableFlavor(autoFlavor.label)
 				else:
-					self.instantiateAutoFlavor(group, autoFlavor)
+					self.maybeInstantiateAutoFlavor(group, autoFlavor)
 
 		for group in list(self._groups.values()):
 			if group.label.type is Classification.TYPE_BINARY and not group.label.isPurpose:
@@ -1945,6 +1981,10 @@ class PackageFilter:
 
 	def makeBinaryGroup(self, name):
 		return self.makeGroupInternal(name, Classification.TYPE_BINARY)
+
+	def maybeInstantiateAutoFlavor(self, baseGroup, autoFlavor):
+		if baseGroup.label.isCompatibleWithAutoFlavor(autoFlavor.label):
+			self.instantiateAutoFlavor(baseGroup, autoFlavor)
 
 	def instantiateAutoFlavor(self, baseGroup, autoFlavor):
 		group = self.makeFlavorGroup(baseGroup, autoFlavor.name)
@@ -2123,10 +2163,24 @@ class PackageFilter:
 				return label
 		return None
 
-	def parseGroup(self, groupType, gd):
+	def parseTemplate(self, gd):
+		template = FilterTemplate(gd['name'], gd['substitute'], gd['document'])
+		if template.name in self._templates:
+			raise Exception(f"Duplicate definition of template {template.name}")
+		self._templates[template.name] = template
+
+	def instantiateTemplate(self, reference):
+		templateName, templateArg = reference.split(':')
+		template = self._templates.get(templateName)
+		if template is None:
+			raise Exception(f"Unknown template name in template instantiation {reference}")
+
+		return template.instantiate(templateArg)
+
+	def parseGroup(self, groupType, gd, template):
 		groupName = gd['name']
 		group = self.makeGroupInternal(groupName, groupType)
-		return self.processGroupDefinition(group, gd)
+		return self.processGroupDefinition(group, gd, template)
 
 	def parseBuildFlavor(self, baseGroup, gd):
 		flavorName = gd['name']
@@ -2170,7 +2224,7 @@ class PackageFilter:
 		'feature',
 	))
 
-	def processGroupDefinition(self, group, gd):
+	def processGroupDefinition(self, group, gd, template = None):
 		def getBoolean(gd, tag):
 			value = gd.get(tag)
 			if value is not None and type(value) is not bool:
@@ -2180,6 +2234,13 @@ class PackageFilter:
 		if group.defined:
 			raise Exception(f"Duplicate definition of group \"{group.name}\" in filter yaml")
 		group.defined = True
+
+		if template is not None:
+			group.label.instanceOfTemplate = template.name
+		if group.name == '@PythonStandard310':
+			print(type(gd))
+			print(gd)
+			assert(group.label.instanceOfTemplate)
 
 		for field in gd.keys():
 			if field not in self.VALID_GROUP_FIELDS:
@@ -2324,6 +2385,28 @@ class PackageFilter:
 			self.parseObjectPurpose(group, fd)
 
 		return group
+
+	def expandYamlObjectList(self, data, name):
+		objectList = data.get(name)
+		if objectList is None:
+			return
+
+		for gd in objectList:
+			templateRef = gd.get('instantiate')
+			if templateRef is None:
+				yield gd, None
+				continue
+
+			instance = self.instantiateTemplate(templateRef)
+
+			instanceData = instance.expand()
+
+			infomsg(f"expanded {templateRef} as {type(instanceData)}")
+			if type(instanceData) is not list:
+				yield instanceData, instance.template
+			else:
+				for expanded in instanceData:
+					yield expanded, instance.template
 
 	def getYamlList(self, node, name, context):
 		value = node.get(name)

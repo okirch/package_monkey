@@ -165,6 +165,21 @@ class ExecTimer:
 	def __str__(self):
 		return f"{self.elapsed:.3} sec"
 
+class TimedExecutionBlock:
+	def __init__(self, desc):
+		self.description = desc
+		self.timer = None
+
+	def __enter__(self):
+		if self.timer is None:
+			infomsg(f"Starting to {self.description}")
+			self.timer = ExecTimer()
+
+	def __exit__(self, *args):
+		if self.timer is not None:
+			infomsg(f"Completed to {self.description}, {self.timer} elapsed")
+			self.timer = None
+
 class LoggingExecTimer(ExecTimer):
 	def __str__(self):
 		elapsed = self.elapsed

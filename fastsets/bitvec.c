@@ -175,6 +175,9 @@ fastset_bitvec_resize(fastset_bitvec_t *vec, unsigned int max_index)
 	while (old_word_index < new_word_index)
 		vec->words[old_word_index++] = 0;
 
+	/* Clear any trailing bits in the highest word - needed when shrinking a bitvec */
+	vec->words[new_word_index] &= new_mask - 1;
+
 	vec->max_index = max_index;
 	vec->nwords = new_word_index + 1;
 
@@ -567,3 +570,33 @@ fastset_bitvec_transform(const fastset_bitvec_t *vec, const fastset_bitvec_trans
 	return res;
 }
 
+int
+fastset_bitvec_compare(const fastset_bitvec_t *vec1, const fastset_bitvec_t *vec2)
+{
+	unsigned int min_word_index;
+	unsigned int pos, state = 0;
+
+	min_word_index = MIN(vec1->nwords, vec2->nwords);
+	for (pos = 0; pos < min_word_index; ++pos) {
+		fastset_bitvec_word_t word1, word2;
+
+		word1 = vec1->words[pos];
+		word2 = vec2->words[pos];
+		if (word1 & ~word2)
+			state |= FASTSET_REL_GREATER_THAN; /* vec1 is NOT a subset of vec2 */
+		if (word2 & ~word1)
+			state |= FASTSET_REL_LESS_THAN; /* vec1 is NOT a superset of vec2 */
+	}
+
+	while (pos < vec1->nwords) {
+		if (vec1->words[pos++] != 0)
+			state |= FASTSET_REL_GREATER_THAN; /* vec1 is NOT a subset of vec2 */
+	}
+
+	while (pos < vec2->nwords) {
+		if (vec2->words[pos++] != 0)
+			state |= FASTSET_REL_LESS_THAN; /* vec1 is NOT a superset of vec2 */
+	}
+
+	return state;
+}

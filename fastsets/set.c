@@ -43,6 +43,7 @@ static PyObject *	Fastset_issubset(fastset_Set *self, PyObject *args, PyObject *
 static PyObject *	Fastset_issuperset(fastset_Set *self, PyObject *args, PyObject *kwds);
 static PyObject *	Fastset_isdisjoint(fastset_Set *self, PyObject *args, PyObject *kwds);
 static Py_ssize_t	Fastset_length(fastset_Set *);
+static PyObject *	Fastset_richcompare(fastset_Set *self, PyObject *other, int op);
 static int		Fastset_contains(fastset_Set *self, PyObject *member);
 static int		Fastset_nonempty(fastset_Set *);
 
@@ -122,6 +123,7 @@ PyTypeObject	fastset_SetTypeTemplate = {
 	.tp_iter	= (getiterfunc) Fastset_getiter,
 	.tp_as_sequence	= &fastset_sequenceMethods,
 	.tp_as_number	= &fastset_numberMethods,
+	.tp_richcompare = (richcmpfunc) Fastset_richcompare,
 };
 
 PyObject *
@@ -288,6 +290,17 @@ Fastset_argsToMember(fastset_Set *self, PyObject *args, PyObject *kwds)
 }
 
 static fastset_Set *
+Fastset_castToSet(fastset_Set *self, PyObject *other_object)
+{
+	if (self->ob_base.ob_type != other_object->ob_type) {
+		PyErr_SetString(PyExc_RuntimeError, "argument is not compatible with set domain");
+		return NULL;
+	}
+
+	return (fastset_Set *) other_object;
+}
+
+static fastset_Set *
 Fastset_argsToSet(fastset_Set *self, PyObject *args, PyObject *kwds)
 {
 	static char *kwlist[] = {
@@ -299,12 +312,7 @@ Fastset_argsToSet(fastset_Set *self, PyObject *args, PyObject *kwds)
 	if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", kwlist, &other_object))
 		return NULL;
 
-	if (self->ob_base.ob_type != other_object->ob_type) {
-		PyErr_SetString(PyExc_RuntimeError, "argument is not compatible with set domain");
-		return NULL;
-	}
-
-	return (fastset_Set *) other_object;
+	return Fastset_castToSet(self, other_object);
 }
 
 static PyObject *
@@ -557,6 +565,50 @@ Fastset_isdisjoint(fastset_Set *self, PyObject *args, PyObject *kwds)
 		return NULL;
 
 	return boolObject(fastset_bitvec_test_disjoint(self->bitvec, other->bitvec));
+}
+
+PyObject *
+Fastset_richcompare(fastset_Set *self, PyObject *other_object, int op)
+{
+	fastset_Set *other;
+	int relation;
+	bool rv;
+
+	if (!(other = Fastset_castToSet(self, other_object)))
+		return NULL;
+
+	relation = fastset_bitvec_compare(self->bitvec, other->bitvec);
+	switch (op) {
+	case Py_LT:
+		// printf("%s(Py_LT): relation %d\n", __func__, relation);
+		rv = relation == FASTSET_REL_LESS_THAN;
+		break;
+	case Py_LE:
+		// printf("%s(Py_LE): relation %d\n", __func__, relation);
+		rv = relation == FASTSET_REL_LESS_THAN || relation == FASTSET_REL_EQUAL;
+		break;
+	case Py_GT:
+		// printf("%s(Py_GT): relation %d\n", __func__, relation);
+		rv = relation == FASTSET_REL_GREATER_THAN;
+		break;
+	case Py_GE:
+		// printf("%s(Py_GE): relation %d\n", __func__, relation);
+		rv = relation == FASTSET_REL_GREATER_THAN || relation == FASTSET_REL_EQUAL;
+		break;
+	case Py_EQ:
+		// printf("%s(Py_EQ): relation %d\n", __func__, relation);
+		rv = relation == FASTSET_REL_EQUAL;
+		break;
+	case Py_NE:
+		// printf("%s(Py_NE): relation %d\n", __func__, relation);
+		rv = relation != FASTSET_REL_EQUAL;
+		break;
+	default:
+		/* FIXME set exception? */
+		return NULL;
+	}
+
+	return boolObject(rv);
 }
 
 /*

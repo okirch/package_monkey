@@ -162,6 +162,10 @@ class FastsetTester:
 		b2 = getattr(avec.__class__, name)(avec, bvec)
 
 		if b1 != b2:
+			print(f"Operation {name} test failed")
+			print(f" a={' '.join(sorted(map(str, a)))}")
+			print(f" b={' '.join(sorted(map(str, b)))}")
+			print(f" expected result {b1}, got {b2}")
 			raise Exception(name)
 
 		debug(f" {name} OK")
@@ -195,7 +199,7 @@ class FastsetTester:
 		for name in 'intersection_update',:
 			self.testBinarySetOperationUpdate(name, a, b)
 
-		for name in 'issubset', 'issuperset', 'isdisjoint':
+		for name in 'issubset', 'issuperset', 'isdisjoint', '__lt__', '__le__', '__gt__', '__ge__', '__eq__', '__ne__':
 			self.testBinarySetOperationBool(name, a, b)
 
 		self.testUnaryFunction('len', len, a)

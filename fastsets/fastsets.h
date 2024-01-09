@@ -100,6 +100,7 @@ extern void		fastset_bitvec_update_union(fastset_bitvec_t *, const fastset_bitve
 extern void		fastset_bitvec_update_intersection(fastset_bitvec_t *, const fastset_bitvec_t *);
 extern void		fastset_bitvec_update_difference(fastset_bitvec_t *, const fastset_bitvec_t *);
 extern void		fastset_bitvec_update_symmetric_difference(fastset_bitvec_t *, const fastset_bitvec_t *);
+extern int		fastset_bitvec_compare(const fastset_bitvec_t *, const fastset_bitvec_t *);
 extern int		fastset_bitvec_find_next_bit(const fastset_bitvec_t *, unsigned int);
 extern unsigned int	fastset_bitvec_count_ones(const fastset_bitvec_t *);
 
@@ -117,6 +118,13 @@ extern fastset_bitvec_t *fastset_bitvec_transform(const fastset_bitvec_t *arg, c
 extern fastset_bitvec_transform_t *fastset_bitvec_transform_new(unsigned int);
 extern void		fastset_bitvec_transform_add(fastset_bitvec_transform_t *, unsigned int arg_index, int res_index);
 extern void		fastset_bitvec_transform_free(fastset_bitvec_transform_t *);
+
+enum {
+	FASTSET_REL_EQUAL		= 0,
+	FASTSET_REL_GREATER_THAN	= 1,
+	FASTSET_REL_LESS_THAN		= 2,
+	FASTSET_REL_NOT_EQUAL		= 3,
+};
 
 static inline void
 fastset_bitvec_drop(fastset_bitvec_t **var)

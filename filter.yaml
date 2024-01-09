@@ -19,7 +19,7 @@ autoflavors:
    # place python packages in @PythonModules by default, unless they
    # are constrained in some other way
    defaultlabels:
-    - "@PythonCore311"
+#   - "@PythonCore311"
     - "@PythonStandard311"
     - "@PythonModules311"
    requires:
@@ -34,7 +34,7 @@ autoflavors:
    # place python packages in @PythonModules by default, unless they
    # are constrained in some other way
    defaultlabels:
-    - "@PythonCore310"
+#   - "@PythonCore310"
     - "@PythonStandard310"
     - "@PythonModules310"
    requires:
@@ -513,6 +513,7 @@ components:
     - Host
     - KernelPlus
     - Security
+    - Systemd
     # because flatpak is currently in the Container component
 #   - Gnome
  - name: Management
@@ -1093,6 +1094,8 @@ groups:
     - freetype2-profile-tti35
     - system-users
     - librpmbuild9
+    # must be placed somewhere in Core because elfutils-debuginfod uses it
+    - libmicrohttpd12
    buildflavors:
     - name: kernel
       requires:
@@ -1139,8 +1142,9 @@ groups:
     - python311-setuptools
     - python311-setuptools-wheel
     - python311-six
+    - python311-curses
+    - python311-dbm
     - libpython311
-    - python311-base
    purposes:
     - name: devel
       binaries:
@@ -1148,6 +1152,12 @@ groups:
     - name: doc
       binaries:
        - python311-doc
+   buildflavors:
+    - name: tcl
+      requires:
+       - "@TclCore"
+      binaries:
+       - python311-tk
 
  - name: "@PythonCore310"
    buildconfig: Core/standard
@@ -1165,8 +1175,9 @@ groups:
     - python310-setuptools
     - python310-setuptools-wheel
     - python310-six
+    - python310-curses
+    - python310-dbm
     - libpython310
-    - python310-base
    purposes:
     - name: devel
       binaries:
@@ -1174,6 +1185,12 @@ groups:
     - name: doc
       binaries:
        - python310-doc
+   buildflavors:
+    - name: tcl
+      requires:
+       - "@TclCore"
+      binaries:
+       - python310-tk
 
  - name: "@SystemPython"
    buildconfig: Core/standard
@@ -1412,6 +1429,8 @@ groups:
     - pcp-conf
     - libpcp3*
     - libpcp_*
+    # for some silly reason, pcp-zeroconf depends on pcp-doc, so we need it here
+    - pcp-doc
    buildflavors:
     - name: infiniband
       requires:
@@ -2189,14 +2208,14 @@ groups:
        - "@Python"
        - "@Glibc-devel"
        - "@GCC-devel"
-#      - "@DBus-devel"
        - "@GnomeLibraries"
-#      - "@X11Libraries-devel"
+       - "@GraphvizLibraries"
       binaries:
        - glib2-devel
        - vala
        - glibmm2-devel
        - glibmm2_4-devel
+       - libvaladoc-0*
 
  - name: "@PulseAudioLibraries"
    buildconfig: Gnome/standard
@@ -2449,6 +2468,14 @@ groups:
     - malcontent
     - libmalcontent-0*
 
+ - name: "@GraphvizLibraries"
+   buildconfig: Gnome/standard
+   requires:
+    - "@Core0"
+   binaries:
+    - libcgraph6
+    - libgvc6
+
  - name: "@GnomeApplications"
    buildconfig: Gnome/standard
    requires:
@@ -2457,6 +2484,7 @@ groups:
     - "@Postscript"
     - "@HPCCoreLibraries"
     - "@PythonStandard"
+    - "@GraphvizLibraries"
    binaries:
     - graphviz
     - inkscape
@@ -3747,6 +3775,10 @@ groups:
        - "@PulseAudioLibraries"
       binaries:
        - libavdevice5*
+   purposes:
+     - name: doc
+       requires:
+        - "@AVLibraries-devel"
 
  - name: "@Recording"
    buildconfig: Multimedia/standard
@@ -4772,6 +4804,7 @@ templates:
        - pythonXXX-decorator
        - pythonXXX-docopt
        - pythonXXX-docutils
+       - pythonXXX-flit-core
        - pythonXXX-future
        - pythonXXX-gobject
        - pythonXXX-idna
@@ -4788,6 +4821,7 @@ templates:
        - pythonXXX-pycparser
        - pythonXXX-pycurl
        - pythonXXX-Pygments
+       - pythonXXX-pyparsing
        - pythonXXX-pyperclip
        - pythonXXX-pyOpenSSL
        - pythonXXX-python-dateutil

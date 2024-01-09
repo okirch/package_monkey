@@ -7,7 +7,7 @@
 #
 #
 ##################################################################
-from util import ExecTimer
+from util import ExecTimer, TimedExecutionBlock
 from util import filterHighestRanking
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from filter import Classification
@@ -109,7 +109,11 @@ class SolverFactory(object):
 class PotentialClassification(object):
 	def __init__(self, solvingTree):
 		self.solvingTree = solvingTree
-		self._preferences = self.PlacementPreferences()
+
+		with TimedExecutionBlock("create mergeability map"):
+			self._mergeabilityMap = self.MergeabilityMap(self.classificationScheme, self.labelOrder)
+
+		self._preferences = self.PlacementPreferences(self._mergeabilityMap)
 
 	@property
 	def labelOrder(self):
@@ -151,7 +155,8 @@ class PotentialClassification(object):
 				if preferredLabel in self.others:
 					self.others.remove(preferredLabel)
 
-		def __init__(self):
+		def __init__(self, mm):
+			self._mergeabilityMap = mm
 			self._prefs = []
 
 		def add(self, preferredLabel, others):
@@ -166,6 +171,41 @@ class PotentialClassification(object):
 					candidates = candidates.difference(hint.others)
 
 			return candidates
+
+		def filterCandidatesForAutoFlavor(self, flavor, candidates):
+			x = self._mergeabilityMap.getCandidatesForAutoFlavor(flavor)
+			if x is None:
+				raise Exception(f"mergeabilityMap lacks {flavor}")
+			return candidates.intersection(x)
+
+	class MergeabilityMap(object):
+		def __init__(self, classificationScheme, labelOrder):
+			self._map = {}
+
+			for flavor in classificationScheme.allAutoFlavors:
+				self.addAutoFlavor(flavor, labelOrder)
+
+		def addAutoFlavor(self, flavor, labelOrder):
+			assert(flavor.type == Classification.TYPE_AUTOFLAVOR)
+
+			candidates = Classification.createLabelSet()
+			stop = Classification.createLabelSet()
+			for label in labelOrder.topDownTraversal():
+				if label in stop:
+					continue
+
+				below = labelOrder.downwardClosureFor(label)
+				if flavor.runtimeRequires.issubset(below):
+					candidates.add(label)
+				else:
+					# if the label couldn't satisfy all requirements of this auto flavor,
+					# then the labels below it will not, either
+					stop.update(below)
+
+			self._map[flavor] = candidates
+
+		def getCandidatesForAutoFlavor(self, flavor):
+			return self._map.get(flavor)
 
 	class PackagePlacement(object):
 		def __init__(self, labelOrder, node, label = None):
@@ -313,9 +353,7 @@ class PotentialClassification(object):
 				if label.disposition == Classification.DISPOSITION_MAYBE_MERGE:
 					# filter out those candidates that provide all the runtime requirements that this autoflavor needs
 					# (which is the condition for merging this autoflavor).
-					merged = Classification.createLabelSet(filter(
-							lambda cand: label.runtimeRequires.issubset(self.labelOrder.downwardClosureFor(cand)),
-							candidates))
+					merged = self.preferences.filterCandidatesForAutoFlavor(label, candidates)
 					self.candidates.update(merged)
 					if merged and self.tracer:
 						self.tracer.labelSetMessage(self, merged, f"{label} can be merged into",

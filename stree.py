@@ -121,7 +121,7 @@ class Tracer:
 			before = intersectSets(before, self.focusLabels)
 
 		if after == before:
-			return f"no change of {what}"
+			return f"no change of labels"
 
 		words = []
 

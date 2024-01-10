@@ -1379,14 +1379,9 @@ class Classification:
 class PackageGroup:
 	def __init__(self, name):
 		self.name = name
-
-		# nuke
-		self.matchCount = 0
 		self.label = None
-		self._packages = []
 		self._buildFlavors = {}
 		self._objectPurposes = {}
-		self._closure = set()
 
 	def track(self, pkg):
 		Classification.labelPackage(pkg, self.label)
@@ -1394,30 +1389,6 @@ class PackageGroup:
 	@property
 	def type(self):
 		return self.label.type
-
-	@property
-	def packages(self):
-		return set(self._packages)
-
-	@property
-	def closure(self):
-		return set(self._closure)
-
-	@property
-	def packageNames(self):
-		return set(_.name for _ in self._packages)
-
-	@property
-	def groupNames(self):
-		return set(_.group for _ in self._packages)
-
-	@property
-	def runtimeRequires(self):
-		raise Exception("obsolete method called")
-
-	@property
-	def buildRequires(self):
-		raise Exception("obsolete method called")
 
 	@property
 	def isFlavor(self):
@@ -2208,21 +2179,6 @@ class PackageFilter:
 			self._groups[label.type, label.name] = group
 
 		return group
-
-	@property
-	def groups(self):
-		return sorted(self._groups.values(), key = lambda grp: grp.matchCount)
-
-	def updateGroup(self, label, packages):
-		self.getGroupForLabel(label).update(packages)
-
-	def labelOnePackage(self, pkg, label, reason):
-		self.getGroupForLabel(label).track(pkg)
-		pkg.labelReason = reason
-
-	def getGroupPackages(self, label):
-		group = self.getGroupForLabel(label)
-		return group.closure
 
 	@property
 	def autoFlavors(self):

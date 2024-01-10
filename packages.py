@@ -1751,30 +1751,6 @@ class PackageInfoFactory:
 			self._map[key] = pinfo
 		return pinfo
 
-class PackageSelector(dict):
-	STRATEGY_YOUNGEST = 0
-
-	def __init__(self):
-		self.setStrategy(self.STRATEGY_YOUNGEST)
-
-	def setStrategy(self, st):
-		if st == self.STRATEGY_YOUNGEST:
-			self.strategy = self.selectYoungest
-		else:
-			infomsg(f"ERROR: {self.__class__.__name__}: unsupported strategy {st}")
-			fail()
-
-	def add(self, pinfo):
-		key = pinfo.key
-		existing = self.get(key)
-		if existing is None or self.strategy(existing, pinfo):
-			self[key] = pinfo
-
-	def selectYoungest(self, existing, candidate):
-		if existing is None:
-			return True
-		return (Versiontools.compareParsedVersions(existing.parsedVersion, candidate.parsedVersion) < 0)
-
 class PackageCollection:
 	def __init__(self):
 		self._packages = []

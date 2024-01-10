@@ -9,7 +9,7 @@ import sys
 
 from repos import RepoDict, UrlCacheStrategy
 from products import ProductCatalog, CacheLocation
-from packages import Product, Resolver, ResolverWorker, PackageSelector
+from packages import Product, Resolver, ResolverWorker
 from filter import PackageFilter, Classification
 from database import BackingStoreDB
 

@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 from products import ProductCatalog, CacheLocation
-from packages import Product, Resolver, ResolverWorker, PackageSelector, PackageCollection
+from packages import Product, Resolver, ResolverWorker, PackageCollection
 from filter import PackageFilter, Classification
 from database import BackingStoreDB
 import sys

@@ -27,6 +27,7 @@ class Classification:
 	DISPOSITION_MERGE = 'merge'
 	DISPOSITION_MAYBE_MERGE = 'maybe_merge'
 	DISPOSITION_IGNORE = 'ignore'
+	DISPOSITION_COMPONENT_WIDE = 'component_wide'
 
 	# should this be a member of the classification scheme?
 	domain = fastsets.Domain("label")
@@ -93,6 +94,12 @@ class Classification:
 			self.isPurpose = False
 			if self.purposeName is not None or self.type == Classification.TYPE_PURPOSE:
 				self.isPurpose = True
+
+			self._globalPurposeLabels = None
+			if self.type == Classification.TYPE_SOURCE:
+				self._globalPurposeLabels = {}
+
+			self.isComponentLevel = False
 
 		@property
 		def fingerprint(self):
@@ -181,6 +188,10 @@ class Classification:
 			return False
 
 		def isCompatibleWithAutoFlavor(self, autoFlavor):
+			# Do not instantiate CoreDevel+something
+			if self.isComponentLevel:
+				return False
+
 			buildConfig = self.getBuildConfigFlavor(autoFlavor.name)
 
 			if buildConfig and self.buildConfig is not buildConfig:
@@ -415,6 +426,51 @@ class Classification:
 
 			return not(missing)
 
+		def globalPurposeLabel(self, name):
+			if self._globalPurposeLabels is None:
+				return None
+			return self._globalPurposeLabels.get(name)
+
+		def setGlobalPurposeLabel(self, name, label):
+			# This can only be set on Components
+			assert(self.type == Classification.TYPE_SOURCE)
+
+			if name in self._globalPurposeLabels:
+				raise Exception(f"{self}: attempt to redefine global purpose {name} as {label}")
+
+			self._globalPurposeLabels[name] = label
+			label.sourceProject = self
+
+		def updateGlobalPurposeLabels(self, classification):
+			if not self._globalPurposeLabels:
+				return
+
+			generalizedRequires = Classification.createLabelSet()
+			for label in classification.allBinaryLabels:
+				if label.componentLabel is not self:
+					continue
+
+				if label.isComponentLevel:
+					continue
+
+				generalizedRequires.add(label)
+
+			# Update the label (eg CoreDevel) with all labels that are associated with
+			# component Core, and which are not a component level label themselves.
+			for name, label in self._globalPurposeLabels.items():
+				label.runtimeRequires.update(generalizedRequires)
+
+				for requiredComponent in self.runtimeRequires:
+					required = requiredComponent.globalPurposeLabel(name)
+					if required is None:
+						warnmsg(f"{requiredComponent} does not define a label for purpose {name}")
+						continue
+					label.runtimeRequires.add(required)
+
+		@property
+		def globalPurposeLabelNames(self):
+			return self._globalPurposeLabels.keys()
+
 		def __str__(self):
 			return self.name
 
@@ -506,6 +562,10 @@ class Classification:
 			return set(filter(lambda label: label.type == Classification.TYPE_BUILDCONFIG, self._labels.values()))
 
 		@property
+		def allComponents(self):
+			return set(filter(lambda label: label.type == Classification.TYPE_SOURCE, self._labels.values()))
+
+		@property
 		def isFinal(self):
 			return self._final
 
@@ -525,6 +585,9 @@ class Classification:
 		def createFlavor(self, baseLabel, flavorName, buildConfig = None, sourceProject = None):
 			if baseLabel.flavorName is not None:
 				raise Exception(f"Cannot derive flavor {flavorName} from label {baseLabel} because it already is a flavor")
+
+			if baseLabel.isComponentLevel:
+				raise Exception(f"Cannot derive flavor {flavorName} from label {baseLabel} because it is a component-level label")
 
 			if baseLabel.type == Classification.TYPE_BINARY:
 				label = self.createLabel(f"{baseLabel}+{flavorName}", Classification.TYPE_BINARY)
@@ -560,9 +623,14 @@ class Classification:
 			return label
 
 		def createPurpose(self, baseLabel, purposeName, template = None):
+			if template and template.disposition == Classification.DISPOSITION_COMPONENT_WIDE:
+				raise Exception(f"Attempt to create {baseLabel}-{purposeName} even though {template} has disposition {template.disposition}")
+
 			if baseLabel.purposeName is not None:
-				infomsg(f"{baseLabel} isPurpose={baseLabel.isPurpose}")
 				raise Exception(f"Cannot derive purpose {purposeName} from label {baseLabel} because it already has a purpose")
+
+			if baseLabel.isComponentLevel:
+				raise Exception(f"Cannot derive purpose {purposeName} from label {baseLabel} because it is a component-level label")
 
 			label = self.createLabel(f"{baseLabel}-{purposeName}", baseLabel.type)
 			label.parent = baseLabel
@@ -599,7 +667,7 @@ class Classification:
 			# ie if we're currently creating NetworkServices-devel, and NetworkServices requires
 			# NetworkLibraries, then we make NetworkServices-devel require NetworkLibraries-devel
 			for req in baseLabel.runtimeRequires:
-				if not req.isPurpose:
+				if not req.isPurpose and not req.isComponentLevel:
 					requirePurpose = req.getObjectPurpose(purposeName)
 					if requirePurpose is None:
 						requirePurpose = self.createPurpose(req, purposeName, template = template)
@@ -711,6 +779,23 @@ class Classification:
 
 			if self._final:
 				raise Exception(f"Duplicate call to ClassificationScheme.finalize()")
+
+			globalPurposeLabelNames = set()
+			for componentLabel in self.allComponents:
+				globalPurposeLabelNames.update(componentLabel.globalPurposeLabelNames)
+
+				globalDevel = componentLabel.globalPurposeLabel('devel')
+				if globalDevel is not None:
+					globalDevel.runtimeRequires.update(componentLabel.buildRequires)
+					if globalDevel.buildConfig is None:
+						globalDevel.buildConfig = self.resolveBuildConfigLabel(componentLabel.name)
+
+				componentLabel.updateGlobalPurposeLabels(self)
+
+			for name in globalPurposeLabelNames:
+				label = self.getLabel(name)
+				if label is None or label.type != Classification.TYPE_PURPOSE:
+					raise Exception(f"A component defines a global named {name}, but there is no corresponding purpose label")
 
 			for label in self._labels.values():
 				if label.sourceProject is None:
@@ -1908,9 +1993,12 @@ class PackageFilter:
 					self.maybeInstantiateAutoFlavor(group, autoFlavor)
 
 		for group in list(self._groups.values()):
-			if group.label.type is Classification.TYPE_BINARY and not group.label.isPurpose:
+			if group.label.type is Classification.TYPE_BINARY and not group.label.isPurpose and not group.label.isComponentLevel:
 				assert(not group.label.isPurpose)
 				for purposeDef in self._purposes:
+					if purposeDef.label.disposition == Classification.DISPOSITION_COMPONENT_WIDE:
+						continue
+
 					self.instantiatePurpose(group, purposeDef)
 
 		for group in list(self._groups.values()):
@@ -2222,6 +2310,7 @@ class PackageFilter:
 		'defaultlabel',
 		'defaultlabels',
 		'feature',
+		'globals',
 	))
 
 	def processGroupDefinition(self, group, gd, template = None):
@@ -2260,7 +2349,7 @@ class PackageFilter:
 				# we allow regular labels to be marked as "ignore", which helps us hide problematic
 				# packages like patterns-*
 				pass
-			elif value not in ('separate', 'merge', 'ignore', 'maybe_merge') or group.type not in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
+			elif value not in ('separate', 'merge', 'ignore', 'maybe_merge', 'component_wide') or group.type not in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
 				raise Exception(f"Invalid disposition={value} in definition of {group.type} group {group.name}")
 			group.label.disposition = value
 
@@ -2379,6 +2468,17 @@ class PackageFilter:
 		purposes = self.getYamlList(gd, 'purposes', group)
 		for fd in purposes:
 			self.parseObjectPurpose(group, fd)
+
+		globals = gd.get('globals')
+		if globals is not None:
+			if group.type != Classification.TYPE_SOURCE:
+				raise Exception(f"You cannot specify globals in a {group.type} group definition")
+
+			for purposeName, labelName in globals.items():
+				# print(f"  {group.label}: {purposeName} -> {labelName}")
+				purposeLabel = self.classificationScheme.createLabel(labelName, Classification.TYPE_BINARY)
+				purposeLabel.isComponentLevel = True
+				group.label.setGlobalPurposeLabel(purposeName, purposeLabel)
 
 		return group
 

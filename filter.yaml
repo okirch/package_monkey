@@ -75,6 +75,7 @@ purposes:
     For the time being, we also include architecture variants because
     we have devel packages that happily mix 64bit and 32bit packages
     (python-pycairo-common-devel for instance).
+   disposition: component_wide
    # make sure that packages that end with *-devel are
    # recognized by this filter with a higher priority than
    # any prefix match.
@@ -131,157 +132,120 @@ purposes:
 build_configs:
  - name: Core/standard
    buildrequires:
-    - "@BaseBuildEnv"
-    - "@Core-devel"
+    - "CoreDevel"
  - name: BuildCore/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Core-devel"
  - name: GCC/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@GCC-devel"
  - name: LLVM/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@LLVM-devel"
  - name: KernelPlus/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Kernel-devel"
  - name: Kiwi/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Kernel-devel"
  - name: Security/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Security-devel"
  - name: AppArmor/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@AppArmor-devel"
  - name: Databases/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Databases-devel"
  - name: CorePlus/standard
    buildrequires:
-    - "@Core-devel"
+    - "CoreDevel"
  - name: Systemd/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@MinimalSystemd-devel"
+    - "CoreDevel"
  - name: Network/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@NetworkLibraries-devel"
  - name: Samba/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@NetworkLibraries-devel"
  - name: Host/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@HostSecurity-devel"
-    - "@HostStorage-devel"
-    - "@HostNetworking-devel"
  - name: UpdateStack/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@UpdateStack-devel"
  - name: Management/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Management-devel"
  - name: Gnome/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@GnomeLibraries-devel"
-    - "@Gnome-devel"
  - name: X11/standard
    buildrequires:
+    - "CoreDevel"
     - "@BaseBuildEnv"
-    - "@X11Libraries-devel"
  - name: Webserver/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Apache-devel"
  - name: Java/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Java-devel"
  - name: Perl/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Perl-devel"
  - name: Ruby/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Ruby-devel"
  - name: Python/python310
    buildrequires:
     - "@BaseBuildEnv"
-    - "@PythonCore310-devel"
  - name: Python/python311
    buildrequires:
     - "@BaseBuildEnv"
-    - "@PythonCore311-devel"
  - name: Python/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Python-devel"
  - name: Rust/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Rust-devel"
  - name: Go/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Go-devel"
  - name: Javascript/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Javascript-devel"
  - name: HPC/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@HPC-devel"
  - name: Typesetting/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Fonts-devel"
  - name: DocumentFormats/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Fonts-devel"
  - name: Texlive/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Texlive-devel"
  - name: Qt/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Qt-devel"
  - name: PublicCloud/standard
    buildrequires:
     - "@BaseBuildEnv"
  - name: Multimedia/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Multimedia-devel"
  - name: Container/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Container-devel"
  - name: Virtualization/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@Virtualization-devel"
  - name: HA/standard
    buildrequires:
     - "@BaseBuildEnv"
-    - "@HA-devel"
  - name: HardwareAccess/standard
    buildrequires:
     - "@BaseBuildEnv"
@@ -305,15 +269,21 @@ buildconfig_flavors:
 
 components:
  - name: Core
+   globals:
+    devel: CoreDevel
    buildrequires:
     - "@BaseBuildEnv"
  - name: CorePlus
+   globals:
+    devel: CorePlusDevel
    requires:
     - Core
     - Perl
    exports:
     - "@Glib2NoDBus"
  - name: KernelPlus
+   globals:
+    devel: KernelDevel
    requires:
     - Core
    exports:
@@ -321,25 +291,37 @@ components:
     - "@KernelLibraries"
     - "@KernelLibraries+udev"
  - name: Perl
+   globals:
+    devel: PerlDevel
    requires:
     - Core
    buildrequires:
     - "@Core"
  - name: HardwareAccess
+   globals:
+    devel: HardwareAccessDevel
    requires:
     - CorePlus
     - KernelPlus
  - name: Network
+   globals:
+    devel: NetworkDevel
    requires:
     - CorePlus
     - Python
  - name: Samba
+   globals:
+    devel: SambaDevel
    requires:
     - Network
  - name: AppArmor
+   globals:
+    devel: AppArmorDevel
    requires:
     - Core
  - name: Host
+   globals:
+    devel: HostDevel
    requires:
     - CorePlus
     - Network
@@ -348,17 +330,23 @@ components:
     - Security
     - GCC
  - name: Databases
+   globals:
+    devel: DatabasesDevel
    requires:
     - Core
     - Network
    buildrequires:
-    - "@Core"
+    - CoreDevel
  - name: HA
+   globals:
+    devel: HADevel
    requires:
     - Core
     - Host
     - Network
  - name: HPC
+   globals:
+    devel: HPCDevel
    requires:
     - Core
     - HardwareAccess
@@ -366,6 +354,8 @@ components:
    requires:
     - Core
  - name: Systemd
+   globals:
+    devel: SystemdDevel
    requires:
     - CorePlus
     - Host
@@ -382,9 +372,13 @@ components:
     - "@SystemdServices"
     - "@PolicyKit"
  - name: Python
+   globals:
+    devel: PythonDevel
    requires:
     - CorePlus
  - name: Webserver
+   globals:
+    devel: WebserverDevel
    requires:
     - CorePlus
     - Security
@@ -398,12 +392,16 @@ components:
     # why?
     - Systemd
  - name: Multimedia
+   globals:
+    devel: MultimediaDevel
    requires:
     - CorePlus
     - Perl
     - Typesetting
     - HardwareAccess
  - name: X11
+   globals:
+    devel: X11Devel
    requires:
     - CorePlus
     - Systemd
@@ -413,7 +411,11 @@ components:
    exports:
     - "@X11Libraries"
     - "@X11StandardUtils"
+    # this is really just exported for devel labels
+    - "@X11API"
  - name: Gnome
+   globals:
+    devel: GnomeDevel
    requires:
     - Multimedia
     - X11
@@ -429,15 +431,21 @@ components:
     - "@GnomeLibraries"
     - "@PulseAudioLibraries"
  - name: Qt
+   globals:
+    devel: QtDevel
    requires:
     - Gnome
     - Databases
     - Python
  - name: Security
+   globals:
+    devel: SecurityDevel
    requires:
     - CorePlus
     - Python
  - name: Java
+   globals:
+    devel: JavaDevel
    requires:
     - CorePlus
     - Gnome
@@ -447,17 +455,25 @@ components:
     - Perl
     - Python
  - name: Ruby
+   globals:
+    devel: RubyDevel
    requires:
     - Core
  - name: Go
+   globals:
+    devel: GoDevel
    requires:
     - Core
     - GCC
  - name: Rust
+   globals:
+    devel: RustDevel
    requires:
     - Core
     - GCC
  - name: Tcl
+   globals:
+    devel: TclDevel
    requires:
     - Core
     - Multimedia
@@ -465,21 +481,29 @@ components:
     # tcl does not change any more, so it's probably safe to export all of it
     - "@TclCore"
  - name: Javascript
+   globals:
+    devel: JavascriptDevel
    requires:
     - CorePlus
     - Systemd
  - name: GCC
+   globals:
+    devel: GccDevel
    requires:
     - Core
     - LLVM
    exports:
     - "@GccRuntime"
  - name: LLVM
+   globals:
+    devel: LlvmDevel
    requires:
     - Core
    exports:
     - "@LLVMRuntime"
  - name: BuildCore
+   globals:
+    devel: BuildCoreDevel
    requires:
     - Core
     - CorePlus
@@ -488,11 +512,18 @@ components:
     - Python
    exports:
     - "@WorkbenchRuntime"
+    # These are really exported for devel only
+    - "@MinimalCDevelopment"
+    - "@Meson"
  - name: Typesetting
+   globals:
+    devel: TypesettingDevel
    requires:
     - Core
     - CorePlus
  - name: DocumentFormats
+   globals:
+    devel: DocumentFormatsDevel
    requires:
     - CorePlus
     - Typesetting
@@ -500,6 +531,8 @@ components:
     # for printing:
     - Network
  - name: Texlive
+   globals:
+    devel: TexliveDevel
    requires:
     - Core
     - Perl
@@ -507,6 +540,8 @@ components:
     - Multimedia
     - Java
  - name: Container
+   globals:
+    devel: ContainerDevel
    requires:
     - Core
     - Network
@@ -517,6 +552,8 @@ components:
     # because flatpak is currently in the Container component
 #   - Gnome
  - name: Management
+   globals:
+    devel: ManagementDevel
    requires:
     - Core
     - Network
@@ -529,6 +566,8 @@ components:
     - UpdateStack
     - Ruby
  - name: UpdateStack
+   globals:
+    devel: UpdateStackDevel
    requires:
     - Core
     - Multimedia
@@ -536,6 +575,8 @@ components:
     - Systemd
     - Ruby
  - name: Virtualization
+   globals:
+    devel: VirtualizationDevel
    requires:
     - KernelPlus
     - Host
@@ -546,17 +587,23 @@ components:
     - Ruby
     - Python
  - name: Kiwi
+   globals:
+    devel: KiwiDevel
    requires:
     - Virtualization
     - UpdateStack
     - Container
  - name: Editors
+   globals:
+    devel: EditorsDevel
    requires:
     - CorePlus
     - Typesetting
     - Network
     - GCC
  - name: PublicCloud
+   globals:
+    devel: PublicCloudDevel
    requires:
     - Python
 
@@ -575,16 +622,13 @@ groups:
     - libubsan1
     - libgmp10
     - libgmpxx4
-   purposes:
-    - name: devel
-      binaries:
 
  - name: "@GCC"
    buildconfig: GCC/standard
    requires:
+    - "@GlibcDevel"
     - "@MinimalCRuntime"
     - "@Core0"
-    - "@Glibc-devel"
    binaries:
     - gcc*
     - binutils
@@ -595,13 +639,6 @@ groups:
     - isl
     - libstdc++-devel
     - libstdc++6-devel-gcc13
-   purposes:
-    - name: devel
-      requires:
-       - "@CoreLibraries-devel"
-       - "@Glibc-devel"
-      binaries:
-       - gcc13-devel
 
  - name: "@GccCross"
    buildconfig: GCC/standard
@@ -611,6 +648,15 @@ groups:
    binaries:
     - cross-*
     - cross-*-newlib13-devel
+
+ - name: GccDevel
+   buildconfig: GCC/standard
+   requires:
+    - "@GCC"
+   binaries:
+    - gcc13-devel
+    - cross-amdgcn-gcc13
+    - cross-nvptx-gcc13
 
  - name: "@LLVMRuntime"
    buildconfig: LLVM/standard
@@ -639,6 +685,12 @@ groups:
     - lldb
 #   - liblldb1?
 
+ - name: BuildCoreDevel
+   binaries:
+    - ocaml-ocamldoc
+    - ocaml-dune
+    - ocaml-dune-devel
+
  - name: "@Testing"
    buildconfig: BuildCore/standard
    requires:
@@ -656,8 +708,6 @@ groups:
    buildconfig: BuildCore/standard
    requires:
     - "@CoreBuild"
-    - "@Core-devel"
-    - "@GCC-devel"
     - "@PythonStandard"
     - "@Texinfo" # for info
    binaries:
@@ -676,6 +726,29 @@ groups:
        - "@SystemdLibraries"
       binaries:
 #      - python31?-psutil
+
+ - name: "@Ocaml"
+   buildconfig: BuildCore/standard
+   requires:
+    - "@Core"
+    - "@GCC"
+   binaries:
+    - ocaml
+    # unfortunately, ocaml-runtime requires ocaml, so we need to lump these all together into one topic
+    - ocaml-runtime
+    - ocaml-rpm-macros
+    - ocaml-*
+   buildflavors:
+    - name: virt
+      requires:
+       - "@Virtualization"
+      binaries:
+       - ocaml-libvirt
+    - name: x11
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - ocaml-graphics
 
  - name: "@CoreConfig"
    buildconfig: Core/standard
@@ -707,18 +780,6 @@ groups:
     - filesystem
     - compat-usrmerge-tools
     - system-user-root
-   purposes:
-    - name: devel
-      requires:
-       - "@Core0"
-       - "@LUA"
-      binaries:
-       - linux-glibc-devel
-       - glibc-devel
-       - pkgconf
-       - pkgconf-m4
-       - pkgconf-pkg-config
-       - compat-usrmerge-build
 
  # This label exists because we need to hide the fact that somewhat oddly,
  # Glibc sits below gcc runtime
@@ -728,6 +789,19 @@ groups:
     - "@Glibc"
     - "@GccRuntime"
 
+ - name: "@GlibcDevel"
+   buildconfig: Core/standard
+   requires:
+    - "@Core0"
+   binaries:
+    - glibc-devel
+    - libxcrypt-devel
+    - linux-glibc-devel
+    - pkgconf
+    - pkgconf-m4
+    - pkgconf-pkg-config
+    - cross-*-glibc-devel priority=3
+
  - name: "@WorkbenchRuntime"
    buildconfig: BuildCore/standard
    requires:
@@ -735,6 +809,29 @@ groups:
    binaries:
     - libltdl7
     - gettext-runtime-mini
+
+ - name: CoreDevel
+   requires:
+    - "@GlibcDevel"
+   binaries:
+    - rpm-build
+    - compat-usrmerge-build
+    - libbz2-devel
+    - libelf-devel
+    - libbsd-devel
+    - libxml2-devel
+    - libcom_err-devel
+    - libboost_*-devel
+    - fftw3-devel priority=0
+    - flex
+    - patch
+    - patchutils
+    # misnamed package (should have been static-devel)
+    - newt-static
+    - libgpgme-devel priority=0
+# these do not belong here
+#   - fftw3-mpi-devel priority=0
+#   - fftw3-openmp-devel priority=0
 
  - name: "@MinimalCDevelopment"
    description: |
@@ -746,7 +843,6 @@ groups:
     - "@GCC"
     # some -devel packages require info when installed; usually through gettext but sometimes directly
     - "@Texinfo"
-    - "@Glibc-devel"
     - "@Guile" # for autogen
     - "@PythonCore" # for cmake-mini
    binaries:
@@ -917,19 +1013,6 @@ groups:
     - update-alternatives
     - sqlite3-tcl
     - timezone
-   purposes:
-    - name: devel
-      requires:
-       - "@MinimalCDevelopment"
-      binaries:
-       - libbz2-devel
-       - libelf-devel
-       - libbsd-devel
-#      - libxml2-devel
-       - libcom_err-devel
-       - libboost_*-devel
-       - fftw3-devel priority=0
-       - flex
    buildflavors:
     - name: database
       requires:
@@ -951,13 +1034,6 @@ groups:
     - name: hpc
       requires:
        - "@HPC"
-      purposes:
-       - name: devel
-         requires:
-          - "@HPC-devel"
-         binaries:
-          - fftw3-mpi-devel priority=0
-          - fftw3-openmp-devel priority=0
 
  - name: "@Core0"
    buildconfig: Core/standard
@@ -1107,16 +1183,10 @@ groups:
        - "@KernelLibraries+udev"
       binaries:
        - libcryptsetup12
-      purposes:
-       - name: devel
-         requires:
+#     purposes:
+#      - name: devel
+#        requires:
 #         - "@HostStorage-devel"
-   purposes:
-    - name: devel
-      binaries:
-       - rpm-build
-       - patch
-       - libxml2-devel
 
  - name: "@PythonBuildConfig"
    buildconfig: Core/standard
@@ -1132,7 +1202,6 @@ groups:
    buildrequires:
     # huh?
     - "@DesktopBuild"
-    - "@X11Libraries-devel"
    binaries:
     - python-rpm-generators
     - python311
@@ -1146,9 +1215,9 @@ groups:
     - python311-dbm
     - libpython311
    purposes:
-    - name: devel
-      binaries:
-       - python311-devel
+#   - name: devel
+#     binaries:
+#      - python311-devel
     - name: doc
       binaries:
        - python311-doc
@@ -1166,7 +1235,6 @@ groups:
    buildrequires:
     # huh?
     - "@DesktopBuild"
-    - "@X11Libraries-devel"
    binaries:
     - python310
     - python310-base
@@ -1179,9 +1247,9 @@ groups:
     - python310-dbm
     - libpython310
    purposes:
-    - name: devel
-      binaries:
-       - python310-devel
+#   - name: devel
+#     binaries:
+#      - python310-devel
     - name: doc
       binaries:
        - python310-doc
@@ -1244,10 +1312,6 @@ groups:
       binaries:
        - tpm2.0-abrmd
        - libtss2-tcti-tabrmd0
-      purposes:
-       - name: devel
-         binaries:
-          - libgpgme-devel priority=0
     - name: perl
       requires:
        - "@Perl"
@@ -1319,10 +1383,10 @@ groups:
       binaries:
        - tukitd
    purposes:
-    - name: devel
-      requires:
-       # libtukit-devel requires rpm-devel
-       - "@BaseBuildEnv-devel"
+#   - name: devel
+#     requires:
+#      # libtukit-devel requires rpm-devel
+#      - "@BaseBuildEnv-devel"
 
  - name: "@Core"
    buildconfig: Core/standard
@@ -1412,9 +1476,9 @@ groups:
        - cryptsetup
        - efivar
       purposes:
-       - name: devel
-         requires:
-          - "@HostStorage-devel"
+#      - name: devel
+#        requires:
+#         - "@HostStorage-devel"
 
  - name: "@PCP"
    buildconfig: Management/standard
@@ -1477,27 +1541,6 @@ groups:
    binaries:
     - guile
 
- - name: "@Ocaml"
-   buildconfig: CorePlus/standard
-   requires:
-    - "@Core"
-    - "@GCC"
-    - "@CoreLibraries-devel"
-   binaries:
-    - ocaml
-    - ocaml-rpm-macros
-   buildflavors:
-    - name: virt
-      requires:
-       - "@Virtualization"
-      binaries:
-       - ocaml-libvirt
-   purposes:
-    - name: devel
-      binaries:
-       - ocaml-ocamldoc
-       - ocaml-dune
-
  - name: "@PlusUtilities"
    buildconfig: CorePlus/standard
    requires:
@@ -1520,10 +1563,10 @@ groups:
     - hunspell
     - hyphen
     - libvoikko1
-   purposes:
-    - name: devel
-      requires:
-       - "@Glib2-devel"
+#  purposes:
+#   - name: devel
+#     requires:
+#      - "@Glib2-devel"
 
  - name: "@Kiwi"
    feature: True
@@ -1581,10 +1624,10 @@ groups:
        - "@Glib2"
       binaries:
        - restorecond
-   purposes:
-    - name: devel
-      requires:
-       - "@PythonStandard"
+#  purposes:
+#   - name: devel
+#     requires:
+#      - "@PythonStandard"
 
  - name: "@Console"
    buildconfig: Core/standard
@@ -1597,13 +1640,11 @@ groups:
     - libgpm2
     - screen
    purposes:
-    - name: devel
-      requires:
-       # newt-devel wants python-devel
-       - "@PythonCore-devel"
-      binaries:
-       # misnamed package (should have been static-devel)
-       - newt-static
+#   - name: devel
+#     requires:
+#      # newt-devel wants python-devel
+#      - "@PythonCore-devel"
+#     binaries:
 
  - name: "@ManDoc"
    buildconfig: Core/standard
@@ -1722,6 +1763,8 @@ groups:
    binaries:
     - libColPack0
     - libadolc2
+    - liblapack3
+    - liblapacke3
 
  - name: "@TclCore"
    buildconfig: Tcl/standard
@@ -1731,7 +1774,7 @@ groups:
     # tk wants to use xhost
     - "@X11StandardUtils"
    buildrequires:
-    - "@X11Libraries-devel"
+#   - "@X11Libraries-devel"
    binaries:
     - tcl
     - tk
@@ -1765,8 +1808,8 @@ groups:
     - "@Guile"
     - "@Kernel+obs"
     - "@Core0"
-    - "@Core-devel"
-    - "@Glibc-devel"
+#   - "@Core-devel"
+#   - "@Glibc-devel"
     - "@Docbook"
     - "@TclCore"
     - "@ManDoc"
@@ -1781,7 +1824,6 @@ groups:
     - build-mkbaselibs
     - doxygen
     - gperf
-    - patchutils
     - post-build-checks
     - rpmlint-mini
     - swig
@@ -1795,7 +1837,7 @@ groups:
       requires:
        - "@Qt"
 
- - name: "@WorkbenchAll"
+ - name: "@Meson"
    buildconfig: BuildCore/standard
    requires:
     - "@MinimalCDevelopment"
@@ -1817,7 +1859,7 @@ groups:
     - "@PythonCore"
     - "@PythonStandard"
     - "@BaseDevTools"
-    - "@Glibc-devel"
+#   - "@Glibc-devel"
     - "@Python"
    binaries:
     - python-rpm-packaging
@@ -1856,15 +1898,15 @@ groups:
     - freetds-tools
     - libsybdb5
    purposes:
-    - name: devel
-      requires:
-       - "@CoreLibraries-devel"
-       # postgres--llvmjit-devel needs llvm
-       - "@LLVM"
-      binaries:
-       - postgresql-devel
-       - postgresql15-devel
-       - postgresql15-devel-mini
+#   - name: devel
+#     requires:
+#      - "@CoreLibraries-devel"
+#      # postgres--llvmjit-devel needs llvm
+#      - "@LLVM"
+#     binaries:
+#      - postgresql-devel
+#      - postgresql15-devel
+#      - postgresql15-devel-mini
     - name: doc
       binaries:
        - postgresql-docs
@@ -1885,6 +1927,47 @@ groups:
        - "@Python"
       binaries:
        - mariadb
+
+ - name: DatabasesDevel
+   buildconfig: Databases/standard
+   binaries:
+    - "@LLVM"
+   binaries:
+    - postgresql-devel
+    - postgresql15-devel
+    - postgresql15-devel-mini
+
+ - name: "@X11API"
+   buildconfig: X11/standard
+   requires:
+    - "@X11Libraries"
+    - CoreDevel
+    - "@Meson"
+   binaries:
+    - libX11-devel
+    - libxcb-devel
+    - libXrandr-devel
+    - libXau-devel
+    - libXext-devel
+    - wayland-devel
+    # for the time being, we need to specify the following packages explicitly. The solver
+    # will only label foobar-devel packages correctly if there is a corresponding
+    # foobar package somewhere.
+    - xcb-proto-devel
+    - xorgproto-devel
+    - fontcacheproto-devel
+    - printproto-devel
+    - pthread-stubs-devel
+    - util-macros-devel
+    - python3-xcb-proto-devel
+
+ - name: X11Devel
+   requires:
+    - CoreDevel
+    - "@X11API"
+   binaries:
+    - xorg-x11-server-sdk
+    - xorg-cf-files
 
  - name: "@DesktopCore"
    buildconfig: X11/standard
@@ -1934,6 +2017,7 @@ groups:
     - libXaw8
     - libxcb1
     - libxcb-composite0
+    - libxcb-cursor0
     - libxcb-damage0
     - libxcb-dpms0
     - libxcb-dri2-0
@@ -1965,6 +2049,7 @@ groups:
     - libxkbcommon-x11-0
     - libXcomposite1
     - libXcursor1
+    - libxvct0
     - libXdmcp6
     - libXext6
     - libXfixes3
@@ -1979,12 +2064,13 @@ groups:
     - libxshmfence1
     - libXt
     - libXt6
-    - libXtst
+    - libXtst6
     - libXv1
     - libXxf86vm1
     - libXprintUtil1
     - libXp6
     - libXRes1
+    - libXxf86dga1
     - xaw3dd
     - xorgproto
     - libXdamage1
@@ -2003,21 +2089,21 @@ groups:
     - liboldX6
     - libXss1
     - xtrans
-   purposes:
-    - name: devel
-      requires:
-       - "@PythonCore"
-      binaries:
-       # for the time being, we need to specify this explicitly. The *-devel rules
-       # will only label foobar-devel packages correctly if there is a corresponding
-       # foobar package somewhere.
-       # FIXME
-       - xorgproto-devel
-       - util-macros-devel
-       - python3-xcb-proto-devel
-       - pthread-stubs-devel
-       - fontcacheproto-devel
-       - printproto-devel
+#  purposes:
+#   - name: devel
+#     requires:
+#      - "@PythonCore"
+#     binaries:
+#      # for the time being, we need to specify this explicitly. The *-devel rules
+#      # will only label foobar-devel packages correctly if there is a corresponding
+#      # foobar package somewhere.
+#      # FIXME
+#      - xorgproto-devel
+#      - util-macros-devel
+#      - python3-xcb-proto-devel
+#      - pthread-stubs-devel
+#      - fontcacheproto-devel
+#      - printproto-devel
 
  - name: "@X11StandardUtils"
    buildconfig: X11/standard
@@ -2069,14 +2155,14 @@ groups:
     - xtermset
     - xcursorgen
     - xeyes
-   purposes:
-    - name: devel
-      requires:
+#  purposes:
+#   - name: devel
+#     requires:
 #      - "@BaseDevTools"
-       - "@FontLibraries-devel"
-      binaries:
-       - imake
-       - xorg-cf-files
+#      - "@FontLibraries-devel"
+#     binaries:
+#      - imake
+#      - xorg-cf-files
 
  - name: "@X11Server"
    buildconfig: X11/standard
@@ -2091,20 +2177,29 @@ groups:
      - xdm
      - xf86-input-libinput
      - xwayland
-   purposes:
-     - name: devel
-       requires:
-#       - "@BaseDevTools"
-        - "@FontLibraries-devel"
-       binaries:
-        - xorg-x11-server-sdk
-        - xorg-x11-devel
+#  purposes:
+#    - name: devel
+#      requires:
+#       - "@FontLibraries-devel"
+#      binaries:
+#       - xorg-x11-server-sdk
+#       - xorg-x11-devel
 
  - name: "@X11Applications"
    buildconfig: X11/standard
    requires:
     - "@X11Libraries"
    binaries:
+
+ - name: QtDevel
+   requires:
+    - CoreDevel
+    - X11Devel
+    # This is silly:
+    - "@Meson"
+   binaries:
+    - libQt5Charts5-designer
+    - qt6-macros
 
  - name: "@Qt"
    buildconfig: Qt/standard
@@ -2147,14 +2242,14 @@ groups:
       binaries:
        - qt6-tools
    purposes:
-    - name: devel
-      requires:
-       # I think this should be picked up automatically, but it's not
-       - "@GPU-devel"
-       - "@WorkbenchAll"
-      binaries:
-       - libQt5Charts5-designer
-       - qt6-macros
+#   - name: devel
+#     requires:
+#      # I think this should be picked up automatically, but it's not
+#      - "@GPU-devel"
+#      - "@WorkbenchAll"
+#     binaries:
+#      - libQt5Charts5-designer
+#      - qt6-macros
     - name: doc
       binaries:
        - qt6-tools-helpgenerators
@@ -2203,19 +2298,33 @@ groups:
        - libumockdev0
        - umockdev
    purposes:
-    - name: devel
-      requires:
-       - "@Python"
-       - "@Glibc-devel"
-       - "@GCC-devel"
-       - "@GnomeLibraries"
-       - "@GraphvizLibraries"
-      binaries:
-       - glib2-devel
-       - vala
-       - glibmm2-devel
-       - glibmm2_4-devel
-       - libvaladoc-0*
+#   - name: devel
+#     requires:
+#      - "@Python"
+#      - "@Glibc-devel"
+#      - "@GCC-devel"
+#      - "@GnomeLibraries"
+#      - "@GraphvizLibraries"
+#     binaries:
+#      - glib2-devel
+#      - vala
+#      - glibmm2-devel
+#      - glibmm2_4-devel
+#      - libvaladoc-0*
+
+ - name: GnomeDevel
+   requires:
+    - CoreDevel
+    - X11Devel
+   binaries:
+    - gnome-doc-utils
+    - gnome-doc-utils-lang
+    - gnome-common
+    - gtk-doc
+    - gtk-doc-mkpdf
+    - gnome-patch-translation
+    # not sure why, but this package thinks it needs gtk4-devel for building
+    - gstreamer-plugins-rs-devel
 
  - name: "@PulseAudioLibraries"
    buildconfig: Gnome/standard
@@ -2337,12 +2446,12 @@ groups:
        - "@Python"
       binaries:
        - gstreamer-plugin-python
-   purposes:
-    - name: devel
-      requires:
-       - "@Python"
-      binaries:
-       - gstreamer-devtools
+#  purposes:
+#   - name: devel
+#     requires:
+#      - "@Python"
+#     binaries:
+#      - gstreamer-devtools
 
  # could possibly be folded into @Desktop* or @Gnome*
  - name: "@CJK"
@@ -2426,24 +2535,24 @@ groups:
       binaries:
        - ibus
    purposes:
-    - name: devel
-      requires:
-       - "@Texlive"
-       - "@Docbook+texlive"
-       - "@MinimalCDevelopment"
-      binaries:
-       - gnome-doc-utils
-       - gnome-doc-utils-lang
-       - gnome-common
-       - gtk-doc
-       - gtk-doc-mkpdf
-       - gnome-patch-translation
-       # not sure why, but this package thinks it needs gtk4-devel for building
-       - gstreamer-plugins-rs-devel
+#   - name: devel
+#     requires:
+#      - "@Texlive"
+#      - "@Docbook+texlive"
+#      - "@MinimalCDevelopment"
+#     binaries:
+#      - gnome-doc-utils
+#      - gnome-doc-utils-lang
+#      - gnome-common
+#      - gtk-doc
+#      - gtk-doc-mkpdf
+#      - gnome-patch-translation
+#      # not sure why, but this package thinks it needs gtk4-devel for building
+#      - gstreamer-plugins-rs-devel
     - name: doc
       requires:
        # gtkmm3-doc requires glibmm2-devel
-       - "@Gnome-devel"
+#      - "@Gnome-devel"
 
  - name: "@GnomeEverythingElse"
    buildconfig: Gnome/standard
@@ -2524,10 +2633,10 @@ groups:
     - libwx_gtk2u*
     - libwx_gtk3u*
     - libwx_qtu*
-   purposes:
-    - name: devel
-      requires:
-       - "@Gnome-devel"
+#  purposes:
+#   - name: devel
+#     requires:
+#      - "@Gnome-devel"
 
  - name: "@AppArmor"
    buildconfig: AppArmor/standard
@@ -2570,16 +2679,17 @@ groups:
    buildconfig: Systemd/standard
    requires:
     - "@Core0"
+    - "@UdevLibraries"
    binaries:
     - libsystemd0-mini
     - libsystemd0
     - libdbus-1-*
     - dbus-1-common
     - libbytesize1
-   purposes:
-    - name: devel
-      binaries:
-       - systemd-mini-devel
+#  purposes:
+#   - name: devel
+#     binaries:
+#      - systemd-mini-devel
 
  - name: "@SystemdUtilities"
    buildconfig: Systemd/standard
@@ -2599,11 +2709,13 @@ groups:
     - "@Glib2NoDBus"
    binaries:
     - dbus-1
-   purposes:
-    - name: devel
-      binaries:
-       # dbus-1-devel depends on dbus-1 (why?)
-       - dbus-1-devel
+#  purposes:
+#   - name: devel
+#     requires:
+#      - CoreDevel
+#     binaries:
+#      # dbus-1-devel depends on dbus-1 (why?)
+#      - dbus-1-devel
 
  - name: "@DBus"
    buildconfig: Systemd/standard
@@ -2661,13 +2773,9 @@ groups:
     - name: test
       requires:
        - "@BaseBuildEnv"
-       - "@CoreLibraries-devel"
-       - "@Core-devel"
-       - "@Core0-devel"
        - "@HostNetworking"
        - "@HostStorage"
        - "@Virtualization"
-       - "@SELinux-devel"
        - "@Busybox"
       binaries:
        - systemd-testsuite
@@ -2697,9 +2805,6 @@ groups:
     # We placed glib2 and related libraries in GnomeLibraries, but due to
     # its depedencies, glib2-devel had to go to DesktopLibraries.
     # So we have to force the -devel flavor to requires DesktopLibraries-devel
-    - name: devel
-      requires:
-       - "@DesktopLibraries-devel"
 
  - name: "@Busybox"
    buildconfig: Host/standard
@@ -2770,11 +2875,6 @@ groups:
        - "@Python"
       binaries:
        - python31?-zypp-plugin
-   purposes:
-    - name: devel
-      requires:
-       # building libzypp requires rpm-devel
-       - "@BaseBuildEnv-devel"
 
  - name: "@SystemdLegacy"
    buildconfig: Systemd/standard
@@ -2906,6 +3006,7 @@ groups:
     - nfs4-acl-tools
     - libnfs14
     - nfsidmap
+    - libnfsidmap1
     - nfs-utils
     - open-iscsi
     - open-isns
@@ -3027,12 +3128,12 @@ groups:
       binaries:
        - cockpit-pcp
    purposes:
-    - name: devel
-      requires:
+#   - name: devel
+#     requires:
 #      - "@BaseDevTools"
-      binaries:
-       - yast2-buildtools
-       - yast2-devtools
+#     binaries:
+#      - yast2-buildtools
+#      - yast2-devtools
 
  - name: "@FontLibraries"
    buildconfig: Typesetting/standard
@@ -3075,10 +3176,10 @@ groups:
     - xorg-x11-fonts*
     - font-util
     - bdftopcf
-   purposes:
-    - name: devel
-      binaries:
-       - fontpackages-devel
+
+ - name: TypesettingDevel
+   binaries:
+    - fontpackages-devel
 
  - name: "@DrawingLibraries"
    buildconfig: Multimedia/standard
@@ -3243,6 +3344,18 @@ groups:
    binaries:
     - nasm
 
+ - name: KernelDevel
+   requires:
+    - CoreDevel
+   binaries:
+    - kernel-source
+    - kernel-syms
+    - kernel-syms-*
+    - systemtap-headers
+    - systemtap-dtrace
+    # do not ship this, ever:
+    - cpupower-rebuild
+
 # some pieces of Kernel require perl-Bootloader which needs perl
  - name: "@Kernel"
    buildconfig: KernelPlus/standard
@@ -3276,18 +3389,11 @@ groups:
     - ucode-intel
     - dtc
    purposes:
-    - name: devel
-      autoselect: no
-      requires:
-       - "@CoreBuild"
-      binaries:
-       - kernel-source
-       - kernel-syms
-       - kernel-syms-*
-#      - systemtap-headers
-       - systemtap-dtrace
-       # do not ship this, ever:
-       - cpupower-rebuild
+#   - name: devel
+#     autoselect: no
+#     requires:
+#      - "@CoreBuild"
+#     binaries:
    buildflavors:
     - name: python
       requires:
@@ -3332,12 +3438,6 @@ groups:
     - name: x11
       requires:
        - "@X11Libraries"
-   purposes:
-    - name: devel
-      requires:
-       - "@X11Libraries-devel"
-      binaries:
-       - vulkan-headers
 
  - name: "@NetworkLibraries"
    buildconfig: Core/standard
@@ -3352,10 +3452,13 @@ groups:
     - libsodium
     - libzmq5
     - libmaxminddb0
-   purposes:
-    - name: devel
-      binaries:
-       - rpcgen
+#   - rpcgen purpose=devel
+
+ - name: HardwareAccessDevel
+   requires:
+    - "@X11API"
+   binaries:
+    - vulkan-headers
 
  - name: "@Sound"
    buildconfig: HardwareAccess/standard
@@ -3385,8 +3488,6 @@ groups:
     - "@SystemdServices"
     - "@UdevLibraries"
     - "@Sound"
-   buildrequires:
-    - "@DesktopLibraries-devel"
    binaries:
     - bluez
     - bluez-deprecated
@@ -3426,7 +3527,11 @@ groups:
     - rds-tools
     - infiniband-diags
     - libfabric1
-
+    - libiscsi9
+   buildflavors:
+    - name: test
+      requires:
+       - "@CoreBuild"
 
  - name: "@BrailleLibraries"
    buildconfig: HardwareAccess/standard
@@ -3451,6 +3556,12 @@ groups:
     - "@PolicyKit"
    binaries:
     - brltty
+   buildflavors:
+    - name: ocaml
+      requires:
+       - "@Ocaml"
+      binaries:
+       - ocaml-brlapi
 
  - name: "@NetworkCore"
    buildconfig: Core/standard
@@ -3665,18 +3776,18 @@ groups:
       binaries:
        - gdk-pixbuf
       purposes:
-       - name: devel
-         binaries:
-          - gdk-pixbuf-devel
-          - libwmf-devel
-          - liblqr-devel
+#      - name: devel
+#        binaries:
+#         - gdk-pixbuf-devel
+#         - libwmf-devel
+#         - liblqr-devel
     - name: gnomelibs
       augments:
        - "@GnomeLibraries"
       purposes:
-       - name: devel
-         binaries:
-          - cairomm*-devel priority=0
+#      - name: devel
+#        binaries:
+#         - cairomm*-devel priority=0
 
  - name: "@AudioLibraries"
    buildconfig: Multimedia/standard
@@ -3729,11 +3840,11 @@ groups:
     - libGLU1
     - libGLEW2*
    purposes:
-     - name: devel
-       binaries:
-        - DirectX-Headers
-        - spirv-headers
-        - spirv-llvm-translator
+#    - name: devel
+#      binaries:
+#       - DirectX-Headers
+#       - spirv-headers
+#       - spirv-llvm-translator
 
  # FFmpeg is a beast in terms of dependencies. However, we have imlib2 -> libheif1 -> librav1e.
  # Unless we want to pull all of FFmpeg into @X11Libraries, we need to put the AVIF libraries
@@ -3769,6 +3880,7 @@ groups:
     - libva-x11-2
     - libva-wayland2
     - libbluray2
+    - libinstpatch-1*
    buildflavors:
     - name: pulseaudio
       requires:
@@ -3778,7 +3890,7 @@ groups:
    purposes:
      - name: doc
        requires:
-        - "@AVLibraries-devel"
+#       - "@AVLibraries-devel"
 
  - name: "@Recording"
    buildconfig: Multimedia/standard
@@ -3881,12 +3993,12 @@ groups:
     - libboost_mpi1*
     - python3-boost_parallel_mpi1*
    purposes:
-    - name: devel
-      binaries:
-       - fftw3-*-hpc-devel priority=0
-       - fftw3-*-hpc-devel-static priority=0
-       - openmpi*-hpc-devel priority=0
-       - openmpi*-hpc-devel-static priority=0
+#   - name: devel
+#     binaries:
+#      - fftw3-*-hpc-devel priority=0
+#      - fftw3-*-hpc-devel-static priority=0
+#      - openmpi*-hpc-devel priority=0
+#      - openmpi*-hpc-devel-static priority=0
 
  - name: "@NetworkUtils"
    buildconfig: Network/standard
@@ -3922,7 +4034,6 @@ groups:
     - "@AvahiLibraries"
     - "@Perl"
    binaries:
-   binaries:
     - bind
     - ntp
     - chrony
@@ -3941,6 +4052,7 @@ groups:
     - freeradius-client
     - net-snmp
     - perl-SNMP
+    - snmp-mibs
    buildflavors:
     - name: mysql
       requires:
@@ -3999,13 +4111,13 @@ groups:
    binaries:
     - cups
    purposes:
-    - name: devel
-      requires:
-       - "@BaseBuildEnv"
-       - "@DBus-devel"
-      binaries:
-       - cups-rpm-helper
-       - cups-ddk
+#   - name: devel
+#     requires:
+#      - "@BaseBuildEnv"
+#      - "@DBus-devel"
+#     binaries:
+#      - cups-rpm-helper
+#      - cups-ddk
 
  - name: "@BrowsersConsole"
    buildconfig: Network/standard
@@ -4133,12 +4245,12 @@ groups:
    binaries:
     - nginx
    purposes:
-    - name: devel
-      requires:
-       - "@Vim"
-      binaries:
-       - nginx-source
-       - nginx-macros
+#   - name: devel
+#     requires:
+#      - "@Vim"
+#     binaries:
+#      - nginx-source
+#      - nginx-macros
 
  - name: "@Apache"
    buildconfig: Webserver/standard
@@ -4337,16 +4449,18 @@ groups:
    binaries:
     - rubygem-libguestfs
 
+ - name: RubyDevel
+   requires:
+    - CoreDevel
+   binaries:
+    - ruby3.2-rubygem-pkg-config
+
  - name: "@RubyStandard"
    buildconfig: Ruby/standard
    requires:
     - "@Ruby"
    binaries:
     - ruby3.2-rubygem-*
-   purposes:
-    - name: devel
-      binaries:
-       - ruby3.2-rubygem-pkg-config
 
  - name: "@PerlCore"
    buildconfig: Core/standard
@@ -4383,10 +4497,10 @@ groups:
     - nodejs20
     - nodejs-default
    purposes:
-    - name: devel
-      binaries:
-       # would have been easier if this was named nodejs-default-devel
-       - nodejs-devel-default
+#   - name: devel
+#     binaries:
+#      # would have been easier if this was named nodejs-default-devel
+#      - nodejs-devel-default
 
  - name: "@JDK"
    buildconfig: Java/standard
@@ -4414,6 +4528,7 @@ groups:
    requires:
     - "@JDK"
     - "@CoreLibraries+java"
+    - "@SystemPythonStandard"
    binaries:
     - mx4j
     - java-*
@@ -4442,15 +4557,10 @@ groups:
     - mysql-connector-java
     - jline1
     - libreadline-java
+    - java-17-openjdk-jmods
+    - javapackages-local
+    - javapackages-ivy
    purposes:
-    - name: devel
-      requires:
-       - "@Java+python"
-      binaries:
-       - java-17-openjdk-jmods
-       - javapackages-local
-       - javapackages-ivy
-#      - jython
     - name: doc
       binaries:
        - junit5-guide
@@ -4471,14 +4581,15 @@ groups:
     - httpcomponents-client
     - slf4j-jcl
    purposes:
-    - name: devel
-      binaries:
-       - xml-commons-apis-bootstrap
+#   - name: devel
+#     binaries:
+#      - xml-commons-apis-bootstrap
 
  - name: "@ApacheAnt"
    buildconfig: Java/standard
    requires:
-    - "@ApacheCommons-devel"
+    - "@ApacheCommons"
+#   - "@ApacheCommons-devel"
    binaries:
     - ant
     - ant-scala
@@ -4713,11 +4824,14 @@ groups:
     - perl-biber
     - perl-Text-BibTeX
     - transfig
-   purposes:
-    - name: devel
-      binaries:
-       - texlive-synctex-devel
-       - texlive-devel
+
+ - name: TexliveDevel
+   buildconfig: Texlive/standard
+   requires:
+    - CoreDevel
+   binaries:
+    - texlive-synctex-devel
+    - texlive-devel
 
 # why do all editors have to have such messy dependencies?
  - name: "@Vim"
@@ -4734,8 +4848,8 @@ groups:
       augments:
        - "@Gnome"
       requires:
-       - "@LUA-devel"
-       - "@Ruby-devel"
+#      - "@LUA-devel"
+#      - "@Ruby-devel"
        #  gvim is gnome based but still asks for libgpm2.
        - "@Console"
       binaries:
@@ -4789,6 +4903,7 @@ templates:
        - "@Glib2"
        - "@PythonData"
        - "@TclCore"
+       - "@NumericLibraries"
 #      - "@SystemdUtilities"
       binaries:
        - pythonXXX-alabaster
@@ -4848,10 +4963,10 @@ templates:
          binaries:
           - pythonXXX-pycairo
          purposes:
-          - name: devel
-            requires:
-             # python-pycairo-common-devel requires cairo-devel which depends on various xlibs
-             - "@X11Libraries"
+#         - name: devel
+#           requires:
+#            # python-pycairo-common-devel requires cairo-devel which depends on various xlibs
+#            - "@X11Libraries"
        - name: desktop
          augments:
           - "@Glib2+python"
@@ -4913,7 +5028,8 @@ templates:
     - name: "@CythonXXX"
       buildconfig: Python/pythonXXX
       requires:
-       - "@PythonCore-devel"
+       - "CoreDevel"
+       - "@PythonCore"
       binaries:
        - pythonXXX-Cython
        - pythonXXX-Cython3

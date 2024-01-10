@@ -88,10 +88,76 @@ class SourceHintsSolver(Solver):
 	def tryToSolve(self, buildPlacement):
 		return buildPlacement.solveWithConstraints(self.closure)
 
+class GlobalPurposeSolver(Solver):
+	def __init__(self, purposeLabel, potentialClassification):
+		self.purposeLabel = purposeLabel
+		self.closure = potentialClassification.labelOrder.downwardClosureForSet(purposeLabel.runtimeRequires)
+
+		if not self.closure:
+			warnmsg(f"Created {self} with empty runtime requirements closure")
+
+	def __str__(self):
+		return f"component purpose solver for {self.purposeLabel}"
+
+	def tryToSolve(self, buildPlacement):
+		if buildPlacement.numSolved == 0:
+			return
+
+		component = None
+
+		for packagePlacement in buildPlacement.stage2:
+			if packagePlacement.isFinal:
+				continue
+			if not packagePlacement.isComponentLevelPurpose:
+				continue
+
+			# infomsg(f"   inspect {packagePlacement}")
+			# infomsg(f"   purpose {packagePlacement.purpose}")
+
+			if component is None:
+				component = self.getComponentForBuild(buildPlacement)
+				if component is None:
+					infomsg(f"   {self} cannot solve {packagePlacement}: no unique component")
+					continue
+
+			purposeName = packagePlacement.purpose.name
+			globalPurpose = component.globalPurposeLabel(purposeName)
+			if globalPurpose is None:
+				infomsg(f"   {self} cannot solve {packagePlacement}: {component} does not specify a global label for purpose {purposeName}")
+				continue
+
+			if packagePlacement.node.lowerCone is not None and globalPurpose not in packagePlacement.node.lowerCone:
+				infomsg(f"   trying to place {packagePlacement} into {globalPurpose}, but it's not a valid candidate")
+				continue
+
+			infomsg(f"{packagePlacement} is placed into {globalPurpose} (global {purposeName} label for component {component})")
+			packagePlacement.setSolution(globalPurpose)
+
+		return buildPlacement.isFinal
+
+	def getComponentForBuild(self, buildPlacement):
+		result = None
+		for placement in buildPlacement.solved:
+			label = placement.label
+			if label is None:
+				continue
+
+			label = label.componentLabel
+			if result is label:
+				continue
+
+			if result is not None:
+				return None
+
+			result = label
+		return result
+
+
 class SolverFactory(object):
 	def __init__(self, potentialClassification):
 		self.potentialClassification = potentialClassification
 		self.componentSolvers = {}
+		self.globalPurposeSolvers = {}
 
 	def sourceHintsSolver(self, label):
 		try:
@@ -103,6 +169,16 @@ class SolverFactory(object):
 		self.componentSolvers[label] = solver
 		return solver
 
+	def globalPurposeSolver(self, label):
+		try:
+			return self.globalPurposeSolvers[label]
+		except:
+			pass
+
+		solver = GlobalPurposeSolver(label, self.potentialClassification)
+		self.globalPurposeSolvers[label] = solver
+		return solver
+
 ##################################################################
 # The actual solving algorithm
 ##################################################################
@@ -110,10 +186,12 @@ class PotentialClassification(object):
 	def __init__(self, solvingTree):
 		self.solvingTree = solvingTree
 
-		with TimedExecutionBlock("create mergeability map"):
-			self._mergeabilityMap = self.MergeabilityMap(self.classificationScheme, self.labelOrder)
+		mergeMap = self.MergeabilityMap(self.classificationScheme, self.labelOrder)
+		catchAllMap = self.CatchAllLabelMap(self.classificationScheme, self.labelOrder)
 
-		self._preferences = self.PlacementPreferences(self._mergeabilityMap)
+		solverFactory = SolverFactory(self)
+
+		self._preferences = self.PlacementPreferences(mergeMap, catchAllMap, solverFactory)
 
 	@property
 	def labelOrder(self):
@@ -155,9 +233,11 @@ class PotentialClassification(object):
 				if preferredLabel in self.others:
 					self.others.remove(preferredLabel)
 
-		def __init__(self, mm):
-			self._mergeabilityMap = mm
+		def __init__(self, mergeabilityMap, catchAllMap, solverFactory):
+			self._mergeabilityMap = mergeabilityMap
+			self._catchAllLabelMap = catchAllMap
 			self._prefs = []
+			self.solverFactory = solverFactory
 
 		def add(self, preferredLabel, others):
 			self._prefs.append(self.Hint(preferredLabel, others))
@@ -178,7 +258,11 @@ class PotentialClassification(object):
 				raise Exception(f"mergeabilityMap lacks {flavor}")
 			return candidates.intersection(x)
 
+		def filterCandidatesForPurpose(self, purpose, candidates):
+			return self._catchAllLabelMap.constrainCandidates(purpose, candidates)
+
 	class MergeabilityMap(object):
+		@profiling
 		def __init__(self, classificationScheme, labelOrder):
 			self._map = {}
 
@@ -207,13 +291,56 @@ class PotentialClassification(object):
 		def getCandidatesForAutoFlavor(self, flavor):
 			return self._map.get(flavor)
 
+	class CatchAllLabelMap(object):
+		@profiling
+		def __init__(self, classificationScheme, labelOrder):
+			self._map = {}
+			self._globalClosure = Classification.createLabelSet()
+
+			purposes = {}
+			for componentLabel in classificationScheme.allComponents:
+				for purposeName in componentLabel.globalPurposeLabelNames:
+					purposeLabel = purposes.get(purposeName)
+					if purposeLabel is None:
+						purposeLabel = classificationScheme.getLabel(purposeName)
+						assert(purposeLabel and purposeLabel.type == Classification.TYPE_PURPOSE and purposeLabel.disposition == Classification.DISPOSITION_COMPONENT_WIDE)
+						purposes[purposeName] = purposeLabel
+
+					catchAllLabel = componentLabel.globalPurposeLabel(purposeName)
+
+					labelSet = self._map.get(purposeLabel)
+					if labelSet is None:
+						labelSet = Classification.createLabelSet()
+						self._map[purposeLabel] = labelSet
+					labelSet.update(labelOrder.upwardClosureFor(catchAllLabel))
+
+			for labelSet in self._map.values():
+				self._globalClosure.update(labelSet)
+
+		def constrainCandidates(self, purposeLabel, candidates):
+			if purposeLabel is None:
+				if candidates is not None:
+					candidates = candidates.difference(self._globalClosure)
+				return candidates
+
+			if purposeLabel.disposition != Classification.DISPOSITION_COMPONENT_WIDE:
+				purposeName = purposeLabel.name
+				return Classification.createLabelSet(filter(lambda label: label.purposeName == purposeName, candidates))
+
+			labelSet = self._map.get(purposeLabel)
+			if labelSet is None:
+				return Classification.createLabelSet()
+
+			return labelSet.intersection(candidates)
+
 	class PackagePlacement(object):
-		def __init__(self, labelOrder, node, label = None):
+		def __init__(self, labelOrder, node, label = None, stage = None):
 			# maybe the node should refer to this placement, not the other way around
 			self.labelOrder = labelOrder
 			self.name = str(node)
 			self.node = node
 			self.label = label
+			self.stage = stage
 			self.labelReason = None
 			self.autoLabel = None
 			self.failed = False
@@ -250,7 +377,7 @@ class PotentialClassification(object):
 	class DefinitivePackagePlacement(PackagePlacement):
 		@profiling
 		def __init__(self, labelOrder, node):
-			super().__init__(labelOrder, node, label = node.solution)
+			super().__init__(labelOrder, node, label = node.solution, stage = 0)
 
 		@property
 		def baseLabels(self):
@@ -262,7 +389,7 @@ class PotentialClassification(object):
 	class TentativePackagePlacement(PackagePlacement):
 		@profiling
 		def __init__(self, labelOrder, node, preferences):
-			super().__init__(labelOrder, node)
+			super().__init__(labelOrder, node, stage = 1)
 
 			self.preferences = preferences
 			self.candidates = node.candidates
@@ -288,13 +415,17 @@ class PotentialClassification(object):
 			self.setSolution(choice)
 
 		@property
+		def isComponentLevelPurpose(self):
+			return self.autoLabel and self.autoLabel.disposition == Classification.DISPOSITION_COMPONENT_WIDE
+
+		@property
 		def baseLabels(self):
 			if self.candidates is None:
 				return None
 
 			return Classification.baseLabelsForSet(self.candidates)
 
-		def constraintComponent(self, componentConstraint):
+		def constrainComponent(self, componentConstraint):
 			if not self.candidates or not componentConstraint.componentLabel:
 				return
 
@@ -307,6 +438,18 @@ class PotentialClassification(object):
 						msg = f"constrained by component {componentName}",
 						indent = '   ')
 			self.candidates = preferred
+
+		def constrainGlobalLabels(self):
+			if self.purpose is None:
+				candidates = self.preferences.filterCandidatesForPurpose(None, self.candidates)
+
+				if self.tracer:
+					self.tracer.updateCandidates(self, candidates,
+						before = self.candidates,
+						msg = f"filter out global purpose labels",
+						indent = '   ')
+				self.candidates = candidates
+
 
 		# After the first stage, we look at the build requirements of all source packages
 		# and use the component label to constrain its build requirements
@@ -370,14 +513,13 @@ class PotentialClassification(object):
 				purposeName = label.name
 				if self.purpose is not None and self.purpose is not label:
 					return self.fail(f"conflicting purposes {self.purpose} and {purposeName} - this will never work")
-
-				self.candidates = Classification.createLabelSet(filter(lambda label: label.purposeName == purposeName, candidates))
 				self.purpose = label
 
+				self.candidates = self.preferences.filterCandidatesForPurpose(self.purpose, candidates)
 				if self.tracer:
 					self.tracer.updateCandidates(self, self.candidates,
 						before = candidates,
-						msg = f"constrained by purpose {label}",
+						msg = f"constrained by purpose {self.purpose.describe()}",
 						indent = '   ')
 			else:
 				raise Exception(f"{self}: Unexpected label {label} type {label.type}")
@@ -557,6 +699,10 @@ class PotentialClassification(object):
 			self.solvingBaseLabel = None
 			self.solvingSourceLabel = None
 
+			self.stage1 = []
+			self.stage2 = []
+			self.queue = self.stage1
+
 			self.trace = False
 
 		def __str__(self):
@@ -570,6 +716,15 @@ class PotentialClassification(object):
 
 			if packagePlacement.trace:
 				self.trace = True
+
+			stage = packagePlacement.stage
+			if stage == 1:
+				self.stage1.append(packagePlacement)
+			if stage == 2:
+				self.stage2.append(packagePlacement)
+
+			if packagePlacement.trace:
+				infomsg(f"   {self} added {packagePlacement} stage {stage}")
 
 		@property
 		def isFinal(self):
@@ -585,7 +740,7 @@ class PotentialClassification(object):
 
 		@property
 		def unsolved(self):
-			return list(filter(lambda p: not p.isSolved, self.children))
+			return list(filter(lambda p: not p.isSolved, self.queue))
 
 		@property
 		def numPackages(self):
@@ -593,7 +748,7 @@ class PotentialClassification(object):
 
 		@property
 		def numSolved(self):
-			return self.packageCount - len(self.unsolved)
+			return len(self.solved)
 
 		@property
 		def uniqueSourceProject(self):
@@ -668,6 +823,12 @@ class PotentialClassification(object):
 					node.placement.applyFlavorOrPurpose(pkg.label)
 					if pkg.label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
 						node.placement.autoLabel = pkg.label
+						if pkg.label.disposition == Classification.DISPOSITION_COMPONENT_WIDE:
+							node.placement.stage = 2
+
+							# This package will not be touched in stage1, install a solver for stage2
+							solver = self.preferences.solverFactory.globalPurposeSolver(pkg.label)
+							node.placement.addSolver(solver)
 
 			self.addPackagePlacement(pkg, node.placement)
 
@@ -684,7 +845,8 @@ class PotentialClassification(object):
 		@profiling
 		def applyConstraints(self):
 			for packagePlacement in self.unsolved:
-				packagePlacement.constraintComponent(self.componentConstraint)
+				packagePlacement.constrainComponent(self.componentConstraint)
+				packagePlacement.constrainGlobalLabels()
 
 		def solveTrivialCases(self):
 			for packagePlacement in self.unsolved:
@@ -941,8 +1103,10 @@ class PotentialClassification(object):
 			except:
 				pass
 
+			# We do not iterate over self.children, because that would include packages scheduled for
+			# later stages, too
 			commonBaseLabels = None
-			for packagePlacement in self.children:
+			for packagePlacement in self.solved + self.unsolved:
 				commonBaseLabels = intersectSets(commonBaseLabels, packagePlacement.baseLabels)
 
 			# Filter common base labels by preference
@@ -1338,7 +1502,7 @@ class PotentialClassification(object):
 	# In addition, if the source package for this build has any build requirements that could
 	# not be solved, attach a solver to it that tries to use the the buildConfig to find a
 	# unique solving label
-	def postProcessSolvedBuildPlacement(self, buildPlacement, build, solverFactory):
+	def postProcessSolvedBuildPlacement(self, buildPlacement, build):
 		if len(build.sources) != 1:
 			warnmsg(f"{build} has {len(build.sources)} sources")
 
@@ -1387,7 +1551,7 @@ class PotentialClassification(object):
 						warnmsg("{lower} has no placement handle")
 						continue
 
-					solver = solverFactory.sourceHintsSolver(buildLabel)
+					solver = self._preferences.solverFactory.sourceHintsSolver(buildLabel)
 					lower.placement.addSolver(solver)
 
 			return True
@@ -1403,7 +1567,7 @@ class PotentialClassification(object):
 		if not solvers:
 			return False
 
-		infomsg(f"{buildPlacement}: {buildPlacement.numSolved}/{buildPlacement.numPackages} solved")
+		infomsg(f"{buildPlacement}: {buildPlacement.numSolved}/{buildPlacement.numPackages} solved (stage 2)")
 		with loggingFacade.temporaryIndent(3):
 			for solver in solvers:
 				infomsg(f"{buildPlacement}: trying to solve using {solver}")
@@ -1411,7 +1575,7 @@ class PotentialClassification(object):
 				with loggingFacade.temporaryIndent(3):
 					success = solver.tryToSolve(buildPlacement)
 
-				if success:
+				if buildPlacement.isFinal:
 					infomsg(f"{buildPlacement}: successfully solved - component {buildPlacement.uniqueSourceProject}")
 					return True
 
@@ -1520,7 +1684,9 @@ class PotentialClassification(object):
 			self.solveBuildPlacementStage1(placement)
 
 		infomsg("### PLACEMENT STAGE 2 ###")
-		solverFactory = SolverFactory(self)
+		for placement in placements:
+			placement.queue = placement.stage2
+
 		for build in self.solvingTree.topDownBuildTraversal():
 			buildPlacement = placementMap[build]
 
@@ -1528,7 +1694,7 @@ class PotentialClassification(object):
 				self.solveBuildPlacementStage2(buildPlacement)
 
 			if buildPlacement.isFinal:
-				self.postProcessSolvedBuildPlacement(buildPlacement, build, solverFactory)
+				self.postProcessSolvedBuildPlacement(buildPlacement, build)
 			else:
 				# if we were still unable to place this build, we should at least propagate
 				# any solvers to unsolved lower neighbors

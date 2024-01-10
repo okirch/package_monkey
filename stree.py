@@ -953,6 +953,39 @@ class SolvingTree(object):
 
 			build.componentConstraint = cc
 
+	# Ensure that each build has its .packages list sorted in order of dependency
+	def sortBuildInfos(self, verify = False):
+		siblingMap = {}
+		for buildInfo in self.allBuilds:
+			for pkg in buildInfo.packages:
+				if pkg in siblingMap:
+					raise Exception(f"Package {pkg} is referenced by more than one build")
+				siblingMap[pkg] = buildInfo
+
+			buildInfo.savedPackages = buildInfo.packages
+			buildInfo.packages = []
+
+		for node in self.bottomUpTraversal():
+			for pkg in node.packages:
+				if pkg.isSourcePackage:
+					continue
+
+				buildInfo = siblingMap.get(pkg)
+				if buildInfo is None:
+					errormsg(f"No build info for {pkg}")
+					continue
+				buildInfo.packages.append(pkg)
+
+		if verify:
+			for buildInfo in self.allBuilds:
+				a = sorted(buildInfo.savedPackages, key = lambda build: build.name)
+				b = sorted(buildInfo.packages, key = lambda build: build.name)
+				if a != b:
+					infomsg(f"{buildInfo}: changed list of packages after sorting")
+					infomsg(f"  before: {' '.join(map(str, a))}")
+					infomsg(f"  after:  {' '.join(map(str, b))}")
+					raise Exception("consistency problem")
+
 	def finalize(self):
 		timing = ExecTimer()
 
@@ -976,6 +1009,9 @@ class SolvingTree(object):
 				node.siblings.recordDecision(node, node.solution)
 
 		self.reportFocusNodesAndLabels()
+
+		# Now make sure that each build has its .packages list sorted in order of dependency
+		self.sortBuildInfos()
 
 		infomsg(f"Computed candidates; {timing} elapsed")
 		infomsg("")

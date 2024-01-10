@@ -133,128 +133,128 @@ build_configs:
  - name: Core/standard
    buildrequires:
     - "CoreDevel"
- - name: BuildCore/standard
+ - name: Workbench/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: GCC/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: LLVM/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: KernelPlus/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Kiwi/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Security/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: AppArmor/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Databases/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: CorePlus/standard
    buildrequires:
     - "CoreDevel"
  - name: Systemd/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
     - "CoreDevel"
  - name: Network/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Samba/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Host/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: UpdateStack/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Management/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Gnome/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: X11/standard
    buildrequires:
     - "CoreDevel"
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Webserver/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Java/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Perl/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Ruby/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Python/python310
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Python/python311
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Python/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Rust/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Go/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Javascript/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: HPC/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Typesetting/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: DocumentFormats/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Texlive/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Qt/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: PublicCloud/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Multimedia/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Container/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Virtualization/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: HA/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: HardwareAccess/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Editors/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: Tcl/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
 
 buildconfig_flavors:
  - name: systemdlibs
@@ -272,7 +272,7 @@ components:
    globals:
     devel: CoreDevel
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
  - name: CorePlus
    globals:
     devel: CorePlusDevel
@@ -350,9 +350,6 @@ components:
    requires:
     - Core
     - HardwareAccess
- - name: BaseBuildEnv
-   requires:
-    - Core
  - name: Systemd
    globals:
     devel: SystemdDevel
@@ -501,9 +498,9 @@ components:
     - Core
    exports:
     - "@LLVMRuntime"
- - name: BuildCore
+ - name: Workbench
    globals:
-    devel: BuildCoreDevel
+    devel: WorkbenchDevel
    requires:
     - Core
     - CorePlus
@@ -685,14 +682,14 @@ groups:
     - lldb
 #   - liblldb1?
 
- - name: BuildCoreDevel
+ - name: WorkbenchDevel
    binaries:
     - ocaml-ocamldoc
     - ocaml-dune
     - ocaml-dune-devel
 
  - name: "@Testing"
-   buildconfig: BuildCore/standard
+   buildconfig: Workbench/standard
    requires:
     - "@MinimalCRuntime"
     - "@Core"
@@ -705,9 +702,9 @@ groups:
        - dejagnu
 
  - name: "@BaseDevTools"
-   buildconfig: BuildCore/standard
+   buildconfig: Workbench/standard
    requires:
-    - "@CoreBuild"
+    - "@WorkbenchCore"
     - "@PythonStandard"
     - "@Texinfo" # for info
    binaries:
@@ -728,7 +725,7 @@ groups:
 #      - python31?-psutil
 
  - name: "@Ocaml"
-   buildconfig: BuildCore/standard
+   buildconfig: Workbench/standard
    requires:
     - "@Core"
     - "@GCC"
@@ -753,18 +750,7 @@ groups:
  - name: "@CoreConfig"
    buildconfig: Core/standard
    buildrequires:
-    - "@BaseBuildEnv"
-   binaries:
-#   - system-group-hardware
-#   - system-group-wheel
-#   - system-group-kvm
-#   - system-user-bin
-#   - system-user-daemon
-#   - system-user-nobody
-#   - system-user-tss
-#   - system-user-brltty
-#  sources:
-#   - system-users
+    - "@WorkbenchEssentials"
 
  - name: "@Glibc"
    buildconfig: Core/standard
@@ -803,7 +789,7 @@ groups:
     - cross-*-glibc-devel priority=3
 
  - name: "@WorkbenchRuntime"
-   buildconfig: BuildCore/standard
+   buildconfig: Workbench/standard
    requires:
     - "@MinimalCRuntime"
    binaries:
@@ -837,7 +823,7 @@ groups:
    description: |
      This defines the set of packages that have to be present in order
      to install the average -devel package.
-   buildconfig: BuildCore/standard
+   buildconfig: Workbench/standard
    requires:
     - "@WorkbenchRuntime"
     - "@GCC"
@@ -877,7 +863,7 @@ groups:
     - "@MinimalCRuntime"
     - "@WorkbenchRuntime"
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
    binaries:
     - mozilla-nss
     - p11-kit-nss-trust
@@ -1038,7 +1024,7 @@ groups:
  - name: "@Core0"
    buildconfig: Core/standard
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
     - "@Console"
    requires:
     - "@CoreLibraries"
@@ -1386,7 +1372,7 @@ groups:
 #   - name: devel
 #     requires:
 #      # libtukit-devel requires rpm-devel
-#      - "@BaseBuildEnv-devel"
+#      - "@WorkbenchEssentials-devel"
 
  - name: "@Core"
    buildconfig: Core/standard
@@ -1795,11 +1781,11 @@ groups:
     - lua54
     - lua-macros
 
- - name: "@CoreBuild"
+ - name: "@WorkbenchCore"
    description: |
      This defines the set of packages that will be used to build
      Core packages by default.
-   buildconfig: BuildCore/standard
+   buildconfig: Workbench/standard
    requires:
     - "@MinimalCDevelopment"
     - "@GCC"
@@ -1838,7 +1824,7 @@ groups:
        - "@Qt"
 
  - name: "@Meson"
-   buildconfig: BuildCore/standard
+   buildconfig: Workbench/standard
    requires:
     - "@MinimalCDevelopment"
     - "@PythonStandard"
@@ -1846,14 +1832,10 @@ groups:
     - meson
     - ninja
 
- - name: "@BuildConfig"
-   buildconfig: BuildCore/standard
-   binaries:
-
- - name: "@BaseBuildEnv"
+ - name: "@WorkbenchEssentials"
    description: |
     Generic build environment for packages above the Core level
-   buildconfig: BuildCore/standard
+   buildconfig: Workbench/standard
    requires:
     - "@Core"
     - "@PythonCore"
@@ -2375,6 +2357,7 @@ groups:
     - libatk-1*
     - libatk-bridge-2*
     - libatspi0
+    - libgjs0
 
  - name: "@DesktopLibraries"
    buildconfig: Gnome/standard
@@ -2772,7 +2755,7 @@ groups:
    buildflavors:
     - name: test
       requires:
-       - "@BaseBuildEnv"
+       - "@WorkbenchEssentials"
        - "@HostNetworking"
        - "@HostStorage"
        - "@Virtualization"
@@ -3087,7 +3070,7 @@ groups:
     - "@Virtualization+gui"
     - "@HostNetworking+gnomelibs"
     - "@TransactionalServer+systemd"
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
     - "@HostSecurity"
     - "@NetworkManager"
 #   - "@SELinux"
@@ -3257,7 +3240,7 @@ groups:
    requires:
     - "@CoreLibraries"
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
    binaries:
     - libkmod2
     - libnuma1
@@ -3301,7 +3284,7 @@ groups:
     - "@PerlCore"
     - "@KernelLibraries"
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
    binaries:
     - suse-module-tools
     - kmod
@@ -3340,7 +3323,7 @@ groups:
    requires:
     - "@Core"
    buildrequires:
-    - "@CoreBuild"
+    - "@WorkbenchCore"
    binaries:
     - nasm
 
@@ -3392,7 +3375,7 @@ groups:
 #   - name: devel
 #     autoselect: no
 #     requires:
-#      - "@CoreBuild"
+#      - "@WorkbenchCore"
 #     binaries:
    buildflavors:
     - name: python
@@ -3531,7 +3514,7 @@ groups:
    buildflavors:
     - name: test
       requires:
-       - "@CoreBuild"
+       - "@WorkbenchCore"
 
  - name: "@BrailleLibraries"
    buildconfig: HardwareAccess/standard
@@ -3795,7 +3778,7 @@ groups:
     - "@MultimediaCore"
     - "@Sound"
    buildrequires:
-    - "@BaseBuildEnv"
+    - "@WorkbenchEssentials"
    binaries:
     - libspeex1
     - libspeexdsp1
@@ -4113,7 +4096,7 @@ groups:
    purposes:
 #   - name: devel
 #     requires:
-#      - "@BaseBuildEnv"
+#      - "@WorkbenchEssentials"
 #      - "@DBus-devel"
 #     binaries:
 #      - cups-rpm-helper
@@ -4793,7 +4776,7 @@ groups:
     - "@Management"
     - "@PythonModules"
     - "@FullSystemd"
-#   - "@BaseBuildEnv"
+#   - "@WorkbenchEssentials"
     - "@Kernel"
    binaries:
     - salt

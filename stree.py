@@ -553,6 +553,7 @@ class SolvingTree(object):
 						self.labels.add(label)
 
 			self.componentConstraint = SolvingTree.ComponentConstraint(self.name)
+			self.baseLabelConstraint = build.baseLabel
 
 		def __str__(self):
 			return self.name
@@ -938,7 +939,8 @@ class SolvingTree(object):
 
 		for build in self.multiBuilds:
 			baseName = build.basePackageName
-			if build.name in ('boost:base', 'fftw3:standard'):
+			# This is all used for handling HPC builds
+			if build.name in ('boost:base', 'fftw3:standard', 'python-scipy:gnu-hpc'):
 				infomsg(f"HACK: we allow {build} to be placed in a different component than other {baseName}:* builds")
 				continue
 

@@ -684,9 +684,6 @@ groups:
 
  - name: WorkbenchDevel
    binaries:
-    - ocaml-ocamldoc
-    - ocaml-dune
-    - ocaml-dune-devel
 
  - name: "@Testing"
    buildconfig: Workbench/standard
@@ -735,6 +732,9 @@ groups:
     - ocaml-runtime
     - ocaml-rpm-macros
     - ocaml-*
+    - ocaml-ocamldoc           purpose=devel
+    - ocaml-dune               purpose=devel
+    - ocaml-dune-devel         purpose=devel
    buildflavors:
     - name: virt
       requires:
@@ -1327,6 +1327,12 @@ groups:
     - libstoragemgmt1
     - libconfig11
     - libwacom-data
+   buildflavors:
+    - name: python
+      requires:
+       - "@UdevLibraries+python"
+      binaries:
+       - wacom-tools
 
  - name: "@CoreServices"
    buildconfig: Core/standard
@@ -1879,6 +1885,7 @@ groups:
     - perl-DBD-mysql
     - freetds-tools
     - libsybdb5
+    - libJudy1
    purposes:
 #   - name: devel
 #     requires:
@@ -2654,6 +2661,8 @@ groups:
    buildconfig: Systemd/standard
    requires:
     - "@Core0"
+   packages:
+    - python-pyudev
    binaries:
     - libudev1
     - libudev-mini1
@@ -2784,6 +2793,7 @@ groups:
    binaries:
     - udisks2
     - libblockdev
+    - accountsservice
    purposes:
     # We placed glib2 and related libraries in GnomeLibraries, but due to
     # its depedencies, glib2-devel had to go to DesktopLibraries.
@@ -2965,6 +2975,8 @@ groups:
     - growpart
    buildflavors:
     - name: python
+      requires:
+       - "@UdevLibraries+python"
       binaries:
        - python311-rtslib-fb
        - python-rtslib-fb-common
@@ -3130,6 +3142,7 @@ groups:
     - libharfbuzz0
     - libharfbuzz-icu0
     - libharfbuzz-subset0
+    - harfbuzz-devel purpose=devel
     - woff2
     - t1utils
    buildflavors:
@@ -3161,6 +3174,8 @@ groups:
     - bdftopcf
 
  - name: TypesettingDevel
+   requires:
+    - "@X11API"
    binaries:
     - fontpackages-devel
 
@@ -3435,7 +3450,7 @@ groups:
     - libsodium
     - libzmq5
     - libmaxminddb0
-#   - rpcgen purpose=devel
+    - rpcgen purpose=devel
 
  - name: HardwareAccessDevel
    requires:
@@ -3702,7 +3717,8 @@ groups:
  - name: "@MultimediaCore"
    buildconfig: Multimedia/standard
    requires:
-    - "@Core0"
+    - "@Core"
+    - "@PythonCore"
    binaries:
     - libid3tag0*
 
@@ -3727,6 +3743,8 @@ groups:
     - libexif12
     - pngquant
     - libpotrace0
+    - libcaca0
+    - python3-caca
    buildflavors:
     - name: x11
       requires:
@@ -3744,6 +3762,7 @@ groups:
        - "@OpenGL"
       binaries:
        - libwebp-tools
+       - libcaca0-plugins
     - name: glib2
       requires:
        - "@Glib2"

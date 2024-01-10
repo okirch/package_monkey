@@ -542,6 +542,14 @@ class Classification:
 		elif pkg.label is not label:
 			raise Exception(f"Refusing to change {pkg.fullname()} label from {pkg.label} to {self.label}")
 
+	@staticmethod
+	def labelBuild(build, label, labelReason = None):
+		if build.baseLabel is None:
+			build.baseLabel = label
+			build.baseLabelReason = labelReason
+		elif build.baseLabel is not label:
+			raise Exception(f"Refusing to change {pkg.fullname()} label from {build.baseLabel} to {self.label}")
+
 	class Scheme:
 		def __init__(self):
 			self._labels = {}
@@ -705,6 +713,8 @@ class Classification:
 				label = self.resolveBuildFlavor(label, flavorName)
 			if purposeName:
 				label = self.resolvePurpose(label, purposeName)
+				if label.disposition == Classification.DISPOSITION_COMPONENT_WIDE:
+					errormsg(f"Encountered {label.type} label {label} with disposition {label.disposition} while parsing label {name}")
 			return label
 
 		def resolveBuildFlavor(self, label, flavorName):
@@ -1698,6 +1708,7 @@ class PackageLabelling(object):
 	def __init__(self):
 		self.binaryMatcher = ParallelStringMatcher()
 		self.sourceMatcher = ParallelStringMatcher()
+		self.buildMatcher = ParallelStringMatcher()
 
 	# FIXME: rather than sorting each and every result of the table, we could
 	# sort ALL matches by precedence once and then feed the patterns to the
@@ -1713,10 +1724,14 @@ class PackageLabelling(object):
 		m = self.Match(pattern, 'source', priority, label)
 		self.sourceMatcher.add(pattern, m)
 
+	def addBuildMatch(self, pattern, priority, label):
+		m = self.Match(pattern, 'package', priority, label)
+		self.buildMatcher.add(pattern, m)
+
 	def finalize(self):
 		pass
 
-	def apply(self, pkg):
+	def applyToPackage(self, pkg):
 		if not pkg.isSourcePackage:
 			matches = self.binaryMatcher.match(pkg.name)
 			if not matches:
@@ -1726,25 +1741,32 @@ class PackageLabelling(object):
 		else:
 			matches = self.sourceMatcher.match(pkg.name)
 
+		return self.returnMatches(pkg.name, matches, pkg.trace)
+
+	def applyToBuild(self, build):
+		matches = self.buildMatcher.match(build.name)
+		return self.returnMatches(build.name, matches, build.trace)
+
+	def returnMatches(self, name, matches, trace):
 		if not matches:
-			if pkg.trace:
-				infomsg(f"{pkg}: no match by package filter")
+			if trace:
+				infomsg(f"{name}: no match by package filter")
 			return None
 
 		if len(matches) > 1:
 			matches = sorted(matches, key = lambda m: m.precedence, reverse = True)
 			m = matches.pop(0)
 
-			if pkg.trace:
-				infomsg(f"{pkg}: {m.label} matched by {m.type} filter {m.pattern}")
+			if trace:
+				infomsg(f"{name}: {m.label} matched by {m.type} filter {m.pattern}")
 				infomsg(f"   {len(matches)} lower priority matches were ignored:")
 				for other in matches:
 					infomsg(f"      {other.label} {other.type} {other.pattern}")
 		else:
 			m = next(iter(matches))
 
-			if pkg.trace:
-				infomsg(f"{pkg}: {m.label} matched by {m.type} filter {m.pattern}")
+			if trace:
+				infomsg(f"{name}: {m.label} matched by {m.type} filter {m.pattern}")
 
 		return PackageFilter.Verdict(m.label, f"{m.type} filter {m.pattern}")
 
@@ -1765,6 +1787,10 @@ class StringMatchBuilder(object):
 		pattern, priority, label = self.processPattern(name)
 		self.stringMatcher.addSourceMatch(pattern, priority, label)
 
+	def addOBSPackageFilter(self, name):
+		pattern, priority, label = self.processPattern(name)
+		self.stringMatcher.addBuildMatch(pattern, priority, label)
+
 	def processPattern(self, value):
 		label = self.label
 		priority = self.priority
@@ -1773,7 +1799,7 @@ class StringMatchBuilder(object):
 		#
 		#	postgresql-* priority=8
 		#
-		if ' ' in value:
+		if ' ' in value or '\t' in value:
 			words = value.split()
 			value = words[0]
 			for param in words[1:]:
@@ -1786,7 +1812,6 @@ class StringMatchBuilder(object):
 						componentLabel = label.componentLabel
 						if componentLabel is not None:
 							purposeLabel = componentLabel.globalPurposeLabel(argValue)
-							infomsg(f"  purpose {argValue} yields global purpose label {purposeLabel}")
 					if purposeLabel is None:
 						raise Exception(f"Cannot add filter for \"{value}\" - unknown purpose {argValue} in label {label}")
 					label = purposeLabel
@@ -1835,6 +1860,10 @@ class PackageFilter:
 		def labelPackage(self, pkg):
 			labelReason = Classification.ReasonFilter(pkg, self.reasonString)
 			Classification.labelPackage(pkg, self.label, labelReason)
+
+		def labelBuild(self, build):
+			labelReason = Classification.ReasonFilter(build, self.reasonString)
+			Classification.labelBuild(build, self.label, labelReason)
 
 	def __init__(self, filename = 'filter.yaml', scheme = None):
 		self.classificationScheme = scheme or Classification.Scheme()
@@ -1987,14 +2016,18 @@ class PackageFilter:
 
 		return
 
-	def apply(self, pkg, product):
-		return self.stringMatcher.apply(pkg)
-
-	def performInitialPlacement(self, pkg):
-		verdict = self.apply(pkg, pkg.product)
+	def tryToLabelPackage(self, pkg):
+		verdict = self.stringMatcher.applyToPackage(pkg)
 		if verdict is not None:
 			verdict.labelPackage(pkg)
 			debugInitialPlacement(f"{pkg} is placed in {verdict.label} by package filter rules")
+
+	def tryToLabelBuild(self, build):
+		verdict = self.stringMatcher.applyToBuild(build)
+		if verdict is not None:
+			verdict.labelBuild(build)
+			debugInitialPlacement(f"{build} is placed in {verdict.label} by package filter rules")
+			infomsg(f"{build} is placed in {verdict.label} by package filter rules")
 
 	def makeGroup(self, name, type = None):
 		assert(type)
@@ -2394,9 +2427,10 @@ class PackageFilter:
 			filterSetBuilder.addSourcePackageFilter(name)
 
 		nameList = self.getYamlList(gd, 'packages', group)
+		if nameList and group.label.parent is not None:
+			raise Exceptition(f"{group.label}: packages list only valid in base labels")
 		for name in nameList:
-			filterSetBuilder.addBinaryPackageFilter(name)
-			filterSetBuilder.addSourcePackageFilter(name)
+			filterSetBuilder.addOBSPackageFilter(name)
 
 		nameList = self.getYamlList(gd, 'sources', group)
 		for name in nameList:

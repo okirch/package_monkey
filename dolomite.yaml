@@ -25,6 +25,7 @@ resolverhints:
     # with any systemd dependencies.
     # Maybe we should have a core package that specifies a systemd unit file version
     - "nscd -> systemd systemd-mini"
+    - "gpm -> systemd systemd-mini"
     - "pesign -> systemd systemd-mini"
     - "snapper -> systemd systemd-mini"
     - "cronie -> systemd systemd-mini"

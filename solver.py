@@ -693,7 +693,6 @@ class PotentialClassification(object):
 			# property relies on this attribute not being present
 			# Do NOT initialize self._compatibleBaseLabels either
 
-			# FIXME: rename to baseLabelSolutions
 			self.baseLabelSolutions = {}
 
 			self.solvingBaseLabel = None
@@ -702,6 +701,9 @@ class PotentialClassification(object):
 			self.stage1 = []
 			self.stage2 = []
 			self.queue = self.stage1
+
+			# used when the filter matches a build
+			self._constrainedBaseLabels = None
 
 			self.trace = False
 
@@ -946,6 +948,9 @@ class PotentialClassification(object):
 			if self.solved:
 				return
 
+			if self._constrainedBaseLabels:
+				return
+
 			autoLabels = self.getAutoLabels()
 			if not autoLabels:
 				return False
@@ -1095,6 +1100,14 @@ class PotentialClassification(object):
 						return myChoice
 
 			return None
+
+		def constrainToBaselabel(self, label):
+			assert(label.parent is None)
+
+			self._constrainedBaseLabels = Classification.createLabelSet()
+			self._constrainedBaseLabels.add(label)
+
+			self._commonBaseLabels = self._constrainedBaseLabels
 
 		@property
 		def commonBaseLabels(self):
@@ -1460,6 +1473,10 @@ class PotentialClassification(object):
 	def createBuildPlacement(self, buildInfo):
 		buildPlacement = self.TentativeBuildPlacement(buildInfo, self.labelOrder, self._preferences)
 
+		if buildInfo.baseLabelConstraint is not None:
+			infomsg(f"{buildInfo} is constrained to base label {buildInfo.baseLabelConstraint}")
+			buildPlacement.constrainToBaselabel(buildInfo.baseLabelConstraint)
+
 		# First, loop over all packages that this build produces, and add them to the
 		# build placement
 		for pkg in buildInfo:
@@ -1583,6 +1600,7 @@ class PotentialClassification(object):
 
 		return False
 
+	# FIXME: obsolete
 	def constrainPackagesWithAutomaticLabels(self, order):
 		flavorConstrained = {}
 		purposeConstrained = {}

@@ -46,19 +46,35 @@ if application.opts.baseline:
 
 
 traceMatcher = application.traceMatcher
+
+# we should probably make this part of PackageCollection
+allBuilds = []
+
 with TimedExecutionBlock("load all packages from database"):
-	for pinfo in store.enumerateLatestPackages():
-		pkg = store.retrievePackage(pinfo)
+	for build in store.enumerateOBSPackages():
+		allBuilds.append(build)
 
-		if traceMatcher and traceMatcher.match(pkg.name):
-			pkg.trace = True
+		src = build.sourcePackage
+		for pinfo in build.binaries:
+			if pinfo.isSourcePackage:
+				continue
+			if pinfo.sourcePackage is None:
+				pinfo.sourcePackage = src
 
-		collection.add(pkg)
+			pkg = store.retrievePackage(pinfo)
+
+			if traceMatcher and traceMatcher.match(pkg.name):
+				pkg.trace = True
+
+			collection.add(pkg)
 
 with TimedExecutionBlock("perform initial placement of packages"):
 	for pkg in collection:
 		if not pkg.isSourcePackage:
-			packageFilter.performInitialPlacement(pkg)
+			packageFilter.tryToLabelPackage(pkg)
+
+	for build in allBuilds:
+		packageFilter.tryToLabelBuild(build)
 
 	if baselineClassification is not None:
 		for pkg in collection:

@@ -696,6 +696,10 @@ class OBSPackage:
 		self._source = None
 		self._binaries = []
 
+		self.baseLabel = None
+		self.baseLabelReason = None
+		self.trace = False
+
 		if ':' in name:
 			self._basePackageName = name.split(':')[0]
 		else:

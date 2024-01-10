@@ -534,6 +534,14 @@ class Classification:
 
 		return (name, flavorName)
 
+	@staticmethod
+	def labelPackage(pkg, label, labelReason = None):
+		if pkg.label is None or pkg.label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
+			pkg.label = label
+			pkg.labelReason = labelReason
+		elif pkg.label is not label:
+			raise Exception(f"Refusing to change {pkg.fullname()} label from {pkg.label} to {self.label}")
+
 	class Scheme:
 		def __init__(self):
 			self._labels = {}
@@ -1381,17 +1389,7 @@ class PackageGroup:
 		self._closure = set()
 
 	def track(self, pkg):
-		self._packages.append(pkg)
-		self.matchCount += 1
-
-		if pkg.label is None or pkg.label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
-			pkg.label = self.label
-		elif pkg.label is self.label:
-			pass
-		else:
-			errormsg(f"Refusing to change {pkg.fullname()} change label from {pkg.label} to {self.label}")
-
-		self._closure.add(pkg)
+		Classification.labelPackage(pkg, self.label)
 
 	@property
 	def type(self):
@@ -1494,15 +1492,8 @@ class ClassificationResult(object):
 			self.packages = set()
 
 		def track(self, pkg, reason):
+			Classification.labelPackage(pkg, self.label, reason)
 			self.packages.add(pkg)
-
-			if pkg.label is None or pkg.label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
-				pkg.label = self.label
-				pkg.labelReason = reason
-			elif pkg.label is self.label:
-				pass
-			else:
-				errormsg(f"Refusing to change {pkg} change label from {pkg.label} to {self.label}")
 
 	class ProjectMembership(object):
 		def __init__(self, label):
@@ -1867,10 +1858,8 @@ class PackageFilter:
 			self.reason = reason
 
 		def labelPackage(self, pkg):
-			pkg.label = self.label
-			pkg.labelReason = Classification.ReasonFilter(pkg, self.reason)
-
-			self.group.track(pkg)
+			labelReason = Classification.ReasonFilter(pkg, self.reasonString)
+			Classification.labelPackage(pkg, self.label, labelReason)
 
 	def __init__(self, filename = 'filter.yaml', scheme = None):
 		self.classificationScheme = scheme or Classification.Scheme()

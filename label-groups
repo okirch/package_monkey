@@ -3,15 +3,18 @@
 # the profile module needs to be implemented before anything else
 from profile import profiling
 
-from packages import Product, Resolver, ResolverWorker, PackageSelector, PackageCollection
+from packages import Product, Resolver, ResolverWorker, PackageCollection
 from filter import PackageFilter, Classification
 from solver import PotentialClassification
 from options import Application
-from util import ExecTimer
+from util import TimedExecutionBlock, ExecTimer
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
-from writers import StandardWriter, TableWriter, XmlWriter
+from writers import StandardWriter, TableWriter, XmlWriter, XmlReader
 
 application = Application('build-dependency-tree')
+application.addArgument('--baseline', default = None, help = 'output of a previous classification run')
+application.parseArguments()
+
 dummy = application.catalog
 
 store = application.loadBackingStore(readonly = True,
@@ -25,27 +28,72 @@ infomsg(f"Fingerprint hash for classificationScheme is {classificationScheme.fin
 
 labelOrder = classificationScheme.createOrdering(Classification.TYPE_BINARY)
 
-packageSelector = PackageSelector()
+haveErrors = 0
 collection = PackageCollection()
 
-resolver = Resolver(backingStore = store)
+baselineClassification = None
+if application.opts.baseline:
+	baselineClassification = dict()
+	with TimedExecutionBlock("load baseline classification"):
+		reader = XmlReader(classificationScheme)
+		baseline = reader.read(application.opts.baseline)
+		for label, members in baseline.enumeratePackages():
+			if not members:
+				continue
 
-timing = ExecTimer()
+			for pinfo in members:
+				baselineClassification[pinfo.shortname] = label
+
+
 traceMatcher = application.traceMatcher
-for pinfo in store.enumerateLatestPackages():
-	pkg = store.retrievePackage(pinfo)
-	collection.add(pkg)
-infomsg(f"Loaded all packages, {timing} elapsed")
+with TimedExecutionBlock("load all packages from database"):
+	for pinfo in store.enumerateLatestPackages():
+		pkg = store.retrievePackage(pinfo)
 
-timing = ExecTimer()
-for pkg in collection:
-	if traceMatcher and traceMatcher.match(pkg.name):
-		pkg.trace = True
+		if traceMatcher and traceMatcher.match(pkg.name):
+			pkg.trace = True
 
-	if not pkg.isSourcePackage:
-		packageFilter.performInitialPlacement(pkg)
-infomsg(f"Performed initial placement of packages, {timing} elapsed")
+		collection.add(pkg)
 
+with TimedExecutionBlock("perform initial placement of packages"):
+	for pkg in collection:
+		if not pkg.isSourcePackage:
+			packageFilter.performInitialPlacement(pkg)
+
+	if baselineClassification is not None:
+		for pkg in collection:
+			if not pkg.isSourcePackage:
+				label = baselineClassification.get(pkg.shortname)
+				if label is None:
+					continue
+
+				if pkg.label is label:
+					continue
+
+				if pkg.label is None:
+					pkg.label = label
+					continue
+
+				if pkg.label.type == Classification.TYPE_AUTOFLAVOR:
+					if label.flavorName != pkg.label.name and label.autoFlavorCanBeMerged(pkg.label):
+						warnmsg(f"Conflicting labels for {pkg}: filter says {pkg.label} but baseline says {label}")
+					pkg.label = label
+					continue
+
+				if pkg.label.type == Classification.TYPE_PURPOSE:
+					if label.purposeName != pkg.label.name:
+						warnmsg(f"Conflicting labels for {pkg}: filter says {pkg.label} but baseline says {label}")
+					pkg.label = label
+					continue
+
+				errormsg(f"Conflicting labels for {pkg}: filter says {pkg.label} but baseline says {label}")
+				haveErrors += 1
+
+if haveErrors:
+	errormsg(f"Please fix the above errors first")
+	exit(1)
+
+resolver = Resolver(backingStore = store)
 worker = ResolverWorker(resolver)
 problemLog = worker.problems
 

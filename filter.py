@@ -1812,6 +1812,11 @@ class StringMatchBuilder(object):
 				elif argName == 'purpose':
 					purposeLabel = label.getObjectPurpose(argValue)
 					if purposeLabel is None:
+						componentLabel = label.componentLabel
+						if componentLabel is not None:
+							purposeLabel = componentLabel.globalPurposeLabel(argValue)
+							infomsg(f"  purpose {argValue} yields global purpose label {purposeLabel}")
+					if purposeLabel is None:
 						raise Exception(f"Cannot add filter for \"{value}\" - unknown purpose {argValue} in label {label}")
 					label = purposeLabel
 				else:

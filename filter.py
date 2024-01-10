@@ -1704,10 +1704,10 @@ class PackageLabelling(object):
 	PRIORITY_DEFAULT = 5
 
 	class Match:
-		def __init__(self, pattern, type, priority, group):
+		def __init__(self, pattern, type, priority, label):
 			self.type = type # binary or source
 			self.pattern = pattern
-			self.group = group
+			self.label = label
 
 			assert(priority <= 10)
 			precedence = (10 - priority) * 100
@@ -1722,7 +1722,7 @@ class PackageLabelling(object):
 			self.precedence = precedence
 
 		def __str__(self):
-			return f"{self.group}/{self.precedence}"
+			return f"{self.label}/{self.precedence}"
 
 	def __init__(self):
 		self.binaryMatcher = ParallelStringMatcher()
@@ -1734,12 +1734,12 @@ class PackageLabelling(object):
 	# However, that does not really address the problem as a shorter match may
 	# return less important results before a longer match with a higher precedence
 	# result.
-	def addBinaryMatch(self, pattern, priority, group):
-		m = self.Match(pattern, 'binary', priority, group)
+	def addBinaryMatch(self, pattern, priority, label):
+		m = self.Match(pattern, 'binary', priority, label)
 		self.binaryMatcher.add(pattern, m)
 
-	def addSourceMatch(self, pattern, priority, group):
-		m = self.Match(pattern, 'source', priority, group)
+	def addSourceMatch(self, pattern, priority, label):
+		m = self.Match(pattern, 'source', priority, label)
 		self.sourceMatcher.add(pattern, m)
 
 	def finalize(self):
@@ -1765,37 +1765,37 @@ class PackageLabelling(object):
 			m = matches.pop(0)
 
 			if pkg.trace:
-				infomsg(f"{pkg}: {m.group.label} matched by {m.type} filter {m.pattern}")
+				infomsg(f"{pkg}: {m.label} matched by {m.type} filter {m.pattern}")
 				infomsg(f"   {len(matches)} lower priority matches were ignored:")
 				for other in matches:
-					infomsg(f"      {other.group} {other.type} {other.pattern}")
+					infomsg(f"      {other.label} {other.type} {other.pattern}")
 		else:
 			m = next(iter(matches))
 
 			if pkg.trace:
-				infomsg(f"{pkg}: {m.group.label} matched by {m.type} filter {m.pattern}")
+				infomsg(f"{pkg}: {m.label} matched by {m.type} filter {m.pattern}")
 
-		return PackageFilter.Verdict(m.group, f"{m.type} filter {m.pattern}")
+		return PackageFilter.Verdict(m.label, f"{m.type} filter {m.pattern}")
 
 class StringMatchBuilder(object):
-	def __init__(self, stringMatcher, group, priority = None):
+	def __init__(self, stringMatcher, label, priority = None):
 		self.stringMatcher = stringMatcher
-		self.group = group
+		self.label = label
 
 		if priority is None:
 			priority = PackageLabelling.PRIORITY_DEFAULT
 		self.priority = priority
 
 	def addBinaryPackageFilter(self, name):
-		pattern, priority, group = self.processPattern(name)
-		self.stringMatcher.addBinaryMatch(pattern, priority, group)
+		pattern, priority, label = self.processPattern(name)
+		self.stringMatcher.addBinaryMatch(pattern, priority, label)
 
 	def addSourcePackageFilter(self, name):
-		pattern, priority, group = self.processPattern(name)
-		self.stringMatcher.addSourceMatch(pattern, priority, group)
+		pattern, priority, label = self.processPattern(name)
+		self.stringMatcher.addSourceMatch(pattern, priority, label)
 
 	def processPattern(self, value):
-		group = self.group
+		label = self.label
 		priority = self.priority
 
 		# A match may come with additional parameters, as in
@@ -1810,14 +1810,14 @@ class StringMatchBuilder(object):
 				if argName == 'priority':
 					priority = int(argValue)
 				elif argName == 'purpose':
-					subGroup = group.getObjectPurpose(argValue)
-					if argValue is None:
-						raise Exception(f"Cannot add filter for \"{value}\" - unknown purpose {argValue} in group {group.label}")
-					group = subGroup
+					purposeLabel = label.getObjectPurpose(argValue)
+					if purposeLabel is None:
+						raise Exception(f"Cannot add filter for \"{value}\" - unknown purpose {argValue} in label {label}")
+					label = purposeLabel
 				else:
-					raise Exception(f"Unknown match parameter {param} in {self.filterSet} expression \"{value}\" for group {group.name}");
+					raise Exception(f"Unknown match parameter {param} in {self.filterSet} expression \"{value}\" for label {label}");
 
-		return (value, priority, group)
+		return (value, priority, label)
 
 class FilterTemplate:
 	def __init__(self, name, key, document):
@@ -1852,10 +1852,9 @@ class FilterTemplate:
 
 class PackageFilter:
 	class Verdict:
-		def __init__(self, group, reason):
-			self.group = group
-			self.label = group.label
-			self.reason = reason
+		def __init__(self, label, reason):
+			self.label = label
+			self.reasonString = reason
 
 		def labelPackage(self, pkg):
 			labelReason = Classification.ReasonFilter(pkg, self.reasonString)
@@ -2415,7 +2414,7 @@ class PackageFilter:
 		# The yaml file may specify per-group priorities for filters, but there is just
 		# one global set of filters. Rather than passing the group and priority argument
 		# into each add*Filter function, create a Builder object that does this transparently.
-		filterSetBuilder = StringMatchBuilder(self.stringMatcher, group, priority)
+		filterSetBuilder = StringMatchBuilder(self.stringMatcher, group.label, priority)
 
 		nameList = self.getYamlList(gd, 'products', group)
 		for name in nameList:

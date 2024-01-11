@@ -281,13 +281,15 @@ components:
     - Perl
    exports:
     - "@Glib2NoDBus"
+    - "@Glib2API"
  - name: KernelPlus
    globals:
     devel: KernelDevel
    requires:
     - Core
    exports:
-    # exporting these is a bit dangerous
+    - "@KernelAPI"
+    # exporting these is a bit risky
     - "@KernelLibraries"
     - "@KernelLibraries+udev"
  - name: Perl
@@ -431,7 +433,7 @@ components:
    globals:
     devel: QtDevel
    requires:
-    - Gnome
+#   - Gnome
     - Databases
     - Python
  - name: Security
@@ -491,6 +493,7 @@ components:
     - LLVM
    exports:
     - "@GccRuntime"
+    - "@GCC"
  - name: LLVM
    globals:
     devel: LlvmDevel
@@ -509,6 +512,7 @@ components:
     - Python
    exports:
     - "@WorkbenchRuntime"
+    - "@WorkbenchEssentials"
     # These are really exported for devel only
     - "@MinimalCDevelopment"
     - "@Meson"
@@ -634,6 +638,7 @@ groups:
     - gmp
     - dwz
     - isl
+    - gmp-devel
     - libstdc++-devel
     - libstdc++6-devel-gcc13
 
@@ -725,7 +730,7 @@ groups:
    buildconfig: Workbench/standard
    requires:
     - "@Core"
-    - "@GCC"
+    - "@CoreAPI"
    binaries:
     - ocaml
     # unfortunately, ocaml-runtime requires ocaml, so we need to lump these all together into one topic
@@ -799,6 +804,8 @@ groups:
  - name: CoreDevel
    requires:
     - "@GlibcDevel"
+    - "@Glib2API"
+    - "@CoreAPI"
    binaries:
     - rpm-build
     - compat-usrmerge-build
@@ -807,7 +814,6 @@ groups:
     - libbsd-devel
     - libxml2-devel
     - libcom_err-devel
-    - libboost_*-devel
     - fftw3-devel priority=0
     - flex
     - patch
@@ -815,9 +821,61 @@ groups:
     # misnamed package (should have been static-devel)
     - newt-static
     - libgpgme-devel priority=0
-# these do not belong here
-#   - fftw3-mpi-devel priority=0
-#   - fftw3-openmp-devel priority=0
+
+ - name: "@Boost"
+   buildconfig: Core/standard
+   description: |
+     Standard build of boost. 
+     Currently, this has to live in Core because it's required by snapper.
+     However, if we move snapper to CorePlus, we could probably move Boost
+     as well
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - boost:base
+    - boost-defaults
+
+ - name: "@FFTW3"
+   buildconfig: Core/standard
+   description: |
+     Standard build of the fftw3 library.  Could possibly live in CorePlus just as well.
+     The only problem with this placement right now is that this also buils fftw3-mpi-devel,
+     which depends on openmpi4-devel from HPC (for whatever reasons).
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - fftw3:standard
+   binaries:
+#   - fftw3-mpi-devel hide
+
+ - name: "@CoreAPI"
+   buildconfig: Core/standard
+   description: |
+     This label exists to maintain a cycle-free dependency graph for
+     devel packages. Some packages in CoreDevel depend on glib2-devel,
+     which lives in @Glib2API. glib2-devel in turn requires some packages
+     from CoreDevel - so we move these into @CoreAPI to straighten
+     things out.
+   requires:
+    - "@GlibcDevel"
+    - "@GCC"
+   binaries:
+    - libblkid-devel
+    - libffi-devel
+    - libidn2-devel
+    - libmount-devel
+    - libpwquality-devel
+    - libselinux-devel
+    - libsepol-devel
+    - ncurses-devel
+    - pcre2-devel
+    - qrencode-devel
+    - tpm2-0-tss-devel
+    - zlib-devel
+    - libcurl-devel
+    - libjson-c-devel
+    - libopenssl-devel
+    - libuuid-devel
 
  - name: "@MinimalCDevelopment"
    description: |
@@ -897,7 +955,6 @@ groups:
     - libaudit1
     - libauparse0
     - libblkid1
-    - libboost_*
     - libbpf1
     - libbrotlicommon1
     - libbrotlidec1
@@ -915,6 +972,7 @@ groups:
     - libelf1
     - libevent-2*
     - libext2fs2
+    - libffi8
     - libfftw3-3
     - libfftw3_mpi3
     - libfftw3_omp3
@@ -1291,6 +1349,7 @@ groups:
     - git-core
     - checkmedia
     - rpm-build-perl
+    - libtidyp-1*
    buildflavors:
     - name: glib2
       requires:
@@ -1302,6 +1361,7 @@ groups:
       requires:
        - "@Perl"
       binaries:
+       - perl-Git
        - git-email
        - git-svn
     - name: test
@@ -1332,7 +1392,7 @@ groups:
       requires:
        - "@UdevLibraries+python"
       binaries:
-       - wacom-tools
+       - libwacom-tools
 
  - name: "@CoreServices"
    buildconfig: Core/standard
@@ -1340,6 +1400,7 @@ groups:
     - "@Core1"
     - "@SystemdLibraries"
     - "@CoreHardware"
+    - "@Boost"
    binaries:
     - nscd
     # this is here because the sasl libraries are currently in Core
@@ -1929,16 +1990,24 @@ groups:
  - name: "@X11API"
    buildconfig: X11/standard
    requires:
+    - "@KernelAPI"
     - "@X11Libraries"
     - CoreDevel
     - "@Meson"
    binaries:
+    - libdrm-devel
+    - libpixman-1-0-devel
     - libX11-devel
-    - libxcb-devel
-    - libXrandr-devel
     - libXau-devel
+    - libxcb-devel
     - libXext-devel
+    - libXfixes-devel
+    - libXpm-devel
+    - libXrandr-devel
+    - libXrender-devel
+    - Mesa-libGL-devel
     - wayland-devel
+
     # for the time being, we need to specify the following packages explicitly. The solver
     # will only label foobar-devel packages correctly if there is a corresponding
     # foobar package somewhere.
@@ -2242,6 +2311,20 @@ groups:
     - name: doc
       binaries:
        - qt6-tools-helpgenerators
+
+ - name: CorePlusDevel
+   requires:
+    - "@Glib2API"
+
+ - name: "@Glib2API"
+   buildconfig: CorePlus/standard
+   requires:
+    - "@Glib2"
+    - "@CoreAPI"
+    - "@GCC"
+    - "@SystemPython"
+   binaries:
+    - glib2-devel
 
  - name: "@Glib2NoDBus"
    buildconfig: CorePlus/standard
@@ -2657,6 +2740,21 @@ groups:
       binaries:
        - apache2-mod_apparmor
 
+ - name: SystemdDevel
+   requires: 
+    - "@SystemdAPI"
+
+ - name: "@SystemdAPI"
+   buildconfig: Systemd/standard
+   requires:
+    - "@CoreAPI"
+    - "@SystemdLibraries"
+    # why does dbus-1-devel require dbus-1?
+    - "@DBusService"
+   binaries:
+    - systemd-mini-devel
+    - dbus-1-devel
+
  - name: "@UdevLibraries"
    buildconfig: Systemd/standard
    requires:
@@ -2676,12 +2774,9 @@ groups:
     - libsystemd0-mini
     - libsystemd0
     - libdbus-1-*
+    - libdbus-c++-1
     - dbus-1-common
     - libbytesize1
-#  purposes:
-#   - name: devel
-#     binaries:
-#      - systemd-mini-devel
 
  - name: "@SystemdUtilities"
    buildconfig: Systemd/standard
@@ -2701,13 +2796,6 @@ groups:
     - "@Glib2NoDBus"
    binaries:
     - dbus-1
-#  purposes:
-#   - name: devel
-#     requires:
-#      - CoreDevel
-#     binaries:
-#      # dbus-1-devel depends on dbus-1 (why?)
-#      - dbus-1-devel
 
  - name: "@DBus"
    buildconfig: Systemd/standard
@@ -2765,6 +2853,7 @@ groups:
     - name: test
       requires:
        - "@WorkbenchEssentials"
+       - "@CoreAPI"
        - "@HostNetworking"
        - "@HostStorage"
        - "@Virtualization"
@@ -3345,6 +3434,7 @@ groups:
  - name: KernelDevel
    requires:
     - CoreDevel
+    - "@KernelAPI"
    binaries:
     - kernel-source
     - kernel-syms
@@ -3353,6 +3443,15 @@ groups:
     - systemtap-dtrace
     # do not ship this, ever:
     - cpupower-rebuild
+
+ - name: "@KernelAPI"
+   buildconfig: KernelPlus/standard
+   requires:
+    - "@KernelLibraries"
+    - "@GlibcDevel"
+   binaries:
+    - libsensors4-devel
+    - libpciaccess-devel
 
 # some pieces of Kernel require perl-Bootloader which needs perl
  - name: "@Kernel"
@@ -3386,12 +3485,6 @@ groups:
     - sdparm
     - ucode-intel
     - dtc
-   purposes:
-#   - name: devel
-#     autoselect: no
-#     requires:
-#      - "@WorkbenchCore"
-#     binaries:
    buildflavors:
     - name: python
       requires:
@@ -3441,6 +3534,8 @@ groups:
    buildconfig: Core/standard
    requires:
     - "@Core0"
+   packages:
+    - libsmi
    binaries:
     - netcfg
     - libwrap0
@@ -3515,6 +3610,8 @@ groups:
     - "@SystemdServices"
     - "@UdevLibraries"
     - "@KernelCore"
+   packages:
+    - openucx
    binaries:
     - dapl
     - dapl-*
@@ -3526,6 +3623,7 @@ groups:
     - infiniband-diags
     - libfabric1
     - libiscsi9
+    - openucx-tools purpose=devel
    buildflavors:
     - name: test
       requires:
@@ -3796,6 +3894,7 @@ groups:
    requires:
     - "@MultimediaCore"
     - "@Sound"
+    - "@FFTW3"
    buildrequires:
     - "@WorkbenchEssentials"
    binaries:
@@ -3945,6 +4044,13 @@ groups:
    binaries:
     - libgsl27
 
+ - name: HPCDevel
+   binaries:
+    - fftw3-*-hpc-devel priority=0
+    - fftw3-*-hpc-devel-static priority=0
+    - openmpi*-hpc-devel priority=0
+    - openmpi*-hpc-devel-static priority=0
+
  - name: "@HPCCore"
    buildconfig: Core/standard
    requires:
@@ -3972,6 +4078,12 @@ groups:
     - "@HostNetworking"
     - "@Infiniband"
     - "@TclCore"
+   packages:
+    # you're in a maze of twisty little alleys, with packages that
+    # are all named the same.
+    - fftw3:*-hpc
+    - boost:*-hpc
+    - boost:extra
    binaries:
     - mvapich2*
     - mpi-selector
@@ -3982,25 +4094,16 @@ groups:
     - openmpi3
     - openmpi4
     - pmix
-    # you're in a maze of twisty little alleys, with packages that
-    # are all named the same.
-    - libfftw3*-gnu-openmpi*-hpc
-    - libfftw3*-gnu-mvapich2-hpc
-    - libfftw3*-gnu-mpich-hpc
-    - libopenmpi*-gnu-hpc
-    - libboost_python-py3*
-    - libboost_mpi_python-py3*
-    - libboost_numpy-py3*
-    - libboost_graph_parallel1*
-    - libboost_mpi1*
-    - python3-boost_parallel_mpi1*
-   purposes:
-#   - name: devel
-#     binaries:
-#      - fftw3-*-hpc-devel priority=0
-#      - fftw3-*-hpc-devel-static priority=0
-#      - openmpi*-hpc-devel priority=0
-#      - openmpi*-hpc-devel-static priority=0
+#   - libfftw3*-gnu-openmpi*-hpc
+#   - libfftw3*-gnu-mvapich2-hpc
+#   - libfftw3*-gnu-mpich-hpc
+#   - libopenmpi*-gnu-hpc
+#   - libboost_python-py3*
+#   - libboost_mpi_python-py3*
+#   - libboost_numpy-py3*
+#   - libboost_graph_parallel1*
+#   - libboost_mpi1*
+#   - python3-boost_parallel_mpi1*
 
  - name: "@NetworkUtils"
    buildconfig: Network/standard
@@ -4498,11 +4601,8 @@ groups:
     - npm
     - nodejs20
     - nodejs-default
-   purposes:
-#   - name: devel
-#     binaries:
-#      # would have been easier if this was named nodejs-default-devel
-#      - nodejs-devel-default
+    # would have been easier if this was named nodejs-default-devel
+    - nodejs-devel-default purpose=devel
 
  - name: "@JDK"
    buildconfig: Java/standard
@@ -4651,6 +4751,7 @@ groups:
    binaries:
     - go1.*
     - go
+    - pprof
 
  - name: "@PHP"
    buildconfig: Webserver/standard
@@ -4810,6 +4911,7 @@ groups:
     - "@Fonts"
     - "@FontLibraries"
     - "@DrawingLibraries"
+    - "@FFTW3"
     # actually, only a handful of tex packages actually require postscript
     # but since texlive has this huge cycle that results in this hairball
     # of packages, it's virtually impossible to split these into packages
@@ -4825,6 +4927,7 @@ groups:
     - texlive-*
     - perl-biber
     - perl-Text-BibTeX
+    - perl-Text-BibTeX-devel priority=0
     - transfig
 
  - name: TexliveDevel

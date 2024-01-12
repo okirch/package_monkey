@@ -1098,7 +1098,9 @@ class SolvingTreeBuilder(object):
 		self.pkgToNode = {}
 		self.builds = set()
 
-		self.validateComponentTree()
+		infomsg("Validating Component tree")
+		with loggingFacade.temporaryIndent(3):
+			self.validateComponentTree()
 
 	def validateComponentTree(self):
 		componentOrder = self.classificationScheme.componentOrder()
@@ -1129,12 +1131,14 @@ class SolvingTreeBuilder(object):
 				if label.okayToAccess(req, componentOrder):
 					continue
 
-				warnmsg(f"{label} [{label.componentLabel}] requires {req} which is in inaccessible component {req.componentLabel}")
+				infomsg(f"{label} [{label.componentLabel}] requires {req} which is in inaccessible component {req.componentLabel}")
 				issues += 1
 
 		if issues:
 			# raise Exception(f"Found {issues} problems with the component tree; please fix first")
 			errormsg(f"Found {issues} problems with the component tree; continuing despite these problems")
+		else:
+			infomsg(f"Component tree checks out OK")
 
 	def addPackage(self, solvingTree, pkg):
 		node = self.pkgToNode.get(pkg)

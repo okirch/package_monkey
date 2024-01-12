@@ -1400,19 +1400,29 @@ groups:
     - "@Core1"
     - "@SystemdLibraries"
     - "@CoreHardware"
-    - "@Boost"
+#   - "@Boost"
    binaries:
     - nscd
     # this is here because the sasl libraries are currently in Core
     - cyrus-sasl-saslauthd
-    - snapper
-    - libsnapper7
-    - pam_snapper
     - util-linux-systemd
     # it's not a service but it links against libsystemd
     - procps
     - cronie
     - lmv2
+
+ - name: "@Snapper"
+   buildconfig: UpdateStack/standard
+   requires:
+    - "@Core1"
+    - "@SystemdLibraries"
+    - "@CoreHardware"
+    - "@Boost"
+    - "@UpdateStack"
+   packages:
+    - snapper
+   binaries:
+    - pam_snapper
 
  - name: "@TransactionalServer"
    description: |
@@ -1423,6 +1433,7 @@ groups:
     - "@Core1"
     - "@Boot"
     - "@NetworkUtils"
+    - "@Snapper"
     - "@UpdateStack"
    binaries:
     - libtukit4
@@ -1480,9 +1491,10 @@ groups:
        - krb5-*
        # for some odd reason, pesign wants systemd
        - pesign
-    - name: postgres
+    - name: database
       requires:
-       - "@Databases"
+       - "@Postgres15Libraries"
+       - "@MariaDB10Libraries"
        - "@Core+systemd"
       binaries:
        - cyrus-sasl-sqlauxprop*
@@ -1501,11 +1513,9 @@ groups:
        - sudo-plugin-python
     - name: zypp
       requires:
-       - "@UpdateStack"
-       - "@UpdateStack+python"
-       - "@Core+systemd"
+       # aka libzypp
+       - "@UpdateStackLibraries"
       binaries:
-       - snapper-zypp-plugin
        - permissions-zypp-plugin
     - name: java
       buildrequires:
@@ -1819,6 +1829,15 @@ groups:
     - liblapack3
     - liblapacke3
 
+ - name: "@BitmapLibraries"
+   buildconfig: CorePlus/standard
+   requires:
+    - "@CoreLibraries"
+   packages:
+    # for now, just pixman. Going forward, we may have more pixmap/bitmap graphic libraries here
+    # netpbm would be a candidate
+    - pixman
+
  - name: "@TclCore"
    buildconfig: Tcl/standard
    requires:
@@ -1921,42 +1940,36 @@ groups:
    binaries:
     - release-notes-*
 
- - name: "@Databases"
-   feature: True
+ - name: "@Postgres15Libraries"
    buildconfig: Databases/standard
    requires:
     - "@Core0"
-    - "@NetworkServices"
-#   - "@ApplicationLibraries"
-    - "@SystemPythonStandard"
+   binaries:
+    - libpq5
+    - libecpg6
+
+ - name: "@Postgres15"
+   buildconfig: Databases/standard
+   requires:
+    - "@Postgres15Libraries"
+    - "@SystemdServices"
+    - "@SystemdLibraries"
+    - "@SystemPython"
+    - "@PerlCore"
+   packages:
+    - python-asyncpg
+    - python-psycopg
    binaries:
     - postgresql-*
     - postgresql15-*
-    - libpq5
-    - libecpg6
-    - unixODBC
-    - rsyslog-module-mysql
-    - rsyslog-module-pgsql
-    - libmariadb3
     - postgresql-plpython
     - postgresql-contrib
     - postgresql15-plpython
     - postgresql15-contrib
-    - python311-mysqlclient
-    - perl-DBD-mysql
-    - freetds-tools
-    - libsybdb5
-    - libJudy1
+    - postgresql-devel          purpose=devel
+    - postgresql15-devel        purpose=devel
+    - postgresql15-devel-mini   purpose=devel
    purposes:
-#   - name: devel
-#     requires:
-#      - "@CoreLibraries-devel"
-#      # postgres--llvmjit-devel needs llvm
-#      - "@LLVM"
-#     binaries:
-#      - postgresql-devel
-#      - postgresql15-devel
-#      - postgresql15-devel-mini
     - name: doc
       binaries:
        - postgresql-docs
@@ -1971,21 +1984,49 @@ groups:
       binaries:
        - postgresql-test
        - postgresql15-test
-    - name: systemd
-      requires:
-       - "@MinimalSystemd"
-       - "@Python"
-      binaries:
-       - mariadb
+
+ - name: "@MariaDB10Libraries"
+   buildconfig: Databases/standard
+   requires:
+    - "@Core0"
+   binaries:
+    - libmariadb3
+
+ - name: "@MariaDB10"
+   buildconfig: Databases/standard
+   requires:
+    - "@MariaDB10Libraries"
+    - "@NetworkLibraries"
+    - "@Core0"
+    - "@PerlCore"
+    - "@SystemdLibraries"
+    - "@Python"
+   packages:
+    - mariadb
+    - python-mysqlclient
+   binaries:
+    - perl-DBD-mysql
+    - libJudy1
+    - mariadb
+
+ - name: "@Databases"
+   feature: True
+   buildconfig: Databases/standard
+   requires:
+    - "@Postgres15"
+    - "@MariaDB10"
+    - "@SystemPythonStandard"
+   packages:
+    - freetds
+   binaries:
+    - unixODBC
+#   - freetds-tools
+#   - libsybdb5
 
  - name: DatabasesDevel
    buildconfig: Databases/standard
-   binaries:
+   requires:
     - "@LLVM"
-   binaries:
-    - postgresql-devel
-    - postgresql15-devel
-    - postgresql15-devel-mini
 
  - name: "@X11API"
    buildconfig: X11/standard
@@ -1996,7 +2037,7 @@ groups:
     - "@Meson"
    binaries:
     - libdrm-devel
-    - libpixman-1-0-devel
+#   - libpixman-1-0-devel
     - libX11-devel
     - libXau-devel
     - libxcb-devel
@@ -2147,21 +2188,12 @@ groups:
     - liboldX6
     - libXss1
     - xtrans
-#  purposes:
-#   - name: devel
-#     requires:
-#      - "@PythonCore"
-#     binaries:
-#      # for the time being, we need to specify this explicitly. The *-devel rules
-#      # will only label foobar-devel packages correctly if there is a corresponding
-#      # foobar package somewhere.
-#      # FIXME
-#      - xorgproto-devel
-#      - util-macros-devel
-#      - python3-xcb-proto-devel
-#      - pthread-stubs-devel
-#      - fontcacheproto-devel
-#      - printproto-devel
+   buildflavors:
+    - name: gdk
+      requires:
+       - "@GdkPixbuf"
+      binaries:
+       - gdk-pixbuf-loader-libheif
 
  - name: "@X11StandardUtils"
    buildconfig: X11/standard
@@ -2462,8 +2494,9 @@ groups:
     - "@OpenGL"
     - "@PrintingLibraries"
     - "@FontLibraries+gnomelibs"
-    - "@GraphicsLibraries+glib2"
-    - "@GraphicsLibraries+gnomelibs"
+#   - "@GraphicsLibraries+glib2"
+#   - "@GraphicsLibraries+gnomelibs"
+    - "@GdkPixbuf"
     - "@Spelling"
    binaries:
     - gsettings-desktop-schemas
@@ -2774,7 +2807,7 @@ groups:
     - libsystemd0-mini
     - libsystemd0
     - libdbus-1-*
-    - libdbus-c++-1
+    - libdbus-c++-1-*
     - dbus-1-common
     - libbytesize1
 
@@ -2926,6 +2959,17 @@ groups:
    binaries:
     - augeas
 
+ - name: "@UpdateStackLibraries"
+   buildconfig: UpdateStack/standard
+   requires:
+    - "@Boost"
+    - "@SystemPython"
+    - "@Glib2NoDBus"
+    - "@Core1"
+   binaries:
+    - libzypp
+    - libsolv
+
  - name: "@UpdateStack"
    buildconfig: UpdateStack/standard
    requires:
@@ -2938,25 +2982,25 @@ groups:
     - "@MinimalSystemd"
     - "@MinimalManagement"
     - "@Glib2"
+    - "@UpdateStackLibraries"
+    - "@SystemPython"
+   packages:
+    - zypp-plugin
+    - python-zypp-plugin
    binaries:
     - deltarpm
     - SUSEConnect
-    - libzypp
     - zypp-*
     - zypper
     - zypper-*
-    - libsolv
     - perl-solv
     - ruby-solv
     - createrepo_c
     - libcreaterepo_c0
     - librepo0
-   buildflavors:
-    - name: python
-      requires:
-       - "@Python"
-      binaries:
-       - python31?-zypp-plugin
+    # normally, the reference to "zypp-plugin" in the section above should
+    # be sufficient to get python311-zypp-plugin included here. It looks like
+    # there's a BUG somewhere
 
  - name: "@SystemdLegacy"
    buildconfig: Systemd/standard
@@ -3174,6 +3218,7 @@ groups:
     - "@WorkbenchEssentials"
     - "@HostSecurity"
     - "@NetworkManager"
+    - "@Snapper"
 #   - "@SELinux"
    binaries:
     - autoyast2
@@ -3782,8 +3827,6 @@ groups:
     - "@AvahiLibraries"
     - "@GnomeLibraries"
     - "@Console"
-#   - "@PythonStandard+gnome"
-#   - "@Qt+python"
     - "@PolicyKit"
     - "@BluetoothLibraries"
     - "@Kernel"         # for openvswitch
@@ -3820,10 +3863,23 @@ groups:
    binaries:
     - libid3tag0*
 
+ # Maybe the following could also live in Core:
+ - name: "@EssentialGraphicsLibraries"
+   buildconfig: Multimedia/standard
+   requires:
+    - "@MultimediaCore"
+    - "@BitmapLibraries"
+   binaries:
+    - libjpeg8
+    - libturbojpeg0
+    - libtiff6
+
  - name: "@GraphicsLibraries"
    buildconfig: Multimedia/standard
    requires:
     - "@MultimediaCore"
+    - "@BitmapLibraries"
+    - "@EssentialGraphicsLibraries"
    binaries:
     - libjpeg8
     - libturbojpeg0
@@ -3861,33 +3917,27 @@ groups:
       binaries:
        - libwebp-tools
        - libcaca0-plugins
-    - name: glib2
-      requires:
-       - "@Glib2"
-       - "@GraphicsLibraries+x11"
-      augments:
-       - "@GnomeLibraries"
-      binaries:
-       - libwmf-gnome
-       - libgdk_pixbuf-2*
-       - libgdk_pixbuf_xlib-2*
-       - gdk-pixbuf-query-loaders
-       - liblqr-1*
-      binaries:
-       - gdk-pixbuf
-      purposes:
-#      - name: devel
-#        binaries:
-#         - gdk-pixbuf-devel
-#         - libwmf-devel
-#         - liblqr-devel
-    - name: gnomelibs
-      augments:
-       - "@GnomeLibraries"
-      purposes:
+#   - name: gnomelibs
+#     augments:
+#      - "@GnomeLibraries"
+#     purposes:
 #      - name: devel
 #        binaries:
 #         - cairomm*-devel priority=0
+
+ - name: "@GdkPixbuf"
+   buildconfig: Multimedia/standard
+   requires:
+    - "@EssentialGraphicsLibraries"
+    - "@X11Libraries"
+    - "@Glib2"
+   binaries:
+    - libgdk_pixbuf-2*
+    - libgdk_pixbuf_xlib-2*
+    - gdk-pixbuf-query-loaders
+    - liblqr-1*
+    - gdk-pixbuf-query-loaders
+    - libwmf-gnome
 
  - name: "@AudioLibraries"
    buildconfig: Multimedia/standard
@@ -3940,12 +3990,10 @@ groups:
     - libglvnd
     - libGLU1
     - libGLEW2*
-   purposes:
-#    - name: devel
-#      binaries:
-#       - DirectX-Headers
-#       - spirv-headers
-#       - spirv-llvm-translator
+#   - libvdpau1
+    - DirectX-Headers           purpose=devel
+    - spirv-Headers             purpose=devel
+    - spirv-llvm-Headers        purpose=devel
 
  # FFmpeg is a beast in terms of dependencies. However, we have imlib2 -> libheif1 -> librav1e.
  # Unless we want to pull all of FFmpeg into @X11Libraries, we need to put the AVIF libraries
@@ -3954,6 +4002,7 @@ groups:
    buildconfig: Multimedia/standard
    requires:
     - "@CoreLibraries"
+    - "@EssentialGraphicsLibraries"
    binaries:
     - librav1e0
     - libdav1d6
@@ -3983,15 +4032,16 @@ groups:
     - libbluray2
     - libinstpatch-1*
    buildflavors:
+    - name: gdk
+      requires:
+       - "@GdkPixbuf"
+      binaries:
+       - gdk-pixbuf-loader-libavif
     - name: pulseaudio
       requires:
        - "@PulseAudioLibraries"
       binaries:
        - libavdevice5*
-   purposes:
-     - name: doc
-       requires:
-#       - "@AVLibraries-devel"
 
  - name: "@Recording"
    buildconfig: Multimedia/standard
@@ -4161,7 +4211,8 @@ groups:
    buildflavors:
     - name: mysql
       requires:
-       - "@Databases"
+       - "@MariaDB10Libraries"
+       - "@Postgres15Libraries"
        - "@Samba"
        - "@PythonCore"
       binaries:
@@ -4759,9 +4810,11 @@ groups:
     - "@Core"
     - "@DrawingLibraries"
     # does it make sense to ship php without datatbase support?
-    - "@Databases"
+    - "@Postgres15Libraries"
     - "@AppArmor"
     - "@Spelling"
+    # For libsnmp40 - maybe this should move into NetworkLibraries
+    - "@NetworkServices"
    binaries:
     - php*
    buildflavors:

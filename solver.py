@@ -1474,7 +1474,7 @@ class PotentialClassification(object):
 		buildPlacement = self.TentativeBuildPlacement(buildInfo, self.labelOrder, self._preferences)
 
 		if buildInfo.baseLabelConstraint is not None:
-			infomsg(f"{buildInfo} is constrained to base label {buildInfo.baseLabelConstraint}")
+			# infomsg(f"{buildInfo} is constrained to base label {buildInfo.baseLabelConstraint}")
 			buildPlacement.constrainToBaselabel(buildInfo.baseLabelConstraint)
 
 		# First, loop over all packages that this build produces, and add them to the

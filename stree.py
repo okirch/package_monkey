@@ -1102,16 +1102,21 @@ class SolvingTreeBuilder(object):
 		with loggingFacade.temporaryIndent(3):
 			self.validateComponentTree()
 
-	def validateComponentTree(self):
+	# level determines how strict we are.
+	#  0: validate base labels only
+	#  1: validate @Baselabel-purpose in addition, but no @Baselabel+option
+	#  2: validate all labels
+	def validateComponentTree(self, level = 0):
 		componentOrder = self.classificationScheme.componentOrder()
 		issues = 0
 
 		baseLabels = Classification.createLabelSet()
 		for label in sorted(self.classificationScheme.allBinaryLabels, key = str):
-			if label.parent is not None:
+			if level == 0 and label.parent is not None:
 				continue
 
-			assert(label.flavorName is None and label.purposeName is None)
+			if level <= 1 and label.flavorName:
+				continue
 
 			if label.componentLabel is None:
 				errormsg(f"base label {label} is not assigned to any component")

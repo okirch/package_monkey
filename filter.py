@@ -2027,7 +2027,6 @@ class PackageFilter:
 		if verdict is not None:
 			verdict.labelBuild(build)
 			debugInitialPlacement(f"{build} is placed in {verdict.label} by package filter rules")
-			infomsg(f"{build} is placed in {verdict.label} by package filter rules")
 
 	def makeGroup(self, name, type = None):
 		assert(type)
@@ -2428,7 +2427,7 @@ class PackageFilter:
 
 		nameList = self.getYamlList(gd, 'packages', group)
 		if nameList and group.label.parent is not None:
-			raise Exceptition(f"{group.label}: packages list only valid in base labels")
+			raise Exception(f"{group.label}: packages list only valid in base labels")
 		for name in nameList:
 			filterSetBuilder.addOBSPackageFilter(name)
 

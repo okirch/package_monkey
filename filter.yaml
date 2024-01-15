@@ -337,6 +337,7 @@ components:
    requires:
     - Core
     - Network
+    - LLVM
    buildrequires:
     - CoreDevel
  - name: HA
@@ -398,6 +399,7 @@ components:
     - Perl
     - Typesetting
     - HardwareAccess
+    - Python
  - name: X11
    globals:
     devel: X11Devel
@@ -436,6 +438,7 @@ components:
 #   - Gnome
     - Databases
     - Python
+    - X11
  - name: Security
    globals:
     devel: SecurityDevel
@@ -602,6 +605,7 @@ components:
     - Typesetting
     - Network
     - GCC
+    - Multimedia
  - name: PublicCloud
    globals:
     devel: PublicCloudDevel
@@ -1759,6 +1763,7 @@ groups:
    requires:
     - "@Core"
     - "@Fonts"
+    - "@EssentialGraphicsLibraries"
     - "@GraphicsLibraries"
     - "@PrintingLibraries"
    binaries:
@@ -1767,6 +1772,7 @@ groups:
    buildflavors:
     - name: x11
       requires:
+       - "@FontLibraries+x11"
        - "@GraphicsLibraries+x11"
        - "@Glib2NoDBus"
       binaries:
@@ -1833,6 +1839,9 @@ groups:
    buildconfig: CorePlus/standard
    requires:
     - "@Core"
+   packages:
+    - openblas:serial
+    - openblas:pthreads
    binaries:
     - libColPack0
     - libadolc2
@@ -1842,15 +1851,62 @@ groups:
  - name: "@EssentialGraphicsLibraries"
    buildconfig: CorePlus/standard
    requires:
-    - "@CoreLibraries"
+    - "@Core0"
    packages:
     - pixman
     - libjpeg-turbo
     - libjpeg-turbo:libjpeg62-turbo
+    - libwebp
    binaries:
     - libjpeg8
     - libturbojpeg0
     - libtiff6
+    - libgif7
+    - libopenjp2-*
+    - liblcms2-2
+    - libjxl0*
+    - libwmf-devel purpose=devel
+    - libwebp7
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - libwmf-0*
+    - name: opengl
+      requires:
+       - "@OpenGL"
+      binaries:
+       - libwebp-tools
+
+ # FFmpeg is a beast in terms of dependencies. However, we have imlib2 -> libheif1 -> librav1e.
+ # Unless we want to pull all of FFmpeg into @X11Libraries, we need to put the AVIF libraries
+ # into a small bucket of their own.
+ - name: "@EssentialVideoLibraries"
+   buildconfig: CorePlus/standard
+   requires:
+    - "@CoreLibraries"
+    - "@EssentialGraphicsLibraries"
+   binaries:
+    - librav1e0
+    - libdav1d6
+    - libSvtAv1Enc1
+    - libheif1
+
+ - name: "@GdkPixbuf"
+   buildconfig: CorePlus/standard
+   requires:
+    - "@X11Libraries"
+    - "@EssentialGraphicsLibraries"
+    - "@EssentialVideoLibraries"
+    - "@Glib2"
+   binaries:
+    - libgdk_pixbuf-2*
+    - libgdk_pixbuf_xlib-2*
+    - liblqr-1*
+    - libwmf-gnome
+    - gdk-pixbuf-loader-libheif
+    - gdk-pixbuf-query-loaders
 
  - name: "@PlusLibraries"
    buildconfig: CorePlus/standard
@@ -1861,6 +1917,8 @@ groups:
     - tre
     - icu
     - gperftools
+    - libdatrie
+    - libmemcached
    binaries:
     - libicu72
     - libicu72-ledata
@@ -1944,6 +2002,13 @@ groups:
    binaries:
     - meson
     - ninja
+
+ - name: "@Mercurial"
+   buildconfig: Workbench/standard
+   requires:
+    - "@SystemPythonStandard"
+   binaries:
+    - mercurial
 
  - name: "@WorkbenchEssentials"
    description: |
@@ -2134,7 +2199,7 @@ groups:
     - "@DesktopCore"
     # the only reason this is here is imlib2-loaders which requires libheif1
     # which implements AVIF by using libdav1d
-    - "@AVLibrariesLight"
+    - "@EssentialVideoLibraries"
     # For libdrm - which might be better off in X11
     - "@KernelLibraries"
    buildrequires:
@@ -2234,7 +2299,12 @@ groups:
       requires:
        - "@GdkPixbuf"
       binaries:
-       - gdk-pixbuf-loader-libheif
+    - name: multimedia
+      requires:
+       - "@GraphicsLibraries"
+      binaries:
+       - imlib2
+       - imlib2-loaders
 
  - name: "@X11StandardUtils"
    buildconfig: X11/standard
@@ -2362,6 +2432,7 @@ groups:
     - "@GnomeLibraries"
     - "@SpeechSynthesis"
     - "@PlusLibraries"
+    - "@NetworkProxyLibraries"
    binaries:
     - libQt5*
     - libqt5-*
@@ -2403,6 +2474,7 @@ groups:
  - name: CorePlusDevel
    requires:
     - "@Glib2API"
+    - "@X11API"
 
  - name: "@Glib2API"
    buildconfig: CorePlus/standard
@@ -2427,7 +2499,6 @@ groups:
     # these do not really belong here
     - libxml++-3*
     - libxml++-5*
-    - libproxy1
 
  - name: "@Glib2"
    buildconfig: CorePlus/standard
@@ -2502,8 +2573,8 @@ groups:
    buildconfig: Gnome/standard
    requires:
     - "@GraphicsLibraries+x11"
+    - "@FontLibraries+x11"
    binaries:
-    - libpango-1*
 
  - name: "@PulseAudioLibraries"
    buildconfig: Gnome/standard
@@ -2528,7 +2599,8 @@ groups:
    buildconfig: Gnome/standard
    requires:
     - "@PulseAudioLibraries"
-    - "@GnomeRendering"
+    - "@GraphicsLibraries+x11"
+    - "@FontLibraries+x11"
     - "@SambaLibraries"
     - "@Bubblewrap"
    binaries:
@@ -2590,6 +2662,7 @@ groups:
 #   - "@GraphicsLibraries+gnomelibs"
     - "@GdkPixbuf"
     - "@Spelling"
+    - "@NetworkProxyLibraries"
    binaries:
     - gsettings-desktop-schemas
     - libgtk-3*
@@ -2668,6 +2741,18 @@ groups:
       binaries:
        - citx-gtk*
 
+ - name: "@Webkit"
+   buildconfig: Gnome/standard
+   requires:
+    - "@DesktopLibraries"
+    - "@DesktopUtilities"
+   packages:
+    - webkit2gtk3:*
+   binaries:
+    - libjavascriptcoregtk-4*
+    - libwebkit2gtk-4*
+    - webkit2gtk-4_0-injected-bundles
+
  - name: "@DesktopUtilities"
    buildconfig: Gnome/standard
    requires:
@@ -2689,7 +2774,7 @@ groups:
    buildconfig: Gnome/standard
    requires:
     - "@DesktopLibraries"
-    - "@DesktopUtilities"
+    - "@Webkit"
     - "@X11Server"
     - "@PolicyKit"
     - "@ApplicationLibraries"
@@ -2817,9 +2902,10 @@ groups:
  - name: "@WxWidgets"
    buildconfig: Gnome/standard
    requires:
-    - "@DesktopUtilities"
+    - "@Webkit"
     - "@Qt"
     - "@Bubblewrap"
+    - "@Webkit"
    binaries:
     - libwx_gtk2u*
     - libwx_gtk3u*
@@ -3059,6 +3145,7 @@ groups:
     - "@SystemPython"
     - "@Glib2NoDBus"
     - "@Core1"
+    - "@NetworkProxyLibraries"
    binaries:
     - libzypp
     - libsolv
@@ -3313,7 +3400,7 @@ groups:
     - "@HostSecurity"
     - "@NetworkManager"
     - "@Snapper"
-#   - "@SELinux"
+    - "@NetworkProxyLibraries"
    binaries:
     - autoyast2
     - yast2*
@@ -3362,7 +3449,6 @@ groups:
    buildconfig: Typesetting/standard
    requires:
     - "@Core"
-    - "@GraphicsLibraries"
     - "@Glib2"
     - "@PlusLibraries"
    binaries:
@@ -3378,7 +3464,7 @@ groups:
     - name: x11
       requires:
        - "@X11Libraries"
-       - "@GraphicsLibraries+x11"
+       - "@EssentialGraphicsLibraries+x11"
       binaries:
        - libcairomm-1*
        - libcairo2
@@ -3386,6 +3472,8 @@ groups:
        - cairo-tools
        - libcairo-script-interpreter2
        - libharfbuzz-cairo0
+       - libpango-1*
+       - libthai0
     - name: gnomelibs
       augments:
        - "@GnomeLibraries"
@@ -3474,7 +3562,7 @@ groups:
    requires:
     - "@Core"
     - "@DesktopLibraries"
-    - "@DesktopUtilities"
+    - "@Webkit"
     - "@PolicyKit"
     - "@Bubblewrap"
    sources:
@@ -3825,7 +3913,6 @@ groups:
     - "@Core"
     - "@NetworkCore"
 #   - "@PythonStandard"
-#   - "@CorePlusLibraries"
    binaries:
     - arptables
     - ebtables
@@ -3971,17 +4058,10 @@ groups:
    requires:
     - "@MultimediaCore"
     - "@EssentialGraphicsLibraries"
+   packages:
+    - libcaca
    binaries:
-#   - libjpeg8
-#   - libturbojpeg0
-    - libgif7
     - libpaper2
-    - libwebp
-    - libwebpdemux2
-    - libopenjp2-*
-#   - libtiff6
-#   - cairo
-    - liblcms2-2
     - libjasper7
     - libdjvulibre2*
     - libraw23
@@ -3995,14 +4075,14 @@ groups:
       requires:
        - "@X11Libraries"
        - "@FontLibraries"
+       - "@X11Libraries+multimedia"
       binaries:
        - netpbm
-       - libwmf-0*
+       - caca-utils
     - name: opengpl
       requires:
        - "@OpenGL"
       binaries:
-       - libwebp-tools
        - libcaca0-plugins
 #   - name: gnomelibs
 #     augments:
@@ -4011,21 +4091,6 @@ groups:
 #      - name: devel
 #        binaries:
 #         - cairomm*-devel priority=0
-
- - name: "@GdkPixbuf"
-   buildconfig: Multimedia/standard
-   requires:
-    - "@MultimediaCore"
-    - "@EssentialGraphicsLibraries"
-    - "@X11Libraries"
-    - "@Glib2"
-   binaries:
-    - libgdk_pixbuf-2*
-    - libgdk_pixbuf_xlib-2*
-    - gdk-pixbuf-query-loaders
-    - liblqr-1*
-    - gdk-pixbuf-query-loaders
-    - libwmf-gnome
 
  - name: "@AudioLibraries"
    buildconfig: Multimedia/standard
@@ -4086,23 +4151,10 @@ groups:
     - libGLU1
     - libGLEW2*
     - libvdpau1
+    - libepoxy0
     - DirectX-Headers           purpose=devel
     - spirv-Headers             purpose=devel
     - spirv-llvm-Headers        purpose=devel
-
- # FFmpeg is a beast in terms of dependencies. However, we have imlib2 -> libheif1 -> librav1e.
- # Unless we want to pull all of FFmpeg into @X11Libraries, we need to put the AVIF libraries
- # into a small bucket of their own.
- - name: "@AVLibrariesLight"
-   buildconfig: Multimedia/standard
-   requires:
-    - "@CoreLibraries"
-    - "@MultimediaCore"
-    - "@EssentialGraphicsLibraries"
-   binaries:
-    - librav1e0
-    - libdav1d6
-    - libSvtAv1Enc1
 
  - name: "@AVLibraries"
    buildconfig: Multimedia/standard
@@ -4110,7 +4162,7 @@ groups:
     - "@GraphicsLibraries"
     - "@AudioLibraries"
     - "@FontLibraries"
-    - "@AVLibrariesLight"
+    - "@EssentialVideoLibraries"
     - "@CoreHardware"
     - "@X11Libraries"
     - "@SystemdLibraries"
@@ -4351,14 +4403,14 @@ groups:
       binaries:
        - strongswan-mysql
 
- - name: "@NetworkToys"
-   buildconfig: Network/standard
-   requires:
-    - "@NetworkCore"
-    - "@CoreServices"
-    - "@MinimalSystemd"
-    - "@Perl"
-   binaries:
+#- name: "@NetworkToys"
+#  buildconfig: Network/standard
+#  requires:
+#   - "@NetworkCore"
+#   - "@CoreServices"
+#   - "@MinimalSystemd"
+#   - "@Perl"
+#  binaries:
 
  - name: "@MailClient"
    buildconfig: Network/standard
@@ -4398,6 +4450,30 @@ groups:
 #      - cups-rpm-helper
 #      - cups-ddk
 
+ - name: "@NetworkProxyLibraries"
+   buildconfig: Network/standard
+   requires:
+    - "@Glib2"
+    - "@SystemdLibraries"
+    - "@Core1"
+   packages:
+    - libproxy
+    - libproxy:plugins
+   binaries:
+    - libproxy1
+    - libproxy1-config-gnome3
+    - libproxy1-pacrunner-duktape
+    - perl-Net-Libproxy
+    - libproxy1-config-pacrunner
+    - python3-libproxy
+    - libproxy1-networkmanager
+   buildflavors:
+    - name: webkit
+      requires:
+       - "@Webkit"
+      binaries:
+       - libproxy1-pacrunner-webkit
+
  - name: "@BrowsersConsole"
    buildconfig: Network/standard
    requires:
@@ -4410,7 +4486,9 @@ groups:
     - name: x11
       requires:
        - "@X11Libraries"
-       - "@AVLibrariesLight"
+       - "@EssentialVideoLibraries"
+       - "@GraphicsLibraries"
+       - "@X11Libraries+multimedia"
       binaries:
        - w3m-inline-image
     - name: ruby
@@ -4574,6 +4652,7 @@ groups:
     - "@NetworkUtils+gnomelibs"
     - "@HostWorkloads"
     - "@PlusLibraries"
+    - "@NetworkProxyLibraries"
    binaries:
     - xen
     - kvm_state
@@ -4707,6 +4786,11 @@ groups:
       binaries:
        - jupyter-nbconvert-latex
        - jupyter-notebook-latex
+    - name: mercurial
+      requires:
+       - "@Mercurial"
+      binaries:
+       - python31?-nbdime-hg
 
  - name: "@Cython"
    buildconfig: Python/standard
@@ -4793,6 +4877,7 @@ groups:
     - "@Core"
     - "@X11Libraries"
     - "@AudioLibraries"
+    - "@GraphicsLibraries"
     - "@Smartcards"
    binaries:
     - java-17-openjdk
@@ -5099,6 +5184,7 @@ groups:
     - "@DrawingLibraries"
     - "@FFTW3"
     - "@FontLibraries+x11"
+    - "@GraphicsLibraries+x11"
     # actually, only a handful of tex packages actually require postscript
     # but since texlive has this huge cycle that results in this hairball
     # of packages, it's virtually impossible to split these into packages
@@ -5153,9 +5239,9 @@ groups:
    buildconfig: Editors/standard
    requires:
     - "@Core"
-#   - "@CorePlusLibraries"
     - "@FontLibraries"
     - "@Fonts"
+    - "@GraphicsLibraries"
     - "@GCC"
     - "@Console"
     - "@MailClient"
@@ -5169,6 +5255,7 @@ groups:
        - "@Sound"
        - "@DrawingLibraries"
        - "@Bubblewrap"
+       - "@Webkit"
       binaries:
        - emacs-x11
 
@@ -5251,6 +5338,7 @@ templates:
           - "@X11StandardUtils"
          binaries:
        - name: graphics
+         # this could also go to a new base label "PythonGraphicsXXX"
          augments:
           - "@Glib2+python"
           - "@GraphicsLibraries+x11"

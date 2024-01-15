@@ -1559,6 +1559,7 @@ groups:
     - libpcp_*
     # for some silly reason, pcp-zeroconf depends on pcp-doc, so we need it here
     - pcp-doc
+    - pcp-testsuite purpose=devel
    buildflavors:
     - name: infiniband
       requires:
@@ -1609,8 +1610,13 @@ groups:
    buildconfig: CorePlus/standard
    requires:
     - "@Core"
+    - "@PlusLibraries"
    binaries:
     - strace
+    # all the other pieces of gperftools go into @PlusLibraries:
+    - gperftools
+    - pprof
+    - agrep
 
  - name: "@Spelling"
    feature: True
@@ -1846,7 +1852,9 @@ groups:
     - "@CoreLibraries"
    packages:
     - re2
+    - tre
     - icu
+    - gperftools
    binaries:
     - libicu72
     - libicu72-ledata
@@ -2069,6 +2077,7 @@ groups:
     - libXpm-devel
     - libXrandr-devel
     - libXrender-devel
+    - libgbm-devel      priority=0
     - Mesa-devel        priority=0
     - Mesa-*-devel      priority=0
     - libOSMesa-devel
@@ -2307,9 +2316,23 @@ groups:
     - "@X11Libraries"
    binaries:
 
- - name: QtDevel
+ - name: "@QtAPI"
+   buildconfig: Qt/standard
    requires:
     - CoreDevel
+    - X11Devel
+    # This is silly:
+#   - "@Meson"
+   binaries:
+    - libQt5Widgets-devel
+    - libQt5OpenGL-devel
+    - libQt5Gui-devel
+    - libQt5Core-devel
+    - libqt5-qtbase-common-devel
+
+ - name: QtDevel
+   requires:
+    - "@QtAPI"
     - X11Devel
     # This is silly:
     - "@Meson"
@@ -2414,7 +2437,6 @@ groups:
     - libgirepository-1*
     - girepository-1*
     - glib2-tools
-    - libdbus-glib-1*
     - gobject-introspection
    buildflavors:
     - name: python
@@ -2470,6 +2492,13 @@ groups:
     - libatk-bridge-2*
     - libatspi0
 
+ - name: "@GnomeRendering"
+   buildconfig: Gnome/standard
+   requires:
+    - "@GraphicsLibraries+x11"
+   binaries:
+    - libpango-1*
+
  - name: "@PulseAudioLibraries"
    buildconfig: Gnome/standard
    requires:
@@ -2486,6 +2515,23 @@ groups:
       binaries:
        - libopenal1
 
+ - name: "@PulseAudio"
+   description: |
+      pulseaudio dependency are a huge jumble of gstreamer, pango, mesa, ... due to a
+      dependency cycle in libgstaudio
+   buildconfig: Gnome/standard
+   requires:
+    - "@PulseAudioLibraries"
+    - "@GnomeRendering"
+    - "@SambaLibraries"
+    - "@Bubblewrap"
+   binaries:
+    - pulseaudio
+    - gstreamer
+    - libgstgl-*
+    - gstreamer-plugins-base
+    - typelib-1_0-Gst-1_0
+
  - name: "@SpeechSynthesis"
    buildconfig: Gnome/standard
    requires:
@@ -2494,7 +2540,6 @@ groups:
     - "@PulseAudioLibraries"
     # We have a circular dependency python3-speechd -> speech-dispatcher
     - "@PythonStandard"
-#   - "@SpeechSynthesis"
    binaries:
     - speech-dispatcher
     - libspeechd2
@@ -2518,7 +2563,7 @@ groups:
    binaries:
     - dconf
     - libgjs0
-#   - hicolor-icon-theme
+    - hicolor-icon-theme
 
  - name: "@DesktopLibraries"
    buildconfig: Gnome/standard
@@ -2529,6 +2574,7 @@ groups:
     - "@AVLibraries"
     - "@AVLibraries+x11"
     - "@PulseAudioLibraries"
+    - "@PulseAudio"
     - "@GPU"
     - "@OpenGL"
     - "@PrintingLibraries"
@@ -2556,14 +2602,11 @@ groups:
     - libjson-glib-1*
     - libnice10
     - libnotify4
-    - gstreamer
     - gstreamer-*
     - gstreamer-plugins-vaapi
     - libappstream4
     - libappstream-compose0
-    - libgstgl-*
     - libgstcuda-*
-    - libpango-1*
     - libpangomm-1*
     - libcanberra0
     - libgcr3
@@ -2647,9 +2690,7 @@ groups:
 #   - "@Flatpak"
     - "@NetworkManager"
     - "@Bluetooth"
-    # for pulseaudio
-    - "@SambaLibraries"
-    - "@Bubblewrap"
+    - "@PulseAudio"
    binaries:
     - gtk2
     - gtk3
@@ -2663,15 +2704,11 @@ groups:
     - xdg-menu
     - gcr-viewer*
     - WebKitGTK*
-    # pulseaudio dependency are a huge jumble of gstreamer, pango, mesa, ... due to a
-    # dependency cycle in libgstaudio
-    - pulseaudio
-    - pulseaudio-module-bluetooth
     - gnome-bluetooth
     - AppStream
-#   - appstream-glib
     - gspell
     - libgsound0
+    - pulseaudio-module-bluetooth
    buildflavors:
     - name: python
       requires:
@@ -2780,10 +2817,15 @@ groups:
     - libwx_gtk2u*
     - libwx_gtk3u*
     - libwx_qtu*
-#  purposes:
-#   - name: devel
-#     requires:
-#      - "@Gnome-devel"
+
+ - name: "@WxWidgetsAPI"
+   buildconfig: Gnome/standard
+   requires:
+    - "@WxWidgets"
+    - "@QtAPI"
+   binaries:
+    - wxQt-*-devel priority=0
+    - libwx_base-suse-devel
 
  - name: "@AppArmor"
    buildconfig: AppArmor/standard
@@ -2823,6 +2865,7 @@ groups:
    requires:
     - "@CoreAPI"
     - "@SystemdLibraries"
+    - "CorePlusDevel"
     # why does dbus-1-devel require dbus-1?
     - "@DBusService"
    binaries:
@@ -2881,6 +2924,7 @@ groups:
     - "@DBusService"
    binaries:
     - dbus-1-glib
+    - libdbus-glib-1*
    buildflavors:
     - name: x11
       augments:
@@ -2932,6 +2976,7 @@ groups:
        - "@HostStorage"
        - "@Virtualization"
        - "@Busybox"
+       - "CoreDevel"
       binaries:
        - systemd-testsuite
     - name: python
@@ -3324,7 +3369,7 @@ groups:
     - t1utils
    buildflavors:
     - name: x11
-      augments:
+      requires:
        - "@GraphicsLibraries+x11"
       binaries:
         - libharfbuzz-cairo0
@@ -3991,6 +4036,8 @@ groups:
     - "@FFTW3"
    buildrequires:
     - "@WorkbenchEssentials"
+   packages:
+    - codec2
    binaries:
     - libspeex1
     - libspeexdsp1
@@ -4016,6 +4063,8 @@ groups:
     - libreplaygain1
     - lv2
     - musepack-r*
+    # codec2-examples requires codec2-devel so place it in devel, too
+    - codec2-examples purpose=devel
    buildflavors:
     - name: desktop
       requires:
@@ -4331,6 +4380,7 @@ groups:
    binaries:
     - libcups2
     - cups-config
+    - cups-client
 
  - name: "@PrintServer"
    buildconfig: Network/standard
@@ -4366,6 +4416,7 @@ groups:
     - name: ruby
       requires:
        - "@Ruby"
+       - "@PlusLibraries"
       binaries:
        - elinks
 
@@ -4748,6 +4799,8 @@ groups:
     - java-17-openjdk-demo
     - java-17-openjdk-headless
     - java-17-openjdk-src
+    # Explicitly make this a regular package rather than a -devel one
+    - java-17-openjdk-devel priority=0
     - java-1_8_0-openjdk
     - java-1_8_0-openjdk-accessibility
     - java-1_8_0-openjdk-demo
@@ -4883,7 +4936,6 @@ groups:
    binaries:
     - go1.*
     - go
-    - pprof
 
  - name: "@PHP"
    buildconfig: Webserver/standard

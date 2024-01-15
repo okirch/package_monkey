@@ -1178,6 +1178,7 @@ groups:
     - libpcre16-0
     - libpsl5
     - libidn12
+    - libsepol-utils
     - lmdb
     - lndir
     - logrotate
@@ -2141,7 +2142,6 @@ groups:
     - "@Meson"
    binaries:
     - libdrm-devel
-#   - libpixman-1-0-devel
     - libX11-devel
     - libXau-devel
     - libxcb-devel
@@ -2412,6 +2412,7 @@ groups:
  - name: QtDevel
    requires:
     - "@QtAPI"
+    - "@PulseAudioAPI"
     - X11Devel
     # This is silly:
     - "@Meson"
@@ -2549,6 +2550,7 @@ groups:
    requires:
     - CoreDevel
     - X11Devel
+    - "@PulseAudioAPI"
    binaries:
     - gnome-doc-utils
     - gnome-doc-utils-lang
@@ -2594,6 +2596,15 @@ groups:
        - "@X11Libraries"
       binaries:
        - libopenal1
+
+ - name: "@PulseAudioAPI"
+   buildconfig: Gnome/standard
+   requires:
+    - "@PulseAudioLibraries"
+    - CorePlusDevel
+    - SystemdDevel
+   binaries:
+    - libpulse-devel
 
  - name: "@PulseAudio"
    description: |
@@ -3507,6 +3518,7 @@ groups:
     - "CoreDevel"
    binaries:
     - fontconfig-devel
+    - libpixman-*-devel priority=0
 
  - name: "@CairoAPI"
    buildconfig: Typesetting/standard

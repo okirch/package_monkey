@@ -1879,9 +1879,8 @@ groups:
       binaries:
        - libwebp-tools
 
- # FFmpeg is a beast in terms of dependencies. However, we have imlib2 -> libheif1 -> librav1e.
- # Unless we want to pull all of FFmpeg into @X11Libraries, we need to put the AVIF libraries
- # into a small bucket of their own.
+ # We need to put some low-level AVIF libraries into a small bucket of their own, otherwise
+ # X11 and the AV Libraries become one huge messy tangle
  - name: "@EssentialVideoLibraries"
    buildconfig: CorePlus/standard
    requires:
@@ -1892,6 +1891,8 @@ groups:
     - libdav1d6
     - libSvtAv1Enc1
     - libheif1
+    - libheif-rav1e
+    - libheif-svtenc
 
  - name: "@GdkPixbuf"
    buildconfig: CorePlus/standard
@@ -2135,6 +2136,7 @@ groups:
    requires:
     - "@KernelAPI"
     - "@X11Libraries"
+    - "@FontLibsAPI"
     - CoreDevel
     - "@Meson"
    binaries:
@@ -2144,6 +2146,7 @@ groups:
     - libXau-devel
     - libxcb-devel
     - libXext-devel
+    - libXft-devel
     - libXfixes-devel
     - libXpm-devel
     - libXrandr-devel
@@ -3451,6 +3454,8 @@ groups:
     - "@Core"
     - "@Glib2"
     - "@PlusLibraries"
+   packages:
+    - fontconfig
    binaries:
     - libfontconfig
     - fontconfig
@@ -3496,9 +3501,27 @@ groups:
     - font-util
     - bdftopcf
 
+ - name: "@FontLibsAPI"
+   buildconfig: Typesetting/standard
+   requires:
+    - "CoreDevel"
+   binaries:
+    - fontconfig-devel
+
+ - name: "@CairoAPI"
+   buildconfig: Typesetting/standard
+   requires:
+    - "@FontLibsAPI"
+    - "@X11API"
+    - "@FontLibraries+x11"
+   binaries:
+    - cairo-devel
+    - fontconfig-devel
+
  - name: TypesettingDevel
    requires:
     - "@X11API"
+    - "@CairoAPI"
    binaries:
     - fontpackages-devel
 
@@ -4797,6 +4820,11 @@ groups:
    requires:
     - "@Cython310"
     - "@Cython311"
+
+ - name: PythonDevel
+   requires:
+    # for python-gobject-common-devel
+    - "@CairoAPI"
 
  - name: "@Ruby"
    buildconfig: Ruby/standard

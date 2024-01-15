@@ -2371,7 +2371,7 @@ class PackageFilter:
 				purpose.gravity = gravity
 
 		if group.label:
-			nameList = gd.get('requires') or []
+			nameList = self.getYamlList(gd, 'requires', group)
 			for name in nameList:
 				otherGroup = self.resolveGroupReference(name, group.type)
 				group.addRequires(otherGroup)
@@ -2389,12 +2389,12 @@ class PackageFilter:
 			# auto-selecting @Gnome+python.
 			# By having @Python+gnome augment rather than require @Gnome, we end up with
 			# @Gnome+python auto-selecting @Python+gnome rather than the other way around
-			nameList = gd.get('augments') or []
+			nameList = self.getYamlList(gd, 'augments', group)
 			for name in nameList:
 				otherGroup = self.resolveGroupReference(name)
 				group.addAugmentation(otherGroup)
 
-			nameList = gd.get('buildrequires') or []
+			nameList = self.getYamlList(gd, 'buildrequires', group)
 			for name in nameList:
 				otherGroup = self.resolveGroupReference(name)
 				group.addBuildRequires(otherGroup)

@@ -44,6 +44,8 @@ resolverhints:
     - "numad -> systemd systemd-mini"
     - "xdm -> systemd systemd-mini"
     - "e2fsprogs-scrub -> postfix"
+    # This hard dependency looks like nonsense to me
+    - "fftw3-mpi-devel -> openmpi4-devel"
   prefer:
     - "order libcontainers-openSUSE-policy libcontainers-default-policy"
     - "order libjpeg8 libjpeg*"

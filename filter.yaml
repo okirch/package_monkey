@@ -924,6 +924,8 @@ groups:
     - "@WorkbenchRuntime"
    buildrequires:
     - "@WorkbenchEssentials"
+   packages:
+    - zlib
    binaries:
     - mozilla-nss
     - p11-kit-nss-trust
@@ -1837,14 +1839,18 @@ groups:
     - liblapack3
     - liblapacke3
 
- - name: "@BitmapLibraries"
+ - name: "@EssentialGraphicsLibraries"
    buildconfig: CorePlus/standard
    requires:
     - "@CoreLibraries"
    packages:
-    # for now, just pixman. Going forward, we may have more pixmap/bitmap graphic libraries here
-    # netpbm would be a candidate
     - pixman
+    - libjpeg-turbo
+    - libjpeg-turbo:libjpeg62-turbo
+   binaries:
+    - libjpeg8
+    - libturbojpeg0
+    - libtiff6
 
  - name: "@PlusLibraries"
    buildconfig: CorePlus/standard
@@ -2559,6 +2565,7 @@ groups:
     - "@Glib2"
     - "@X11"
     - "@AccessibilityLibraries"
+    - "@FontLibraries+x11"
     - "@PlusLibraries"
    binaries:
     - dconf
@@ -3370,9 +3377,15 @@ groups:
    buildflavors:
     - name: x11
       requires:
+       - "@X11Libraries"
        - "@GraphicsLibraries+x11"
       binaries:
-        - libharfbuzz-cairo0
+       - libcairomm-1*
+       - libcairo2
+       - libcairo-gobject2
+       - cairo-tools
+       - libcairo-script-interpreter2
+       - libharfbuzz-cairo0
     - name: gnomelibs
       augments:
        - "@GnomeLibraries"
@@ -3508,6 +3521,7 @@ groups:
     - name: x11
       requires:
        - "@GraphicsLibraries+x11"
+       - "@FontLibraries+x11"
       binaries:
        - hwloc
 
@@ -3952,33 +3966,21 @@ groups:
    binaries:
     - libid3tag0*
 
- # Maybe the following could also live in Core:
- - name: "@EssentialGraphicsLibraries"
-   buildconfig: Multimedia/standard
-   requires:
-    - "@MultimediaCore"
-    - "@BitmapLibraries"
-   binaries:
-    - libjpeg8
-    - libturbojpeg0
-    - libtiff6
-
  - name: "@GraphicsLibraries"
    buildconfig: Multimedia/standard
    requires:
     - "@MultimediaCore"
-    - "@BitmapLibraries"
     - "@EssentialGraphicsLibraries"
    binaries:
-    - libjpeg8
-    - libturbojpeg0
+#   - libjpeg8
+#   - libturbojpeg0
     - libgif7
     - libpaper2
     - libwebp
     - libwebpdemux2
     - libopenjp2-*
-    - libtiff6
-    - cairo
+#   - libtiff6
+#   - cairo
     - liblcms2-2
     - libjasper7
     - libdjvulibre2*
@@ -3992,12 +3994,8 @@ groups:
     - name: x11
       requires:
        - "@X11Libraries"
+       - "@FontLibraries"
       binaries:
-       - libcairo2
-       - libcairo-gobject2
-       - libcairomm-1*
-       - cairo-tools
-       - libcairo-script-interpreter2
        - netpbm
        - libwmf-0*
     - name: opengpl
@@ -4017,6 +4015,7 @@ groups:
  - name: "@GdkPixbuf"
    buildconfig: Multimedia/standard
    requires:
+    - "@MultimediaCore"
     - "@EssentialGraphicsLibraries"
     - "@X11Libraries"
     - "@Glib2"
@@ -4098,6 +4097,7 @@ groups:
    buildconfig: Multimedia/standard
    requires:
     - "@CoreLibraries"
+    - "@MultimediaCore"
     - "@EssentialGraphicsLibraries"
    binaries:
     - librav1e0
@@ -5098,6 +5098,7 @@ groups:
     - "@FontLibraries"
     - "@DrawingLibraries"
     - "@FFTW3"
+    - "@FontLibraries+x11"
     # actually, only a handful of tex packages actually require postscript
     # but since texlive has this huge cycle that results in this hairball
     # of packages, it's virtually impossible to split these into packages
@@ -5253,8 +5254,11 @@ templates:
          augments:
           - "@Glib2+python"
           - "@GraphicsLibraries+x11"
+          - "@FontLibraries+x11"
          binaries:
           - pythonXXX-pycairo
+          - pythonXXX-cairocffi
+          - pythonXXX-CairoSVG
          purposes:
 #         - name: devel
 #           requires:

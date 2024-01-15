@@ -834,6 +834,13 @@ groups:
    packages:
     - boost:base
     - boost-defaults
+   binaries: 
+    # place one libboost rpm here explicitly. There's still something wrong with the
+    # label hierarchy, because if I don't do this, the libboost_* packages from
+    # boost:base will not be placed at all.
+    # This seems to be an issue with boost-license1 being required by something that
+    # doesn't have @Boost in its list of requirements
+    - libboost_thread1_82_0
 
  - name: "@FFTW3"
    buildconfig: Core/standard
@@ -1503,9 +1510,9 @@ groups:
        - cyrus-sasl-ldap-auxprop-bdb
     - name: python
       buildrequires:
-       - "@Python"
+       - "@SystemPython"
       requires:
-       - "@PythonCore"
+       - "@SystemPython"
        - "@Core+systemdlibs"
        - "@Core+udevlibs"
       binaries:
@@ -1940,10 +1947,17 @@ groups:
    binaries:
     - release-notes-*
 
- - name: "@Postgres15Libraries"
+ - name: "@CommonDatabaseLibraries"
    buildconfig: Databases/standard
    requires:
     - "@Core0"
+   packages:
+    - unixODBC
+
+ - name: "@Postgres15Libraries"
+   buildconfig: Databases/standard
+   requires:
+    - "@CommonDatabaseLibraries"
    binaries:
     - libpq5
     - libecpg6
@@ -1988,7 +2002,7 @@ groups:
  - name: "@MariaDB10Libraries"
    buildconfig: Databases/standard
    requires:
-    - "@Core0"
+    - "@CommonDatabaseLibraries"
    binaries:
     - libmariadb3
 
@@ -2000,7 +2014,7 @@ groups:
     - "@Core0"
     - "@PerlCore"
     - "@SystemdLibraries"
-    - "@Python"
+    - "@SystemPythonStandard"
    packages:
     - mariadb
     - python-mysqlclient
@@ -2008,6 +2022,8 @@ groups:
     - perl-DBD-mysql
     - libJudy1
     - mariadb
+    - mariadb-client
+    - mariadb-errormessages
 
  - name: "@Databases"
    feature: True
@@ -2430,6 +2446,19 @@ groups:
     # not sure why, but this package thinks it needs gtk4-devel for building
     - gstreamer-plugins-rs-devel
 
+ - name: "@AccessibilityLibraries"
+   buildconfig: X11/standard
+   requires:
+    - "@Core0"
+    - "@DBus"
+    - "@Glib2"
+    - "@X11"
+   binaries:
+    - at-spi2*
+    - libatk-1*
+    - libatk-bridge-2*
+    - libatspi0
+
  - name: "@PulseAudioLibraries"
    buildconfig: Gnome/standard
    requires:
@@ -2473,12 +2502,9 @@ groups:
     - "@DBus"
     - "@Glib2"
     - "@X11"
+    - "@AccessibilityLibraries"
    binaries:
     - dconf
-    - at-spi2*
-    - libatk-1*
-    - libatk-bridge-2*
-    - libatspi0
     - libgjs0
 
  - name: "@DesktopLibraries"
@@ -2668,6 +2694,7 @@ groups:
     - "@SambaLibraries"
     - "@FullSystemd"
     - "@Flatpak"
+    - "@Boost"
    binaries:
     - gdm
     - gnome-control-center
@@ -2983,7 +3010,7 @@ groups:
     - "@MinimalManagement"
     - "@Glib2"
     - "@UpdateStackLibraries"
-    - "@SystemPython"
+    - "@SystemPythonStandard"
    packages:
     - zypp-plugin
     - python-zypp-plugin
@@ -3730,8 +3757,6 @@ groups:
     - dnsmasq
     - ethtool
     - susefirewall2-to-firewalld
-# this probably wants to go into its own label
-#   - strongswan
     - stunnel
     - nftables
     - python3-nftables
@@ -4128,6 +4153,8 @@ groups:
     - "@HostNetworking"
     - "@Infiniband"
     - "@TclCore"
+    - "@Boost"
+    - "@FFTW3"
    packages:
     # you're in a maze of twisty little alleys, with packages that
     # are all named the same.
@@ -4214,7 +4241,7 @@ groups:
        - "@MariaDB10Libraries"
        - "@Postgres15Libraries"
        - "@Samba"
-       - "@PythonCore"
+       - "@SystemPython"
       binaries:
        - freeradius-server
        - freeradius-server-mysql
@@ -4228,6 +4255,27 @@ groups:
       requires:
        - "@Python"
       binaries:
+
+ - name: "@IPSec"
+   buildconfig: Network/standard
+   requires:
+    - "@NetworkCore"
+    - "@CoreServices"
+    - "@MinimalSystemd"
+    - "@Perl"
+    # strongswan-libs0 pulls in everything under the sun :-(
+    - "@DesktopLibraries"
+    - "@Smartcards"
+    # Really just libnm0 but I haven't yet pried that apart
+    - "@NetworkManager"
+   packages:
+    - strongswan
+   buildflavors:
+    - name: database
+      requires:
+       - "@Databases"
+      binaries:
+       - strongswan-mysql
 
  - name: "@NetworkToys"
    buildconfig: Network/standard
@@ -4810,7 +4858,7 @@ groups:
     - "@Core"
     - "@DrawingLibraries"
     # does it make sense to ship php without datatbase support?
-    - "@Postgres15Libraries"
+    - "@Databases"
     - "@AppArmor"
     - "@Spelling"
     # For libsnmp40 - maybe this should move into NetworkLibraries

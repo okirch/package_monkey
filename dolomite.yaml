@@ -36,6 +36,7 @@ resolverhints:
     - "util-linux-systemd -> systemd systemd-mini"
     - "cyrus-sasl-saslauthd -> systemd systemd-mini"
     - "pcp -> systemd systemd-mini"
+    - "strongswan -> systemd systemd-mini"
     - "libstoragemgmt -> systemd systemd-mini"
     - "rdma-core -> systemd systemd-mini"
     - "rdma-core -> udev udev-mini"

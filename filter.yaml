@@ -741,11 +741,6 @@ groups:
     - ocaml-dune               purpose=devel
     - ocaml-dune-devel         purpose=devel
    buildflavors:
-    - name: virt
-      requires:
-       - "@Virtualization"
-      binaries:
-       - ocaml-libvirt
     - name: x11
       requires:
        - "@X11Libraries"
@@ -823,14 +818,14 @@ groups:
     - libgpgme-devel priority=0
 
  - name: "@Boost"
-   buildconfig: Core/standard
+   buildconfig: CorePlus/standard
    description: |
      Standard build of boost. 
      Currently, this has to live in Core because it's required by snapper.
      However, if we move snapper to CorePlus, we could probably move Boost
      as well
    requires:
-    - "@CoreLibraries"
+    - "@PlusLibraries"
    packages:
     - boost:base
     - boost-defaults
@@ -989,7 +984,6 @@ groups:
     # It's a font library, but it's used in so many places that it makes sense to place it here
     - libfreetype6
     - libfribidi0
-    - libicu*
     - libiniparser1
     # libpng is required by libfreetype6
     - libpng16
@@ -1624,6 +1618,7 @@ groups:
    requires:
     - "@Core0"
     - "@Glib2NoDBus"
+    - "@PlusLibraries"
    binaries:
     - myspell-dictionaries
     - enchant
@@ -1845,6 +1840,17 @@ groups:
     # netpbm would be a candidate
     - pixman
 
+ - name: "@PlusLibraries"
+   buildconfig: CorePlus/standard
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - re2
+    - icu
+   binaries:
+    - libicu72
+    - libicu72-ledata
+
  - name: "@TclCore"
    buildconfig: Tcl/standard
    requires:
@@ -1965,6 +1971,7 @@ groups:
  - name: "@Postgres15"
    buildconfig: Databases/standard
    requires:
+    - "@PlusLibraries"
     - "@Postgres15Libraries"
     - "@SystemdServices"
     - "@SystemdLibraries"
@@ -2062,7 +2069,10 @@ groups:
     - libXpm-devel
     - libXrandr-devel
     - libXrender-devel
-    - Mesa-libGL-devel
+    - Mesa-devel        priority=0
+    - Mesa-*-devel      priority=0
+    - libOSMesa-devel
+    - libglvnd-devel
     - wayland-devel
 
     # for the time being, we need to specify the following packages explicitly. The solver
@@ -2322,6 +2332,7 @@ groups:
     - "@PulseAudioLibraries"
     - "@GnomeLibraries"
     - "@SpeechSynthesis"
+    - "@PlusLibraries"
    binaries:
     - libQt5*
     - libqt5-*
@@ -2503,9 +2514,11 @@ groups:
     - "@Glib2"
     - "@X11"
     - "@AccessibilityLibraries"
+    - "@PlusLibraries"
    binaries:
     - dconf
     - libgjs0
+#   - hicolor-icon-theme
 
  - name: "@DesktopLibraries"
    buildconfig: Gnome/standard
@@ -2727,6 +2740,7 @@ groups:
     - "@HPCCoreLibraries"
     - "@PythonStandard"
     - "@GraphvizLibraries"
+    - "@Boost"
    binaries:
     - graphviz
     - inkscape
@@ -3180,6 +3194,7 @@ groups:
     - "@OATH"
     - "@GCC"
     - "@Core+systemd"
+    - "@PlusLibraries"
    binaries:
     - ceph
 
@@ -3297,6 +3312,7 @@ groups:
     - "@Core"
     - "@GraphicsLibraries"
     - "@Glib2"
+    - "@PlusLibraries"
    binaries:
     - libfontconfig
     - fontconfig
@@ -3467,6 +3483,7 @@ groups:
     - sg3_utils
     - hwdata
     - pciutils
+    - fuse3
    buildflavors:
     # lvm2 is not really a proper Kernel package because it wants a lot
     # of stuff that's only available at higher levels
@@ -3710,6 +3727,7 @@ groups:
     - "@Core0"
    binaries:
     - libbrlapi0*
+    - system-user-brltty
 
  - name: "@Braille"
    buildconfig: HardwareAccess/standard
@@ -3718,6 +3736,7 @@ groups:
     - "@UdevLibraries"
     - "@SystemdServices"
     - "@PulseAudioLibraries"
+    - "@PlusLibraries"
     - "@Console"
     - "@Glib2"
     - "@Bluetooth"
@@ -4009,13 +4028,16 @@ groups:
    requires:
     - "@Core"
     - "@X11"
+   packages:
+    - libvdpau
+    - libglvnd
+    - libgbm
    binaries:
     - Mesa*
     - libglut3
-    - libglvnd
     - libGLU1
     - libGLEW2*
-#   - libvdpau1
+    - libvdpau1
     - DirectX-Headers           purpose=devel
     - spirv-Headers             purpose=devel
     - spirv-llvm-Headers        purpose=devel
@@ -4040,10 +4062,12 @@ groups:
     - "@AudioLibraries"
     - "@FontLibraries"
     - "@AVLibrariesLight"
-    - "@GPU"
     - "@CoreHardware"
     - "@X11Libraries"
     - "@SystemdLibraries"
+    - "@GPU"
+    - "@OpenGL"
+   packages:
    binaries:
     - libavcodec5*
     - libavformat5*
@@ -4155,12 +4179,21 @@ groups:
     - "@TclCore"
     - "@Boost"
     - "@FFTW3"
+    - "@PlusLibraries"
    packages:
     # you're in a maze of twisty little alleys, with packages that
     # are all named the same.
     - fftw3:*-hpc
     - boost:*-hpc
     - boost:extra
+    - openmpi1:gnu-hpc
+    - openmpi2:gnu-hpc
+    - openmpi3:gnu-hpc
+    - openmpi4:gnu-hpc
+    - openmpi1:standard
+    - openmpi2:standard
+    - openmpi3:standard
+    - openmpi4:standard
    binaries:
     - mvapich2*
     - mpi-selector
@@ -4171,16 +4204,6 @@ groups:
     - openmpi3
     - openmpi4
     - pmix
-#   - libfftw3*-gnu-openmpi*-hpc
-#   - libfftw3*-gnu-mvapich2-hpc
-#   - libfftw3*-gnu-mpich-hpc
-#   - libopenmpi*-gnu-hpc
-#   - libboost_python-py3*
-#   - libboost_mpi_python-py3*
-#   - libboost_numpy-py3*
-#   - libboost_graph_parallel1*
-#   - libboost_mpi1*
-#   - python3-boost_parallel_mpi1*
 
  - name: "@NetworkUtils"
    buildconfig: Network/standard
@@ -4215,6 +4238,8 @@ groups:
     - "@SystemdServices"
     - "@AvahiLibraries"
     - "@Perl"
+    # postfix uses icu
+    - "@PlusLibraries"
    binaries:
     - bind
     - ntp
@@ -4497,6 +4522,7 @@ groups:
     - "@Vim"
     - "@NetworkUtils+gnomelibs"
     - "@HostWorkloads"
+    - "@PlusLibraries"
    binaries:
     - xen
     - kvm_state
@@ -4540,6 +4566,12 @@ groups:
        - "@Smartcards"
       binaries:
        - qemu-hw-usb-smartcard
+    - name: ocaml
+      requires:
+       - "@Ocaml"
+      binaries:
+       - ocaml-libvirt
+
 
  - instantiate: PythonGroups:310
 
@@ -4696,6 +4728,7 @@ groups:
    buildconfig: Javascript/standard
    requires:
     - "@Core"
+    - "@PlusLibraries"
    binaries:
     - npm
     - nodejs20
@@ -5024,6 +5057,8 @@ groups:
     - "@PythonStandard"
     # texlive-asymptote
     - "@HPCCoreLibraries"
+    # some packages use libicu
+    - "@PlusLibraries"
    binaries:
     - texlive-*
     - perl-biber

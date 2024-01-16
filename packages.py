@@ -698,9 +698,10 @@ class Resolver:
 		def candidatePackages(self):
 			return set(_.pkg for _ in self._candidates)
 
-	def __init__(self, backingStore = None):
+	def __init__(self, backingStore = None, hints = None):
 		self._buckets = {}
 		self.backingStore = backingStore
+		self.hints = hints
 		self._nullBucket = self.NameBucket(None)
 		self._conditionals = {}
 

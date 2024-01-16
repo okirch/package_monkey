@@ -180,3 +180,13 @@ class Application:
 		return self.catalog.enumerate(family = self.opts.family,
 				version = self.opts.version,
 				arch = self.opts.arch)
+
+	@property
+	def productFamily(self):
+		if self.opts.family is None:
+			raise Exception("Cannot determine product family, please specify --family option")
+
+		family = self.catalog.select(self.opts.family)
+		if family is None:
+			raise Exception(f"Unknown product family {self.opts.family}")
+		return family

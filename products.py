@@ -144,6 +144,7 @@ class ProductFamily:
 			return
 
 		assert(self.repoDef)
+		infomsg(f"Loading product definition for family {self.name} from {self.repoDef}")
 		with open(self.repoDef) as f:
 			data = yaml.full_load(f)
 

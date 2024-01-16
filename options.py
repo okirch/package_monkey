@@ -90,6 +90,9 @@ class Application:
 
 	@property
 	def catalog(self):
+		return self.loadProductCatalog()
+
+	def loadProductCatalog(self):
 		if self._catalog is None:
 			self._catalog = ProductCatalog(cacheLocation = self.cache)
 
@@ -111,6 +114,9 @@ class Application:
 	def loadBackingStore(self, readonly = False, dependencyTreeLookups = False, sourceLookups = False):
 		if self._store is not None:
 			return self._store
+
+		# Force load the product family definition to enable mapping of product ID to product object
+		self.loadProductCatalog()
 
 		dbPath = self.backingStorePath
 		if os.path.exists(dbPath):

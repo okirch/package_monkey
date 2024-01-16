@@ -15,8 +15,6 @@ application = Application('build-dependency-tree')
 application.addArgument('--baseline', default = None, help = 'output of a previous classification run')
 application.parseArguments()
 
-dummy = application.catalog
-
 store = application.loadBackingStore(readonly = True,
 		dependencyTreeLookups = True,
 		sourceLookups = True)

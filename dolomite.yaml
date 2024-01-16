@@ -44,8 +44,16 @@ resolverhints:
     - "numad -> systemd systemd-mini"
     - "xdm -> systemd systemd-mini"
     - "e2fsprogs-scrub -> postfix"
-    # This hard dependency looks like nonsense to me
+    # These hard dependencies on openmpi4 look wrong to me
     - "fftw3-mpi-devel -> openmpi4-devel"
+    - "libboost_mpi1_82_0-devel -> openmpi4-devel"
+    # boost dependencies are a mess. Quite a few devel packages from boost-defaults require packages from boost:extra
+    # (and it's not clear why the python bindings are in boost:extra, for instance)
+    - "libboost_python3-devel -> libboost_python-py3-1_82_0-devel"
+    - "libboost_mpi_python3-devel -> libboost_mpi_python-py3-1_82_0-devel"
+    - "libboost_graph_parallel-devel -> libboost_graph_parallel1_82_0-devel"
+    - "libboost_mpi-devel -> libboost_mpi1_82_0-devel"
+    - "libboost_numpy3-devel -> libboost_numpy-py3-1_82_0-devel"
   prefer:
     - "order libcontainers-openSUSE-policy libcontainers-default-policy"
     - "order libjpeg8 libjpeg*"

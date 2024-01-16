@@ -1660,8 +1660,7 @@ class BackingStoreDB(DB):
 
 		pkgIdList = self.buildPkgRelation.retrievePackagesForBuild(obsPackage.backingStoreId)
 		if pkgIdList is None:
-			infomsg(f"OBS package {obsPackage} (id {obsPackage.backingStoreId}) does not seem to produce any packages")
-			xx
+			raise Exception(f"OBS package {obsPackage} (id {obsPackage.backingStoreId}) does not seem to produce any packages")
 		else:
 			obsPackage._binaries = list(self.loadPackagesIntoCache(pkgIdList))
 

@@ -1503,11 +1503,29 @@ class ClassificationResult(object):
 				return name.split(':')[0]
 			return name
 
+	class PackageRequirements(dict):
+		def __init__(self):
+			pass
+
+		def add(self, pkg, target):
+			requires = self.get(pkg)
+			if requires is None:
+				requires = set()
+				self[pkg] = requires
+
+			requires.add(target)
+
 	def __init__(self, labelOrder):
 		self._labelOrder = labelOrder
 		self._packages = {}
 		self._projects = {}
 		self._builds = []
+
+		self._brokenDependencies = None
+
+	def enableBrokenDependencyTracking(self):
+		if self._brokenDependencies is None:
+			self._brokenDependencies = self.PackageRequirements()
 
 	def packageMembership(self, label):
 		m = self._packages.get(label)
@@ -1609,7 +1627,9 @@ class ClassificationResult(object):
 
 				if requiredLabel not in fullRequirements:
 					# either the user's input created a contradction, or we made a bad decision somewhere along the way
-					warnmsg(f"CONFLICT: {pkg} has been placed in {label}, but it requires {required} which is in {requiredLabel}")
+					# warnmsg(f"CONFLICT: {pkg} has been placed in {label}, but it requires {required} which is in {requiredLabel}")
+					if self._brokenDependencies is not None:
+						self._brokenDependencies.add(pkg, required)
 					failed = True
 					continue
 
@@ -1680,6 +1700,15 @@ class ClassificationResult(object):
 			return None
 
 		return actualRequirements
+
+	def reportBrokenDependencies(self):
+		if not self._brokenDependencies:
+			return False
+
+		for pkg, brokenRequires in self._brokenDependencies.items():
+			for required in brokenRequires:
+				warnmsg(f"CONFLICT: {pkg} has been placed in {pkg.label}, but it requires {required} which is in {required.label}")
+		return True
 
 class PackageLabelling(object):
 	PRIORITY_DEFAULT = 5

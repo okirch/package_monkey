@@ -133,6 +133,7 @@ potentialClassification.definePreference("@Gnome", ["@DesktopLibraries", ])
 potentialClassification.definePreference("@MinimalCRuntime", ["@GccRuntime", "@Glibc"])
 result = potentialClassification.solve()
 
+result.enableBrokenDependencyTracking()
 writer = TableWriter(application.getOutputPath("packages.csv"))
 writer.write(result)
 
@@ -141,3 +142,5 @@ writer.write(result)
 
 if False and problemLog:
 	writer.writeProblems(problemLog)
+
+result.reportBrokenDependencies()

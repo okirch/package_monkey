@@ -569,6 +569,7 @@ components:
     - Gnome
     - UpdateStack
     - Ruby
+    - Container
  - name: UpdateStack
    globals:
     devel: UpdateStackDevel
@@ -1095,6 +1096,8 @@ groups:
     - "@CoreLibraries"
     - "@CoreConfig"
     - "@LLVMRuntime"
+   packages:
+    - rpm:python-rpm
    binaries:
     - rpm
     # this is placed in Core because suse-module-tools requires it
@@ -1567,6 +1570,7 @@ groups:
     # for some silly reason, pcp-zeroconf depends on pcp-doc, so we need it here
     - pcp-doc
     - pcp-testsuite purpose=devel
+    - sysstat
    buildflavors:
     - name: infiniband
       requires:
@@ -2040,6 +2044,8 @@ groups:
     - "@Core0"
    packages:
     - unixODBC
+   binaries:
+    - libct4
 
  - name: "@Postgres15Libraries"
    buildconfig: Databases/standard
@@ -2124,7 +2130,7 @@ groups:
     - freetds
    binaries:
     - unixODBC
-#   - freetds-tools
+    - freetds-tools
 #   - libsybdb5
 
  - name: DatabasesDevel
@@ -2154,6 +2160,7 @@ groups:
     - libgbm-devel      priority=0
     - Mesa-devel        priority=0
     - Mesa-*-devel      priority=0
+    - glu-devel
     - libOSMesa-devel
     - libglvnd-devel
     - wayland-devel
@@ -2479,6 +2486,9 @@ groups:
    requires:
     - "@Glib2API"
     - "@X11API"
+   binaries:
+    - libpixman-*-devel priority=0
+    - boost-devel
 
  - name: "@Glib2API"
    buildconfig: CorePlus/standard
@@ -2774,6 +2784,7 @@ groups:
    binaries:
     - xdg-dbus-proxy
     - xdg-desktop-portal
+    - xml2po
 
  - name: "@PolicyKit"
    buildconfig: Systemd/standard
@@ -2797,6 +2808,8 @@ groups:
     - "@NetworkManager"
     - "@Bluetooth"
     - "@PulseAudio"
+   packages:
+    - colord
    binaries:
     - gtk2
     - gtk3
@@ -3159,7 +3172,10 @@ groups:
     - "@SystemPython"
     - "@Glib2NoDBus"
     - "@Core1"
+    - "@SystemPythonStandard"
     - "@NetworkProxyLibraries"
+   packages:
+    - zypp-plugin
    binaries:
     - libzypp
     - libsolv
@@ -3178,9 +3194,6 @@ groups:
     - "@Glib2"
     - "@UpdateStackLibraries"
     - "@SystemPythonStandard"
-   packages:
-    - zypp-plugin
-    - python-zypp-plugin
    binaries:
     - deltarpm
     - SUSEConnect
@@ -3192,9 +3205,6 @@ groups:
     - createrepo_c
     - libcreaterepo_c0
     - librepo0
-    # normally, the reference to "zypp-plugin" in the section above should
-    # be sufficient to get python311-zypp-plugin included here. It looks like
-    # there's a BUG somewhere
 
  - name: "@SystemdLegacy"
    buildconfig: Systemd/standard
@@ -3518,7 +3528,6 @@ groups:
     - "CoreDevel"
    binaries:
     - fontconfig-devel
-    - libpixman-*-devel priority=0
 
  - name: "@CairoAPI"
    buildconfig: Typesetting/standard
@@ -3526,6 +3535,7 @@ groups:
     - "@FontLibsAPI"
     - "@X11API"
     - "@FontLibraries+x11"
+    - CorePlusDevel
    binaries:
     - cairo-devel
     - fontconfig-devel
@@ -3591,6 +3601,31 @@ groups:
     - container-selinux
 #   - systemd-container
     - umoci
+    - docker-*-completion
+    - skopeo-*-completion
+    - docker-rootless-extras
+    - buildkit
+    - nerdctl
+
+ - name: "@Fish"
+   buildconfig: Container/standard
+   requires:
+    - "@Core"
+    - "@ManDoc"
+    - "@Container"
+   packages:
+    - fish
+   buildflavors:
+    - name: docker
+      requires:
+       - "@Container"
+      binaries:
+       - docker-fish-completion
+    - name: skopeo
+      requires:
+       - "@Container"
+      binaries:
+       - skopeo-fish-completion
 
  - name: "@Flatpak"
    buildconfig: Container/standard
@@ -3666,6 +3701,7 @@ groups:
     - hwdata
     - pciutils
     - fuse3
+    - arm-trusted-firmware-tools
    buildflavors:
     # lvm2 is not really a proper Kernel package because it wants a lot
     # of stuff that's only available at higher levels
@@ -4164,6 +4200,9 @@ groups:
     - musepack-r*
     # codec2-examples requires codec2-devel so place it in devel, too
     - codec2-examples purpose=devel
+    # These aren't really audio libraries, but it's an OK place to put them
+    - libSDL2*
+    - libSDL-1*
    buildflavors:
     - name: desktop
       requires:
@@ -4216,6 +4255,7 @@ groups:
     - libva-wayland2
     - libbluray2
     - libinstpatch-1*
+    - mjpegtools
    buildflavors:
     - name: gdk
       requires:
@@ -5209,6 +5249,7 @@ groups:
     - "@FullSystemd"
 #   - "@WorkbenchEssentials"
     - "@Kernel"
+    - "@Fish"
    binaries:
     - salt
     - python31?-salt priority=0
@@ -5306,6 +5347,16 @@ groups:
    buildconfig: Core/standard
    binaries:
     - patterns-*
+
+ - name: "@ProductBuilder"
+   buildconfig: Core/standard
+   disposition: ignore
+   binaries:
+    - product-builder
+    - product-builder-plugin-ALP
+    - product-builder-plugin-SLE_15
+    - SLE-EULAs
+    - instsource-susedata
 
 templates:
  - name: PythonGroups

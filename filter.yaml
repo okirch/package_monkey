@@ -145,6 +145,7 @@ build_configs:
  - name: KernelPlus/standard
    buildrequires:
     - "@WorkbenchEssentials"
+    - "@KernelHeaders"
  - name: Kiwi/standard
    buildrequires:
     - "@WorkbenchEssentials"
@@ -240,6 +241,8 @@ build_configs:
  - name: Container/standard
    buildrequires:
     - "@WorkbenchEssentials"
+    - "@Go"
+    - "@Rust"
  - name: Virtualization/standard
    buildrequires:
     - "@WorkbenchEssentials"
@@ -821,6 +824,7 @@ groups:
     # misnamed package (should have been static-devel)
     - newt-static
     - libgpgme-devel priority=0
+    - libatomic_ops-devel
 
  - name: "@Boost"
    buildconfig: CorePlus/standard
@@ -1186,6 +1190,7 @@ groups:
     - lndir
     - logrotate
     - lz4
+    - lzip
     - m4
     - mailx
     - makedepend
@@ -1227,6 +1232,7 @@ groups:
     - librpmbuild9
     # must be placed somewhere in Core because elfutils-debuginfod uses it
     - libmicrohttpd12
+    - libpamtest0 purpose=devel
    buildflavors:
     - name: kernel
       requires:
@@ -1238,10 +1244,6 @@ groups:
        - "@KernelLibraries+udev"
       binaries:
        - libcryptsetup12
-#     purposes:
-#      - name: devel
-#        requires:
-#         - "@HostStorage-devel"
 
  - name: "@PythonBuildConfig"
    buildconfig: Core/standard
@@ -1925,6 +1927,7 @@ groups:
     - gperftools
     - libdatrie
     - libmemcached
+    - jsoncpp
    binaries:
     - libicu72
     - libicu72-ledata
@@ -2667,6 +2670,7 @@ groups:
     - dconf
     - libgjs0
     - hicolor-icon-theme
+    - libgusb2
 
  - name: "@DesktopLibraries"
    buildconfig: Gnome/standard
@@ -3477,6 +3481,9 @@ groups:
     - "@PlusLibraries"
    packages:
     - fontconfig
+    - m17n-lib
+    - libotf
+    - m17n-db
    binaries:
     - libfontconfig
     - fontconfig
@@ -3486,11 +3493,13 @@ groups:
     - harfbuzz-devel purpose=devel
     - woff2
     - t1utils
+    - libotf1
    buildflavors:
     - name: x11
       requires:
        - "@X11Libraries"
        - "@EssentialGraphicsLibraries+x11"
+       - "@DrawingLibraries"
       binaries:
        - libcairomm-1*
        - libcairo2
@@ -3500,6 +3509,8 @@ groups:
        - libharfbuzz-cairo0
        - libpango-1*
        - libthai0
+       - libm17n0
+       - libotf
     - name: gnomelibs
       augments:
        - "@GnomeLibraries"
@@ -4155,13 +4166,11 @@ groups:
        - "@OpenGL"
       binaries:
        - libcaca0-plugins
-#   - name: gnomelibs
-#     augments:
-#      - "@GnomeLibraries"
-#     purposes:
-#      - name: devel
-#        binaries:
-#         - cairomm*-devel priority=0
+    - name: gnome
+      augments:
+       - "@Gnome"
+      binaries:
+       - argyllcms
 
  - name: "@AudioLibraries"
    buildconfig: Multimedia/standard
@@ -4973,6 +4982,13 @@ groups:
     - java-1_8_0-openjdk-src
     - javapackages-filesystem
     - javapackages-tools
+
+ - name: "@JavaTimezoneTools"
+   buildconfig: Java/standard
+   requires:
+   binaries:
+    - javazic
+    - tzdb
 
  - name: "@Java"
    feature: True

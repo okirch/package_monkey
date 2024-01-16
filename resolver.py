@@ -164,7 +164,7 @@ class ResolverHints:
 				self._ignoredDependencies[targetName] = set()
 			self._ignoredDependencies[targetName].add(packageName)
 
-	def dependencyIsIgnored(self, packageName, targetName):
+	def isIgnoredDependency(self, packageName, targetName):
 		if self._ignoredTargets is not None and targetName in self._ignoredTargets:
 			return True
 

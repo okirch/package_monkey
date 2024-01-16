@@ -238,7 +238,7 @@ class ProductFamily:
 		for expr in data:
 			if '->' in expr:
 				(sourceNames, targetNames) = expr.split('->')
-				sourcesNames = sourcesNames.split()
+				sourceNames = sourceNames.split()
 				targetNames = targetNames.split()
 				for packageName in sourceNames:
 					for targetName in targetNames:

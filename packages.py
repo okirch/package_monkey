@@ -358,6 +358,7 @@ class ResolverContext:
 
 		self._cache = ResolverCache()
 
+		self.suppressedDependencies = []
 		self.debugMsg = debugDependency
 
 	def acceptable(self, pkg):
@@ -431,6 +432,23 @@ class ResolverContext:
 		pkg.resolvedRequires = result
 		return result
 
+	def suppressUnwantedDependencies(self, pkg):
+		if self._resolver.hints is None:
+			return
+
+		if pkg.isSourcePackage:
+			return
+
+		hints = self._resolver.hints
+		filtered = []
+
+		for dep, target in self.resolveDownward(pkg):
+			if hints.isIgnoredDependency(pkg.name, target.name):
+				self.suppressedDependencies.append((pkg, target))
+			else:
+				filtered.append((dep, target))
+
+		pkg.resolvedRequires = filtered
 
 class ResolverWorker:
 	class Problem(object):

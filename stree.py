@@ -1169,6 +1169,13 @@ class SolvingTreeBuilder(object):
 		sources = set(filter(bool, (build.sourcePackage for build in self.builds)))
 		self.buildTreePartial(solvingTree, sources, seen)
 
+		hiddenEdges = self.context.suppressedDependencies
+		if hiddenEdges:
+			infomsg(f"Hiding the following package dependencies (based on resolver hints)")
+			with loggingFacade.temporaryIndent(3):
+				for pkg, target in hiddenEdges:
+					infomsg(f"{pkg} -> {target}")
+
 		solvingTree.finalize()
 		return solvingTree
 
@@ -1190,6 +1197,10 @@ class SolvingTreeBuilder(object):
 				# we're actively ignoring this package - it has been labelled with
 				# disposition ignore
 				continue
+
+			# The product family yaml file specifies a list of dependencies to be ignored,
+			# for instance on systemd-mini
+			self.context.suppressUnwantedDependencies(pkg)
 
 			for dep, target in self.context.resolveDownward(pkg):
 				if target is pkg:

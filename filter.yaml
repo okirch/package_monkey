@@ -1045,7 +1045,6 @@ groups:
     - libsha1detectcoll1
     - libsigc-2*
     - libsigc-3*
-    - libsnappy1
     - libsqlite3*
     - libssh-config
     - libunistring5
@@ -1359,6 +1358,7 @@ groups:
     - suse-build-key
     - perl-libintl-perl
     - ibmtss
+    - ibmswtpm2
     - git-core
     - checkmedia
     - rpm-build-perl
@@ -1377,6 +1377,7 @@ groups:
        - perl-Git
        - git-email
        - git-svn
+       - git
     - name: test
       binaries:
 #      - libglib-testing-0-0
@@ -1400,6 +1401,8 @@ groups:
     - libstoragemgmt1
     - libconfig11
     - libwacom-data
+    - libwacom-devel purpose=devel
+    - libhidapi-devel purpose=devel
    buildflavors:
     - name: python
       requires:
@@ -1932,6 +1935,13 @@ groups:
     - libicu72
     - libicu72-ledata
 
+ - name: "@Snappy"
+   buildconfig: CorePlus/standard
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libsnappy1
+
  - name: "@TclCore"
    buildconfig: Tcl/standard
    requires:
@@ -2028,13 +2038,25 @@ groups:
     - "@PythonCore"
     - "@PythonStandard"
     - "@BaseDevTools"
-#   - "@Glibc-devel"
     - "@Python"
    binaries:
     - python-rpm-packaging
     - obs-service-*
     - uasm
     - yasm
+
+ - name: "@WorkbenchUnitTests"
+   buildconfig: Workbench/standard
+   requires:
+    - "@Core"
+    - "@PythonCore"
+    - "@PythonStandard"
+    - "@BaseDevTools"
+    - "@Python"
+   packages:
+    - libcmocka
+   binaries:
+    - libcmocka-devel
 
  - name: "@Documentation"
    buildconfig: Core/standard
@@ -2447,6 +2469,7 @@ groups:
     - "@SpeechSynthesis"
     - "@PlusLibraries"
     - "@NetworkProxyLibraries"
+    - "@Snappy"
    binaries:
     - libQt5*
     - libqt5-*
@@ -2485,13 +2508,18 @@ groups:
       binaries:
        - qt6-tools-helpgenerators
 
- - name: CorePlusDevel
+ - name: "@CorePlusAPI"
+   buildconfig: CorePlus/standard
    requires:
     - "@Glib2API"
     - "@X11API"
    binaries:
     - libpixman-*-devel priority=0
     - boost-devel
+
+ - name: CorePlusDevel
+   requires:
+    - "@CorePlusAPI"
 
  - name: "@Glib2API"
    buildconfig: CorePlus/standard
@@ -2989,7 +3017,7 @@ groups:
    requires:
     - "@CoreAPI"
     - "@SystemdLibraries"
-    - "CorePlusDevel"
+    - "@CorePlusAPI"
     # why does dbus-1-devel require dbus-1?
     - "@DBusService"
    binaries:
@@ -3271,7 +3299,6 @@ groups:
     - "@NetworkLibraries"
    buildconfig: Security/standard
    binaries:
-    - ibmswtpm2
     - ima-evm-utils
     - ima-inspect
     - pam_u2f
@@ -3362,6 +3389,7 @@ groups:
     - "@GCC"
     - "@Core+systemd"
     - "@PlusLibraries"
+    - "@Snappy"
    binaries:
     - ceph
 
@@ -4412,6 +4440,7 @@ groups:
        - "@GnomeLibraries"
        - "@Qt"
        - "@Multimedia"
+       - "@Snappy"
       binaries:
        - wireshark
 
@@ -4737,6 +4766,7 @@ groups:
     - "@HostWorkloads"
     - "@PlusLibraries"
     - "@NetworkProxyLibraries"
+    - "@Snappy"
    binaries:
     - xen
     - kvm_state

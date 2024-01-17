@@ -238,6 +238,64 @@ class NameMatcher:
 
 ##################################################################
 #
+# Format sorted triples of (tag1, tag2, message) so that
+# recurring tags are hidden
+#
+##################################################################
+class IndexFormatterBase(object):
+	def __init__(self, msgfunc = print, sort = False):
+		self.print = msgfunc
+		self.sort = sort
+		self.queue = []
+
+	def __del__(self):
+		if self.sort and self.queue:
+			self.sort = False
+
+			for entry in sorted(self.queue):
+				self.next(*entry)
+			self.queue = None
+
+class IndexFormatterTwoLevels(IndexFormatterBase):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.lastTag1 = None
+		self.lastTag2 = None
+
+	def next(self, tag1, tag2, message):
+		if self.sort:
+			self.queue.append((tag1, tag2, message))
+			return
+
+		if self.lastTag1 != tag1:
+			self.print(f"   {tag1}")
+			self.lastTag1 = tag1
+			self.lastTag2 = None
+
+		if self.lastTag2 != tag2:
+			self.print(f"      {tag2}")
+			self.lastTag2 = tag2
+
+		self.print(f"       - {message}")
+
+class IndexFormatter(IndexFormatterBase):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.lastTag = None
+
+	def next(self, tag, message):
+		if self.sort:
+			self.queue.append((tag, message))
+			return
+
+		if self.lastTag != tag:
+			print(f"   {tag}")
+			self.lastTag = tag
+
+		print(f"    - {message}")
+
+##################################################################
+#
 # Interfacing with python's logging class
 #
 ##################################################################

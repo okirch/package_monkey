@@ -8,7 +8,7 @@
 #
 ##################################################################
 from util import ExecTimer, TimedExecutionBlock
-from util import filterHighestRanking
+from util import IndexFormatterTwoLevels
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from filter import Classification
 from filter import ClassificationResult
@@ -1671,6 +1671,21 @@ class PotentialClassification(object):
 		infomsg(f"Solved {numSolvedPackages}/{totalPackages} packages")
 		infomsg("")
 
+	def reportMissingBuildRequirements(self, buildSpecs):
+		formatter = IndexFormatterTwoLevels(msgfunc = infomsg, sort = True)
+		for spec in sorted(buildSpecs, key = lambda spec: spec.component.name):
+			buildLabel = str(spec.component)
+			buildEnv = spec.buildEnvironment
+			for requiredLabel, packages in sorted(spec.unsatisfied, key = lambda pair: str(pair[0])):
+				if requiredLabel:
+					for required in packages:
+						formatter.next(buildLabel, str(requiredLabel),
+							f"building {spec} using {buildEnv} requires {required} labelled {requiredLabel}")
+				else:
+					for required in packages:
+						formatter.next(buildLabel, "(unlabelled)",
+							f"building {spec} using {buildEnv} requires {required} which has not been labelled")
+
 	def solve(self):
 		infomsg("### PLACEMENT STAGE 1 ###")
 
@@ -1726,8 +1741,11 @@ class PotentialClassification(object):
 			if node.placement:
 				node.placement.reportVerdict(node, result)
 
-		for build in self.solvingTree.builds:
+		buildSpecFactory = BuildSpecFactory.create(self.classificationScheme, self.labelOrder)
+		allBuildSpecs = []
+		for build in self.solvingTree.allBuilds:
 			label = None
+			buildSpec = None
 
 			buildPlacement = placementMap.get(build)
 			if buildPlacement is None:
@@ -1737,7 +1755,23 @@ class PotentialClassification(object):
 			if buildPlacement.isFinal:
 				label = buildPlacement.uniqueSourceProject
 
+				# build the list of labels/packages this build requires
+				buildRequires = []
+				for srpm in build.sources:
+					srcNode = self.solvingTree.getPackage(srpm)
+					for required in srcNode.lowerNeighbors:
+						# required is a SolvingTree node, extract the label we assigned and the
+						# list of rpms it represents
+						requiredLabel = required.placement.label
+						buildRequires.append((requiredLabel, required.packages))
+
+				buildSpec = buildSpecFactory.createBuildSpec(buildPlacement, build, buildRequires)
+				if buildSpec is not None:
+					allBuildSpecs.append(buildSpec)
+
 			result.labelOneBuild(build.name, label, build.packages, build.sources)
+
+		self.reportMissingBuildRequirements(allBuildSpecs)
 
 		return result
 
@@ -1756,3 +1790,145 @@ class PotentialClassification(object):
 
 		return self._order.minimumOf(candidates)
 
+##################################################################
+# Catalog all build configs (Core/standard, Core/java, ...) and
+# compute the set of labels that they can access.
+# For any given OBS package, get the source project it has been assigned
+# to, and loop over build configs it provides.
+# Select the build config that matches the build requirements of this
+# OBS package. If there is no perfect match, choose the one that covers
+# most of the requirements, and record the ones that could not be
+# satisfied.
+##################################################################
+class BuildSpecFactory(object):
+	class BuildSpec(object):
+		def __init__(self, buildPlacement, develLabel, requiredList):
+			self.name = buildPlacement.name
+			self.component = buildPlacement.uniqueSourceProject
+			self.buildEnvironment = None
+			self.buildRequires = Classification.createLabelSet()
+			self.required = requiredList
+			self.unsatisfied = []
+
+			# The odd structure of the requiredList is due to our use of
+			# the SolvingTree. The source RPM corresponds to a TreeNode,
+			# and as we cycle through its list of lower neighbors (i.e.
+			# its build requirements), we look at each node in turn. These
+			# nodes have a label, and while most of them represent a single
+			# binary RPM, some represent several packages (because these
+			# packages form a dependency cycle and had to be collapsed into a
+			# single node).
+			for label, packages in requiredList:
+				if label is not None:
+					self.buildRequires.add(label)
+
+		def __str__(self):
+			return self.name
+
+	class BuildEnvironment(object):
+		def __init__(self, buildConfig, develLabel, labelOrder, baseConfig = None):
+			self.name = buildConfig.name
+			self.component = buildConfig.parent
+			self.buildConfig = buildConfig
+
+			assert(buildConfig.type == Classification.TYPE_BUILDCONFIG)
+			assert(self.component.type == Classification.TYPE_SOURCE)
+			if develLabel.componentLabel is not self.component:
+				errormsg(f"{develLabel} component is {develLabel.componentLabel} - expected {self.component}")
+			assert(develLabel.componentLabel is self.component)
+
+			visible = Classification.createLabelSet()
+			visible.add(develLabel)
+
+			if baseConfig is not None:
+				visible.update(baseConfig.buildRequires)
+
+			visible.update(buildConfig.buildRequires)
+
+			self.visible = labelOrder.downwardClosureForSet(visible)
+
+		def __str__(self):
+			return self.name
+
+	def __init__(self):
+		self._map = {}
+
+	def defineBuildEnvironment(self, *args, **kwargs):
+		buildEnv = self.BuildEnvironment(*args, **kwargs)
+
+		component = buildEnv.component
+		bucket = self._map.get(component)
+		if bucket is None:
+			bucket = []
+			self._map[component] = bucket
+		bucket.append(buildEnv)
+
+		return buildEnv
+
+	def findOptimalBuildConfig(self, buildSpec):
+		buildEnvironments = self._map.get(buildSpec.component)
+		if buildEnvironments is None:
+			raise Exception(f"{buildSpec} uses unknown component {buildSpec.component}")
+
+		# infomsg(f"Trying to place {buildSpec}")
+
+		best = None
+		bestCoverage = -1
+		for env in buildEnvironments:
+			if buildSpec.buildRequires.issubset(env.visible):
+				# infomsg(f"   {env} is a match")
+				return env
+
+			coverage = len(buildSpec.buildRequires.intersection(env.visible))
+			# infomsg(f"   {env} coverage {coverage}")
+			if coverage > bestCoverage:
+				best = env
+				bestCoverage = coverage
+
+		# infomsg(f"{buildSpec}: best build env is {best} coverage={bestCoverage}")
+		if best is None:
+			raise Exception(f"Cannot find build config for {buildSpec}: {buildSpec.component} does not seem to define any build configs")
+
+		for requiredLabel, packages in buildSpec.required:
+			if requiredLabel in best.visible:
+				continue
+
+			buildSpec.unsatisfied.append((requiredLabel, packages))
+
+		return best
+
+	@classmethod
+	def create(klass, classificationScheme, labelOrder):
+		result = klass()
+		for component in classificationScheme.allComponents:
+			devel = component.globalPurposeLabel("devel")
+			if not devel:
+				raise Exception(f"Unable to determine build environments for {component}: no global devel label")
+
+			standardConfig = component.getBuildFlavor('standard')
+			if standardConfig is not None:
+				result.defineBuildEnvironment(standardConfig, devel, labelOrder)
+
+			for buildConfig in component.flavors:
+				if buildConfig is standardConfig:
+					continue
+				result.defineBuildEnvironment(buildConfig, devel, labelOrder, baseConfig = standardConfig)
+
+		return result
+
+	def createBuildSpec(self, buildPlacement, build, buildRequires):
+		label = buildPlacement.uniqueSourceProject
+		if not label:
+			return None
+
+		devel = label.globalPurposeLabel("devel")
+		if not devel:
+			errormsg(f"Unable to create build spec for {build}: no devel label for {label}")
+			return None
+
+		# infomsg(f"{buildPlacement} source {label} devel {devel}")
+		result = self.BuildSpec(buildPlacement, devel, buildRequires)
+
+		result.buildEnvironment = self.findOptimalBuildConfig(result)
+
+		return result

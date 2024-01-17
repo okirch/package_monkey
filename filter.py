@@ -535,6 +535,28 @@ class Classification:
 		return (name, flavorName)
 
 	@staticmethod
+	def parseLabel(type, name):
+		if '/' in name and type is not Classification.TYPE_BUILDCONFIG:
+			raise Exception(f"Invalid label {name}: not compatible with type {type}")
+
+		flavorName = None
+		purposeName = None
+
+		if type is Classification.TYPE_BINARY:
+			(baseName, flavorName, purposeName) = Classification.parseBinaryLabel(name)
+			baseLabelType = type
+		elif type is Classification.TYPE_BUILDCONFIG:
+			baseName, flavorName = Classification.parseBuildconfigLabel(name)
+			baseLabelType = Classification.TYPE_SOURCE
+		else:
+			assert('+' not in name)
+			assert('-' not in name)
+			baseName = name
+			baseLabelType = type
+
+		return (baseLabelType, baseName, flavorName, purposeName)
+
+	@staticmethod
 	def labelPackage(pkg, label, labelReason = None):
 		if pkg.label is None or pkg.label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
 			pkg.label = label
@@ -612,6 +634,9 @@ class Classification:
 				sourceProject = baseLabel
 			else:
 				raise Exception(f"Cannot create flavor {flavorName} for {baseLabel.type} label {baseLabel}: unexpected type")
+
+			if '/' in label.name:
+				assert(baseLabel.type == Classification.TYPE_SOURCE)
 
 			label.parent = baseLabel
 			label.flavorName = flavorName
@@ -2062,17 +2087,9 @@ class PackageFilter:
 		return self.makeGroupInternal(name, type)
 
 	def resolveGroupReference(self, name, labelType = Classification.TYPE_BINARY):
-		if labelType is not Classification.TYPE_SOURCE:
-			labelType = Classification.TYPE_BINARY
+		baseLabelType, baseName, flavorName, purposeName = Classification.parseLabel(labelType, name)
 
-		if labelType is Classification.TYPE_BINARY:
-			baseName, flavorName, purposeName = Classification.parseBinaryLabel(name)
-		elif labelType is Classification.TYPE_SOURCE:
-			baseName, flavorName, purposeName = name, None, None
-		else:
-			raise Exception(f"resolveGroupReference: {labelType} labels not supported")
-
-		baseLabel = self.classificationScheme.createLabel(baseName, labelType)
+		baseLabel = self.classificationScheme.createLabel(baseName, baseLabelType)
 		group = self.getGroupForLabel(baseLabel, create = True);
 
 		if flavorName is not None:
@@ -2402,7 +2419,12 @@ class PackageFilter:
 		if group.label:
 			nameList = self.getYamlList(gd, 'requires', group)
 			for name in nameList:
-				otherGroup = self.resolveGroupReference(name, group.type)
+				if group.type is Classification.TYPE_SOURCE:
+					labelType = group.type
+				else:
+					labelType = Classification.TYPE_BINARY
+
+				otherGroup = self.resolveGroupReference(name, labelType)
 				group.addRequires(otherGroup)
 
 			# 'augments' are like runtime requirements, except they also flags the

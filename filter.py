@@ -2231,20 +2231,14 @@ class PackageFilter:
 		except:
 			group = None
 
-		if group is None:
-			if not type:
-				raise Exception(f"Cannot create group {name} with no type")
-
-			group = PackageGroup(name)
-			self._groups[type, name] = group
-
-		if type:
-			if group.label is None:
-				group.label = self.classificationScheme.createLabel(name, type)
-			elif group.type != type:
+		if group is not None:
+			if type and group.type != type:
 				raise Exception(f"Group {name} does not match expected type ({group.type} vs {type})")
+			return group
 
-		return group
+		if not type:
+			raise Exception(f"Cannot create group {name} with no type")
+		return self.resolveGroupReference(name, labelType = type)
 
 	def getGroupForLabel(self, label, create = False):
 		group = self.getGroup(label.name, label.type)

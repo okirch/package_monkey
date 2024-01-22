@@ -1139,14 +1139,11 @@ class SolvingTreeBuilder(object):
 				if not req.isExported:
 					# we require a label that is in an inaccessible component, and not exported. This is always a problem
 					infomsg(f"{label} [{label.componentLabel}] requires {req} which is in inaccessible component {req.componentLabel}")
-				elif req.parent is None:
-					# we require a label exported by some other component, and we're a base label. This is also a problem, because
-					# only buildflavors are allowed to do that.
-					infomsg(f"{label} [{label.componentLabel}] requires {req} which is exported by component {req.componentLabel}")
-				else:
-					continue
+					issues += 1
 
-				issues += 1
+				# we require a label exported by some other component
+				debugmsg(f"{label} [{label.componentLabel}] requires {req} which is exported by component {req.componentLabel}")
+				req.numImports += 1
 
 		if issues:
 			# raise Exception(f"Found {issues} problems with the component tree; please fix first")

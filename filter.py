@@ -186,9 +186,6 @@ class Classification:
 			if componentLabelOrder.isBelow(other.componentLabel, self.componentLabel):
 				return True
 
-			if other.isExported:
-				return True
-
 			return False
 
 		def isCompatibleWithAutoFlavor(self, autoFlavor):

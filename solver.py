@@ -1773,6 +1773,10 @@ class PotentialClassification(object):
 
 			result.labelOneBuild(build.name, label, build.packages, build.sources, buildConfig)
 
+		componentOrder = self.classificationScheme.componentOrder()
+		for componentLabel in componentOrder.bottomUpTraversal():
+			result.addComponent(componentLabel)
+
 		# FIXME: save all build configs in the result object
 
 		self.reportMissingBuildRequirements(allBuildSpecs)

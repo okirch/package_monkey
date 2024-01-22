@@ -1553,11 +1553,14 @@ class ClassificationResult(object):
 
 			requires.add(target)
 
-	def __init__(self, labelOrder):
+	def __init__(self, labelOrder, componentOrder = None):
 		self._labelOrder = labelOrder
 		self._packages = {}
 		self._projects = {}
 		self._builds = []
+
+		self._componentOrder = componentOrder
+		self._components = []
 
 		self._brokenDependencies = None
 
@@ -1602,6 +1605,9 @@ class ClassificationResult(object):
 		if label is not None:
 			self.projectMembership(label).track(buildInfo)
 
+	def addComponent(self, label):
+		self._components.append(label)
+
 	def enumeratePackages(self):
 		for label in self._labelOrder.bottomUpTraversal():
 			members = self.packageMembership(label).packages
@@ -1611,6 +1617,13 @@ class ClassificationResult(object):
 		infomsg(f"result contains {len(self._builds)} builds")
 		for buildInfo in self._builds:
 			yield buildInfo.label, buildInfo
+
+	def enumerateComponents(self):
+		for label in self._components:
+			requires = label.runtimeRequires
+			if self._componentOrder is not None:
+				requires = self._componentOrder.maxima(requires)
+			yield label, requires
 
 	# initially, we create the label tree with a maximum of edges
 	# When reporting it in the output, we want to cut this down

@@ -736,6 +736,7 @@ groups:
     - "@MinimalCRuntime"
     - "@Core0"
     - "@SystemPython"
+    - "@LLVMRuntime"
    binaries:
     - llvm
     - clang
@@ -1152,7 +1153,7 @@ groups:
    requires:
     - "@CoreLibraries"
     - "@CoreConfig"
-    - "@LLVMRuntime"
+#   - "@LLVMRuntime"
    packages:
     - rpm:python-rpm
     - libpwquality
@@ -2089,13 +2090,17 @@ groups:
     - swig
     - valgrind
     - pesign-obs-integration
-    - bpftool
     - libcunit1
     - libcheck0
    buildflavors:
     - name: qt
       requires:
        - "@Qt"
+    - name: llvm
+      requires:
+       - "@LLVMRuntime"
+      binaries:
+       - bpftool
 
  - name: "@Meson"
    buildconfig: Workbench/standard
@@ -2188,6 +2193,7 @@ groups:
     - "@SystemdLibraries"
     - "@SystemPython"
     - "@PerlCore"
+    - "@LLVMRuntime"
    packages:
     - python-asyncpg
     - python-psycopg
@@ -4599,6 +4605,7 @@ groups:
    requires:
     - "@Core"
     - "@X11"
+    - "@LLVMRuntime"
    packages:
     - libvdpau
     - libglvnd

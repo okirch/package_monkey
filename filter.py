@@ -102,6 +102,8 @@ class Classification:
 
 			self.isComponentLevel = False
 
+			self.numImports = 0
+
 		@property
 		def fingerprint(self):
 			values = [self.name, self.type, self.disposition, tuple(self.preferredLabels), self.gravity]

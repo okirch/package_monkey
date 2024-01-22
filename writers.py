@@ -200,10 +200,13 @@ class XmlWriter(BaseWriter):
 		labelNode = self.xmltree.root.addChild('topic')
 
 		# for now; could also have separate attrs for base name, option, pkgclass
-		labelNode.setAttribute('name', label.name)
+		labelNode.setAttribute('label', label.name)
 
 		if label.disposition != Classification.DISPOSITION_SEPARATE:
 			labelNode.setAttribute('disposition', label.disposition)
+
+		if label.numImports:
+			labelNode.setAttribute('api', True)
 
 		componentName = label.componentName
 		if componentName is not None:
@@ -221,7 +224,7 @@ class XmlWriter(BaseWriter):
 		runtimeNode = labelNode.addChild('runtime')
 		for req in sorted(runtimeRequires, key = lambda l: l.name):
 			reqNode = runtimeNode.addChild('requires')
-			reqNode.setAttribute('topic', req.name)
+			reqNode.setAttribute('label', req.name)
 			if req.sourceProject is not None:
 				reqNode.setAttribute('component', req.sourceProject.name)
 
@@ -232,29 +235,6 @@ class XmlWriter(BaseWriter):
 
 		for rpm in sorted(packages, key = lambda p: p.name):
 			rpmNode = self.writeRPM(labelNode, rpm)
-
-			# FIXME: rather that grouping requirements by the required topic,
-			# why not just add an attribute requires="@Topic", like
-			#  <rpm arch="noarch" name="python3-foobar" topic="@Topic"/>
-			# This may make it a bit more readable, and we would include
-			# unlabelled dependencies.
-			reqNodes = {}
-			for dep, required in rpm.resolvedRequires:
-				if required.label is None or \
-				   required.label.sourceProject is label.sourceProject:
-					continue
-
-				topicName = required.label.name
-				reqNode = reqNodes.get(topicName)
-				if reqNode is None:
-					reqNode = rpmNode.addChild('requires')
-					reqNode.setAttribute('topic', topicName)
-					reqNode.setAttribute('component', required.label.sourceProject.name)
-					reqNodes[topicName] = reqNode
-
-				self.writeRPM(reqNode, required)
-
-			# FIXME: would be good if we could add the OBS package name here
 
 	def writeBuild(self, label, buildInfo):
 		buildNode = self.xmltree.root.addChild('build')
@@ -267,8 +247,12 @@ class XmlWriter(BaseWriter):
 		if buildConfig is not None:
 			buildNode.addField('buildconfig', buildConfig.name)
 
-		for rpm in buildInfo.sources + buildInfo.binaries:
+		for rpm in buildInfo.sources:
 			self.writeRPM(buildNode, rpm)
+
+		for rpm in buildInfo.binaries:
+			rpmNode = self.writeRPM(buildNode, rpm)
+			self.writeRequirements(rpmNode, rpm, label)
 
 		if buildInfo.buildRequires:
 			bdepNode = buildNode.addChild('buildrequires')
@@ -280,6 +264,33 @@ class XmlWriter(BaseWriter):
 		rpmNode.setAttribute('name', rpm.name)
 		rpmNode.setAttribute('arch', rpm.arch)
 		return rpmNode
+
+	def writeRequirements(self, rpmNode, rpm, componentLabel):
+		references = []
+		for dep, required in rpm.resolvedRequires:
+			if required.label is None:
+				references.append(required)
+				continue
+
+			if required.label.sourceProject is componentLabel:
+				continue
+
+			references.append(required)
+
+		references = sorted(references,
+				key = lambda rpm:
+					(rpm.label is None and "-") or rpm.label.sourceProject.name
+				)
+
+		if not references:
+			return
+
+		reqNode = rpmNode.addChild('requires')
+		for required in references:
+			childRpmNode = self.writeRPM(reqNode, required)
+			if required.label:
+				childRpmNode.setAttribute('label', required.label.name)
+				childRpmNode.setAttribute('component', required.label.sourceProject.name)
 
 	def writeProblems(self, problemLog):
 		raise Exception("XML writer does not support problem log")
@@ -305,7 +316,7 @@ class XmlReader:
 			raise Exception(f"invalid root element <{root.tag}> in {path}")
 
 		for node in root:
-			if node.tag == 'topic':
+			if node.tag == 'topic' or node.tag == 'label':
 				self.processTopic(node)
 			elif node.tag == 'build':
 				self.processBuild(node)
@@ -336,7 +347,7 @@ class XmlReader:
 			rpm.label = label
 
 	def processRequires(self, reqNode):
-		reqLabel = self.validateLabel(reqNode.attrib['topic'], Classification.TYPE_BINARY)
+		reqLabel = self.validateLabel(reqNode.attrib['label'], Classification.TYPE_BINARY)
 		componentName = reqNode.attrib.get('component')
 		if componentName is not None:
 			self.validateComponent(reqLabel, componentName)

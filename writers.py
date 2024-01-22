@@ -20,6 +20,9 @@ class BaseWriter:
 		# - write the component hierarchy and its base labels
 		# - write build configs for each component
 
+		for label, requires in result.enumerateComponents():
+			self.writeComponent(label, requires)
+
 		for label, members in result.enumeratePackages():
 			if label.name in self._excluded:
 				continue
@@ -67,6 +70,9 @@ class StandardWriter(BaseWriter):
 			print(f"  {pkg}")
 
 	def writeBuild(self, label, buildInfo):
+		pass
+
+	def writeComponent(self, label, requires):
 		pass
 
 	def indentingWriter(self):
@@ -180,6 +186,9 @@ class TableWriter(BaseWriter):
 	def writeBuild(self, label, buildInfo):
 		pass
 
+	def writeComponent(self, label, requires):
+		pass
+
 	def writeProblems(self, problemLog):
 		raise Exception("CSV writer does not support problem log")
 
@@ -259,6 +268,16 @@ class XmlWriter(BaseWriter):
 			for rpm in buildInfo.buildRequires:
 				self.writeRPM(bdepNode, rpm)
 
+	def writeComponent(self, label, requires):
+		compNode = self.xmltree.root.addChild('component')
+		compNode.setAttribute('name', str(label))
+
+		reqNode = compNode.addChild('requires')
+		for req in requires:
+			reqNode.addChild('label').setAttribute('name', str(req))
+
+		# bclistNode = compNode.addChild('buildconfig')
+
 	def writeRPM(self, parent, rpm):
 		rpmNode = parent.addChild('rpm')
 		rpmNode.setAttribute('name', rpm.name)
@@ -323,7 +342,7 @@ class XmlReader:
 			else:
 				raise Exception(f"unsupported element <{node.tag}> in {path}")
 
-		result = ClassificationResult(self.classificationScheme.defaultOrder())
+		result = ClassificationResult(self.classificationScheme.defaultOrder(), self.classificationScheme.componentOrder())
 		for rpm in self._packages.values():
 			result.labelOnePackage(rpm, rpm.label, None)
 		for name, component, binaries, sources in self._builds:

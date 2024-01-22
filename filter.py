@@ -173,6 +173,10 @@ class Classification:
 			return self.componentLabel and self in self.componentLabel.exports
 
 		def okayToAccess(self, other, componentLabelOrder):
+			return self.canAccessDirectly(other, componentLabelOrder) or \
+			       other.isExported
+
+		def canAccessDirectly(self, other, componentLabelOrder):
 			if self.componentLabel is None or other.componentLabel is None:
 				return False
 

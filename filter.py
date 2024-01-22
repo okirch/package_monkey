@@ -827,8 +827,10 @@ class Classification:
 			if self._final:
 				raise Exception(f"Duplicate call to ClassificationScheme.finalize()")
 
+			componentOrder = self.componentOrder()
+
 			globalPurposeLabelNames = set()
-			for componentLabel in self.allComponents:
+			for componentLabel in componentOrder.bottomUpTraversal():
 				globalPurposeLabelNames.update(componentLabel.globalPurposeLabelNames)
 
 				globalDevel = componentLabel.globalPurposeLabel('devel')
@@ -838,6 +840,14 @@ class Classification:
 						globalDevel.buildConfig = self.resolveBuildConfigLabel(componentLabel.name)
 
 				componentLabel.updateGlobalPurposeLabels(self)
+
+				# build config X11/standard inherits from XXX/standard for all XXX components below X11
+				# for lowerComponent in componentOrder.downwardClosureFor(componentLabel):
+				for lowerComponent in componentLabel.runtimeRequires:
+					for lowerConfig in lowerComponent.flavors:
+						buildConfig = self.createFlavor(componentLabel, lowerConfig.name)
+						buildConfig.buildRequires.update(lowerConfig.buildRequires)
+						buildConfig.runtimeRequires.update(lowerConfig.runtimeRequires)
 
 			for name in globalPurposeLabelNames:
 				label = self.getLabel(name)
@@ -859,7 +869,6 @@ class Classification:
 			# create a partial order but throw it away afterwards. the label hierarchy
 			# is changing as part of this exercise
 			topicOrder = self.createOrdering(Classification.TYPE_BINARY)
-			componentOrder = self.componentOrder()
 			for label in topicOrder.bottomUpTraversal():
 				label.autoSelectCompatibleFlavors(topicOrder, componentOrder)
 

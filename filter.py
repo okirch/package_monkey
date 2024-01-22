@@ -1530,6 +1530,7 @@ class ClassificationResult(object):
 			self.sources = []
 			self.buildRequires = []
 			self.label = None
+			self.buildConfig = None
 
 		def __str__(self):
 			return self.name
@@ -1582,13 +1583,14 @@ class ClassificationResult(object):
 	def labelOnePackage(self, pkg, label, reason):
 		self.packageMembership(label).track(pkg, reason)
 
-	def labelOneBuild(self, name, label, binaries, sources):
+	def labelOneBuild(self, name, label, binaries, sources, buildConfig = None):
 		buildInfo = self.BuildInfo(name)
 		self._builds.append(buildInfo)
 
 		buildInfo.binaries += binaries
 		buildInfo.sources += sources
 		buildInfo.label = label
+		buildInfo.buildConfig = buildConfig
 
 		for rpm in sources:
 			if rpm.resolvedRequires is None:

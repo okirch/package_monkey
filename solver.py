@@ -1746,6 +1746,7 @@ class PotentialClassification(object):
 		for build in self.solvingTree.allBuilds:
 			label = None
 			buildSpec = None
+			buildConfig = None
 
 			buildPlacement = placementMap.get(build)
 			if buildPlacement is None:
@@ -1768,8 +1769,11 @@ class PotentialClassification(object):
 				buildSpec = buildSpecFactory.createBuildSpec(buildPlacement, build, buildRequires)
 				if buildSpec is not None:
 					allBuildSpecs.append(buildSpec)
+					buildConfig = buildSpec.buildEnvironment
 
-			result.labelOneBuild(build.name, label, build.packages, build.sources)
+			result.labelOneBuild(build.name, label, build.packages, build.sources, buildConfig)
+
+		# FIXME: save all build configs in the result object
 
 		self.reportMissingBuildRequirements(allBuildSpecs)
 

@@ -16,6 +16,10 @@ class BaseWriter:
 		self._excluded.add(labelName)
 
 	def write(self, result):
+		# FIXME:
+		# - write the component hierarchy and its base labels
+		# - write build configs for each component
+
 		for label, members in result.enumeratePackages():
 			if label.name in self._excluded:
 				continue
@@ -229,6 +233,11 @@ class XmlWriter(BaseWriter):
 		for rpm in sorted(packages, key = lambda p: p.name):
 			rpmNode = self.writeRPM(labelNode, rpm)
 
+			# FIXME: rather that grouping requirements by the required topic,
+			# why not just add an attribute requires="@Topic", like
+			#  <rpm arch="noarch" name="python3-foobar" topic="@Topic"/>
+			# This may make it a bit more readable, and we would include
+			# unlabelled dependencies.
 			reqNodes = {}
 			for dep, required in rpm.resolvedRequires:
 				if required.label is None or \
@@ -253,6 +262,10 @@ class XmlWriter(BaseWriter):
 
 		if label is not None:
 			buildNode.setAttribute('component', label)
+
+		buildConfig = buildInfo.buildConfig
+		if buildConfig is not None:
+			buildNode.addField('buildconfig', buildConfig.name)
 
 		for rpm in buildInfo.sources + buildInfo.binaries:
 			self.writeRPM(buildNode, rpm)

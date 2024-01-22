@@ -50,6 +50,7 @@ class Classification:
 			self.preferredLabels = []
 			self.defined = False
 			self.instanceOfTemplate = None
+			self.compatibility = None
 
 			# This is populated for labels that represent a build flavor like @Core+python,
 			# or a purpose like @Core-devel, or a flavor AND purpose, like @Core+python-devel
@@ -193,12 +194,11 @@ class Classification:
 			if self.isComponentLevel:
 				return False
 
-			buildConfig = self.getBuildConfigFlavor(autoFlavor.name)
-
-			if buildConfig and self.buildConfig is not buildConfig:
-				debugmsg(f"{self} is not compatible with {autoFlavor}: my buildConfig is {self.buildConfig} while flavor would use {buildConfig}")
-				return False
-			return True
+			# templated labels and autoflavors may come with a "compatibility" setting. The goal is
+			# to avoid creating labels like "PythonStandard311/python310".
+			return (self.compatibility == autoFlavor.compatibility or \
+					self.compatibility is None or
+					autoFlavor.compatibility is None)
 
 		def addRuntimeDependency(self, other):
 			assert(isinstance(other, Classification.Label))
@@ -2338,6 +2338,7 @@ class PackageFilter:
 		'purposes',
 		'sourceproject',
 		'buildconfig',
+		'compatibility',
 		'disposition',
 		'autoselect',
 		'defaultlabel',
@@ -2351,6 +2352,12 @@ class PackageFilter:
 			value = gd.get(tag)
 			if value is not None and type(value) is not bool:
 				raise Exception(f"{group.label}: bad value {tag}={value} (expected boolean value not {type(value)})")
+			return value
+
+		def getString(gd, tag):
+			value = gd.get(tag)
+			if value is not None and type(value) is not str:
+				raise Exception(f"{group.label}: bad value {tag}={value} (expected string value not {type(value)})")
 			return value
 
 		if group.defined:
@@ -2518,6 +2525,8 @@ class PackageFilter:
 				purposeLabel = self.classificationScheme.createLabel(labelName, Classification.TYPE_BINARY)
 				purposeLabel.isComponentLevel = True
 				group.label.setGlobalPurposeLabel(purposeName, purposeLabel)
+
+		group.label.compatibility = getString(gd, 'compatibility')
 
 		return group
 

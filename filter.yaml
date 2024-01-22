@@ -13,6 +13,7 @@ autoflavors:
     - perl-*
  - name: python
    disposition: maybe_merge
+   compatibility: python311
    # placing packages through this autoflavor can be overridden by
    # explicit placement in some @Topic (which has a default priority of 5)
    priority: 10
@@ -28,6 +29,7 @@ autoflavors:
     - python311-*
  - name: python310
    disposition: maybe_merge
+   compatibility: python310
    # placing packages through this autoflavor can be overridden by
    # explicit placement in some @Topic (which has a default priority of 5)
    priority: 10
@@ -5214,6 +5216,8 @@ groups:
  - instantiate: PythonGroups:311
 
  - name: "@PythonCore"
+   # we do not accept any autoflavors:
+   compatibility: none
    description: |
      This is where we would add future python versions
    buildconfig: Python/standard
@@ -5222,17 +5226,23 @@ groups:
     - "@PythonCore311"
 
  - name: "@Python"
+   # we do not accept any autoflavors:
+   compatibility: none
    buildconfig: Python/standard
    requires:
     - "@PythonCore310"
     - "@PythonCore311"
 
  - name: "@PythonData"
+   # we do not accept any autoflavors:
+   compatibility: none
    buildconfig: Python/standard
    binaries:
     - python-langtable-data
 
  - name: "@PythonStandard"
+   # we do not accept any autoflavors:
+   compatibility: none
    buildconfig: Python/standard
    requires:
     - "@PythonStandard310"
@@ -5244,6 +5254,8 @@ groups:
        - "@PythonStandard311+desktop"
 
  - name: "@PythonModules"
+   # we do not accept any autoflavors:
+   compatibility: none
    buildconfig: Python/standard
    requires:
     - "@PythonStandard"
@@ -5802,11 +5814,13 @@ templates:
    document:
     - name: "@PythonXXX"
       buildconfig: Python/pythonXXX
+      compatibility: pythonXXX
       requires:
        - "@PythonCoreXXX"
 
     - name: "@PythonStandardXXX"
       buildconfig: Python/pythonXXX
+      compatibility: pythonXXX
       requires:
        - "@PythonXXX"
        - "@Core0"
@@ -5910,11 +5924,13 @@ templates:
 
     - name: "@PythonModulesXXX"
       buildconfig: Python/pythonXXX
+      compatibility: pythonXXX
       requires:
        - "@PythonStandardXXX"
 
     - name: "@PythonMatplotXXX"
       buildconfig: Python/pythonXXX
+      compatibility: pythonXXX
       requires:
        - "@PythonModulesXXX"
        - "@PythonStandardXXX+graphics"
@@ -5947,6 +5963,7 @@ templates:
 
     - name: "@CythonXXX"
       buildconfig: Python/pythonXXX
+      compatibility: pythonXXX
       requires:
        - "CoreDevel"
        - "@PythonCore"

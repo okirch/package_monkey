@@ -133,12 +133,41 @@ build_configs:
  - name: Core/standard
    buildrequires:
     - "CoreDevel"
+    - "@SystemdAPI"
+    - "@WorkbenchUnitTests"
+    - "@GtkDoc"
+ - name: Core/java
+   buildrequires:
+    - "@JavaTimezoneTools"
+    - "@Java"
+    - "@ApacheCommons"
+ - name: Core/cross
+   buildrequires:
+    - "@GccCross"
+    - "@KernelHeaders"
+ - name: Core/qt
+   buildrequires:
+    - "QtDevel"
+ - name: Core/x11
+   buildrequires:
+    - "@X11API"
+ - name: Core/gtk
+   buildrequires:
+    - "@GtkAPI"
+ - name: Core/database
+   buildrequires:
+    - "DatabasesDevel"
+ - name: Core/tcl
+   buildrequires:
+    - TclDevel
  - name: Workbench/standard
    buildrequires:
     - "@WorkbenchEssentials"
  - name: GCC/standard
    buildrequires:
     - "@WorkbenchEssentials"
+    - "@WorkbenchUnitTests"
+    - "@KernelHeaders"
  - name: LLVM/standard
    buildrequires:
     - "@WorkbenchEssentials"
@@ -146,6 +175,8 @@ build_configs:
    buildrequires:
     - "@WorkbenchEssentials"
     - "@KernelHeaders"
+    - "@Go"
+    - "@Rust"
  - name: Kiwi/standard
    buildrequires:
     - "@WorkbenchEssentials"
@@ -161,6 +192,8 @@ build_configs:
  - name: CorePlus/standard
    buildrequires:
     - "CoreDevel"
+    - "@Graphviz"
+    - "@Go"
  - name: Systemd/standard
    buildrequires:
     - "@WorkbenchEssentials"
@@ -208,6 +241,10 @@ build_configs:
  - name: Python/standard
    buildrequires:
     - "@WorkbenchEssentials"
+    - "@Javascript"
+    - "@Rust"
+    - "@Rust+python"
+    - "@Rust+python310"
  - name: Rust/standard
    buildrequires:
     - "@WorkbenchEssentials"
@@ -232,6 +269,7 @@ build_configs:
  - name: Qt/standard
    buildrequires:
     - "@WorkbenchEssentials"
+    - "@Javascript"
  - name: PublicCloud/standard
    buildrequires:
     - "@WorkbenchEssentials"
@@ -258,6 +296,7 @@ build_configs:
  - name: Tcl/standard
    buildrequires:
     - "@WorkbenchEssentials"
+    - "@X11LegacyAPI"
 
 buildconfig_flavors:
  - name: systemdlibs
@@ -367,7 +406,6 @@ components:
     - Security
     - AppArmor
     - HardwareAccess
-#   - Python
    exports:
     - "@SystemdLibraries"
     - "@UdevLibraries"
@@ -570,6 +608,7 @@ components:
     - KernelPlus
     - Security
     - Gnome
+    - Qt
     - UpdateStack
     - Ruby
     - Container
@@ -650,6 +689,14 @@ groups:
     - libstdc++-devel
     - libstdc++6-devel-gcc13
 
+ - name: "@GCCDevel"
+   buildconfig: GCC/standard
+   requires:
+    - "@GCC"
+    - "@CoreAPI"
+   binaries:
+    - binutils-devel
+
  - name: "@GccCross"
    buildconfig: GCC/standard
    requires:
@@ -703,13 +750,6 @@ groups:
    requires:
     - "@MinimalCRuntime"
     - "@Core"
-   buildflavors:
-    - name: dejagnu
-      requires:
-       - "@TclCore"
-       - "@Texinfo"
-      binaries:
-       - dejagnu
 
  - name: "@BaseDevTools"
    buildconfig: Workbench/standard
@@ -809,10 +849,11 @@ groups:
     - "@GlibcDevel"
     - "@Glib2API"
     - "@CoreAPI"
+    - "@SystemdAPI"
    binaries:
     - rpm-build
     - compat-usrmerge-build
-    - libbz2-devel
+#   - libbz2-devel
     - libelf-devel
     - libbsd-devel
     - libxml2-devel
@@ -868,6 +909,7 @@ groups:
      from CoreDevel - so we move these into @CoreAPI to straighten
      things out.
    requires:
+    - "@MinimalCDevelopment"
     - "@GlibcDevel"
     - "@GCC"
    binaries:
@@ -887,6 +929,14 @@ groups:
     - libjson-c-devel
     - libopenssl-devel
     - libuuid-devel
+    - freetype2-devel
+    - libbz2-devel
+    - libbrotli-devel
+    - libexpat-devel
+    - python310-devel
+    - python311-devel
+    - gdbm-devel
+    - openldap2-devel
 
  - name: "@MinimalCDevelopment"
    description: |
@@ -913,6 +963,7 @@ groups:
     - make
     - gettext-tools-mini
     - gettext-tools
+    - nasm
    buildflavors:
     - name: qt
       requires:
@@ -1056,6 +1107,7 @@ groups:
     - libverto-libev1
     - libwtmpdb0
     - libxml2-2
+    - libxml2-tools
     - libxxhash0
     - libyaml
     - libz1
@@ -1101,6 +1153,8 @@ groups:
     - "@LLVMRuntime"
    packages:
     - rpm:python-rpm
+    - libpwquality
+    - bzip2
    binaries:
     - rpm
     # this is placed in Core because suse-module-tools requires it
@@ -1136,6 +1190,7 @@ groups:
     - dialog
     - diffutils
     - dosfstools
+    - dos2unix
     - dwarves
     - e2fsprogs
     - ed
@@ -1144,6 +1199,7 @@ groups:
     - file
     - fillup
     - findutils
+    - ftdump
     - gawk
     - gc
 #   - gettext-runtime
@@ -1174,6 +1230,7 @@ groups:
     - libexslt0
     - libnscd1
     - libssh4
+    - libpwquality-tools
     - libtss2-fapi1
     - libxslt1
     - libxslt-tools
@@ -1301,11 +1358,11 @@ groups:
     - python310-six
     - python310-curses
     - python310-dbm
+# unfortunately, the following does not work yet, because by the time we parse this purpose statement, we have
+# not yet populated all -$purpose children
+#   - python310-doc purpose=doc
     - libpython310
    purposes:
-#   - name: devel
-#     binaries:
-#      - python310-devel
     - name: doc
       binaries:
        - python310-doc
@@ -1323,14 +1380,8 @@ groups:
    binaries:
     - python3
 
- - name: "@CorePythonBindings"
+ - name: "@RubyCore"
    buildconfig: Core/standard
-   buildrequires:
-    - "@BaseDevTools"
-   requires:
-    - "@Core0"
-    - "@SystemPython"
-   binaries:
 
  - name: "@Core1"
    buildconfig: Core/standard
@@ -1342,7 +1393,7 @@ groups:
     - "@Core0"
     - "@PerlCore"
     - "@NetworkLibraries"
-    - "@CorePythonBindings"
+    - "@SystemPython"
    binaries:
     - gpgme
     - libgpgme11
@@ -1363,6 +1414,7 @@ groups:
     - checkmedia
     - rpm-build-perl
     - libtidyp-1*
+    - fmt
    buildflavors:
     - name: glib2
       requires:
@@ -1451,6 +1503,7 @@ groups:
     - "@NetworkUtils"
     - "@Snapper"
     - "@UpdateStack"
+    - "@PlusUtilities"
    binaries:
     - libtukit4
     - tukit
@@ -1485,7 +1538,6 @@ groups:
       requires:
        - "@SystemdLibraries"
       binaries:
-       - libpcap1
        - util-linux-tty-tools
        - nghttp2
     - name: kernel
@@ -1509,8 +1561,7 @@ groups:
        - pesign
     - name: database
       requires:
-       - "@Postgres15Libraries"
-       - "@MariaDB10Libraries"
+       - "@SystemDatabaseLibraries"
        - "@Core+systemd"
       binaries:
        - cyrus-sasl-sqlauxprop*
@@ -1622,17 +1673,32 @@ groups:
    binaries:
     - guile
 
+ - name: "@ELFDebugging"
+   buildconfig: CorePlus/standard
+   requires:
+    - "@GlibcDevel"
+    - "@MinimalCRuntime"
+    - "@Core0"
+    - "@Glib2NoDBus"
+    - "@SystemPython"
+   packages:
+    - source-highlight
+   binaries:
+    - gdb
+    - babeltrace
+    - strace
+    # all the other pieces of gperftools go into @PlusLibraries:
+    - gperftools
+    - pprof
+
  - name: "@PlusUtilities"
    buildconfig: CorePlus/standard
    requires:
     - "@Core"
     - "@PlusLibraries"
    binaries:
-    - strace
-    # all the other pieces of gperftools go into @PlusLibraries:
-    - gperftools
-    - pprof
     - agrep
+    - lsof
 
  - name: "@Spelling"
    feature: True
@@ -1672,6 +1738,7 @@ groups:
     - "@Console"
     - "@Virtualization"
     - "@JeOS"
+    - "@PlusUtilities"
    binaries:
     - kiwi
     - python3-kiwi
@@ -1750,6 +1817,11 @@ groups:
        - "@FontLibraries"
        - "@Postscript"
        - "@X11Libraries"
+    - name: ruby
+      requires:
+       - "@Ruby"
+      binaries:
+       - ruby3.2-rubygem-asciidoctor
 
  - name: "@Postscript"
    buildconfig: DocumentFormats/standard
@@ -1883,6 +1955,11 @@ groups:
        - "@X11Libraries"
       binaries:
        - libwmf-0*
+    - name: glib
+      requires:
+       - "@Glib2NoDBus"
+      binaries:
+       - libgraphene-1*
     - name: opengl
       requires:
        - "@OpenGL"
@@ -1942,6 +2019,9 @@ groups:
    binaries:
     - libsnappy1
 
+ # it would make sense to put Tcl into Core, because it's not really
+ # changing anymore, anyway. However, as it depends on X11 to a degree,
+ # this means splitting off the x11 dependent parts into a build flavor
  - name: "@TclCore"
    buildconfig: Tcl/standard
    requires:
@@ -1956,6 +2036,8 @@ groups:
     - tk
     - expect
     - tix
+
+ - name: TclDevel
 
  - name: "@LUA"
    description: |
@@ -2039,6 +2121,8 @@ groups:
     - "@PythonStandard"
     - "@BaseDevTools"
     - "@Python"
+    - "@GCCDevel"
+    - "@WorkbenchUnitTests"
    binaries:
     - python-rpm-packaging
     - obs-service-*
@@ -2053,10 +2137,23 @@ groups:
     - "@PythonStandard"
     - "@BaseDevTools"
     - "@Python"
+    - "@NetworkAnalysis+systemd"
+    - "@TclCore"
+    - "@Texinfo"
+    - "@CoreAPI"
+    - "@Glib2API"
    packages:
     - libcmocka
+    - umockdev
+    - cunit
+    - check
    binaries:
     - libcmocka-devel
+    - libumockdev0
+    - dejagnu
+    - umockdev-devel
+    - cunit-devel
+    - check-devel
 
  - name: "@Documentation"
    buildconfig: Core/standard
@@ -2158,6 +2255,12 @@ groups:
     - freetds-tools
 #   - libsybdb5
 
+ - name: "@SystemDatabaseLibraries"
+   buildconfig: Databases/standard
+   requires:
+    - "@MariaDB10Libraries"
+    - "@Postgres15Libraries"
+
  - name: DatabasesDevel
    buildconfig: Databases/standard
    requires:
@@ -2169,26 +2272,42 @@ groups:
     - "@KernelAPI"
     - "@X11Libraries"
     - "@FontLibsAPI"
-    - CoreDevel
+    - "@CoreAPI"
+    - "@OpenGL"
     - "@Meson"
    binaries:
     - libdrm-devel
+    - libICE-devel
+    - libSM-devel
     - libX11-devel
     - libXau-devel
     - libxcb-devel
+    - libXcomposite-devel
+    - libXcursor-devel
+    - libXdamage-devel
     - libXext-devel
-    - libXft-devel
     - libXfixes-devel
+    - libXft-devel
+    - libXi-devel
+    - libXinerama-devel
     - libXpm-devel
     - libXrandr-devel
     - libXrender-devel
+    - libXt-devel
+    - libXtst-devel
+    - libxkbcommon-devel
+
+    - wayland-devel
+    - wayland-protocols-devel
+
+    # do we need @OpenGLAPI?
     - libgbm-devel      priority=0
     - Mesa-devel        priority=0
     - Mesa-*-devel      priority=0
+    - libepoxy-devel
     - glu-devel
     - libOSMesa-devel
     - libglvnd-devel
-    - wayland-devel
 
     # for the time being, we need to specify the following packages explicitly. The solver
     # will only label foobar-devel packages correctly if there is a corresponding
@@ -2200,14 +2319,28 @@ groups:
     - pthread-stubs-devel
     - util-macros-devel
     - python3-xcb-proto-devel
+#  buildflavors:
+#   - name: glib
+#     requires:
+#      - "@Glib2API"
+#     binaries:
+#      - libgraphene-devel
+
+ - name: "@X11LegacyAPI"
+   buildconfig: X11/standard
+   requires:
+    - "@X11API"
+   binaries:
+    - imake
+    - xorg-cf-files
 
  - name: X11Devel
    requires:
     - CoreDevel
     - "@X11API"
+    - "@X11LegacyAPI"
    binaries:
     - xorg-x11-server-sdk
-    - xorg-cf-files
 
  - name: "@DesktopCore"
    buildconfig: X11/standard
@@ -2329,6 +2462,8 @@ groups:
     - liboldX6
     - libXss1
     - xtrans
+    - libXpm-tools
+    - libdrm-tools
    buildflavors:
     - name: gdk
       requires:
@@ -2430,8 +2565,10 @@ groups:
  - name: "@QtAPI"
    buildconfig: Qt/standard
    requires:
-    - CoreDevel
-    - X11Devel
+    - "@Qt"
+    - "@CoreAPI"
+    - "@X11API"
+    - "@HardwareAccessAPI"
     # This is silly:
 #   - "@Meson"
    binaries:
@@ -2516,6 +2653,12 @@ groups:
    binaries:
     - libpixman-*-devel priority=0
     - boost-devel
+    - libboost_headers1*-devel priority=0
+    - libopenblas_pthreads-devel
+    - lapack-devel
+    - blas-devel
+    - openblas-common-devel
+    - cblas-devel
 
  - name: CorePlusDevel
    requires:
@@ -2565,13 +2708,6 @@ groups:
       requires:
        - "@PythonCore"
       binaries:
-    - name: test
-      # there should be a way to say "I want this to require the label that contains libpcap"
-      requires:
-       - "@Core+systemdlibs"
-      binaries:
-       - libumockdev0
-       - umockdev
    purposes:
 #   - name: devel
 #     requires:
@@ -2586,6 +2722,15 @@ groups:
 #      - glibmm2-devel
 #      - glibmm2_4-devel
 #      - libvaladoc-0*
+
+ - name: "@GtkDoc"
+   buildconfig: Gnome/standard
+   requires:
+    - "@Docbook"
+    - "@Glib2API"
+    - "@SystemPythonStandard"
+   binaries:
+    - gtk-doc
 
  - name: GnomeDevel
    requires:
@@ -2615,6 +2760,16 @@ groups:
     - libatk-bridge-2*
     - libatspi0
 
+ - name: "@AccessibilityAPI"
+   buildconfig: X11/standard
+   requires:
+    - "@AccessibilityLibraries"
+    - "@Glib2API"
+    - "@X11API"
+    - "@SystemdAPI"
+   binaries:
+    - at-spi2-core-devel
+
  - name: "@GnomeRendering"
    buildconfig: Gnome/standard
    requires:
@@ -2628,6 +2783,7 @@ groups:
     - "@SystemdLibraries"
     - "@AVLibraries"
     - "@Glib2"
+    - "@RemoteControlLibraries"
    binaries:
     - libpulse0
     - libpcaudio0
@@ -2684,6 +2840,96 @@ groups:
       binaries: 
        - speech-dispatcher-configure
 
+ # Is Gnome really the proper place for icon themes?
+ - name: "@DesktopIcons"
+   buildconfig: Gnome/standard
+   requires:
+   binaries:
+    - adwaita-icon-theme
+    - hicolor-icon-theme
+
+ - name: "@GtkCommon"
+   buildconfig: Gnome/standard
+   requires:
+    - "@Glib2"
+    - "@EssentialGraphicsLibraries"
+#   - "@AccessibilityLibraries"
+    - "@FontLibraries+x11"
+    - "@PlusLibraries"
+    - "@DesktopIcons"
+    - "@GdkPixbuf"
+    - "@NetworkProxyLibraries"
+   binaries:
+    - libcolord2
+    - librsvg-2*
+    - libtracker-sparql-3*
+    - libjson-glib-1*
+    - libsoup-2*
+    - glib-networking
+    - gsettings-desktop-schemas
+
+ - name: "@Gtk3"
+   buildconfig: Gnome/standard
+   packages:
+    - gtk3
+   requires:
+    - "@Core0"
+    - "@DBus"
+    - "@X11"
+    - "@GtkCommon"
+    - "@PrintingLibraries"
+    - "@AccessibilityLibraries"
+    - "@GStreamerLibraries"
+    - "@OpenGL"
+   binaries:
+    - libgtk-3*
+    - gtk3-schema
+    - gtk3-tools
+    - gtk3-data
+
+ - name: "@Gtk4"
+   buildconfig: Gnome/standard
+   packages:
+    - gtk4
+   requires:
+    - "@Core0"
+    - "@DBus"
+    - "@X11"
+    - "@GtkCommon"
+    - "@PrintingLibraries"
+    - "@GStreamerLibraries"
+    - "@PulseAudio"
+    - "@OpenGL"
+   binaries:
+    - libgtk-4*
+    - gtk4-schema
+    - gtk4-tools
+    - gtk4-data
+
+ - name: "@GtkAPI"
+   buildconfig: Gnome/standard
+   requires:
+    - "@Gtk3"
+    - "@Gtk4"
+    - "@FontLibsAPI+x11"
+    - "@Glib2API"
+    - "@CairoAPI"
+    - "@AccessibilityAPI"
+   binaries:
+    - librsvg-devel
+    - gtk3-devel
+    - gtk4-devel-tools
+    - gtk4-devel
+
+ - name: "@GnomeVTE"
+   buildconfig: Gnome/standard
+   requires:
+    - "@Gtk3"
+    - "@Gtk4"
+   binaries:
+    - libvte-2*
+    - vte-tools*
+
  - name: "@GnomeLibraries"
    buildconfig: Gnome/standard
    requires:
@@ -2694,11 +2940,43 @@ groups:
     - "@AccessibilityLibraries"
     - "@FontLibraries+x11"
     - "@PlusLibraries"
+    - "@DesktopIcons"
    binaries:
     - dconf
     - libgjs0
     - hicolor-icon-theme
     - libgusb2
+
+ - name: "@GStreamerLibraries"
+   buildconfig: Gnome/standard
+   requires:
+    - "@GtkCommon"
+    - "@PulseAudio"
+   binaries:
+    - libgstadaptivedemux-1_0-0
+    - libgstbadaudio-1_0-0
+    - libgstbasecamerabinsrc-1_0-0
+    - libgstcodecparsers-1_0-0
+    - libgstcodecs-1_0-0
+    - libgstinsertbin-1_0-0
+    - libgstisoff-1_0-0
+    - libgstmpegts-1_0-0
+    - libgstphotography-1_0-0
+    - libgstsctp-1_0-0
+    - libgsttranscoder-1_0-0
+    - libgsturidownloader-1_0-0
+    - libgstva-1_0-0
+    - libgstwayland-1_0-0
+    - libgstwebrtc-1_0-0
+    - libgstplayer-1*
+    - libgstplay-1_0-0
+
+ - name: "@GnomeRelatedUtilities"
+   buildconfig: Gnome/standard
+   requires:
+    - "@GtkCommon"
+   binaries:
+    - tracker
 
  - name: "@DesktopLibraries"
    buildconfig: Gnome/standard
@@ -2713,29 +2991,23 @@ groups:
     - "@GPU"
     - "@OpenGL"
     - "@PrintingLibraries"
-    - "@FontLibraries+gnomelibs"
+    - "@FontLibraries+x11"
 #   - "@GraphicsLibraries+glib2"
 #   - "@GraphicsLibraries+gnomelibs"
     - "@GdkPixbuf"
     - "@Spelling"
     - "@NetworkProxyLibraries"
+    - "@Gtk3"
+    - "@Gtk4"
+    - "@GnomeRelatedUtilities"
+    - "@GStreamerLibraries"
    binaries:
-    - gsettings-desktop-schemas
-    - libgtk-3*
     - libgtk-2*
     - gtk2-schema
     - gtk2-tools
     - gtk2-data
-    - libgtk-3*
-    - gtk3-schema
-    - gtk3-tools
-    - gtk3-data
     - libgtk-4*
-    - gtk4-schema
-    - gtk4-tools
-    - gtk4-data
     - gettext-its-gtk*
-    - libjson-glib-1*
     - libnice10
     - libnotify4
     - gstreamer-*
@@ -2748,7 +3020,6 @@ groups:
     - libgcr3
     # or move to AudioLibraries:
     - libgstvulkan-1*
-    - libcolord2
     - colord-color-profiles
     - gcab
     - appstream-glib
@@ -2757,7 +3028,6 @@ groups:
     - libmanette
     - libdecor
     - librevenge-0*
-    - libsoup-2*
    buildflavors:
     - name: qt
       requires:
@@ -2797,6 +3067,7 @@ groups:
       binaries:
        - citx-gtk*
 
+ # FIXME: Would this work with a smaller footprint?
  - name: "@Webkit"
    buildconfig: Gnome/standard
    requires:
@@ -2918,6 +3189,31 @@ groups:
    binaries:
     - libcgraph6
     - libgvc6
+    - libgvpr2
+
+ - name: "@GraphvizAPI"
+   buildconfig: Gnome/standard
+   requires:
+    # it would be nice if this would just depend on GraphvizLibraries, but
+    # the devel package wants the full graphviz.
+    - "@Graphviz"
+   binaries:
+    - graphviz-devel
+
+ # doesn't have to be Gnome
+ - name: "@Graphviz"
+   buildconfig: Gnome/standard
+   requires:
+    - "@GraphvizLibraries"
+    - "@Glib2NoDBus"
+   binaries:
+    - graphviz
+   buildflavors:
+    - name: php
+      requires:
+       - "@PHP"
+      binaries:
+       - graphviz-php
 
  - name: "@GnomeApplications"
    buildconfig: Gnome/standard
@@ -2927,17 +3223,11 @@ groups:
     - "@Postscript"
     - "@HPCCoreLibraries"
     - "@PythonStandard"
-    - "@GraphvizLibraries"
+    - "@Graphviz"
     - "@Boost"
    binaries:
-    - graphviz
     - inkscape
    buildflavors:
-    - name: php
-      requires:
-       - "@PHP"
-      binaries:
-       - graphviz-php
     - name: tex
       requires:
        - "@Texlive"
@@ -3238,16 +3528,16 @@ groups:
     - libcreaterepo_c0
     - librepo0
 
- - name: "@SystemdLegacy"
+ - name: "@LegacyServices"
    buildconfig: Systemd/standard
    requires:
     - "@Core"
     - "@MinimalSystemd"
     - "@NetworkManager"
    binaries:
-    - sysvinit
     - syslogd
     - rsyslog
+    - sysvinit-tools
 
  - name: "@Sysadmin"
    buildconfig: Core/standard
@@ -3321,7 +3611,6 @@ groups:
    binaries:
     - autofs
     - bcache-tools
-    - dos2unix
     - dump
     - duperemove
     - ecryptfs-utils
@@ -3390,6 +3679,7 @@ groups:
     - "@Core+systemd"
     - "@PlusLibraries"
     - "@Snappy"
+    - "@ELFDebugging"
    binaries:
     - ceph
 
@@ -3431,7 +3721,7 @@ groups:
     - google-osconfig-*
     - google-cloud*
 
- - name: "@PublicCloud/Alibaba"
+ - name: "@Alibaba"
    buildconfig: PublicCloud/standard
    requires:
     - "@PublicCloud"
@@ -3450,13 +3740,14 @@ groups:
     - "@RubyStandard"
     - "@Management"
     - "@Virtualization+gui"
-    - "@HostNetworking+gnomelibs"
     - "@TransactionalServer+systemd"
     - "@WorkbenchEssentials"
     - "@HostSecurity"
     - "@NetworkManager"
     - "@Snapper"
     - "@NetworkProxyLibraries"
+    - "@NetworkAnalysis+systemd"
+    - "@Qt"
    binaries:
     - autoyast2
     - yast2*
@@ -3472,8 +3763,7 @@ groups:
    buildflavors:
     - name: test
       requires:
-       - "@Testing+dejagnu"
-       - "@TclCore"
+       - "@WorkbenchUnitTests"
       binaries:
        - yast2-testsuite
     - name: ncurses
@@ -3518,7 +3808,6 @@ groups:
     - libharfbuzz0
     - libharfbuzz-icu0
     - libharfbuzz-subset0
-    - harfbuzz-devel purpose=devel
     - woff2
     - t1utils
     - libotf1
@@ -3539,11 +3828,6 @@ groups:
        - libthai0
        - libm17n0
        - libotf
-    - name: gnomelibs
-      augments:
-       - "@GnomeLibraries"
-       - "@FontLibraries+x11"
-      binaries:
        - harfbuzz-tools
        - libharfbuzz-gobject0
        # we have to force the priority here to avoid having
@@ -3564,9 +3848,22 @@ groups:
  - name: "@FontLibsAPI"
    buildconfig: Typesetting/standard
    requires:
-    - "CoreDevel"
+    - "@CoreAPI"
+    - "@FontLibraries"
    binaries:
     - fontconfig-devel
+   buildflavors:
+    - name: x11
+      requires:
+       - "@FontLibraries+x11"
+       - "@X11API"
+       - "@Glib2API"
+       - "@CairoAPI"
+      binaries:
+       - pango-devel
+       - harfbuzz-devel
+       - graphite2-devel
+       - libthai-devel
 
  - name: "@CairoAPI"
    buildconfig: Typesetting/standard
@@ -3798,6 +4095,14 @@ groups:
    binaries:
     - libsensors4-devel
     - libpciaccess-devel
+   buildflavors:
+    - name: udev
+      requires:
+       - "@CoreAPI"
+       - "@SystemdAPI"
+       - "@KernelLibraries+udev"
+      binaries:
+       - device-mapper-devel
 
 # some pieces of Kernel require perl-Bootloader which needs perl
  - name: "@Kernel"
@@ -3845,11 +4150,6 @@ groups:
        - "@Glib2"
       binaries:
        - irqbalance
-    - name: gnomelibs
-      requires:
-       - "@Kernel+glib"
-       - "@GnomeLibraries"
-      binaries:
        - irqbalance-ui
     - name: xen
       requires:
@@ -3893,11 +4193,55 @@ groups:
     - libmaxminddb0
     - rpcgen purpose=devel
 
+ - name: "@RemoteControlLibraries"
+   buildconfig: HardwareAccess/standard
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - liblirc0
+    - liblirc_client0
+    - liblirc_server0
+
+ - name: "@RemoteControl"
+   buildconfig: HardwareAccess/standard
+   requires:
+    - "@RemoteControlLibraries"
+    - "@UdevLibraries"
+    - "@SystemdLibraries"
+    - "@SystemdServices"
+    - "@SystemPython"
+    - "@Glib2"
+    - "@Sound"
+   packages:
+    - lirc
+   binaries:
+   buildflavors:
+    # FIXME FIXME FIXME - lirc-core requires typelib-{Gtk,Vte} - I don't know how they end up in @DesktopLibs right now :-(
+    - name: desktop
+      requires:
+       - "@GnomeVTE"
+       - "@Gtk3"
+#      - "@DesktopLibraries"
+      binaries:
+       - lirc-core
+       - lirc-drv-ftdi
+       - lirc-disable-kernel-rc
+
  - name: HardwareAccessDevel
    requires:
+    - "@HardwareAccessAPI"
+
+ - name: "@HardwareAccessAPI"
+   buildconfig: HardwareAccess/standard
+   requires:
     - "@X11API"
+    - "@GPU"
+    - "@BluetoothLibraries"
+    - "@RemoteControlLibraries"
    binaries:
     - vulkan-headers
+    - vulkan-devel
+    - bluez-devel
 
  - name: "@Sound"
    buildconfig: HardwareAccess/standard
@@ -4130,6 +4474,7 @@ groups:
     - "@PolicyKit"
     - "@BluetoothLibraries"
     - "@Kernel"         # for openvswitch
+    - "@NetworkAnalysis+systemd"
    binaries:
     - libnm0
     - NetworkManager
@@ -4262,10 +4607,13 @@ groups:
     - libGLU1
     - libGLEW2*
     - libvdpau1
+    - libvdpau_*
+    - libvulkan_*
     - libepoxy0
     - DirectX-Headers           purpose=devel
     - spirv-Headers             purpose=devel
     - spirv-llvm-Headers        purpose=devel
+    - libxatracker2
 
  - name: "@AVLibraries"
    buildconfig: Multimedia/standard
@@ -4434,13 +4782,24 @@ groups:
     - nmap
     - mutt
     - socat
+
+ - name: "@NetworkAnalysis"
+   buildconfig: Network/standard
+   requires:
+    - "@HostNetworking"
    buildflavors:
-    - name: gnomelibs
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - libpcap1
+    - name: gui
       requires:
        - "@GnomeLibraries"
        - "@Qt"
        - "@Multimedia"
        - "@Snappy"
+       - "@NetworkAnalysis+systemd"
       binaries:
        - wireshark
 
@@ -4477,10 +4836,10 @@ groups:
    buildflavors:
     - name: mysql
       requires:
-       - "@MariaDB10Libraries"
-       - "@Postgres15Libraries"
+       - "@SystemDatabaseLibraries"
        - "@Samba"
        - "@SystemPython"
+       - "@NetworkAnalysis+systemd"
       binaries:
        - freeradius-server
        - freeradius-server-mysql
@@ -4723,20 +5082,50 @@ groups:
 #      - nginx-source
 #      - nginx-macros
 
+ - name: "@ApacheLibraries"
+   buildconfig: Webserver/standard
+   requires:
+    - "@Core0"
+   packages:
+    - libapr
+    - libapr-util
+   binaries:
+    - apache-rpm-macros
+    - apache-rpm-macros-control
+    - libapr-util1
+    - libapr-util1*-dbd-sqlite*
+   buildflavors:
+    - name: database
+      requires:
+       - "@SystemDatabaseLibraries"
+      binaries:
+       - libapr-util1*-dbd-mysql
+       - libapr-util1*-dbd-mgsql
+
  - name: "@Apache"
    buildconfig: Webserver/standard
    requires:
     - "@NetworkServices"
+    - "@ApacheLibraries"
    binaries:
     - apache2*
-    - apache-rpm-macros
-    - apache-rpm-macros-control
    buildflavors:
     - name: php
       requires:
        - "@PHP"
       binaries:
        - apache2-mod_php8
+
+ - name: "@ApacheAPI"
+   buildconfig: Webserver/standard
+   requires:
+    - "@Apache"
+    - "@CoreAPI"
+    - "@GCC"
+   binaries:
+    - apache2-devel
+    - apr-devel
+    - apr-util-devel
 
  # Need to sort out the mess around qemu. Too much seems to depend on desktop stuff...
  - name: "@Virtualization"
@@ -4766,6 +5155,10 @@ groups:
     - "@HostWorkloads"
     - "@PlusLibraries"
     - "@NetworkProxyLibraries"
+    - "@NetworkAnalysis+systemd"
+    # for the wireshark plugin
+    - "@NetworkAnalysis+gui"
+    - "@GnomeVTE"
     - "@Snappy"
    binaries:
     - xen
@@ -4781,7 +5174,6 @@ groups:
     - virt-install
     - virt-manager
     - virt-manager-common
-    - vte-tools*
     - open-vm-tools-desktop
     - vte
     - libspice-server1
@@ -5508,6 +5900,13 @@ templates:
           - "@Texlive"
          binaries:
           - pythonXXX-Sphinx-latex
+       - name: numeric
+         requires:
+          - "@NumericLibraries"
+          - "@CorePlusAPI"
+         binaries:
+          - pythonXXX-pythran
+          - pythonXXX-numpy-devel
 
     - name: "@PythonModulesXXX"
       buildconfig: Python/pythonXXX
@@ -5519,7 +5918,6 @@ templates:
       requires:
        - "@PythonModulesXXX"
        - "@PythonStandardXXX+graphics"
-#      - "@SystemdUtilities"
       binaries:
        - pythonXXX-matplotlib
        - pythonXXX-matplotlib-tk

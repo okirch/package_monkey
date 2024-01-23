@@ -698,6 +698,7 @@ class OBSPackage:
 
 		self.baseLabel = None
 		self.baseLabelReason = None
+		self.config = None
 		self.trace = False
 
 		if ':' in name:

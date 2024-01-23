@@ -316,7 +316,8 @@ class Classification:
 			if self.buildConfig is configLabel:
 				return
 			if self.buildConfig is not None:
-				raise Exception(f"Duplicate buildconfig for {self}: {self.buildConfig} vs {configLabel}")
+				warnmsg(f"Ignoring duplicate buildconfig for {self}: {self.buildConfig} vs {configLabel}")
+				return
 			self.buildConfig = configLabel
 			if self.sourceProject is None:
 				self.sourceProject = configLabel.sourceProject
@@ -565,7 +566,7 @@ class Classification:
 			pkg.label = label
 			pkg.labelReason = labelReason
 		elif pkg.label is not label:
-			raise Exception(f"Refusing to change {pkg.fullname()} label from {pkg.label} to {self.label}")
+			raise Exception(f"Refusing to change {pkg.fullname()} label from {pkg.label} to {label}")
 
 	@staticmethod
 	def labelBuild(build, label, labelReason = None):
@@ -1431,7 +1432,7 @@ class PackageGroup:
 		self._objectPurposes = {}
 
 	def track(self, pkg):
-		Classification.labelPackage(pkg, self.label)
+		Classification.labelPackage(pkg, self.label, "by PackageGroup.track")
 
 	@property
 	def type(self):

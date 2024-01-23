@@ -480,10 +480,9 @@ class SolvingTree(object):
 
 			projects = set()
 			for label in candidates:
-				if label.buildConfig:
-					label = label.buildConfig
-					if label.sourceProject:
-						projects.add(label.sourceProject)
+				componentLabel = label.componentLabel
+				if componentLabel is not None:
+					projects.add(componentLabel)
 			return projects
 
 		def anyPackageHasLabel(self):

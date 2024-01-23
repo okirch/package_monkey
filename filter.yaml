@@ -431,7 +431,7 @@ components:
     - Network
     - Databases
     # PHP wants to draw images
-    - Multimedia
+#   - Multimedia
     # why?
     - Systemd
  - name: Multimedia
@@ -478,9 +478,9 @@ components:
    globals:
     devel: QtDevel
    requires:
-#   - Gnome
     - Databases
     - Python
+    - Security
     - X11
  - name: Security
    globals:
@@ -1153,7 +1153,6 @@ groups:
    requires:
     - "@CoreLibraries"
     - "@CoreConfig"
-#   - "@LLVMRuntime"
    packages:
     - rpm:python-rpm
     - libpwquality
@@ -1297,6 +1296,7 @@ groups:
       requires:
        - "@Kernel"
       binaries:
+       - fuse2fs
     - name: kernellibs
       requires:
        - "@KernelLibraries"
@@ -1329,6 +1329,7 @@ groups:
     - python311-six
     - python311-curses
     - python311-dbm
+    - python311-tools
     - libpython311
    purposes:
 #   - name: devel
@@ -1340,9 +1341,11 @@ groups:
    buildflavors:
     - name: tcl
       requires:
-       - "@TclCore"
+       - "@TclCore+x11"
       binaries:
        - python311-tk
+       - python311-idle
+       - python311-testsuite
 
  - name: "@PythonCore310"
    buildconfig: Core/standard
@@ -1361,6 +1364,7 @@ groups:
     - python310-six
     - python310-curses
     - python310-dbm
+    - python310-tools
 # unfortunately, the following does not work yet, because by the time we parse this purpose statement, we have
 # not yet populated all -$purpose children
 #   - python310-doc purpose=doc
@@ -1372,9 +1376,11 @@ groups:
    buildflavors:
     - name: tcl
       requires:
-       - "@TclCore"
+       - "@TclCore+x11"
       binaries:
        - python310-tk
+       - python310-idle
+       - python310-testsuite
 
  - name: "@SystemPython"
    buildconfig: Core/standard
@@ -1618,6 +1624,7 @@ groups:
    requires:
     - "@Core"
     - "@Perl"
+    - "@KernelLibraries"
     - "@PythonModules"
     - "@AvahiLibraries"
     - "@GCC"
@@ -1668,6 +1675,12 @@ groups:
        - "@Qt"
       binaries:
        - pcp-testsuite
+    - name: tk
+      requires:
+       - "@TclCore+x11"
+      binaries:
+       - sysstat-isag
+
 
  - name: "@Guile"
    buildconfig: CorePlus/standard
@@ -2026,19 +2039,21 @@ groups:
  # changing anymore, anyway. However, as it depends on X11 to a degree,
  # this means splitting off the x11 dependent parts into a build flavor
  - name: "@TclCore"
-   buildconfig: Tcl/standard
+   buildconfig: Core/standard
    requires:
     - "@Core0"
-    - "@GraphicsLibraries"
-    # tk wants to use xhost
-    - "@X11StandardUtils"
-   buildrequires:
-#   - "@X11Libraries-devel"
    binaries:
     - tcl
-    - tk
     - expect
-    - tix
+   buildflavors:
+    - name: x11
+      requires:
+       - "@GraphicsLibraries"
+       # tk wants to use xhost
+       - "@X11StandardUtils"
+      binaries:
+       - tk
+       - tix
 
  - name: TclDevel
 
@@ -2145,7 +2160,7 @@ groups:
     - "@BaseDevTools"
     - "@Python"
     - "@NetworkAnalysis+systemd"
-    - "@TclCore"
+    - "@TclCore+x11"
     - "@Texinfo"
     - "@CoreAPI"
     - "@Glib2API"
@@ -2614,7 +2629,14 @@ groups:
     - "@SpeechSynthesis"
     - "@PlusLibraries"
     - "@NetworkProxyLibraries"
+    - "@SmartcardLibraries"
     - "@Snappy"
+   packages:
+    - python-qt5
+    - python-qt5-*
+    - python-PyQt6
+    - python-PyQt6-*
+    - python-pytest-qt
    binaries:
     - libQt5*
     - libqt5-*
@@ -2622,19 +2644,18 @@ groups:
     - qt6-sql-*
     - qt6-*
    buildflavors:
-    - name: python
-      augments:
-       - "@Python"
-      requires:
-       - "@Qt+nfc"
-      binaries:
-       - python31?-qt5
-       - python31?-PyQt6*
     - name: nfc
       requires:
        - "@Smartcards"
       binaries:
-       - libQt6Nfc6
+#      - libQt5Nfc5
+#      - libQt6Nfc6
+    - name: pyqt
+      requires:
+       - "@Qt+nfc"
+      binaries:
+#      - python31?-qt5
+#      - python31?-PyQt6*
     - name: meta
       requires:
        - "@Qt-doc"
@@ -3337,6 +3358,8 @@ groups:
    requires:
     - "@Core0"
     - "@UdevLibraries"
+   packages:
+    - libbytesize
    binaries:
     - libsystemd0-mini
     - libsystemd0
@@ -3344,6 +3367,7 @@ groups:
     - libdbus-c++-1-*
     - dbus-1-common
     - libbytesize1
+    - bscalc
 
  - name: "@SystemdUtilities"
    buildconfig: Systemd/standard
@@ -3573,12 +3597,20 @@ groups:
     - oath-toolkit
     - pam_oath
 
+ - name: "@SmartcardLibraries"
+   buildconfig: Security/standard
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libpcsclite1
+
  - name: "@Smartcards"
    buildconfig: Security/standard
    requires:
     - "@Security"
     - "@SystemdServices"
     - "@GnomeLibraries"
+    - "@SmartcardLibraries"
     - "@PolicyKit"
    binaries:
     - pcsc
@@ -4406,7 +4438,7 @@ groups:
    buildflavors:
     - name: desktop
       requires:
-       - "@Qt+python"
+       - "@Qt"
        - "@HostNetworking+gnomelibs"
        - "@PythonStandard+desktop"
       binaries:
@@ -4465,7 +4497,7 @@ groups:
     - name: gui
       requires:
        - "@Gnome"
-       - "@Qt+python"
+       - "@Qt"
        - "@SystemPythonStandard+desktop"
       binaries:
        - firewall-config
@@ -4502,7 +4534,7 @@ groups:
     - name: gui
       requires:
        - "@Gnome"
-       - "@Qt+python"
+       - "@Qt"
        - "@PythonStandard+desktop"
       binaries:
        - firewall-config
@@ -5270,6 +5302,8 @@ groups:
     - "@PythonModules311"
 
  - name: "@SystemPythonStandard"
+   # we do not accept any autoflavors:
+   compatibility: none
    buildconfig: Python/standard
    requires:
     - "@PythonStandard311"
@@ -5279,6 +5313,8 @@ groups:
        - "@PythonStandard311+desktop"
 
  - name: "@SystemPythonModules"
+   # we do not accept any autoflavors:
+   compatibility: none
    buildconfig: Python/standard
    requires:
     - "@PythonModules311"
@@ -5374,6 +5410,7 @@ groups:
     - perl-Bootloader
     - perl-IPC-Run3
     - perl-Date-Calc
+    - perl-DBI
     - perl-Carp-Clan
     - perl-Bit-Vector
     - perl-Text-Unidecode
@@ -5733,6 +5770,7 @@ groups:
     - "@OpenGL"
     - "@PythonStandard"
     # texlive-asymptote
+    - "@TclCore+x11"
     - "@HPCCoreLibraries"
     # some packages use libicu
     - "@PlusLibraries"
@@ -5840,6 +5878,7 @@ templates:
        - pythonXXX-alabaster
        - pythonXXX-apipkg
        - pythonXXX-Babel
+       - pythonXXX-bcrypt
        - pythonXXX-certifi
        - pythonXXX-cffi
        - pythonXXX-charset-normalizer
@@ -5868,7 +5907,6 @@ templates:
        - pythonXXX-pycurl
        - pythonXXX-Pygments
        - pythonXXX-pyparsing
-       - pythonXXX-pyperclip
        - pythonXXX-pyOpenSSL
        - pythonXXX-python-dateutil
        - pythonXXX-pytz
@@ -5878,6 +5916,8 @@ templates:
        - pythonXXX-snowballstemmer
        - pythonXXX-sphinx*
        - pythonXXX-Sphinx
+       - pythonXXX-tomli
+       - pythonXXX-tomli-w
        - pythonXXX-urllib3
        - pythonXXX-numpy
        - pythonXXX-zope
@@ -5887,21 +5927,29 @@ templates:
          requires:
           - "@X11StandardUtils"
          binaries:
+          - pythonXXX-pyperclip
+          - pythonXXX-hatch
+       - name: tcl
+         requires:
+          - "@TclCore+x11"
+         binaries:
+          - pythonXXX-Pympler
        - name: graphics
          # this could also go to a new base label "PythonGraphicsXXX"
          augments:
           - "@Glib2+python"
           - "@GraphicsLibraries+x11"
           - "@FontLibraries+x11"
+          - "@PythonCoreXXX+tcl"
+          - "@TclCore+x11"
          binaries:
           - pythonXXX-pycairo
           - pythonXXX-cairocffi
           - pythonXXX-CairoSVG
-         purposes:
-#         - name: devel
-#           requires:
-#            # python-pycairo-common-devel requires cairo-devel which depends on various xlibs
-#            - "@X11Libraries"
+          - pythonXXX-Pillow
+          - pythonXXX-Pillow-tk
+          - pythonXXX-Django
+          - pythonXXX-pytest-django
        - name: desktop
          augments:
           - "@Glib2+python"
@@ -5941,13 +5989,14 @@ templates:
       requires:
        - "@PythonModulesXXX"
        - "@PythonStandardXXX+graphics"
+       - "@TclCore+x11"
       binaries:
        - pythonXXX-matplotlib
        - pythonXXX-matplotlib-tk
       buildflavors:
        - name: qt
          requires:
-          - "@Qt+python"
+          - "@Qt"
          binaries:
           - pythonXXX-matplotlib-qt*
        - name: gnome

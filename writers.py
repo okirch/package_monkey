@@ -339,6 +339,8 @@ class XmlReader:
 				self.processTopic(node)
 			elif node.tag == 'build':
 				self.processBuild(node)
+			elif node.tag == 'component':
+				self.processComponent(node)
 			else:
 				raise Exception(f"unsupported element <{node.tag}> in {path}")
 
@@ -351,7 +353,7 @@ class XmlReader:
 		return result
 
 	def processTopic(self, labelNode):
-		name = labelNode.attrib['name']
+		name = labelNode.attrib['label']
 
 		label = self.validateLabel(name, Classification.TYPE_BINARY)
 		self.validateComponent(label, labelNode.attrib.get('component'))
@@ -366,11 +368,25 @@ class XmlReader:
 			rpm.label = label
 
 	def processRequires(self, reqNode):
-		reqLabel = self.validateLabel(reqNode.attrib['label'], Classification.TYPE_BINARY)
+		labelName = reqNode.attrib.get('label') or reqNode.attrib.get('name')
+		assert(labelName)
+		reqLabel = self.validateLabel(labelName, Classification.TYPE_BINARY)
 		componentName = reqNode.attrib.get('component')
 		if componentName is not None:
 			self.validateComponent(reqLabel, componentName)
 		return reqLabel
+
+	def processComponent(self, node):
+		name = node.attrib['name']
+		component = self.validateLabel(name, Classification.TYPE_SOURCE)
+
+		requiresNode = node.find('requires')
+		if requiresNode is not None:
+			for otherNode in requiresNode:
+				otherComponent = self.validateLabel(otherNode.attrib['name'], Classification.TYPE_SOURCE)
+				component.addRuntimeDependency(otherComponent)
+
+		return component
 
 	def validateComponent(self, label, componentName):
 		if componentName is None:
@@ -434,10 +450,11 @@ class XmlReader:
 			rpm.resolvedRequires = []
 			self._packages[key] = rpm
 
-		for reqNode in rpmNode.findall('requires'):
-			reqLabel = self.processRequires(reqNode)
-			for required in self.processAllRpmChildren(reqNode):
-				required.label = reqLabel
-				rpm.resolvedRequires.append((None, required))
+		if False:
+			for reqNode in rpmNode.findall('requires'):
+				reqLabel = self.processRequires(reqNode)
+				for required in self.processAllRpmChildren(reqNode):
+					required.label = reqLabel
+					rpm.resolvedRequires.append((None, required))
 
 		return rpm

@@ -183,6 +183,43 @@ class NodeVersusLabelSetReport:
 			for name in it:
 				output(f"    {'':20} {name}")
 
+class InaccessibleLabelReport:
+	class LabelSet:
+		def __init__(self, label):
+			self.label = label
+			self.paths = []
+
+	class Path:
+		def __init__(self, nodeList):
+			self.names = list(map(str, nodeList))
+
+		def __str__(self):
+			return ' -> '.join(self.names)
+
+	def __init__(self):
+		self.byLabels = {}
+
+	def add(self, label, path):
+		info = self.byLabels.get(label)
+		if info is None:
+			info = self.LabelSet(label)
+			self.byLabels[label] = info
+
+		info.paths.append(self.Path(path))
+
+	def display(self):
+		for label, info in self.byLabels.items():
+			key = str(label)
+			it = iter(info.paths)
+			if len(key) > 20:
+				infomsg(f"    {key}")
+			else:
+				path = next(it)
+				infomsg(f"    {key:20} {path}")
+
+			for path in it:
+				infomsg(f"    {'':20} {path}")
+
 class BuildComponentsReport:
 	def __init__(self, build):
 		self.name = build.name
@@ -777,7 +814,8 @@ class SolvingTree(object):
 				infomsg(f"   {labelName} has unsatisfied requirements")
 				for offendingPackage, packageReport in bucket.offenses:
 					infomsg(f"     {offendingPackage}")
-					packageReport.display("     ")
+					with loggingFacade.temporaryIndent(3):
+						packageReport.display()
 				infomsg("")
 
 	class ConflictingComponentsReport:
@@ -794,6 +832,16 @@ class SolvingTree(object):
 				infomsg("")
 
 	def validateInitialPlacements(self, order):
+		def findOffendingNode(node, missing):
+			if node.solution is not None and node.solution in missing:
+				return [node]
+			for lower in node.lowerNeighbors:
+				bad = findOffendingNode(lower, missing)
+				if bad is not None:
+					return [node] + bad
+
+			return None
+
 		errors = 0
 
 		infomsg("Validating initial package placements")
@@ -807,14 +855,21 @@ class SolvingTree(object):
 				configuredRequirements = self._order.downwardClosureFor(node.solution)
 
 				if not node._combinedRequirements.issubset(configuredRequirements):
-					packageReport = NodeVersusLabelSetReport()
+					packageReport = InaccessibleLabelReport()
 					for lower in node.lowerNeighbors:
-						if not lower._combinedRequirements.issubset(configuredRequirements):
-							missing = lower._combinedRequirements.difference(configuredRequirements)
-							missing = self._order.maxima(missing)
+						if lower._combinedRequirements.issubset(configuredRequirements):
+							continue
 
-							packageReport.add(lower.nameWithLabelReason, missing)
-							errors += 1
+						missing = lower._combinedRequirements.difference(configuredRequirements)
+
+						offenders = findOffendingNode(lower, missing)
+						assert(offenders)
+
+						infomsg(f"{node} -> {lower} -> {' '.join(map(str, offenders))}")
+
+						label = offenders[-1].solution
+						packageReport.add(label, offenders)
+						errors += 1
 
 					report.add(node.solution, node.nameWithLabelReason, packageReport)
 					# errormsg(f"configuration problem: {node} has been labelled as {node.solution} but not all its requirements are covered")

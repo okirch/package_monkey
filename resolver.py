@@ -118,6 +118,8 @@ class ResolverHints:
 		self._ignoredDependencies = {}
 		self._ignoredTargets = None
 
+		self._rewriteDependencies = {}
+
 	def addNameOrder(self, words):
 		self._rules.append(self.NameOrderRule(words))
 
@@ -170,6 +172,19 @@ class ResolverHints:
 
 		ignoredNames = self._ignoredDependencies.get(targetName)
 		return ignoredNames is not None and packageName in ignoredNames
+
+	##########################################################
+	# Handling of dependency rewrites
+	##########################################################
+	def addDependencyRewrite(self, fromName, toName):
+		exist = self._rewriteDependencies.get(fromName)
+		if exist is not None:
+			raise Exception(f"Duplicate dependency rewrite rule for {fromName}")
+
+		self._rewriteDependencies[fromName] = toName
+
+	def rewriteDependency(self, name):
+		return self._rewriteDependencies.get(name)
 
 	# not really a self test yet
 	def selfTest(self):

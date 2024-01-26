@@ -172,6 +172,9 @@ class ProductFamily:
 			ignore = hints.get('ignore')
 			if ignore is not None:
 				self.expandIgnoredDependencies(ignore)
+			rewrite = hints.get('rewrite')
+			if rewrite is not None:
+				self.expandDependencyRewrites(rewrite)
 			self.resolverHints.finalize()
 
 			# self.resolverHints.selfTest()
@@ -247,6 +250,14 @@ class ProductFamily:
 				targetNames = expr.split()
 				for targetName in targetNames:
 					self.resolverHints.addIgnoredDependency('*', targetName)
+
+	def expandDependencyRewrites(self, data):
+		for expr in data:
+			if '->' not in expr:
+				raise Exception(expr)
+
+			(fromName, toName) = expr.split('->')
+			self.resolverHints.addDependencyRewrite(fromName.strip(), toName.strip())
 
 	def enumerate(self, **args):
 		if args.get('version') == 'latest':

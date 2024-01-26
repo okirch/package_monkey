@@ -109,14 +109,13 @@ if haveErrors:
 productFamily = application.productFamily
 
 resolver = Resolver(backingStore = store, hints = productFamily.resolverHints)
-worker = ResolverWorker(resolver)
+worker = ResolverWorker(resolver, packageCollection = collection)
 problemLog = worker.problems
 
 productArchitecture = store.getProperty("arch")
 if productArchitecture is None:
 	raise Exception("database does not record architecture of original query")
 
-resolverContext = worker.contextForArch(productArchitecture)
 classificationContext = Classification.ClassificationContext(worker, productArchitecture,
 					classificationScheme, labelOrder, store)
 

@@ -1260,7 +1260,7 @@ class SolvingTreeBuilder(object):
 
 			# The product family yaml file specifies a list of dependencies to be ignored,
 			# for instance on systemd-mini
-			self.context.suppressUnwantedDependencies(pkg)
+			self.context.rewriteDependencies(pkg)
 
 			for dep, target in self.context.resolveDownward(pkg):
 				if target is pkg:

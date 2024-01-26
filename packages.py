@@ -345,6 +345,7 @@ class ResolverChoice:
 
 class ResolverContext:
 	def __init__(self, worker, arch):
+		self.worker = worker
 		self._resolver = worker._resolver
 		# FIXME: obsolete
 		self._preferences = None
@@ -432,7 +433,7 @@ class ResolverContext:
 		pkg.resolvedRequires = result
 		return result
 
-	def suppressUnwantedDependencies(self, pkg):
+	def rewriteDependencies(self, pkg):
 		if self._resolver.hints is None:
 			return
 
@@ -446,6 +447,14 @@ class ResolverContext:
 			if hints.isIgnoredDependency(pkg.name, target.name):
 				self.suppressedDependencies.append((pkg, target))
 			else:
+				rewrittenName = hints.rewriteDependency(target.name)
+				if rewrittenName:
+					newTarget = self.worker.getKnownPackage(rewrittenName)
+					if newTarget is None:
+						raise Exception(f"cannot translate dependency {target} to {rewrittenName}: no such package")
+
+					debugmsg(f"{pkg}: rewrite dependency {target} -> {newTarget}")
+					target = newTarget
 				filtered.append((dep, target))
 
 		pkg.resolvedRequires = filtered
@@ -657,12 +666,13 @@ class ResolverWorker:
 				for key, problem in sorted(category.items()):
 					problem.show(categoryReport)
 
-	def __init__(self, resolver):
+	def __init__(self, resolver, packageCollection = None):
 		self._resolver = resolver
 		self._queue = []
 		self._packages = set()
 		self._problems = self.Problems()
 		self._contexts = {}
+		self._packageCollection = packageCollection
 
 		self.debugMsg = debugDependency
 
@@ -697,6 +707,11 @@ class ResolverWorker:
 
 	def formatCacheStats(self):
 		return ResolverCache.stats.format()
+
+	def getKnownPackage(self, name):
+		if self._packageCollection is None:
+			return None
+		return self._packageCollection.get(name)
 
 class Resolver:
 	class NameBucket(object):
@@ -1775,9 +1790,14 @@ class PackageCollection:
 		self._packages = []
 		self._sources = set()
 		self._arches = set()
+		self._packageDict = {}
+
+	def get(self, name):
+		return self._packageDict.get(name)
 
 	def add(self, pkg):
 		self._packages.append(pkg)
+		self._packageDict[pkg.name] = pkg
 		if pkg.arch not in ('src', 'nosrc', 'noarch'):
 			self._arches.add(pkg.arch)
 

@@ -639,6 +639,21 @@ class PotentialClassification(object):
 				if self.trace:
 					infomsg(f"### {self} candidates={' '.join(map(str, candidates))}")
 
+				# if the package has an auto label (ie a purpose like 'doc' or a flavor like 'python310', whittle down the
+				# list of candidates to those matching this purpose/flavor label
+				if len(candidates) > 1 and self.autoLabel:
+					name = self.autoLabel.name
+					if self.autoLabel.type == Classification.TYPE_PURPOSE:
+						match = filter(lambda cand: cand.purposeName == name, candidates)
+					else:
+						match = filter(lambda cand: cand.flavorName == name, candidates)
+					match = Classification.createLabelSet(match)
+
+					if self.trace:
+						infomsg(f"### {self} constrained candidates by auto label {self.autoLabel} to {' '.join(map(str, match))}")
+
+					candidates = match
+
 				if not candidates:
 					return None
 

@@ -43,6 +43,8 @@ resolverhints:
     - "mcelog -> systemd systemd-mini"
     - "numad -> systemd systemd-mini"
     - "xdm -> systemd systemd-mini"
+    - "udisks2-core -> systemd systemd-mini"
+    - "udisks2-core -> udev udev-mini"
     - "e2fsprogs-scrub -> postfix"
     # These hard dependencies on openmpi4 look wrong to me
     - "fftw3-mpi-devel -> openmpi4-devel"
@@ -54,6 +56,9 @@ resolverhints:
     - "libboost_graph_parallel-devel -> libboost_graph_parallel1_82_0-devel"
     - "libboost_mpi-devel -> libboost_mpi1_82_0-devel"
     - "libboost_numpy3-devel -> libboost_numpy-py3-1_82_0-devel"
+  rewrite:
+   - "systemd-mini -> environment_with_systemd"
+   - "udev-mini -> environment_with_udev"
   prefer:
     - "order libcontainers-openSUSE-policy libcontainers-default-policy"
     - "order libjpeg8 libjpeg*"

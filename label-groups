@@ -47,6 +47,10 @@ traceMatcher = application.traceMatcher
 # we should probably make this part of PackageCollection
 allBuilds = []
 
+# hard-code for now
+for name in ('environment_with_systemd', 'environment_with_udev', ):
+	collection.addSynthetic(name)
+
 with TimedExecutionBlock("load all packages from database"):
 	for build in store.enumerateOBSPackages():
 		allBuilds.append(build)

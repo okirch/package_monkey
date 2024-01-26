@@ -1225,6 +1225,8 @@ class PotentialClassification(object):
 
 				for req in node.lowerNeighbors:
 					reqPlacement = req.placement
+					if reqPlacement is None:
+						raise Exception(f"{node} invalid lower neighbor {req} - no placement")
 					if reqPlacement.failed:
 						infomsg(f"   {packagePlacement} requires {req} which we failed to solve")
 						return False

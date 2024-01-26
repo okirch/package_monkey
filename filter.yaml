@@ -20,7 +20,6 @@ autoflavors:
    # place python packages in @PythonModules by default, unless they
    # are constrained in some other way
    defaultlabels:
-#   - "@PythonCore311"
     - "@PythonStandard311"
     - "@PythonModules311"
    requires:
@@ -36,7 +35,6 @@ autoflavors:
    # place python packages in @PythonModules by default, unless they
    # are constrained in some other way
    defaultlabels:
-#   - "@PythonCore310"
     - "@PythonStandard310"
     - "@PythonModules310"
    requires:
@@ -524,7 +522,7 @@ components:
     - Multimedia
    exports:
     # tcl does not change any more, so it's probably safe to export all of it
-    - "@TclCore"
+#   - "@TclCore"
  - name: Javascript
    globals:
     devel: JavascriptDevel
@@ -770,12 +768,6 @@ groups:
     - ctags
     - unifdef
     - cppunit
-   buildflavors:
-    - name: systemd
-      augments:
-       - "@SystemdLibraries"
-      binaries:
-#      - python31?-psutil
 
  - name: "@Ocaml"
    buildconfig: Workbench/standard
@@ -936,8 +928,6 @@ groups:
     - libbz2-devel
     - libbrotli-devel
     - libexpat-devel
-    - python310-devel
-    - python311-devel
     - gdbm-devel
     - openldap2-devel
 
@@ -990,6 +980,8 @@ groups:
    packages:
     - zlib
    binaries:
+    - environment_with_systemd
+    - environment_with_udev
     - mozilla-nss
     - p11-kit-nss-trust
     - p11-kit-tools
@@ -1056,8 +1048,9 @@ groups:
     - libgdbm_compat4
     - libibmtss1
     - libjson-c5
-    - libldap-*
+    - libldap-data
     - libldap2
+    - libldapcpp0
     - liblmdb-0*
     - libltdl7
     - liblua5*
@@ -1124,13 +1117,6 @@ groups:
     - sqlite3-tcl
     - timezone
    buildflavors:
-    - name: database
-      requires:
-       - "@Databases"
-      buildrequires:
-       - "@Databases"
-      binaries:
-       - openldap2-back-sql
     - name: python
       requires:
        - "@SystemPython"
@@ -1244,6 +1230,7 @@ groups:
     - libpsl5
     - libidn12
     - libsepol-utils
+    - libslp1
     - lmdb
     - lndir
     - logrotate
@@ -1304,6 +1291,26 @@ groups:
       binaries:
        - libcryptsetup12
 
+ - name: "@OpenLDAP"
+   buildconfig: Core/standard
+   requires:
+    - "@Core0"
+    - "@PerlCore"
+   packages:
+    - openldap2
+   binaries:
+    - openldap2
+    - openldap2-back-*
+    - openldap2-client
+   buildflavors:
+    - name: database
+      requires:
+       - "@Databases"
+      buildrequires:
+       - "@Databases"
+      binaries:
+       - openldap2-back-sql
+
  - name: "@PythonBuildConfig"
    buildconfig: Core/standard
    requires:
@@ -1332,9 +1339,6 @@ groups:
     - python311-tools
     - libpython311
    purposes:
-#   - name: devel
-#     binaries:
-#      - python311-devel
     - name: doc
       binaries:
        - python311-doc
@@ -1346,6 +1350,13 @@ groups:
        - python311-tk
        - python311-idle
        - python311-testsuite
+
+ - name: PythonAPI311
+   buildconfig: Core/standard
+   requires:
+    - "@PythonCore311"
+   binaries:
+    - python311-devel
 
  - name: "@PythonCore310"
    buildconfig: Core/standard
@@ -1382,6 +1393,13 @@ groups:
        - python310-idle
        - python310-testsuite
 
+ - name: PythonAPI310
+   buildconfig: Core/standard
+   requires:
+    - "@PythonCore310"
+   binaries:
+    - python310-devel
+
  - name: "@SystemPython"
    buildconfig: Core/standard
    requires:
@@ -1403,6 +1421,7 @@ groups:
     - "@PerlCore"
     - "@NetworkLibraries"
     - "@SystemPython"
+    - "@OpenLDAP"
    binaries:
     - gpgme
     - libgpgme11
@@ -1410,10 +1429,8 @@ groups:
 #   - polkit-default-privs
     - openssh-clients
     - gpg2
-    - openldap2
     - libldapcpp0
     - openslp
-    - libslp1
     - libduktape*
     - suse-build-key
     - perl-libintl-perl
@@ -1450,7 +1467,7 @@ groups:
     - "@UdevLibraries"
     - "@Glib2NoDBus"
    binaries:
-    # these don't actually need systemd, the only depend on udev
+    # these don't actually need systemd, they only depend on udev
     # one way or other
     - libhidapi-hidraw0
     - libhidapi-libusb0
@@ -1464,12 +1481,15 @@ groups:
     - libwacom-data
     - libwacom-devel purpose=devel
     - libhidapi-devel purpose=devel
+    - libstoragemgmt-udev
    buildflavors:
     - name: python
       requires:
        - "@UdevLibraries+python"
       binaries:
        - libwacom-tools
+       - libstoragemgmt
+       - libstoragemgmt-*-plugin
 
  - name: "@CoreServices"
    buildconfig: Core/standard
@@ -1936,7 +1956,7 @@ groups:
  - name: "@NumericLibraries"
    buildconfig: CorePlus/standard
    requires:
-    - "@Core"
+    - "@Core0"
    packages:
     - openblas:serial
     - openblas:pthreads
@@ -2024,6 +2044,7 @@ groups:
     - libdatrie
     - libmemcached
     - jsoncpp
+    - libconfuse
    binaries:
     - libicu72
     - libicu72-ledata
@@ -2263,6 +2284,16 @@ groups:
     - mariadb
     - mariadb-client
     - mariadb-errormessages
+    - libmariadbd19
+    - mariadb-bench
+    - mariadb-rpm-macros
+    - mariadb-tools
+   buildflavors:
+    - name: test
+      requires:
+       - "@CoreServices"
+      binaries:
+       - mariadb-test
 
  - name: "@Databases"
    feature: True
@@ -2969,12 +3000,13 @@ groups:
     - "@AccessibilityLibraries"
     - "@FontLibraries+x11"
     - "@PlusLibraries"
+    - "@USBLibraries"
     - "@DesktopIcons"
    binaries:
     - dconf
     - libgjs0
     - hicolor-icon-theme
-    - libgusb2
+#   - libgusb2
 
  - name: "@GStreamerLibraries"
    buildconfig: Gnome/standard
@@ -3311,6 +3343,7 @@ groups:
       requires:
        - "@PythonModules"
        - "@PerlCore"
+       - "@CoreServices"
       binaries:
        - python3-apparmor
        - perl-apparmor
@@ -3376,8 +3409,6 @@ groups:
     - "@CoreServices"
     - "@SystemdLibraries"
     - "@PythonCore"
-   binaries:
-#   - python31?-psutil
 
  - name: "@DBusService"
    buildconfig: Systemd/standard
@@ -3407,6 +3438,15 @@ groups:
        - dbus-1-x11
 
  - name: "@SystemdServices"
+   buildconfig: Systemd/standard
+   requires:
+    - "@Core0"
+    - "@KernelCore"
+   binaries:
+#   - systemd-mini
+#   - udev-mini
+
+ - name: "@SystemdDontUse"
    buildconfig: Systemd/standard
    requires:
     - "@Core0"
@@ -3720,6 +3760,7 @@ groups:
     - "@PlusLibraries"
     - "@Snappy"
     - "@ELFDebugging"
+    - "@CoreHardware+python"
    binaries:
     - ceph
 
@@ -4216,12 +4257,32 @@ groups:
       requires:
        - "@X11Libraries"
 
+ - name: "@USBLibraries"
+   buildconfig: HardwareAccess/standard
+   requires:
+    - "@CoreHardware"
+    - "@Glib2NoDBus"
+   packages:
+    - libftdi1
+   binaries:
+    - libftdi1*
+   buildflavors:
+    - name: python
+      binaries:
+       - python3-libftdi1
+    - name: glib
+      requires:
+       - "@Glib2"
+      binaries:
+       - libgusb2
+
  - name: "@NetworkLibraries"
    buildconfig: Core/standard
    requires:
     - "@Core0"
    packages:
     - libsmi
+    - python-NaCl
    binaries:
     - netcfg
     - libwrap0
@@ -4236,7 +4297,7 @@ groups:
  - name: "@RemoteControlLibraries"
    buildconfig: HardwareAccess/standard
    requires:
-    - "@CoreLibraries"
+    - "@USBLibraries"
    binaries:
     - liblirc0
     - liblirc_client0
@@ -5197,6 +5258,7 @@ groups:
     - "@PlusLibraries"
     - "@NetworkProxyLibraries"
     - "@NetworkAnalysis+systemd"
+    - "@USBLibraries+glib"
     # for the wireshark plugin
     - "@NetworkAnalysis+gui"
     - "@GnomeVTE"
@@ -5335,7 +5397,7 @@ groups:
     - python31?-jupyter-core
     - python31?-jupyter-server
     - python31?-jupyter-client*
-#   - python31?-ipython
+    - python31?-ipykernel
 #   - python31?-jupyter*
 #   - python31?-notebook*
 #   - python31?-nbclassic
@@ -5866,6 +5928,9 @@ templates:
     - name: "@PythonStandardXXX"
       buildconfig: Python/pythonXXX
       compatibility: pythonXXX
+      note: |
+       We need to carefully avoid polluting the dependencies of this group
+       with anything that pulls in SystemPython or anything of that sort.
       requires:
        - "@PythonXXX"
        - "@Core0"
@@ -5873,10 +5938,10 @@ templates:
        - "@PythonData"
        - "@TclCore"
        - "@NumericLibraries"
-#      - "@SystemdUtilities"
       binaries:
        - pythonXXX-alabaster
        - pythonXXX-apipkg
+       - pythonXXX-attrs
        - pythonXXX-Babel
        - pythonXXX-bcrypt
        - pythonXXX-certifi
@@ -5914,6 +5979,7 @@ templates:
        - pythonXXX-requests
        - pythonXXX-slip-dbus
        - pythonXXX-snowballstemmer
+       - pythonXXX-slip
        - pythonXXX-sphinx*
        - pythonXXX-Sphinx
        - pythonXXX-tomli
@@ -5973,6 +6039,7 @@ templates:
          requires:
           - "@NumericLibraries"
           - "@CorePlusAPI"
+          - PythonAPIXXX
          binaries:
           - pythonXXX-pythran
           - pythonXXX-numpy-devel
@@ -6021,8 +6088,8 @@ templates:
       buildconfig: Python/pythonXXX
       compatibility: pythonXXX
       requires:
-       - "CoreDevel"
-       - "@PythonCore"
+       - "PythonAPIXXX"
+       - "@PythonCoreXXX"
       binaries:
        - pythonXXX-Cython
        - pythonXXX-Cython3

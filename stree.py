@@ -1281,6 +1281,13 @@ class SolvingTreeBuilder(object):
 			infomsg(f"No OBS package for {rpm}")
 			return None
 
+		if buildId == 'synthetic':
+			from obsclnt import OBSPackage
+
+			build = OBSPackage(rpm.name)
+			build.addBinary(rpm)
+			return build
+
 		build = self.store.retrieveOBSPackageByBuildId(buildId)
 		if build is None:
 			infomsg(f"Could not find OBS package {buildId} for {rpm.shortname}")

@@ -1805,6 +1805,12 @@ class PackageCollection:
 			if src:
 				self._sources.add(src)
 
+	def addSynthetic(self, name, version = "0.0", release = "0", arch = "noarch"):
+		pkg = Package(name, version, release, arch)
+		pkg.obsBuildId = 'synthetic'
+		self.add(pkg)
+		return pkg
+
 	def __iter__(self):
 		return iter(self._packages + list(self._sources))
 

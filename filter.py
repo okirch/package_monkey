@@ -44,7 +44,8 @@ class Classification:
 			self.runtimeRequires = set()
 			self.buildRequires = set()
 			self.runtimeAugmentations = set()
-			self.exports = set()
+			self.imports = Classification.createLabelSet()
+			self.exports = Classification.createLabelSet()
 			self.disposition = Classification.DISPOSITION_SEPARATE
 			# This is used in autoflavor labels only
 			self.preferredLabels = []
@@ -172,6 +173,10 @@ class Classification:
 			return False
 
 		@property
+		def isImported(self):
+			return self.componentLabel and self in self.componentLabel.imports
+
+		@property
 		def isExported(self):
 			return self.componentLabel and self in self.componentLabel.exports
 
@@ -216,6 +221,10 @@ class Classification:
 		def addBuildDependency(self, other):
 			assert(isinstance(other, Classification.Label))
 			self.buildRequires.add(other)
+
+		def addImport(self, other):
+			assert(isinstance(other, Classification.Label))
+			self.imports.add(other)
 
 		def addExport(self, other):
 			assert(isinstance(other, Classification.Label))
@@ -1465,6 +1474,11 @@ class PackageGroup:
 			raise Exception(f"Group {otherGroup.name} has a NULL label")
 		self.label.addBuildDependency(otherGroup.label)
 
+	def addImport(self, otherGroup):
+		if otherGroup.label is None:
+			raise Exception(f"Group {otherGroup.name} has a NULL label")
+		self.label.addImport(otherGroup.label)
+
 	def addExport(self, otherGroup):
 		if otherGroup.label is None:
 			raise Exception(f"Group {otherGroup.name} has a NULL label")
@@ -2349,6 +2363,7 @@ class PackageFilter:
 		'requires',
 		'buildrequires',
 		'augments',
+		'imports',
 		'exports',
 		'products',
 		'packages',
@@ -2369,6 +2384,7 @@ class PackageFilter:
 		'globals',
 	))
 
+	# FIXME: reduce use of `group' in this function
 	def processGroupDefinition(self, group, gd, template = None):
 		def getBoolean(gd, tag):
 			value = gd.get(tag)
@@ -2486,6 +2502,11 @@ class PackageFilter:
 			for name in nameList:
 				otherGroup = self.resolveGroupReference(name)
 				group.addBuildRequires(otherGroup)
+
+			nameList = self.getYamlList(gd, 'imports', group)
+			for name in nameList:
+				referencedLabel = self.resolveLabelReference(name)
+				groupLabel.addImport(referencedLabel)
 
 			nameList = self.getYamlList(gd, 'exports', group)
 			for name in nameList:

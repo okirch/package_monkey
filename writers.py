@@ -41,9 +41,18 @@ class BaseWriter:
 
 			self.writeBuild(label, buildInfo)
 
+		for pkg, candidates in result.enumerateUnclassifiedPackages():
+			self.writeUnclassified(pkg, candidates)
+
 		self.flush()
 
 	def flush(self):
+		pass
+
+	def writeComponent(self, label, requires):
+		pass
+
+	def writeUnclassified(self, pkg, candidates):
 		pass
 
 class StandardWriter(BaseWriter):
@@ -70,9 +79,6 @@ class StandardWriter(BaseWriter):
 			print(f"  {pkg}")
 
 	def writeBuild(self, label, buildInfo):
-		pass
-
-	def writeComponent(self, label, requires):
 		pass
 
 	def indentingWriter(self):
@@ -186,9 +192,6 @@ class TableWriter(BaseWriter):
 	def writeBuild(self, label, buildInfo):
 		pass
 
-	def writeComponent(self, label, requires):
-		pass
-
 	def writeProblems(self, problemLog):
 		raise Exception("CSV writer does not support problem log")
 
@@ -197,6 +200,7 @@ class XmlWriter(BaseWriter):
 		super().__init__()
 		self.filename = filename
 		self.xmltree = XMLTree('components')
+		self.unclassified = None
 
 		self._labels = {}
 
@@ -323,7 +327,25 @@ class XmlWriter(BaseWriter):
 			childRpmNode = self.writeRPM(reqNode, required)
 			if required.label:
 				childRpmNode.setAttribute('label', required.label.name)
-				childRpmNode.setAttribute('component', required.label.sourceProject.name)
+				childRpmNode.setAttribute('component', required.label.componentName)
+
+	def writeUnclassified(self, pkg, candidates):
+		if self.unclassified is None:
+			self.unclassified = self.xmltree.root.addChild('unclassified')
+
+		rpmNode = self.writeRPM(self.unclassified, pkg)
+		if candidates is None:
+			# rpmNode.addField('candidate', 'anywhere')
+			rpmNode.addChild('anywhere')
+		else:
+			candNode = rpmNode.addChild('candidates')
+			componentNames = set(map(lambda label: label.componentName, candidates))
+			componentNames = sorted(filter(bool, componentNames))
+			for label in componentNames:
+				if label is None:
+					errormsg(f"bad candidate label {label} for package {pkg}")
+					continue
+				candNode.addField('n', label)
 
 	def writeProblems(self, problemLog):
 		raise Exception("XML writer does not support problem log")
@@ -355,6 +377,8 @@ class XmlReader:
 				self.processBuild(node)
 			elif node.tag == 'component':
 				self.processComponent(node)
+			elif node.tag == 'unclassified':
+				pass
 			else:
 				raise Exception(f"unsupported element <{node.tag}> in {path}")
 

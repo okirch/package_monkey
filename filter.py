@@ -1590,9 +1590,9 @@ class ClassificationResult(object):
 		if self._brokenDependencies is None:
 			self._brokenDependencies = self.PackageRequirements()
 
-	def packageMembership(self, label):
+	def packageMembership(self, label, create = True):
 		m = self._packages.get(label)
-		if m is None:
+		if m is None and create:
 			m = self.PackageMembership(label)
 			self._packages[label] = m
 		return m
@@ -1606,6 +1606,11 @@ class ClassificationResult(object):
 
 	def labelOnePackage(self, pkg, label, reason):
 		self.packageMembership(label).track(pkg, reason)
+
+	def getPackagesForLabel(self, label):
+		m = self.packageMembership(label, create = False)
+		if m is not None:
+			return m.packages
 
 	def labelOneBuild(self, name, label, binaries, sources, buildConfig = None):
 		buildInfo = self.BuildInfo(name)

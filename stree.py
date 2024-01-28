@@ -286,6 +286,7 @@ class SolvingTree(object):
 			self._upperCone = None
 			self._candidates = None
 			self._solution = None
+			self._reason = None
 			self._combinedRequirements = set()
 
 			self.placement = None
@@ -310,6 +311,9 @@ class SolvingTree(object):
 				if pkg.labelReason:
 					return str(pkg.labelReason)
 
+			if self._reason:
+				return f"{self} {self._reason}"
+
 			return str(self)
 
 		@property
@@ -318,11 +322,15 @@ class SolvingTree(object):
 
 		@solution.setter
 		def solution(self, label):
-			if self._solution and self._solution is not label:
+			if self._solution is label:
+				return
+
+			if self._solution:
 				raise Exception(f"Conflicting solution for {self}: label {self._solution} vs {label}")
 			if self._trace:
 				infomsg(f" {self} set solution to {label}")
 			self._solution = label
+			self._reason = "(called solution.setter directly)"
 
 			# update lower and upper cone here?
 
@@ -561,9 +569,10 @@ class SolvingTree(object):
 
 			assert(self.solution is None)
 			self.solution = label
+			self._reason = reason
 
 			if self.siblings is not None:
-				self.siblings.recordDecision(node, label)
+				self.siblings.recordDecision(node, label, reason)
 
 	class SiblingInfo:
 		def __init__(self, build):
@@ -600,7 +609,7 @@ class SolvingTree(object):
 		def __len__(self):
 			return len(self.packages)
 
-		def recordDecision(self, node, label):
+		def recordDecision(self, node, label, reason):
 			self.labels.add(label)
 
 		@property
@@ -782,7 +791,7 @@ class SolvingTree(object):
 
 			# Copy already assigned labels to the newly created node
 			if pkg.label and pkg.label.type == Classification.TYPE_BINARY:
-				packeNode.solution = pkg.label
+				packeNode.recordDecision(pkg.label, pkg.labelReason or "initial placement")
 
 			if pkg.trace:
 				infomsg(f" {packeNode} [{pkg.label}] added to solving tree")
@@ -1062,7 +1071,7 @@ class SolvingTree(object):
 
 		for node in self.randomWalk():
 			if node.solution and node.siblings is not None:
-				node.siblings.recordDecision(node, node.solution)
+				node.siblings.recordDecision(node, node.solution, f"copied from {node}")
 
 		self.reportFocusNodesAndLabels()
 

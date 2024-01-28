@@ -202,6 +202,8 @@ class Classification:
 
 		def addRuntimeDependency(self, other):
 			assert(isinstance(other, Classification.Label))
+			if self.type is Classification.TYPE_BUILDCONFIG:
+				raise Exception(f"{self}: requires not valid in definition of buildconfig labels")
 			if not self.okayToAdd(other):
 				raise Exception(f"Attempt to add incompatible dependency to {self.type} label {self}: {other} (type {other.type})")
 
@@ -213,6 +215,8 @@ class Classification:
 
 		def addBuildDependency(self, other):
 			assert(isinstance(other, Classification.Label))
+			if self.type is not Classification.TYPE_BUILDCONFIG:
+				raise Exception(f"{self}: buildrequires only valid in definition of buildconfig labels")
 			self.buildRequires.add(other)
 
 		def addImport(self, other):
@@ -648,7 +652,8 @@ class Classification:
 			label.copyRequirementsFrom(baseLabel)
 
 			# @Foo+blah always requires @Foo for runtime
-			label.addRuntimeDependency(baseLabel)
+			if label.type is Classification.TYPE_BINARY:
+				label.addRuntimeDependency(baseLabel)
 
 			return label
 

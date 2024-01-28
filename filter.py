@@ -67,11 +67,8 @@ class Classification:
 
 			self.mergeableAutoFlavors = set()
 
-			# build config labels have a source project assigned
+			# binary labels and build config labels have a source project assigned
 			self.sourceProject = None
-
-			# binary labels have a build config assigned
-			self.buildConfig = None
 
 			# if autoSelect is true, then a group referencing a label
 			# "@Foo" will automatically select all flavors "@Foo+bar"
@@ -135,8 +132,6 @@ class Classification:
 		def componentName(self):
 			if self.sourceProject is not None:
 				return self.sourceProject.name
-#			if self.buildConfig is not None:
-#				return self.buildConfig.name
 			return None
 
 		@property
@@ -815,8 +810,6 @@ class Classification:
 				globalDevel = componentLabel.globalPurposeLabel('devel')
 				if globalDevel is not None:
 					globalDevel.runtimeRequires.update(componentLabel.buildRequires)
-					if globalDevel.buildConfig is None:
-						globalDevel.buildConfig = self.resolveBuildConfigLabel(componentLabel.name)
 
 				componentLabel.updateGlobalPurposeLabels(self)
 
@@ -1888,7 +1881,6 @@ class PackageFilter:
 		'buildflavors',
 		'purposes',
 		'sourceproject',
-		'buildconfig',
 		'compatibility',
 		'disposition',
 		'autoselect',
@@ -1931,11 +1923,6 @@ class PackageFilter:
 		if name is not None:
 			sourceProject = self.makeGroupInternal(name, Classification.TYPE_SOURCE)
 			groupLabel.setSourceProject(sourceProject.label)
-
-		name = gd.get('buildconfig')
-		if name is not None:
-			buildConfig = self.resolveBuildReference(name)
-			groupLabel.setSourceProject(buildConfig.label.parent)
 
 		value = gd.get('disposition')
 		if value is not None:

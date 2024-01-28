@@ -1568,6 +1568,11 @@ class ClassificationResult(object):
 
 			requires.add(target)
 
+	class UnclassifiedPackage(object):
+		def __init__(self, pkg, candidates):
+			self.pkg = pkg
+			self.candidates = candidates
+
 	def __init__(self, labelOrder, componentOrder = None):
 		self._labelOrder = labelOrder
 		self._packages = {}
@@ -1576,6 +1581,8 @@ class ClassificationResult(object):
 
 		self._componentOrder = componentOrder
 		self._components = []
+
+		self._unclassified = []
 
 		self._brokenDependencies = None
 
@@ -1623,6 +1630,9 @@ class ClassificationResult(object):
 	def addComponent(self, label):
 		self._components.append(label)
 
+	def addUnclassified(self, pkg, candidates):
+		self._unclassified.append(self.UnclassifiedPackage(pkg, candidates))
+
 	def enumeratePackages(self):
 		for label in self._labelOrder.bottomUpTraversal():
 			members = self.packageMembership(label).packages
@@ -1639,6 +1649,10 @@ class ClassificationResult(object):
 			if self._componentOrder is not None:
 				requires = self._componentOrder.maxima(requires)
 			yield label, requires
+
+	def enumerateUnclassifiedPackages(self):
+		for entry in self._unclassified:
+			yield entry.pkg, entry.candidates
 
 	# initially, we create the label tree with a maximum of edges
 	# When reporting it in the output, we want to cut this down

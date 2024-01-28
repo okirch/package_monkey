@@ -923,7 +923,7 @@ class Classification:
 			if target.type != Classification.TYPE_SOURCE:
 				raise Exception(f"getReferencingLabels({target}): label type {target.type} not implemented")
 
-			result = set()
+			result = Classification.createLabelSet()
 			for label in self.allBinaryLabels:
 				if label.sourceProject == target:
 					result.add(label)

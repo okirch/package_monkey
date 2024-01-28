@@ -1,0 +1,386 @@
+#!/usr/bin/python3
+
+from options import Application
+from writers import XmlReader
+from filter import Classification, PackageFilter
+from util import IndexFormatterThreeLevels
+
+def main():
+	application = Application('query-component')
+	application.addArgument(dest = 'components', metavar = 'COMPONENTS', nargs = '+', help = 'list of components to query')
+	application.addArgument('--what-requires', action = 'append', default = [])
+	application.addArgument('--imports', action = 'store_true', default = False)
+	application.addArgument('--terse', action = 'store_true', default = False)
+	application.parseArguments()
+
+	classificationScheme = Classification.Scheme()
+
+	if False:
+		packageFilter = PackageFilter(scheme = classificationScheme)
+	else:
+		reader = XmlReader(classificationScheme)
+		path = application.getOutputPath("packages.xml")
+		print(f"Reading classification result from {path}")
+		classification = reader.read(path)
+
+	context = QueryContext(classification, classificationScheme)
+
+	for name in application.opts.components:
+		print(f"Inspecting component {name}")
+
+		component = context.getLabel('component', name, Classification.TYPE_SOURCE)
+
+		if application.opts.what_requires:
+			renderer = WhatRequiresRenderer()
+			query = WhatRequiresQuery(context, component)
+
+			for req in application.opts.what_requires:
+				apiLabel = context.getLabel('topic', req, Classification.TYPE_BINARY)
+				query.visit(apiLabel, renderer)
+
+		if application.opts.imports:
+			if application.opts.terse:
+				renderer = APISummarizer()
+			else:
+				renderer = APITextRenderer()
+
+			query = ImportedAPIQuery(context, component)
+
+			renderer.renderHeader(component, query)
+			for topic in context.bottomUpTraversal(query.binaryLabels):
+				if topic.parent is None:
+					query.visit(topic, renderer)
+
+			renderer.renderTrailer(component, query)
+
+		print()
+
+class QueryContext(object):
+	def __init__(self, classification, classificationScheme):
+		self.classification = classification
+		self.classificationScheme = classificationScheme
+		self.labelOrder = classificationScheme.defaultOrder()
+		self.componentOrder = classificationScheme.componentOrder()
+		self._allAPIs = self.getAPIs()
+
+	def getAPIs(self, componentList = None):
+		if componentList is None:
+			componentList = list(self.classificationScheme.allComponents)
+
+		result = Classification.createLabelSet()
+		for component in componentList:
+			result.update(component.exports)
+		return result
+
+
+	def getLabel(self, desc, name, expectedType):
+		result = self.classificationScheme.getLabel(name)
+		if result is None:
+			raise Exception(f"Unknown {desc} {name}")
+		if result.type != expectedType:
+			raise Exception(f"Incompatible {desc} {name} - defined as {result.type} label, but expected {expectedType}")
+		return result
+
+	def getLabelsForComponent(self, component):
+		return self.classificationScheme.getReferencingLabels(component)
+
+	def getPackagesForLabel(self, label):
+		return self.classification.getPackagesForLabel(label)
+
+	def bottomUpTraversal(self, *args, **kwargs):
+		return iter(self.labelOrder.bottomUpTraversal(*args, **kwargs))
+
+def getAllAPIs(componentList = None):
+	if componentList is None:
+		componentList = list(classificationScheme.allComponents)
+
+	result = Classification.createLabelSet()
+	for component in componentList:
+		result.update(component.exports)
+	return result
+
+def reduceLabelSet(labelSet):
+	result = []
+	seen = set()
+	for label in sorted(labelSet, key = str):
+		seen.add(label)
+		if label.parent not in seen:
+			result.append(label)
+	return result
+
+def renderLabelSet(msg, labelSet):
+	if not labelSet:
+		return
+
+	print(msg)
+	for label in sorted(labelSet, key = str):
+		print(f"     {label}")
+
+def reduceLabelSet(labelSet):
+	result = []
+	seen = set()
+	for label in sorted(labelSet, key = str):
+		seen.add(label)
+		if label.parent not in seen:
+			result.append(label)
+	return result
+
+def renderLabelSet(msg, labelSet):
+	if not labelSet:
+		return
+
+	print(msg)
+	for label in sorted(labelSet, key = str):
+		print(f"     {label}")
+
+class ComponentQuery(object):
+	def __init__(self, context, component):
+		self.context = context
+		self.component = component
+
+		self._binaryLabels = None
+		self._accessibleAPIs = None
+
+	def getLabelsForComponent(self, component):
+		return self.context.getLabelsForComponent(component)
+
+	@property
+	def binaryLabels(self):
+		if self._binaryLabels is None:
+			self._binaryLabels = self.getLabelsForComponent(self.component)
+		return self._binaryLabels
+
+	def getLabelsRequiringAPI(self, candidateLabels, apiLabel):
+		labelOrder = self.context.labelOrder
+
+		result = []
+		for label in self.binaryLabels:
+			if apiLabel in labelOrder.downwardClosureFor(label):
+				result.append(label)
+
+		if not result:
+			return None
+
+		return reduceLabelSet(result)
+
+	@property
+	def accessibleAPIs(self):
+		if self._accessibleAPIs is None:
+			result = Classification.createLabelSet()
+			for vc in self.visibleComponents:
+				result.update(self.getLabelsForComponent(vc))
+
+			self._accessibleAPIs = result
+		return self._accessibleAPIs
+
+	@property
+	def visibleComponents(self):
+		try:
+			return self._visibleComponents
+		except:
+			pass
+
+		self._visibleComponents = self.context.componentOrder.downwardClosureFor(self.component)
+		return self._visibleComponents
+
+	@property
+	def visibleAPIs(self):
+		try:
+			return self._visibleAPIs
+		except:
+			pass
+
+		self._visibleAPIs = getAllAPIs(self.visibleComponents).union(self.binaryLabels)
+		return self._visibleAPIs
+
+	@property
+	def alwaysImportedAPIs(self):
+		try:
+			return self._alwaysImportedAPIs
+		except:
+			pass
+
+		self._alwaysImportedAPIs = Classification.createLabelSet()
+		for vc in self.visibleComponents:
+			self._alwaysImportedAPIs.update(vc.imports)
+
+		return self._alwaysImportedAPIs
+
+	@property
+	def importableAPIs(self):
+		try:
+			return self._importableAPIs
+		except:
+			pass
+
+		self._importableAPIs = self.context._allAPIs.difference(self.visibleAPIs)
+		return self._importableAPIs
+
+class WhatRequiresRenderer(object):
+	def __init__(self):
+		pass
+
+	def reportRequiring(self, component, requirers, requiredLabel):
+		if not requirers:
+			print(f"   {component}: nothing requires {requiredLabel}")
+		else:
+			print(f"   {component}: the following topics require {requiredLabel}")
+			for label in requirers:
+				print(f"      {label}")
+
+	def reportImportedPackages(self, component, label, pkgs):
+		if not pkgs:
+			return
+
+		print()
+		print(f"   {component} imports the following packages from {label} (component {label.componentName})")
+		for rpm in pkgs:
+			print(f"       - {rpm}")
+
+class WhatRequiresQuery(ComponentQuery):
+	def __init__(self, context, component):
+		super().__init__(context, component)
+
+	def visit(self, topic, renderer):
+		requirers = self.getLabelsRequiringAPI(self.binaryLabels, topic)
+		renderer.reportRequiring(self.component, requirers, topic)
+
+		allRequirements = self.context.labelOrder.downwardClosureFor(topic)
+		incrementalLabels = allRequirements.difference(self.accessibleAPIs)
+
+		for label in incrementalLabels:
+			pkgs = self.context.getPackagesForLabel(label)
+			renderer.reportImportedPackages(self.component, label, pkgs)
+
+class APIRenderer(object):
+	def __init__(self):
+		self.renderPurposes = False
+
+	def renderHeader(self, component, query):
+		pass
+
+	def renderTrailer(self, component, query):
+		pass
+
+	def renderImportedAPIs(self, importer, apis, indent):
+		pass
+
+	def renderWildImports(self, importer, apis, indent):
+		pass
+
+class APITextRenderer(APIRenderer):
+	def renderHeader(self, component, query):
+		self.renderImportedAPIs(component, query.alwaysImportedAPIs, 0)
+
+	def renderImportedAPIs(self, importer, apis, indent):
+		ws = indent * " "
+		renderLabelSet(f"{ws}{importer} imports the following APIs:", apis)
+
+	def renderWildImports(self, importer, apis, indent):
+		ws = indent * " "
+		renderLabelSet(f"{ws}{importer} uses the following non-APIs:", apis)
+
+class APISummarizer(APIRenderer):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self._summary = {}
+
+	def renderImportedAPIs(self, importer, apis, indent):
+		for label in apis:
+			try:
+				self._summary[label] += 1
+			except:
+				self._summary[label] = 1
+
+	def renderWildImports(self, importer, apis, indent):
+		pass
+
+	def renderTrailer(self, component, query):
+		print(f"{component} imports the following APIs")
+		for label, count in sorted(self._summary.items(), key = str):
+			print(f" {count:5} {label}")
+
+class ImportedAPIQuery(ComponentQuery):
+	def __init__(self, context, component):
+		super().__init__(context, component)
+
+	def visit(self, topic, renderer):
+		visitor = self.Visitor(self, topic)
+
+		visitor.render(renderer)
+
+		if renderer.renderPurposes:
+			for purpose in topic.objectPurposes:
+				purposeVisitor = visitor.descend(purpose)
+				purposeVisitor.render(renderer)
+
+		for flavor in topic.flavors:
+			flavorVisitor = visitor.descend(flavor)
+			flavorVisitor.render(renderer)
+
+			if renderer.renderPurposes:
+				for purpose in flavor.objectPurposes:
+					purposeVisitor = flavorVisitor.descend(purpose)
+					purposeVisitor.render(renderer)
+		return
+
+
+	class Visitor:
+		def __init__(self, query, label, parent = None):
+			self.query = query
+			self.label = label
+
+			if parent:
+				subtractAPIs = parent.maskAPIs
+				self.indent = parent.indent + 1
+			else:
+				subtractAPIs = None
+				self.indent = 1
+
+			context = query.context
+			labelOrder = context.labelOrder
+
+			requiredLabels = labelOrder.downwardClosureFor(label)
+
+			if label.purposeName:
+				if subtractAPIs:
+					subtractAPIs = subtractAPIs.union(self.derivePurposeAPIs(label.purposeName, subtractAPIs))
+				else:
+					subtractAPIs = self.derivePurposeAPIs(label.purposeName, query.accessibleAPIs)
+
+			if subtractAPIs:
+				requiredLabels = requiredLabels.difference(subtractAPIs)
+
+			self.importedAPIs = requiredLabels.intersection(query.importableAPIs)
+			self.importedAPIs.difference_update(query.alwaysImportedAPIs)
+
+			wildImports = requiredLabels.difference(context._allAPIs).difference(query.accessibleAPIs)
+			if label.purposeName and wildImports:
+				wildImports.difference_update(self.derivePurposeAPIs(label.purposeName, query.importableAPIs))
+			if wildImports:
+				wildImports = labelOrder.maxima(wildImports)
+			self.wildImports = wildImports
+
+			self.maskAPIs = self.importedAPIs.union(wildImports)
+			if subtractAPIs:
+				self.maskAPIs.update(subtractAPIs)
+			self.maskAPIs.add(label)
+			self.maskAPIs = labelOrder.downwardClosureForSet(self.maskAPIs)
+
+		def derivePurposeAPIs(self, purposeName, labelSet):
+			# for a label like @Foo-32bit, we allow access to any @BlahAPI-32bit
+			return Classification.createLabelSet(
+					filter(bool,
+						map(lambda _: _.getObjectPurpose(purposeName), labelSet)
+						))
+
+		def render(self, renderer):
+			renderer.renderImportedAPIs(self.label, self.importedAPIs, 1)
+			if self.wildImports:
+				renderer.renderWildImports(self.label, self.wildImports, 1)
+
+		def descend(self, label):
+			return self.__class__(self.query, label, parent = self)
+
+
+main()

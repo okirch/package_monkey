@@ -135,16 +135,14 @@ class Classification:
 		def componentName(self):
 			if self.sourceProject is not None:
 				return self.sourceProject.name
-			if self.buildConfig is not None:
-				return self.buildConfig.name
+#			if self.buildConfig is not None:
+#				return self.buildConfig.name
 			return None
 
 		@property
 		def componentLabel(self):
 			if self.sourceProject is not None:
 				result = self.sourceProject
-			elif self.buildConfig is not None:
-				result = self.buildConfig.baseLabel
 			else:
 				return None
 			assert(result.type is Classification.TYPE_SOURCE)
@@ -268,8 +266,6 @@ class Classification:
 			# flavors inherit the parent's build project by default
 			if self.sourceProject and not otherLabel.sourceProject:
 				otherLabel.setSourceProject(self.sourceProject)
-			if self.buildConfig and not otherLabel.buildConfig:
-				otherLabel.setBuildConfig(self.buildConfig)
 
 			if self.sourceProject and otherLabel.sourceProject is not self.sourceProject:
 				raise Exception(f"build flavor {otherLabel} uses source project {otherLabel.sourceProject}, but {self} uses {self.sourceProject}")
@@ -299,8 +295,6 @@ class Classification:
 			# purposes inherit the parent's build project by default
 			if self.sourceProject and not otherLabel.sourceProject:
 				otherLabel.setSourceProject(self.sourceProject)
-			if self.buildConfig and not otherLabel.buildConfig:
-				otherLabel.setBuildConfig(self.buildConfig)
 
 			if self.sourceProject and otherLabel.sourceProject is not self.sourceProject:
 				raise Exception(f"build purpose {otherLabel} uses source project {otherLabel.sourceProject}, but {self} uses {self.sourceProject}")
@@ -322,16 +316,8 @@ class Classification:
 			self.sourceProject = sourceLabel
 
 		def setBuildConfig(self, configLabel):
-			if self.buildConfig is configLabel:
-				return
-			if self.buildConfig is not None:
-				warnmsg(f"Ignoring duplicate buildconfig for {self}: {self.buildConfig} vs {configLabel}")
-				return
-			self.buildConfig = configLabel
-			if self.sourceProject is None:
-				self.sourceProject = configLabel.sourceProject
-
-			self.copyBuildRequirementsFrom(configLabel)
+			self.setSourceProject(configLabel.sourceProject)
+			# self.copyBuildRequirementsFrom(configLabel)
 
 		def getBuildConfigFlavor(self, name):
 			sourceProject = self.sourceProject
@@ -661,17 +647,10 @@ class Classification:
 
 			# Packages built for a specific purpose share the source project
 			# of their base label by default...
-			if sourceProject is None:
-				sourceProject = baseLabel.sourceProject
-			label.sourceProject = sourceProject
+			label.setSourceProject(sourceProject or baseLabel.sourceProject)
 
 			# ... and share their requirements ...
 			label.copyRequirementsFrom(baseLabel)
-
-			# ... and, unless overridden, their build config
-			if buildConfig is None:
-				buildConfig = baseLabel.buildConfig
-			label.setBuildConfig(buildConfig)
 
 			# @Foo+blah always requires @Foo for runtime
 			label.addRuntimeDependency(baseLabel)
@@ -700,13 +679,10 @@ class Classification:
 
 			# Packages built for a specific purpose share the source project
 			# of their base label ...
-			label.sourceProject = baseLabel.sourceProject
+			label.setSourceProject(baseLabel.sourceProject)
 
 			# ... and share their requirements ...
 			label.copyRequirementsFrom(baseLabel)
-
-			# ... and their build config
-			label.setBuildConfig(baseLabel.buildConfig)
 
 			# copy requirements from template, if given
 			if template:
@@ -827,14 +803,6 @@ class Classification:
 							label.setSourceProject(source)
 				return label.sourceProject
 
-			def inheritBuildConfig(label):
-				if label.buildConfig is None:
-					if label.parent:
-						source = inheritBuildConfig(label.parent)
-						if source:
-							label.setBuildConfig(source)
-				return label.buildConfig
-
 			if self._final:
 				raise Exception(f"Duplicate call to ClassificationScheme.finalize()")
 
@@ -868,14 +836,13 @@ class Classification:
 			for label in self._labels.values():
 				if label.sourceProject is None:
 					inheritSourceProject(label)
-				if label.buildConfig is None:
-					inheritBuildConfig(label)
 
 				if label.type == Classification.TYPE_BINARY:
-					if label.buildConfig is None and label.disposition != Classification.DISPOSITION_IGNORE:
-						raise Exception(f"Label {label}: no buildconfig specified")
-					elif not label.buildConfig.defined:
-						raise Exception(f"Label {label} references buildconfig {label.buildConfig}, but it's not defined anywhere")
+					if label.sourceProject is None:
+						if label.disposition != Classification.DISPOSITION_IGNORE:
+							raise Exception(f"Label {label}: no buildconfig specified")
+					elif not label.sourceProject.defined:
+						raise Exception(f"Label {label} references project {label.sourceProject}, but it's not defined anywhere")
 
 			# create a partial order but throw it away afterwards. the label hierarchy
 			# is changing as part of this exercise
@@ -1657,13 +1624,6 @@ class PackageFilter:
 					# infomsg(f"{label} should require {purposeReq}")
 					label.addRuntimeDependency(purposeReq)
 
-				# XXX FIXME
-				# We may also want to make the build config Foo/Standard automatically require @Foo-devel
-				if False and baseLabel.flavorName is None:
-					if baseLabel.buildConfig:
-						baseLabel.buildConfig.addBuildDependency(label)
-
-
 		return
 
 	def tryToLabelPackage(self, pkg):
@@ -1970,12 +1930,12 @@ class PackageFilter:
 		name = gd.get('sourceproject')
 		if name is not None:
 			sourceProject = self.makeGroupInternal(name, Classification.TYPE_SOURCE)
-			group.label.setSourceProject(sourceProject.label)
+			groupLabel.setSourceProject(sourceProject.label)
 
 		name = gd.get('buildconfig')
 		if name is not None:
 			buildConfig = self.resolveBuildReference(name)
-			group.label.setBuildConfig(buildConfig.label)
+			groupLabel.setSourceProject(buildConfig.label.parent)
 
 		value = gd.get('disposition')
 		if value is not None:

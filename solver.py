@@ -1556,25 +1556,20 @@ class PotentialClassification(object):
 		buildLabel = None
 		componentLabel = None
 		if buildPlacement.solvingBaseLabel:
-			buildLabel = buildPlacement.solvingBaseLabel.buildConfig
-			componentLabel = buildLabel.baseLabel
+			componentLabel = buildPlacement.solvingBaseLabel.sourceProject
 		else:
 			solutions = [p.label for p in buildPlacement.solved]
 
-			buildConfigs = set(label.buildConfig for label in solutions)
-			if len(buildConfigs) == 1:
-				buildLabel = next(iter(buildConfigs))
-
-			components = set(label.baseLabel for label in buildConfigs)
+			components = set(label.sourceProject for label in solutions)
 			if len(components) == 1:
 				componentLabel = next(iter(components))
-
-		if buildLabel and not componentLabel:
-			componentLabel = buildLabel.baseLabel
 
 		if componentLabel is None:
 			warnmsg(f"{build} unable to determine unique component label")
 			return False
+
+		if buildLabel is None:
+			buildLabel = componentLabel.getBuildFlavor('standard')
 
 		if buildLabel is None:
 			warnmsg(f"{build} unable to determine unique build label")
@@ -1585,7 +1580,6 @@ class PotentialClassification(object):
 			infomsg(f"{build} will be placed in component {componentLabel}")
 
 		with loggingFacade.temporaryIndent(3):
-			buildPlacement.buildConfig = buildLabel
 			buildPlacement.componentLabel = componentLabel
 
 			for rpm in build.sources:

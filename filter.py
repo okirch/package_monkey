@@ -2114,6 +2114,12 @@ class PackageFilter:
 		assert(type)
 		return self.makeGroupInternal(name, type)
 
+	def resolveLabelReference(self, name, labelType = Classification.TYPE_BINARY):
+		group = self.resolveGroupReference(name, labelType)
+		if group.label is None:
+			raise Exception(f"Group {name} has a NULL label")
+		return group.label
+
 	def resolveGroupReference(self, name, labelType = Classification.TYPE_BINARY):
 		baseLabelType, baseName, flavorName, purposeName = Classification.parseLabel(labelType, name)
 
@@ -2376,6 +2382,8 @@ class PackageFilter:
 				raise Exception(f"{group.label}: bad value {tag}={value} (expected string value not {type(value)})")
 			return value
 
+		groupLabel = group.label
+
 		if group.defined:
 			raise Exception(f"Duplicate definition of group \"{group.name}\" in filter yaml")
 		group.defined = True
@@ -2481,8 +2489,8 @@ class PackageFilter:
 
 			nameList = self.getYamlList(gd, 'exports', group)
 			for name in nameList:
-				otherGroup = self.resolveGroupReference(name)
-				group.addExport(otherGroup)
+				referencedLabel = self.resolveLabelReference(name)
+				groupLabel.addExport(referencedLabel)
 
 		# The yaml file may specify per-group priorities for filters, but there is just
 		# one global set of filters. Rather than passing the group and priority argument

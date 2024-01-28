@@ -362,6 +362,19 @@ class PotentialClassification(object):
 			pass
 
 		def reportVerdict(self, node, result):
+			if self.label is None:
+				if self.candidates is None:
+					baseLabels = None
+				else:
+					baseLabels = map(lambda l: l.baseLabel, self.candidates)
+					baseLabels = Classification.createLabelSet(baseLabels)
+
+				for pkg in self.node.packages:
+					result.addUnclassified(pkg, baseLabels)
+
+				result.labelOnePackage(pkg, None, None)
+				return
+
 			# FIXME: this is really just the reporting stage, so no idea why we're trying to update
 			# the node's solution here.
 			if node.solution and node.solution is not self.label:

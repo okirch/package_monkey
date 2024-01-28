@@ -403,7 +403,7 @@ class XmlReader:
 				label.addRuntimeDependency(reqLabel)
 
 		for rpm in self.processAllRpmChildren(labelNode):
-			rpm.label = label
+			rpm.setLabel(label, "baseline classification")
 
 	def processRequires(self, reqNode):
 		labelName = reqNode.attrib.get('label') or reqNode.attrib.get('name')

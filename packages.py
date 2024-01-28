@@ -1365,7 +1365,7 @@ class Package:
 
 		self._parsedVersion = None
 
-		self.label = None
+		self._label = None
 		self.labelReason = None
 
 		self.trace = False
@@ -1536,6 +1536,18 @@ class Package:
 			self.sourcePackage.showChanges()
 		else:
 			self.status.show(self.fullname())
+
+	@property
+	def label(self):
+		return self._label
+
+	def setLabel(self, label, reason):
+		if self._label is None or self._label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
+			self._label = label
+			self.labelReason = reason
+			assert(reason)
+		elif self._label is not label:
+			raise Exception(f"Refusing to change {self.fullname()} label from {self.label} to {label}")
 
 class Product:
 	def __init__(self, resolverHints = None):
@@ -1740,7 +1752,7 @@ class PackageInfo:
 
 		self.isSourcePackage = isSourceArchitecture(arch)
 
-		self.label = None
+		self._label = None
 		self.labelReason = None
 
 	@staticmethod
@@ -1772,6 +1784,19 @@ class PackageInfo:
 
 	def fullname(self):
 		return f"{self.name}-{self.version}-{self.release}.{self.arch}.rpm"
+
+	@property
+	def label(self):
+		return self._label
+
+	def setLabel(self, label, reason):
+		if self._label is None or self._label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
+			self._label = label
+			self.labelReason = reason
+			assert(reason)
+		elif self._label is not label:
+			raise Exception(f"Refusing to change {self.fullname()} label from {self.label} to {label}")
+
 
 class PackageInfoFactory:
 	def __init__(self):

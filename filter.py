@@ -571,6 +571,8 @@ class Classification:
 
 	@staticmethod
 	def labelPackage(pkg, label, labelReason = None):
+		return pkg.setLabel(label, labelReason or "no reason provided")
+
 		if pkg.label is None or pkg.label.type in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
 			pkg.label = label
 			pkg.labelReason = labelReason

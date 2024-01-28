@@ -272,9 +272,22 @@ class XmlWriter(BaseWriter):
 		compNode = self.xmltree.root.addChild('component')
 		compNode.setAttribute('name', str(label))
 
-		reqNode = compNode.addChild('requires')
-		for req in requires:
-			reqNode.addChild('label').setAttribute('name', str(req))
+		if requires:
+			reqNode = compNode.addChild('requires')
+			for req in requires:
+				reqNode.addChild('label').setAttribute('name', str(req))
+
+		imports = label.imports
+		if imports:
+			reqNode = compNode.addChild('imports')
+			for req in imports:
+				reqNode.addChild('label').setAttribute('name', str(req))
+
+		exports = label.exports
+		if exports:
+			reqNode = compNode.addChild('exports')
+			for req in exports:
+				reqNode.addChild('label').setAttribute('name', str(req))
 
 		# bclistNode = compNode.addChild('buildconfig')
 
@@ -296,11 +309,12 @@ class XmlWriter(BaseWriter):
 
 			references.append(required)
 
-		references = sorted(references,
-				key = lambda rpm:
-					(rpm.label is None and "-") or rpm.label.sourceProject.name
-				)
+		def sourceProjectName(rpm):
+			if rpm.label and rpm.label.sourceProject:
+				return rpm.label.sourceProject.name
+			return "-"
 
+		references = sorted(references, key = sourceProjectName)
 		if not references:
 			return
 
@@ -385,6 +399,18 @@ class XmlReader:
 			for otherNode in requiresNode:
 				otherComponent = self.validateLabel(otherNode.attrib['name'], Classification.TYPE_SOURCE)
 				component.addRuntimeDependency(otherComponent)
+
+		importsNode = node.find('imports')
+		if importsNode is not None:
+			for apiNode in importsNode:
+				api = self.validateLabel(apiNode.attrib['name'], Classification.TYPE_BINARY)
+				component.addImport(api)
+
+		exportsNode = node.find('exports')
+		if exportsNode is not None:
+			for apiNode in exportsNode:
+				api = self.validateLabel(apiNode.attrib['name'], Classification.TYPE_BINARY)
+				component.addExport(api)
 
 		return component
 

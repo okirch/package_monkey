@@ -134,6 +134,7 @@ build_configs:
    buildrequires:
     - "CoreDevel"
     - "@SystemdAPI"
+    - "@WorkbenchEssentials"
     - "@WorkbenchUnitTests"
     - "@GtkDoc"
  - name: Core/java
@@ -174,6 +175,7 @@ build_configs:
  - name: KernelPlus/standard
    buildrequires:
     - "@WorkbenchEssentials"
+    - "@WorkbenchCore"
     - "@KernelHeaders"
     - "@Go"
     - "@Rust"
@@ -313,8 +315,8 @@ components:
  - name: Core
    globals:
     devel: CoreDevel
-   buildrequires:
-    - "@WorkbenchEssentials"
+   imports:
+    - "@GccRuntime"
  - name: CorePlus
    globals:
     devel: CorePlusDevel
@@ -339,8 +341,6 @@ components:
     devel: PerlDevel
    requires:
     - Core
-   buildrequires:
-    - "@Core"
  - name: HardwareAccess
    globals:
     devel: HardwareAccessDevel
@@ -380,8 +380,6 @@ components:
     - Core
     - Network
     - LLVM
-   buildrequires:
-    - CoreDevel
  - name: HA
    globals:
     devel: HADevel
@@ -792,15 +790,9 @@ groups:
 
  - name: "@CoreConfig"
    sourceproject: Core
-   buildrequires:
-    - "@WorkbenchEssentials"
 
  - name: "@Glibc"
    sourceproject: Core
-   # when deciding where to place -devel packages for a set of packages spread across
-   # several labels (eg glibc here, nscd in Core0), we want this label to win
-   buildrequires:
-    - "@KernelHeaders"
    gravity: 100
    binaries:
     - glibc
@@ -975,8 +967,6 @@ groups:
     - "@CoreConfig"
     - "@MinimalCRuntime"
     - "@WorkbenchRuntime"
-   buildrequires:
-    - "@WorkbenchEssentials"
    packages:
     - zlib
    binaries:
@@ -1133,9 +1123,6 @@ groups:
 
  - name: "@Core0"
    sourceproject: Core
-   buildrequires:
-    - "@WorkbenchEssentials"
-    - "@Console"
    requires:
     - "@CoreLibraries"
     - "@CoreConfig"
@@ -1306,8 +1293,6 @@ groups:
     - name: database
       requires:
        - "@Databases"
-      buildrequires:
-       - "@Databases"
       binaries:
        - openldap2-back-sql
 
@@ -1322,9 +1307,6 @@ groups:
    sourceproject: Core
    requires:
     - "@PythonBuildConfig"
-   buildrequires:
-    # huh?
-    - "@DesktopBuild"
    binaries:
     - python-rpm-generators
     - python311
@@ -1362,9 +1344,6 @@ groups:
    sourceproject: Core
    requires:
     - "@PythonBuildConfig"
-   buildrequires:
-    # huh?
-    - "@DesktopBuild"
    binaries:
     - python310
     - python310-base
@@ -1412,8 +1391,6 @@ groups:
 
  - name: "@Core1"
    sourceproject: Core
-   buildrequires:
-    - "@BaseDevTools"
    requires:
     - "@CoreLibraries"
     - "@CoreHardware"
@@ -1552,8 +1529,6 @@ groups:
 
  - name: "@Core"
    sourceproject: Core
-   buildrequires:
-    - "@BaseDevTools"
    requires:
     - "@CoreLibraries"
     - "@CoreHardware"
@@ -1598,8 +1573,6 @@ groups:
        - cyrus-sasl-ldap-auxprop
        - cyrus-sasl-ldap-auxprop-bdb
     - name: python
-      buildrequires:
-       - "@SystemPython"
       requires:
        - "@SystemPython"
        - "@Core+systemdlibs"
@@ -1614,13 +1587,6 @@ groups:
       binaries:
        - permissions-zypp-plugin
     - name: java
-      buildrequires:
-       - "@Java"
-       - "@ApacheCommons"
-       - "@BrowsersConsole"
-       - "@Console"
-       - "@Ruby"
-       - "@Security+services"
       binaries:
        - pam-doc
        - pam-extra
@@ -2424,8 +2390,6 @@ groups:
     - "@EssentialVideoLibraries"
     # For libdrm - which might be better off in X11
     - "@KernelLibraries"
-   buildrequires:
-    - "@DesktopBuild"
    binaries:
     - libdrm2
     - libdrm_*
@@ -2534,8 +2498,6 @@ groups:
    sourceproject: X11
    requires:
     - "@X11Libraries"
-   buildrequires:
-    - "@DesktopBuild"
    binaries:
     - xauth
     - xdpyinfo
@@ -2550,9 +2512,6 @@ groups:
    requires:
     - "@X11Libraries"
     - "@X11StandardUtils"
-   buildrequires:
-    - "@DesktopBuild"
-    - "@BrowsersConsole"
    binaries:
     - mkfontdir
     - mkfontscale
@@ -3355,8 +3314,6 @@ groups:
       binaries:
        - ruby-apparmor
     - name: apache
-      buildrequires:
-       - "@Apache"
       binaries:
        - apache2-mod_apparmor
 
@@ -4064,8 +4021,6 @@ groups:
    sourceproject: KernelPlus
    requires:
     - "@CoreLibraries"
-   buildrequires:
-    - "@WorkbenchEssentials"
    binaries:
     - libkmod2
     - libnuma1
@@ -4109,8 +4064,6 @@ groups:
     - "@Core0"
     - "@PerlCore"
     - "@KernelLibraries"
-   buildrequires:
-    - "@WorkbenchEssentials"
    binaries:
     - suse-module-tools
     - kmod
@@ -4150,8 +4103,6 @@ groups:
    sourceproject: KernelPlus
    requires:
     - "@Core"
-   buildrequires:
-    - "@WorkbenchCore"
    binaries:
     - nasm
 
@@ -4173,6 +4124,8 @@ groups:
    requires:
     - "@KernelLibraries"
     - "@GlibcDevel"
+    # for pesign-obs-integration
+    - "@WorkbenchCore"
    binaries:
     - libsensors4-devel
     - libpciaccess-devel
@@ -4188,8 +4141,6 @@ groups:
 # some pieces of Kernel require perl-Bootloader which needs perl
  - name: "@Kernel"
    sourceproject: KernelPlus
-   buildrequires:
-    - "@KernelBuild"
    requires:
     - "@Core0"
     - "@KernelCore"
@@ -4652,8 +4603,6 @@ groups:
     - "@MultimediaCore"
     - "@Sound"
     - "@FFTW3"
-   buildrequires:
-    - "@WorkbenchEssentials"
    packages:
     - codec2
    binaries:
@@ -5578,8 +5527,6 @@ groups:
    requires:
     - "@Core0"
     - "@Java"
-   buildrequires:
-    - "@PythonStandard"
    binaries:
     - apache-commons-*
     - apache-pdfbox
@@ -5701,10 +5648,6 @@ groups:
 
  - name: "@Boot"
    sourceproject: KernelPlus
-   buildrequires:
-    - "@KernelBuild"
-    # for grub2
-    - "@Fonts"
    requires:
     - "@Core"
     - "@Core+udevlibs"
@@ -5741,8 +5684,6 @@ groups:
       # grub2-branding-SLE seems to require everything under the sun, including
       # libudisks2 gtk4-tools geoclue2... not sure why.
       # FIXME: there's no reason this package has to live in @Boot
-      buildrequires:
-       - "@GraphicsLibraries"
       binaries:
        - grub2-branding-*
     - name: xen

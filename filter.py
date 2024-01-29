@@ -1702,6 +1702,7 @@ class PackageFilter:
 	VALID_GROUP_FIELDS = set((
 		'name',
 		'description',
+		'note',
 		'priority',
 		'gravity',
 		'requires',
@@ -1753,6 +1754,9 @@ class PackageFilter:
 				raise Exception(f"Invalid field {field} in definition of group {groupLabel}")
 
 		groupLabel.description = gd.get('description')
+
+		# ignore any notes
+		# dropit = gd.get('note')
 
 		name = gd.get('sourceproject')
 		if name is not None:

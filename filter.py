@@ -1499,25 +1499,17 @@ class PackageFilter:
 		self.classificationScheme.finalize()
 
 	def finalize(self):
-		def validateDependencies(dependencies):
+		def validateDependencies(label, dependencies):
 			for req in dependencies:
-				chase = req
-				while True:
-					other = self.getGroup(chase.name, chase.type)
-					if other is None:
-						raise Exception(f"could not find {chase.type} group {chase.name}")
-					if not other.label.parent:
-						break
-					chase = other.label.parent
-
-				if not other.defined and not other.label.isPurpose:
-					raise Exception(f"filter configuration issue: group {group.label} requires {other.label}, which is not defined anywhere")
+				reqBaseLabel = req.baseLabel
+				if not reqBaseLabel.defined and not reqBaseLabel.isPurpose:
+					raise Exception(f"filter configuration issue: group {label} requires {req}, which is not defined anywhere")
 
 		self.stringMatcher.finalize()
 
 		for group in self._groups.values():
 			label = group.label
-			validateDependencies(label.buildRequires)
+			validateDependencies(label, label.buildRequires)
 
 			# resolve the preferred labels
 			if label.preferredLabels:

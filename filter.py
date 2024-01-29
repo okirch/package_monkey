@@ -937,7 +937,6 @@ class PackageGroup:
 	def __init__(self, name):
 		self.name = name
 		self.label = None
-		self._buildFlavors = {}
 		self._objectPurposes = {}
 
 	def track(self, pkg):
@@ -958,21 +957,6 @@ class PackageGroup:
 	@defined.setter
 	def defined(self, value):
 		self.label.defined = value
-
-	@property
-	def flavors(self):
-		return map(lambda pair: pair[1], sorted(self._buildFlavors.items()))
-
-	def addBuildFlavor(self, otherGroup):
-		flavorName = otherGroup.label.flavorName
-		assert(flavorName)
-
-		if self._buildFlavors.get(flavorName):
-			raise Exception(f"Duplicate definition of build flavor {flavorName} for {self.name}")
-		self._buildFlavors[flavorName] = otherGroup
-
-	def getBuildFlavor(self, name):
-		return self._buildFlavors.get(name)
 
 	@property
 	def purposes(self):
@@ -1673,21 +1657,23 @@ class PackageFilter:
 		return flavor.label
 
 	def makeFlavorGroup(self, baseGroup, flavorName, type = None):
-		flavor = baseGroup.getBuildFlavor(flavorName)
+		baseLabel = baseGroup.label
+
+		flavor = baseLabel.getBuildFlavor(flavorName)
 		if flavor is not None:
-			return flavor
+			return self.getGroupForLabel(flavor)
 
 		if type is not None:
-			assert(baseGroup.type == Classification.TYPE_SOURCE and type == Classification.TYPE_BUILDCONFIG)
+			assert(baseLabel.type == Classification.TYPE_SOURCE and type == Classification.TYPE_BUILDCONFIG)
 
-		if baseGroup.type == Classification.TYPE_BINARY:
+		if baseLabel.type == Classification.TYPE_BINARY:
 			flavor = self.createBinaryFlavor(baseGroup, flavorName)
-		elif baseGroup.type == Classification.TYPE_SOURCE:
+		elif baseLabel.type == Classification.TYPE_SOURCE:
 			flavor = self.createBuildConfigFlavor(baseGroup, flavorName)
 		else:
-			raise Exception(f"Don't know how to create flavor {flavorName} for {baseGroup.type} label {baseGroup.label}")
+			raise Exception(f"Don't know how to create flavor {flavorName} for {baseLabel.type} label {baseLabel}")
 
-		return flavor
+		return self.getGroupForLabel(flavor, create = True)
 
 	def makePurposeLabel(self, baseLabel, purposeName):
 		baseGroup = self.getGroupForLabel(baseLabel, create = False)
@@ -1712,25 +1698,21 @@ class PackageFilter:
 		buildLabel = baseGroup.label.getBuildConfigFlavor(flavorName)
 
 		label = self.classificationScheme.createFlavor(baseGroup.label, flavorName, buildConfig = buildLabel)
-		flavor = self.getGroupForLabel(label, create = True)
-		baseGroup.addBuildFlavor(flavor)
 
 		flavorDef = self.getGroupLabelNoFail(flavorName, Classification.TYPE_AUTOFLAVOR)
 		if flavorDef is not None:
-			flavor.label.autoSelect = flavorDef.autoSelect
+			label.autoSelect = flavorDef.autoSelect
 
-		return flavor
+		return label
 
 	def createBuildConfigFlavor(self, baseGroup, flavorName):
 		label = self.classificationScheme.createFlavor(baseGroup.label, flavorName)
-		flavor = self.getGroupForLabel(label, create = True)
-		baseGroup.addBuildFlavor(flavor)
 
 		# For the time being, make all buildconfigs auto-selectable.
 		# Probably a useless gesture.
-		flavor.autoSelect = True
+		label.autoSelect = True
 
-		return flavor
+		return label
 
 	def createObjectPurpose(self, baseGroup, purposeName):
 		purposeDef = self.getObjectPurposeDefinition(purposeName)

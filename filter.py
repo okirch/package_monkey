@@ -1760,19 +1760,12 @@ class PackageFilter:
 		return group
 
 	def makeGroupInternal(self, name, type):
-		try:
-			group = self._groups[type, name]
-		except:
-			group = None
-
-		if group is not None:
-			if type and group.type != type:
-				raise Exception(f"Group {name} does not match expected type ({group.type} vs {type})")
-			return group
-
-		if not type:
-			raise Exception(f"Cannot create group {name} with no type")
-		return self.resolveGroupReference(name, labelType = type)
+		group = self.getGroup(name, type)
+		if group is None:
+			if not type:
+				raise Exception(f"Cannot create group {name} with no type")
+			group = self.resolveGroupReference(name, labelType = type)
+		return group
 
 	def getGroupForLabel(self, label, create = False):
 		group = self.getGroup(label.name, label.type)

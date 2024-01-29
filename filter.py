@@ -8,6 +8,7 @@ from ordered import PartialOrder
 from functools import reduce
 from stree import SolvingTreeBuilder
 from pmatch import ParallelStringMatcher
+from profile import profiling
 
 # hack until I'm packaging fastsets properly
 import fastsets.fastsets as fastsets
@@ -765,6 +766,7 @@ class Classification:
 		def allLabels(self):
 			return sorted(self._labels.values(), key = lambda _: _.name)
 
+		@profiling
 		def createOrdering(self, labelType):
 			if labelType not in (Classification.TYPE_BINARY, Classification.TYPE_SOURCE):
 				raise Exception(f"Unable to create an ordering for {labelType} labels")
@@ -794,6 +796,7 @@ class Classification:
 		def componentOrder(self):
 			return self.createOrdering(Classification.TYPE_SOURCE)
 
+		@profiling
 		def finalize(self):
 			def inheritSourceProject(label):
 				if label.sourceProject is None:
@@ -1437,6 +1440,7 @@ class PackageFilter:
 		self.finalize()
 		self.classificationScheme.finalize()
 
+	@profiling
 	def finalize(self):
 		def validateDependencies(label, dependencies):
 			for req in dependencies:

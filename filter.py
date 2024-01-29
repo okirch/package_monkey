@@ -1458,7 +1458,6 @@ class PackageFilter:
 	def __init__(self, filename = 'filter.yaml', scheme = None):
 		self.classificationScheme = scheme or Classification.Scheme()
 		self._groups = {}
-		self._autoflavors = []
 		self._templates = {}
 
 		self.stringMatcher = PackageLabelling()
@@ -1478,7 +1477,6 @@ class PackageFilter:
 		# newly created flavors from default settings.
 		for gd, template in self.expandYamlObjectList(data, 'autoflavors'):
 			group = self.parseGroup(Classification.TYPE_AUTOFLAVOR, gd, template)
-			self._autoflavors.append(group)
 
 		for gd, template in self.expandYamlObjectList(data, 'purposes'):
 			group = self.parseGroup(Classification.TYPE_PURPOSE, gd, template)
@@ -1530,8 +1528,8 @@ class PackageFilter:
 			   group.label.type is not Classification.TYPE_BINARY:
 				continue
 
-			for autoFlavor in self.autoFlavors:
-				if autoFlavor.label.disposition is Classification.DISPOSITION_SEPARATE:
+			for autoFlavor in self.classificationScheme.allAutoFlavors:
+				if autoFlavor.disposition is Classification.DISPOSITION_SEPARATE:
 					self.maybeInstantiateAutoFlavor(group, autoFlavor)
 
 		# Loop over all @Foo labels and look for auto flavors with disposition maybe_merge, such as python
@@ -1551,17 +1549,17 @@ class PackageFilter:
 			# get the closure of all requirements of @Foo
 			baseDependencies = preliminaryOrder.downwardClosureFor(group.label)
 
-			for autoFlavor in self.autoFlavors:
-				if autoFlavor.label.disposition != Classification.DISPOSITION_MAYBE_MERGE:
+			for autoFlavor in self.classificationScheme.allAutoFlavors:
+				if autoFlavor.disposition != Classification.DISPOSITION_MAYBE_MERGE:
 					continue
 
-				if autoFlavor.label.runtimeRequires.issubset(baseDependencies):
+				if autoFlavor.runtimeRequires.issubset(baseDependencies):
 					flavor = baseLabel.getBuildFlavor(autoFlavor.name)
 					if flavor is not None:
-						infomsg(f"{baseLabel}+{autoFlavor.label} packages could be merged into {baseLabel}, but {flavor} exists")
+						infomsg(f"{baseLabel}+{autoFlavor} packages could be merged into {baseLabel}, but {flavor} exists")
 					else:
-						# infomsg(f"{baseLabel}+{autoFlavor.label} packages will be merged into {baseLabel}")
-						baseLabel.addMergeableFlavor(autoFlavor.label)
+						# infomsg(f"{baseLabel}+{autoFlavor} packages will be merged into {baseLabel}")
+						baseLabel.addMergeableFlavor(autoFlavor)
 				else:
 					self.maybeInstantiateAutoFlavor(group, autoFlavor)
 
@@ -1637,9 +1635,10 @@ class PackageFilter:
 	def makeBinaryGroup(self, name):
 		return self.makeGroupInternal(name, Classification.TYPE_BINARY)
 
+	# autoFlavor is a Label
 	def maybeInstantiateAutoFlavor(self, baseGroup, autoFlavor):
-		if baseGroup.label.isCompatibleWithAutoFlavor(autoFlavor.label):
-			self.instantiateAutoFlavor(baseGroup, autoFlavor.label)
+		if baseGroup.label.isCompatibleWithAutoFlavor(autoFlavor):
+			self.instantiateAutoFlavor(baseGroup, autoFlavor)
 
 	# autoFlavor is a Label
 	def instantiateAutoFlavor(self, baseGroup, autoFlavor):
@@ -1702,11 +1701,9 @@ class PackageFilter:
 		flavor = self.getGroupForLabel(label, create = True)
 		baseGroup.addBuildFlavor(flavor)
 
-		for flavorDef in self._autoflavors:
-			if flavorDef.name == flavorName:
-				# If there is a default flavor definition, copy its autoselect
-				# setting.
-				flavor.label.autoSelect = flavorDef.label.autoSelect
+		flavorDef = self.getGroupLabelNoFail(flavorName, Classification.TYPE_AUTOFLAVOR)
+		if flavorDef is not None:
+			flavor.label.autoSelect = flavorDef.autoSelect
 
 		return flavor
 
@@ -1742,6 +1739,13 @@ class PackageFilter:
 		if label is not None:
 			if label.type != type:
 				raise Exception(f"Group {name} does not match expected type (has {label.type}; expected {type})")
+		return label
+
+	def getGroupLabelNoFail(self, name, type):
+		label = self.classificationScheme.getLabel(name)
+		if label is not None:
+			if label.type != type:
+				label = None
 		return label
 
 	def getGroup(self, name, type = None):
@@ -1781,16 +1785,6 @@ class PackageFilter:
 			self._groups[label.type, label.name] = group
 
 		return group
-
-	@property
-	def autoFlavors(self):
-		return self._autoflavors
-
-	def getAutoFlavorDefinition(self, name):
-		for label in self._autoflavors:
-			if label.name == name:
-				return label
-		return None
 
 	@property
 	def objectPurposes(self):

@@ -935,34 +935,6 @@ class Classification:
 			self.labelOrder = labelOrder
 			self.store = store
 
-class PackageGroup:
-	def __init__(self, name):
-		self.name = name
-		self.label = None
-
-	def track(self, pkg):
-		Classification.labelPackage(pkg, self.label, "by PackageGroup.track")
-
-	@property
-	def type(self):
-		return self.label.type
-
-	@property
-	def isFlavor(self):
-		return self.label.parent is not None
-
-	@property
-	def defined(self):
-		return self.label and self.label.defined
-
-	@defined.setter
-	def defined(self, value):
-		self.label.defined = value
-
-	# Having classified a set of packages, we add it to the group's closure
-	def update(self, packages):
-		self._closure.update(packages)
-
 class ClassificationResult(object):
 	class PackageMembership(object):
 		def __init__(self, label):
@@ -1658,10 +1630,6 @@ class PackageFilter:
 			if label.type != type:
 				label = None
 		return label
-
-	@property
-	def objectPurposes(self):
-		raise Exception("obsolete property")
 
 	def getObjectPurposeDefinition(self, name):
 		label = self.classificationScheme.getLabel(name)

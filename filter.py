@@ -291,7 +291,7 @@ class Classification:
 
 			self._purposes[purposeName] = otherLabel
 
-			# purposes inherit the parent's build project by default
+			# purposes inherit the parent's source project by default
 			if self.sourceProject and not otherLabel.sourceProject:
 				otherLabel.setSourceProject(self.sourceProject)
 
@@ -1484,7 +1484,6 @@ class PackageFilter:
 		self.classificationScheme = scheme or Classification.Scheme()
 		self._groups = {}
 		self._autoflavors = []
-		self._purposes = []
 		self._templates = {}
 
 		self.stringMatcher = PackageLabelling()
@@ -1508,7 +1507,6 @@ class PackageFilter:
 
 		for gd, template in self.expandYamlObjectList(data, 'purposes'):
 			group = self.parseGroup(Classification.TYPE_PURPOSE, gd, template)
-			self._purposes.append(group)
 
 		for gd, template in self.expandYamlObjectList(data, 'build_configs'):
 			self.parseGroup(Classification.TYPE_BUILDCONFIG, gd, template)
@@ -1603,11 +1601,11 @@ class PackageFilter:
 		for group in list(self._groups.values()):
 			if group.label.type is Classification.TYPE_BINARY and not group.label.isPurpose and not group.label.isComponentLevel:
 				assert(not group.label.isPurpose)
-				for purposeDef in self._purposes:
-					if purposeDef.label.disposition == Classification.DISPOSITION_COMPONENT_WIDE:
+				for purposeDef in self.classificationScheme.allAutoPurposes:
+					if purposeDef.disposition == Classification.DISPOSITION_COMPONENT_WIDE:
 						continue
 
-					self.instantiatePurpose(group, purposeDef)
+					self.makePurposeGroup(group, purposeDef.name)
 
 		for group in list(self._groups.values()):
 			label = group.label
@@ -1684,9 +1682,6 @@ class PackageFilter:
 		group.label.copyRequirementsFrom(autoFlavor.label)
 
 		return group
-
-	def instantiatePurpose(self, group, purposeDef):
-		return self.makePurposeGroup(group, purposeDef.name)
 
 	def instantiateBuildConfigFlavor(self, sourceProject, name):
 		if sourceProject is None:
@@ -1765,10 +1760,10 @@ class PackageFilter:
 
 		label = baseGroup.label.getObjectPurpose(purposeName)
 		if label is None:
-			label = self.classificationScheme.createPurpose(baseGroup.label, purposeName, template = purposeDef.label)
+			label = self.classificationScheme.createPurpose(baseGroup.label, purposeName, template = purposeDef)
 
 		# copy requirements from purposeDef
-		label.copyRequirementsFrom(purposeDef.label)
+		label.copyRequirementsFrom(purposeDef)
 
 		purpose = self.getGroupForLabel(label, create = True)
 		baseGroup.addObjectPurpose(purpose)
@@ -1824,13 +1819,13 @@ class PackageFilter:
 
 	@property
 	def objectPurposes(self):
-		return self._purposes
+		raise Exception("obsolete property")
 
 	def getObjectPurposeDefinition(self, name):
-		for label in self._purposes:
-			if label.name == name:
-				return label
-		return None
+		label = self.classificationScheme.getLabel(name)
+		if label is not None and label.type is not Classification.TYPE_PURPOSE:
+			label = None
+		return label
 
 	def parseTemplate(self, gd):
 		template = FilterTemplate(gd['name'], gd['substitute'], gd['document'])
@@ -1972,7 +1967,7 @@ class PackageFilter:
 
 			# we may have defined labels out of order; make sure subordinate purpose labels
 			# inherit the gravity value
-			for purpose in group.label._purposes.values():
+			for purpose in groupLabel.objectPurposes:
 				purpose.gravity = gravity
 
 		if group.label:

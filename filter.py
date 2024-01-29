@@ -959,31 +959,6 @@ class PackageGroup:
 	def defined(self, value):
 		self.label.defined = value
 
-	def addRequires(self, otherGroup):
-		if otherGroup.label is None:
-			raise Exception(f"Group {otherGroup.name} has a NULL label")
-		self.label.addRuntimeDependency(otherGroup.label)
-
-	def addAugmentation(self, otherGroup):
-		if otherGroup.label is None:
-			raise Exception(f"Group {otherGroup.name} has a NULL label")
-		self.label.addRuntimeAugmentation(otherGroup.label)
-
-	def addBuildRequires(self, otherGroup):
-		if otherGroup.label is None:
-			raise Exception(f"Group {otherGroup.name} has a NULL label")
-		self.label.addBuildDependency(otherGroup.label)
-
-	def addImport(self, otherGroup):
-		if otherGroup.label is None:
-			raise Exception(f"Group {otherGroup.name} has a NULL label")
-		self.label.addImport(otherGroup.label)
-
-	def addExport(self, otherGroup):
-		if otherGroup.label is None:
-			raise Exception(f"Group {otherGroup.name} has a NULL label")
-		self.label.addExport(otherGroup.label)
-
 	@property
 	def flavors(self):
 		return map(lambda pair: pair[1], sorted(self._buildFlavors.items()))
@@ -1978,8 +1953,8 @@ class PackageFilter:
 				else:
 					labelType = Classification.TYPE_BINARY
 
-				otherGroup = self.resolveGroupReference(name, labelType)
-				group.addRequires(otherGroup)
+				referencedLabel = self.resolveLabelReference(name, labelType)
+				groupLabel.addRuntimeDependency(referencedLabel)
 
 			# 'augments' are like runtime requirements, except they also flags the
 			# group/flavor as an augmentation. Augmentations will never auto-select any
@@ -1996,13 +1971,13 @@ class PackageFilter:
 			# @Gnome+python auto-selecting @Python+gnome rather than the other way around
 			nameList = self.getYamlList(gd, 'augments', groupLabel)
 			for name in nameList:
-				otherGroup = self.resolveGroupReference(name)
-				group.addAugmentation(otherGroup)
+				referencedLabel = self.resolveLabelReference(name)
+				groupLabel.addRuntimeAugmentation(referencedLabel)
 
 			nameList = self.getYamlList(gd, 'buildrequires', groupLabel)
 			for name in nameList:
-				otherGroup = self.resolveGroupReference(name)
-				group.addBuildRequires(otherGroup)
+				referencedLabel = self.resolveLabelReference(name)
+				groupLabel.addBuildDependency(referencedLabel)
 
 			nameList = self.getYamlList(gd, 'imports', groupLabel)
 			for name in nameList:

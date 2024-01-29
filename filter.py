@@ -1634,29 +1634,24 @@ class PackageFilter:
 		return flavor
 
 	def makeFlavorLabel(self, baseLabel, flavorName, type = None):
-		baseGroup = self.getGroupForLabel(baseLabel, create = False)
-		assert(baseGroup)
-
-		flavor = self.makeFlavorGroup(baseGroup, flavorName, type)
-		return flavor.label
-
-	def makeFlavorGroup(self, baseGroup, flavorName, type = None):
-		baseLabel = baseGroup.label
-
 		flavor = baseLabel.getBuildFlavor(flavorName)
 		if flavor is not None:
-			return self.getGroupForLabel(flavor)
+			return flavor
 
 		if type is not None:
 			assert(baseLabel.type == Classification.TYPE_SOURCE and type == Classification.TYPE_BUILDCONFIG)
 
 		if baseLabel.type == Classification.TYPE_BINARY:
-			flavor = self.createBinaryFlavor(baseGroup, flavorName)
+			flavor = self.createBinaryFlavor(baseLabel, flavorName)
 		elif baseLabel.type == Classification.TYPE_SOURCE:
-			flavor = self.createBuildConfigFlavor(baseGroup, flavorName)
+			flavor = self.createBuildConfigFlavor(baseLabel, flavorName)
 		else:
 			raise Exception(f"Don't know how to create flavor {flavorName} for {baseLabel.type} label {baseLabel}")
 
+		return flavor
+
+	def makeFlavorGroup(self, baseGroup, flavorName, type = None):
+		flavor = self.makeFlavorLabel(baseGroup.label, flavorName, type)
 		return self.getGroupForLabel(flavor, create = True)
 
 	def makePurposeLabel(self, baseLabel, purposeName):
@@ -1675,13 +1670,13 @@ class PackageFilter:
 
 		return self.getGroupForLabel(purpose, create = True)
 
-	def createBinaryFlavor(self, baseGroup, flavorName):
+	def createBinaryFlavor(self, baseLabel, flavorName):
 		# When creating @Foo+blah, and @Foo has a sourceProject of FooSource, check
 		# whether there's a buildconfig for FooSource/blah.
 		# If that doesn't exist, the flavor will build using the same config as the base label.
-		buildLabel = baseGroup.label.getBuildConfigFlavor(flavorName)
+		buildLabel = baseLabel.getBuildConfigFlavor(flavorName)
 
-		label = self.classificationScheme.createFlavor(baseGroup.label, flavorName, buildConfig = buildLabel)
+		label = self.classificationScheme.createFlavor(baseLabel, flavorName, buildConfig = buildLabel)
 
 		flavorDef = self.getGroupLabelNoFail(flavorName, Classification.TYPE_AUTOFLAVOR)
 		if flavorDef is not None:
@@ -1689,8 +1684,8 @@ class PackageFilter:
 
 		return label
 
-	def createBuildConfigFlavor(self, baseGroup, flavorName):
-		label = self.classificationScheme.createFlavor(baseGroup.label, flavorName)
+	def createBuildConfigFlavor(self, baseLabel, flavorName):
+		label = self.classificationScheme.createFlavor(baseLabel, flavorName)
 
 		# For the time being, make all buildconfigs auto-selectable.
 		# Probably a useless gesture.

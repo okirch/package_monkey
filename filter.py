@@ -1425,7 +1425,6 @@ class PackageFilter:
 
 	def __init__(self, filename = 'filter.yaml', scheme = None):
 		self.classificationScheme = scheme or Classification.Scheme()
-		self._groups = {}
 		self._templates = {}
 
 		self.stringMatcher = PackageLabelling()
@@ -1565,10 +1564,6 @@ class PackageFilter:
 			verdict.labelBuild(build)
 			debugInitialPlacement(f"{build} is placed in {verdict.label} by package filter rules")
 
-	def makeGroup(self, name, type = None):
-		assert(type)
-		return self.makeGroupInternal(name, type)
-
 	def resolveLabelReference(self, name, labelType = Classification.TYPE_BINARY):
 		baseLabelType, baseName, flavorName, purposeName = Classification.parseLabel(labelType, name)
 
@@ -1580,12 +1575,6 @@ class PackageFilter:
 			newLabel = self.makePurposeLabel(newLabel, purposeName)
 
 		return newLabel
-
-	def makeSourceGroup(self, name):
-		return self.makeGroupInternal(name, Classification.TYPE_SOURCE)
-
-	def makeBinaryGroup(self, name):
-		return self.makeGroupInternal(name, Classification.TYPE_BINARY)
 
 	# autoFlavor is a Label
 	def maybeInstantiateAutoFlavor(self, baseLabel, autoFlavor):
@@ -1599,21 +1588,6 @@ class PackageFilter:
 		# even if the group existed already, at this point we need to copy any runtime
 		# requirements specified for the auto flavor
 		flavor.copyRequirementsFrom(autoFlavor)
-
-		return flavor
-
-	def instantiateBuildConfigFlavor(self, sourceProject, name):
-		if sourceProject is None:
-			return None
-
-		flavor = sourceProject.getBuildFlavor(name)
-		if flavor is None:
-			tmpl = self.getGroupLabel(name, Classification.TYPE_BUILDCONFIG_FLAVOR)
-			if tmpl is not None:
-				sourceGroup = self.makeGroupInternal(sourceProject.name, Classification.TYPE_SOURCE);
-
-				flavor = self.instantiateAutoFlavor(sourceGroup.label, tmpl)
-				flavor.copyRequirementsFrom(tmpl)
 
 		return flavor
 
@@ -1633,10 +1607,6 @@ class PackageFilter:
 			raise Exception(f"Don't know how to create flavor {flavorName} for {baseLabel.type} label {baseLabel}")
 
 		return flavor
-
-	def makeFlavorGroup(self, baseGroup, flavorName, type = None):
-		flavor = self.makeFlavorLabel(baseGroup.label, flavorName, type)
-		return self.getGroupForLabel(flavor, create = True)
 
 	def makePurposeLabel(self, baseLabel, purposeName):
 		purpose = baseLabel.getObjectPurpose(purposeName)
@@ -1695,39 +1665,6 @@ class PackageFilter:
 				label = None
 		return label
 
-	def getGroup(self, name, type = None):
-		try:
-			group = self._groups[type, name]
-		except:
-			return None
-
-		if type and group.type != type:
-			raise Exception(f"Group {name} does not match expected type (has {group.type}; expected {type})")
-
-		return group
-
-	def makeGroupInternal(self, name, type):
-		group = self.getGroup(name, type)
-		if group is None:
-			if not type:
-				raise Exception(f"Cannot create group {name} with no type")
-
-			label = self.resolveLabelReference(name, type)
-			group = self.getGroupForLabel(label, create = True);
-		return group
-
-	def getGroupForLabel(self, label, create = False):
-		group = self.getGroup(label.name, label.type)
-		if group is not None:
-			assert(group.label is label)
-		elif create:
-			group = PackageGroup(label.name)
-			group.label = label
-
-			self._groups[label.type, label.name] = group
-
-		return group
-
 	@property
 	def objectPurposes(self):
 		raise Exception("obsolete property")
@@ -1754,8 +1691,9 @@ class PackageFilter:
 
 	def parseGroup(self, groupType, gd, template):
 		groupName = gd['name']
-		group = self.makeGroupInternal(groupName, groupType)
-		self.processGroupDefinition(group.label, gd, template)
+
+		label = self.resolveLabelReference(groupName, groupType)
+		self.processGroupDefinition(label, gd, template)
 
 	def parseBuildFlavor(self, baseLabel, gd):
 		flavorName = gd['name']
@@ -1765,8 +1703,6 @@ class PackageFilter:
 		flavor = self.makeFlavorLabel(baseLabel, flavorName)
 		self.processGroupDefinition(flavor, gd)
 
-		return self.getGroupForLabel(flavor)
-
 	def parseObjectPurpose(self, baseLabel, gd):
 		purposeName = gd['name']
 		if not self.getObjectPurposeDefinition(purposeName):
@@ -1774,7 +1710,6 @@ class PackageFilter:
 
 		purpose = self.makePurposeLabel(baseLabel, purposeName)
 		self.processGroupDefinition(purpose, gd)
-		return self.getGroupForLabel(purpose)
 
 	VALID_GROUP_FIELDS = set((
 		'name',

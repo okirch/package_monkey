@@ -620,7 +620,7 @@ class Classification:
 				raise Exception(f"Conflicting types for label {name}. Already have a label of type {label.type}, now asked to create {type}")
 			return label
 
-		def createFlavor(self, baseLabel, flavorName, buildConfig = None, sourceProject = None):
+		def createFlavor(self, baseLabel, flavorName, sourceProject = None):
 			if baseLabel.flavorName is not None:
 				raise Exception(f"Cannot derive flavor {flavorName} from label {baseLabel} because it already is a flavor")
 
@@ -1612,12 +1612,7 @@ class PackageFilter:
 		return purpose
 
 	def createBinaryFlavor(self, baseLabel, flavorName):
-		# When creating @Foo+blah, and @Foo has a sourceProject of FooSource, check
-		# whether there's a buildconfig for FooSource/blah.
-		# If that doesn't exist, the flavor will build using the same config as the base label.
-		buildLabel = baseLabel.getBuildConfigFlavor(flavorName)
-
-		label = self.classificationScheme.createFlavor(baseLabel, flavorName, buildConfig = buildLabel)
+		label = self.classificationScheme.createFlavor(baseLabel, flavorName)
 
 		flavorDef = self.getGroupLabelNoFail(flavorName, Classification.TYPE_AUTOFLAVOR)
 		if flavorDef is not None:

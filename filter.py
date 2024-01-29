@@ -1591,13 +1591,10 @@ class PackageFilter:
 
 		return flavor
 
-	def makeFlavorLabel(self, baseLabel, flavorName, type = None):
+	def makeFlavorLabel(self, baseLabel, flavorName):
 		flavor = baseLabel.getBuildFlavor(flavorName)
 		if flavor is not None:
 			return flavor
-
-		if type is not None:
-			assert(baseLabel.type == Classification.TYPE_SOURCE and type == Classification.TYPE_BUILDCONFIG)
 
 		if baseLabel.type == Classification.TYPE_BINARY:
 			flavor = self.createBinaryFlavor(baseLabel, flavorName)

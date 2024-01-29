@@ -1532,13 +1532,13 @@ class PackageFilter:
 					self.maybeInstantiateAutoFlavor(group, autoFlavor)
 
 		for group in list(self._groups.values()):
-			if group.label.type is Classification.TYPE_BINARY and not group.label.isPurpose and not group.label.isComponentLevel:
-				assert(not group.label.isPurpose)
+			groupLabel = group.label
+			if groupLabel.type is Classification.TYPE_BINARY and not groupLabel.isPurpose and not groupLabel.isComponentLevel:
 				for purposeDef in self.classificationScheme.allAutoPurposes:
 					if purposeDef.disposition == Classification.DISPOSITION_COMPONENT_WIDE:
 						continue
 
-					self.makePurposeGroup(group, purposeDef.name)
+					self.makePurposeLabel(groupLabel, purposeDef.name)
 
 		for group in list(self._groups.values()):
 			label = group.label
@@ -1580,16 +1580,14 @@ class PackageFilter:
 	def resolveGroupReference(self, name, labelType = Classification.TYPE_BINARY):
 		baseLabelType, baseName, flavorName, purposeName = Classification.parseLabel(labelType, name)
 
-		baseLabel = self.classificationScheme.createLabel(baseName, baseLabelType)
-		group = self.getGroupForLabel(baseLabel, create = True);
-
+		newLabel = self.classificationScheme.createLabel(baseName, baseLabelType)
 		if flavorName is not None:
-			group = self.makeFlavorGroup(group, flavorName)
+			newLabel = self.makeFlavorLabel(newLabel, flavorName)
 
 		if purposeName is not None:
-			group = self.makePurposeGroup(group, purposeName)
+			newLabel = self.makePurposeLabel(newLabel, purposeName)
 
-		return group
+		return self.getGroupForLabel(newLabel, create = True);
 
 	def resolveBuildReference(self, name):
 		sourceProjectName, flavorName = Classification.parseBuildconfigLabel(name)
@@ -1659,10 +1657,6 @@ class PackageFilter:
 		if purpose is None:
 			purpose = self.createObjectPurpose(baseLabel, purposeName)
 		return purpose
-
-	def makePurposeGroup(self, baseGroup, purposeName):
-		purpose = self.makePurposeLabel(baseGroup.label, purposeName)
-		return self.getGroupForLabel(purpose, create = True)
 
 	def createBinaryFlavor(self, baseLabel, flavorName):
 		# When creating @Foo+blah, and @Foo has a sourceProject of FooSource, check

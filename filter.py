@@ -1895,29 +1895,29 @@ class PackageFilter:
 		def getBoolean(gd, tag):
 			value = gd.get(tag)
 			if value is not None and type(value) is not bool:
-				raise Exception(f"{group.label}: bad value {tag}={value} (expected boolean value not {type(value)})")
+				raise Exception(f"{groupLabel}: bad value {tag}={value} (expected boolean value not {type(value)})")
 			return value
 
 		def getString(gd, tag):
 			value = gd.get(tag)
 			if value is not None and type(value) is not str:
-				raise Exception(f"{group.label}: bad value {tag}={value} (expected string value not {type(value)})")
+				raise Exception(f"{groupLabel}: bad value {tag}={value} (expected string value not {type(value)})")
 			return value
 
 		groupLabel = group.label
 
-		if group.defined:
-			raise Exception(f"Duplicate definition of group \"{group.name}\" in filter yaml")
-		group.defined = True
+		if groupLabel.defined:
+			raise Exception(f"Duplicate definition of group \"{groupLabel}\" in filter yaml")
+		groupLabel.defined = True
 
 		if template is not None:
-			group.label.instanceOfTemplate = template.name
+			groupLabel.instanceOfTemplate = template.name
 
 		for field in gd.keys():
 			if field not in self.VALID_GROUP_FIELDS:
-				raise Exception(f"Invalid field {field} in definition of group {group.name}")
+				raise Exception(f"Invalid field {field} in definition of group {groupLabel}")
 
-		group.label.description = gd.get('description')
+		groupLabel.description = gd.get('description')
 
 		name = gd.get('sourceproject')
 		if name is not None:
@@ -1926,35 +1926,35 @@ class PackageFilter:
 
 		value = gd.get('disposition')
 		if value is not None:
-			if value == 'ignore' and group.type == Classification.TYPE_BINARY:
+			if value == 'ignore' and groupLabel.type == Classification.TYPE_BINARY:
 				# we allow regular labels to be marked as "ignore", which helps us hide problematic
 				# packages like patterns-*
 				pass
-			elif value not in ('separate', 'merge', 'ignore', 'maybe_merge', 'component_wide') or group.type not in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
-				raise Exception(f"Invalid disposition={value} in definition of {group.type} group {group.name}")
-			group.label.disposition = value
+			elif value not in ('separate', 'merge', 'ignore', 'maybe_merge', 'component_wide') or groupLabel.type not in (Classification.TYPE_AUTOFLAVOR, Classification.TYPE_PURPOSE):
+				raise Exception(f"Invalid disposition={value} in definition of {groupLabel.type} group {groupLabel}")
+			groupLabel.disposition = value
 
 		value = getBoolean(gd, 'autoselect')
 		if value is not None:
-			group.label.autoSelect = value
+			groupLabel.autoSelect = value
 
 		value = getBoolean(gd, 'feature')
 		if value is not None:
-			group.label.isFeature = value
+			groupLabel.isFeature = value
 
 		value = gd.get('defaultlabel')
 		if value is not None:
-			if group.label.type != Classification.TYPE_AUTOFLAVOR:
-				raise Exception(f"Error: defaultlabel is not valid for {group.label.type} labels")
-			group.label.preferredLabels.insert(0, value)
+			if groupLabel.type != Classification.TYPE_AUTOFLAVOR:
+				raise Exception(f"Error: defaultlabel is not valid for {groupLabel.type} labels")
+			groupLabel.preferredLabels.insert(0, value)
 
-		nameList = self.getYamlList(gd, 'defaultlabels', group)
+		nameList = self.getYamlList(gd, 'defaultlabels', groupLabel)
 		for name in nameList:
-			if group.label.type != Classification.TYPE_AUTOFLAVOR:
-				raise Exception(f"Error: defaultlabels is not valid for {group.label.type} labels")
+			if groupLabel.type != Classification.TYPE_AUTOFLAVOR:
+				raise Exception(f"Error: defaultlabels is not valid for {groupLabel.type} labels")
 			if type(name) != str:
 				raise Exception(f"Error: unexpected {type(name)} in list of default labels")
-			group.label.preferredLabels.append(name)
+			groupLabel.preferredLabels.append(name)
 
 		priority = gd.get('priority')
 		if priority is not None:
@@ -1963,18 +1963,18 @@ class PackageFilter:
 		gravity = gd.get('gravity')
 		if gravity is not None:
 			assert(type(gravity) == int)
-			group.label.gravity = gravity
+			groupLabel.gravity = gravity
 
 			# we may have defined labels out of order; make sure subordinate purpose labels
 			# inherit the gravity value
 			for purpose in groupLabel.objectPurposes:
 				purpose.gravity = gravity
 
-		if group.label:
-			nameList = self.getYamlList(gd, 'requires', group)
+		if groupLabel:
+			nameList = self.getYamlList(gd, 'requires', groupLabel)
 			for name in nameList:
-				if group.type is Classification.TYPE_SOURCE:
-					labelType = group.type
+				if groupLabel.type is Classification.TYPE_SOURCE:
+					labelType = groupLabel.type
 				else:
 					labelType = Classification.TYPE_BINARY
 
@@ -1994,22 +1994,22 @@ class PackageFilter:
 			# auto-selecting @Gnome+python.
 			# By having @Python+gnome augment rather than require @Gnome, we end up with
 			# @Gnome+python auto-selecting @Python+gnome rather than the other way around
-			nameList = self.getYamlList(gd, 'augments', group)
+			nameList = self.getYamlList(gd, 'augments', groupLabel)
 			for name in nameList:
 				otherGroup = self.resolveGroupReference(name)
 				group.addAugmentation(otherGroup)
 
-			nameList = self.getYamlList(gd, 'buildrequires', group)
+			nameList = self.getYamlList(gd, 'buildrequires', groupLabel)
 			for name in nameList:
 				otherGroup = self.resolveGroupReference(name)
 				group.addBuildRequires(otherGroup)
 
-			nameList = self.getYamlList(gd, 'imports', group)
+			nameList = self.getYamlList(gd, 'imports', groupLabel)
 			for name in nameList:
 				referencedLabel = self.resolveLabelReference(name)
 				groupLabel.addImport(referencedLabel)
 
-			nameList = self.getYamlList(gd, 'exports', group)
+			nameList = self.getYamlList(gd, 'exports', groupLabel)
 			for name in nameList:
 				referencedLabel = self.resolveLabelReference(name)
 				groupLabel.addExport(referencedLabel)
@@ -2017,9 +2017,9 @@ class PackageFilter:
 		# The yaml file may specify per-group priorities for filters, but there is just
 		# one global set of filters. Rather than passing the group and priority argument
 		# into each add*Filter function, create a Builder object that does this transparently.
-		filterSetBuilder = StringMatchBuilder(self.stringMatcher, group.label, priority)
+		filterSetBuilder = StringMatchBuilder(self.stringMatcher, groupLabel, priority)
 
-		nameList = self.getYamlList(gd, 'products', group)
+		nameList = self.getYamlList(gd, 'products', groupLabel)
 		for name in nameList:
 			raise Exception(f"package filter 'products' no longer supported")
 
@@ -2027,52 +2027,52 @@ class PackageFilter:
 		# a package pattern "*-foo", except that the suffix is recorded in
 		# the label to aid later placement.
 		# Only makes sense with purpose labels right now
-		nameList = self.getYamlList(gd, 'packagesuffixes', group)
+		nameList = self.getYamlList(gd, 'packagesuffixes', groupLabel)
 		for name in nameList:
-			group.label.packageSuffixes.append(name)
+			groupLabel.packageSuffixes.append(name)
 
 			name = f"*-{name}"
 			filterSetBuilder.addBinaryPackageFilter(name)
 			filterSetBuilder.addSourcePackageFilter(name)
 
-		nameList = self.getYamlList(gd, 'packages', group)
-		if nameList and group.label.parent is not None:
-			raise Exception(f"{group.label}: packages list only valid in base labels")
+		nameList = self.getYamlList(gd, 'packages', groupLabel)
+		if nameList and groupLabel.parent is not None:
+			raise Exception(f"{groupLabel}: packages list only valid in base labels")
 		for name in nameList:
 			filterSetBuilder.addOBSPackageFilter(name)
 
-		nameList = self.getYamlList(gd, 'sources', group)
+		nameList = self.getYamlList(gd, 'sources', groupLabel)
 		for name in nameList:
 			filterSetBuilder.addSourcePackageFilter(name)
 
-		nameList = self.getYamlList(gd, 'binaries', group)
+		nameList = self.getYamlList(gd, 'binaries', groupLabel)
 		for name in nameList:
 			filterSetBuilder.addBinaryPackageFilter(name)
 
-		nameList = self.getYamlList(gd, 'rpmGroups', group)
+		nameList = self.getYamlList(gd, 'rpmGroups', groupLabel)
 		for name in nameList:
 			raise Exception(f"package filter 'rpmGroups' no longer supported")
 
-		flavors = self.getYamlList(gd, 'buildflavors', group)
+		flavors = self.getYamlList(gd, 'buildflavors', groupLabel)
 		for fd in flavors:
-			self.parseBuildFlavor(group, fd)
+			self.parseBuildFlavor(groupLabel, fd)
 
-		purposes = self.getYamlList(gd, 'purposes', group)
+		purposes = self.getYamlList(gd, 'purposes', groupLabel)
 		for fd in purposes:
-			self.parseObjectPurpose(group, fd)
+			self.parseObjectPurpose(groupLabel, fd)
 
 		globals = gd.get('globals')
 		if globals is not None:
-			if group.type != Classification.TYPE_SOURCE:
-				raise Exception(f"You cannot specify globals in a {group.type} group definition")
+			if groupLabel.type != Classification.TYPE_SOURCE:
+				raise Exception(f"You cannot specify globals in a {groupLabel.type} group definition")
 
 			for purposeName, labelName in globals.items():
-				# print(f"  {group.label}: {purposeName} -> {labelName}")
+				# print(f"  {groupLabel}: {purposeName} -> {labelName}")
 				purposeLabel = self.classificationScheme.createLabel(labelName, Classification.TYPE_BINARY)
 				purposeLabel.isComponentLevel = True
-				group.label.setGlobalPurposeLabel(purposeName, purposeLabel)
+				groupLabel.setGlobalPurposeLabel(purposeName, purposeLabel)
 
-		group.label.compatibility = getString(gd, 'compatibility')
+		groupLabel.compatibility = getString(gd, 'compatibility')
 
 		return group
 
@@ -2103,6 +2103,6 @@ class PackageFilter:
 			return []
 
 		if type(value) != list:
-			raise Exception(f"In definition of {context.label}, {name} should be a list not a {type(value)}")
+			raise Exception(f"In definition of {context}, {name} should be a list not a {type(value)}")
 
 		return value

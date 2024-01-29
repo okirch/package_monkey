@@ -1473,8 +1473,9 @@ class PackageFilter:
 
 		self.stringMatcher.finalize()
 
-		for group in self._groups.values():
-			label = group.label
+		classificationScheme = self.classificationScheme
+
+		for label in classificationScheme.allAutoFlavors:
 			validateDependencies(label, label.buildRequires)
 
 			# resolve the preferred labels
@@ -1491,9 +1492,8 @@ class PackageFilter:
 
 		# For all base labels, instantiate their auto flavors (ie for @Foo, instantiate
 		# @Foo+python, @Foo+ruby, etc)
-		for group in list(self._groups.values()):
-			if group.label.parent is not None or \
-			   group.label.type is not Classification.TYPE_BINARY:
+		for label in classificationScheme.allBinaryLabels:
+			if label.parent is not None:
 				continue
 
 			for autoFlavor in self.classificationScheme.allAutoFlavors:
@@ -1505,17 +1505,17 @@ class PackageFilter:
 		# be @PythonCore), then mark the auto flavor for merging. Otherwise, create a separate
 		# build flavor @Foo+python
 		preliminaryOrder = self.classificationScheme.createOrdering(Classification.TYPE_BINARY)
-		for group in list(self._groups.values()):
-			if group.label.parent is not None:
+		for label in classificationScheme.allBinaryLabels:
+			if label.parent is not None:
 				continue
 
-			if group.label.type is not Classification.TYPE_BINARY:
+			if label.type is not Classification.TYPE_BINARY:
 				continue
 
-			baseLabel = group.label
+			baseLabel = label
 
 			# get the closure of all requirements of @Foo
-			baseDependencies = preliminaryOrder.downwardClosureFor(group.label)
+			baseDependencies = preliminaryOrder.downwardClosureFor(baseLabel)
 
 			for autoFlavor in self.classificationScheme.allAutoFlavors:
 				if autoFlavor.disposition != Classification.DISPOSITION_MAYBE_MERGE:
@@ -1531,8 +1531,7 @@ class PackageFilter:
 				else:
 					self.maybeInstantiateAutoFlavor(baseLabel, autoFlavor)
 
-		for group in list(self._groups.values()):
-			groupLabel = group.label
+		for groupLabel in classificationScheme.allBinaryLabels:
 			if groupLabel.type is Classification.TYPE_BINARY and not groupLabel.isPurpose and not groupLabel.isComponentLevel:
 				for purposeDef in self.classificationScheme.allAutoPurposes:
 					if purposeDef.disposition == Classification.DISPOSITION_COMPONENT_WIDE:
@@ -1540,8 +1539,7 @@ class PackageFilter:
 
 					self.makePurposeLabel(groupLabel, purposeDef.name)
 
-		for group in list(self._groups.values()):
-			label = group.label
+		for label in classificationScheme.allBinaryLabels:
 			if label.purposeName == 'devel':
 				baseLabel = label.parent
 				for req in baseLabel.runtimeRequires:

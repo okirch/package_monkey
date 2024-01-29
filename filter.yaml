@@ -1962,6 +1962,11 @@ groups:
        - "@Glib2NoDBus"
       binaries:
        - libgraphene-1*
+    - name: typelib
+      requires:
+       - "@EssentialGraphicsLibraries+glib"
+      binaries:
+#      - typelib-1_0-Graphene-1_0
     - name: opengl
       requires:
        - "@OpenGL"
@@ -2919,6 +2924,7 @@ groups:
     - "@GStreamerLibraries"
     - "@PulseAudio"
     - "@OpenGL"
+    - "@EssentialGraphicsLibraries+typelib"
    binaries:
     - libgtk-4*
     - gtk4-schema
@@ -2965,7 +2971,6 @@ groups:
     - dconf
     - libgjs0
     - hicolor-icon-theme
-#   - libgusb2
 
  - name: "@GStreamerLibraries"
    sourceproject: Gnome
@@ -3131,6 +3136,7 @@ groups:
     - "@NetworkManager"
     - "@Bluetooth"
     - "@PulseAudio"
+    - "@USBLibraries+typelib"
    packages:
     - colord
    binaries:
@@ -3464,19 +3470,19 @@ groups:
     - "@MinimalSystemd"
     - "@HostStorage"
     - "@Glib2"
-#   - "@Python"
     - "@Core+kernellibs"
     - "@PolicyKit"
+    - "@CoreHardware"
     - "@KernelLibraries+udev"
     - "@KernelCore+systemdlibs"
    binaries:
     - udisks2
     - libblockdev
     - accountsservice
-   purposes:
-    # We placed glib2 and related libraries in GnomeLibraries, but due to
-    # its depedencies, glib2-devel had to go to DesktopLibraries.
-    # So we have to force the -devel flavor to requires DesktopLibraries-devel
+   buildflavors:
+    - name: python
+      requires:
+       - "@CoreHardware+python"
 
  - name: "@Busybox"
    sourceproject: Host
@@ -4226,6 +4232,9 @@ groups:
        - "@Glib2"
       binaries:
        - libgusb2
+    - name: typelib
+      requires:
+       - "@USBLibraries+glib"
 
  - name: "@NetworkLibraries"
    sourceproject: Core
@@ -4354,6 +4363,7 @@ groups:
     - "@KernelCore"
    packages:
     - openucx
+    - libqb
    binaries:
     - dapl
     - dapl-*
@@ -4567,6 +4577,7 @@ groups:
     - "@EssentialGraphicsLibraries"
    packages:
     - libcaca
+    - argyllcms
    binaries:
     - libpaper2
     - libjasper7
@@ -4730,16 +4741,6 @@ groups:
     # libjack0 itself needs to be in AudioLibraries, while libjacknet and libjackserver can go here:
     - libjack*0
    buildflavors:
-    - name: desktop
-      requires:
-       - "@DesktopLibraries"
-      binaries:
-       - ImageMagick
-       - libMagickCore-7*
-       - libMagickWand-7*
-#      - libMagick++-7_Q16HDRI5
-       - ImageMagick-extra
-       - perl-PerlMagick
     - name: pulseaudio
       requires:
        - "@PulseAudioLibraries+x11"
@@ -4747,6 +4748,21 @@ groups:
        - openmpt123
        - mpg123-openal
        - mpg123-pulse
+
+ - name: "@ImageMagick"
+   sourceproject: Multimedia
+   requires:
+    - "@GraphicsLibraries"
+    - "@AudioLibraries"
+    - "@AVLibraries"
+    - "@DesktopLibraries"
+   binaries:
+    - ImageMagick
+    - libMagickCore-7*
+    - libMagickWand-7*
+#   - libMagick++-7_Q16HDRI5
+    - ImageMagick-extra
+    - perl-PerlMagick
 
  - name: "@HPCCoreLibraries"
    sourceproject: Core
@@ -5880,6 +5896,7 @@ templates:
        - "@Glib2"
        - "@PythonData"
        - "@TclCore"
+       - "@NetworkLibraries"
        - "@NumericLibraries"
       binaries:
        - pythonXXX-alabaster

@@ -822,7 +822,9 @@ class Classification:
 				# for lowerComponent in componentOrder.downwardClosureFor(componentLabel):
 				for lowerComponent in componentLabel.runtimeRequires:
 					for lowerConfig in lowerComponent.flavors:
-						buildConfig = self.createFlavor(componentLabel, lowerConfig.name)
+						buildConfig = componentLabel.getBuildFlavor(lowerConfig.name)
+						if buildConfig is None:
+							buildConfig = self.createFlavor(componentLabel, lowerConfig.name)
 						buildConfig.buildRequires.update(lowerConfig.buildRequires)
 						buildConfig.runtimeRequires.update(lowerConfig.runtimeRequires)
 

@@ -3,7 +3,6 @@
 from options import Application
 from writers import XmlReader
 from filter import Classification, PackageFilter
-from util import IndexFormatterThreeLevels
 
 def main():
 	application = Application('query-component')

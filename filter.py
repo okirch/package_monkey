@@ -937,7 +937,6 @@ class PackageGroup:
 	def __init__(self, name):
 		self.name = name
 		self.label = None
-		self._objectPurposes = {}
 
 	def track(self, pkg):
 		Classification.labelPackage(pkg, self.label, "by PackageGroup.track")
@@ -957,21 +956,6 @@ class PackageGroup:
 	@defined.setter
 	def defined(self, value):
 		self.label.defined = value
-
-	@property
-	def purposes(self):
-		return map(lambda pair: pair[1], sorted(self._objectPurposes.items()))
-
-	def addObjectPurpose(self, otherGroup):
-		purposeName = otherGroup.label.purposeName
-		assert(purposeName)
-
-		if self._objectPurposes.get(purposeName):
-			raise Exception(f"Duplicate definition of build purpose {purposeName} for {self.name}")
-		self._objectPurposes[purposeName] = otherGroup
-
-	def getObjectPurpose(self, name):
-		return self._objectPurposes.get(name)
 
 	# Having classified a set of packages, we add it to the group's closure
 	def update(self, packages):
@@ -1683,13 +1667,13 @@ class PackageFilter:
 		return flavor.label
 
 	def makePurposeGroup(self, baseGroup, purposeName):
-		purpose = baseGroup.getObjectPurpose(purposeName)
-		if purpose is not None:
-			return purpose
+		baseLabel = baseGroup.label
 
-		purpose = self.createObjectPurpose(baseGroup, purposeName)
+		purpose = baseLabel.getObjectPurpose(purposeName)
+		if purpose is None:
+			purpose = self.createObjectPurpose(baseLabel, purposeName)
 
-		return purpose
+		return self.getGroupForLabel(purpose, create = True)
 
 	def createBinaryFlavor(self, baseGroup, flavorName):
 		# When creating @Foo+blah, and @Foo has a sourceProject of FooSource, check
@@ -1714,21 +1698,19 @@ class PackageFilter:
 
 		return label
 
-	def createObjectPurpose(self, baseGroup, purposeName):
+	def createObjectPurpose(self, baseLabel, purposeName):
 		purposeDef = self.getObjectPurposeDefinition(purposeName)
 		if purposeDef is None:
-			raise Exception(f"Undefined purpose {purposeName} in definition of {baseGroup.label}: you must define {purposeName} globally first")
+			raise Exception(f"Undefined purpose {purposeName} in definition of {baseLabel}: you must define {purposeName} globally first")
 
-		label = baseGroup.label.getObjectPurpose(purposeName)
+		label = baseLabel.getObjectPurpose(purposeName)
 		if label is None:
-			label = self.classificationScheme.createPurpose(baseGroup.label, purposeName, template = purposeDef)
+			label = self.classificationScheme.createPurpose(baseLabel, purposeName, template = purposeDef)
 
 		# copy requirements from purposeDef
 		label.copyRequirementsFrom(purposeDef)
 
-		purpose = self.getGroupForLabel(label, create = True)
-		baseGroup.addObjectPurpose(purpose)
-		return purpose
+		return label
 
 	def getGroupLabel(self, name, type):
 		label = self.classificationScheme.getLabel(name)

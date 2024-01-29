@@ -1665,6 +1665,13 @@ class PackageFilter:
 
 		return flavor
 
+	def makeFlavorLabel(self, baseLabel, flavorName, type = None):
+		baseGroup = self.getGroupForLabel(baseLabel, create = False)
+		assert(baseGroup)
+
+		flavor = self.makeFlavorGroup(baseGroup, flavorName, type)
+		return flavor.label
+
 	def makeFlavorGroup(self, baseGroup, flavorName, type = None):
 		flavor = baseGroup.getBuildFlavor(flavorName)
 		if flavor is not None:
@@ -1681,6 +1688,13 @@ class PackageFilter:
 			raise Exception(f"Don't know how to create flavor {flavorName} for {baseGroup.type} label {baseGroup.label}")
 
 		return flavor
+
+	def makePurposeLabel(self, baseLabel, purposeName):
+		baseGroup = self.getGroupForLabel(baseLabel, create = False)
+		assert(baseGroup)
+
+		flavor = self.makePurposeGroup(baseGroup, purposeName)
+		return flavor.label
 
 	def makePurposeGroup(self, baseGroup, purposeName):
 		purpose = baseGroup.getObjectPurpose(purposeName)
@@ -1806,23 +1820,26 @@ class PackageFilter:
 	def parseGroup(self, groupType, gd, template):
 		groupName = gd['name']
 		group = self.makeGroupInternal(groupName, groupType)
-		self.processGroupDefinition(group, gd, template)
+		self.processGroupDefinition(group.label, gd, template)
 
-	def parseBuildFlavor(self, baseGroup, gd):
+	def parseBuildFlavor(self, baseLabel, gd):
 		flavorName = gd['name']
 		if self.getObjectPurposeDefinition(flavorName):
-			raise Exception(f"Invalid build flavor name {flavorName} in definition of {baseGroup.label}: already defined as an object purpose")
+			raise Exception(f"Invalid build flavor name {flavorName} in definition of {baseLabel}: already defined as an object purpose")
 
-		group = self.makeFlavorGroup(baseGroup, flavorName)
-		return self.processGroupDefinition(group, gd)
+		flavor = self.makeFlavorLabel(baseLabel, flavorName)
+		self.processGroupDefinition(flavor, gd)
 
-	def parseObjectPurpose(self, baseGroup, gd):
+		return self.getGroupForLabel(flavor)
+
+	def parseObjectPurpose(self, baseLabel, gd):
 		purposeName = gd['name']
 		if not self.getObjectPurposeDefinition(purposeName):
-			raise Exception(f"Undefined purpose {purposeName} in definition of {baseGroup.label}: you must define {purposeName} globally first")
+			raise Exception(f"Undefined purpose {purposeName} in definition of {baseLabel}: you must define {purposeName} globally first")
 
-		group = self.makePurposeGroup(baseGroup, purposeName)
-		return self.processGroupDefinition(group, gd)
+		purpose = self.makePurposeLabel(baseLabel, purposeName)
+		self.processGroupDefinition(purpose, gd)
+		return self.getGroupForLabel(purpose)
 
 	VALID_GROUP_FIELDS = set((
 		'name',
@@ -1853,7 +1870,7 @@ class PackageFilter:
 	))
 
 	# FIXME: reduce use of `group' in this function
-	def processGroupDefinition(self, group, gd, template = None):
+	def processGroupDefinition(self, groupLabel, gd, template = None):
 		def getBoolean(gd, tag):
 			value = gd.get(tag)
 			if value is not None and type(value) is not bool:
@@ -1865,8 +1882,6 @@ class PackageFilter:
 			if value is not None and type(value) is not str:
 				raise Exception(f"{groupLabel}: bad value {tag}={value} (expected string value not {type(value)})")
 			return value
-
-		groupLabel = group.label
 
 		if groupLabel.defined:
 			raise Exception(f"Duplicate definition of group \"{groupLabel}\" in filter yaml")
@@ -1883,8 +1898,8 @@ class PackageFilter:
 
 		name = gd.get('sourceproject')
 		if name is not None:
-			sourceProject = self.makeGroupInternal(name, Classification.TYPE_SOURCE)
-			groupLabel.setSourceProject(sourceProject.label)
+			sourceProject = self.resolveLabelReference(name, Classification.TYPE_SOURCE)
+			groupLabel.setSourceProject(sourceProject)
 
 		value = gd.get('disposition')
 		if value is not None:
@@ -2035,8 +2050,6 @@ class PackageFilter:
 				groupLabel.setGlobalPurposeLabel(purposeName, purposeLabel)
 
 		groupLabel.compatibility = getString(gd, 'compatibility')
-
-		return group
 
 	def expandYamlObjectList(self, data, name):
 		objectList = data.get(name)

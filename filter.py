@@ -1655,19 +1655,13 @@ class PackageFilter:
 		return self.getGroupForLabel(flavor, create = True)
 
 	def makePurposeLabel(self, baseLabel, purposeName):
-		baseGroup = self.getGroupForLabel(baseLabel, create = False)
-		assert(baseGroup)
-
-		flavor = self.makePurposeGroup(baseGroup, purposeName)
-		return flavor.label
-
-	def makePurposeGroup(self, baseGroup, purposeName):
-		baseLabel = baseGroup.label
-
 		purpose = baseLabel.getObjectPurpose(purposeName)
 		if purpose is None:
 			purpose = self.createObjectPurpose(baseLabel, purposeName)
+		return purpose
 
+	def makePurposeGroup(self, baseGroup, purposeName):
+		purpose = self.makePurposeLabel(baseGroup.label, purposeName)
 		return self.getGroupForLabel(purpose, create = True)
 
 	def createBinaryFlavor(self, baseLabel, flavorName):

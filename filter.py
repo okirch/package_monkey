@@ -1476,10 +1476,10 @@ class PackageFilter:
 		# Parse autoflavors *before* everything else so that we can populate
 		# newly created flavors from default settings.
 		for gd, template in self.expandYamlObjectList(data, 'autoflavors'):
-			group = self.parseGroup(Classification.TYPE_AUTOFLAVOR, gd, template)
+			self.parseGroup(Classification.TYPE_AUTOFLAVOR, gd, template)
 
 		for gd, template in self.expandYamlObjectList(data, 'purposes'):
-			group = self.parseGroup(Classification.TYPE_PURPOSE, gd, template)
+			self.parseGroup(Classification.TYPE_PURPOSE, gd, template)
 
 		for gd, template in self.expandYamlObjectList(data, 'build_configs'):
 			self.parseGroup(Classification.TYPE_BUILDCONFIG, gd, template)
@@ -1813,7 +1813,7 @@ class PackageFilter:
 	def parseGroup(self, groupType, gd, template):
 		groupName = gd['name']
 		group = self.makeGroupInternal(groupName, groupType)
-		return self.processGroupDefinition(group, gd, template)
+		self.processGroupDefinition(group, gd, template)
 
 	def parseBuildFlavor(self, baseGroup, gd):
 		flavorName = gd['name']

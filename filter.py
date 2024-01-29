@@ -1444,6 +1444,30 @@ class PackageFilter:
 				if not reqBaseLabel.defined and not reqBaseLabel.isPurpose:
 					raise Exception(f"filter configuration issue: group {label} requires {req}, which is not defined anywhere")
 
+		def validateCompatibility(label, closure):
+			if label.parent is not None:
+				return
+
+			if label.compatibility in (None, "none"):
+				return
+
+			lowerCompat = set(filter(lambda c: (c and c != "none"), (lower.compatibility for lower in closure)))
+			if not lowerCompat:
+				return
+
+			if len(lowerCompat) > 1:
+				errormsg(f"{label} requires labels with conflicting compatibility")
+				for compat in lowerCompat:
+					errormsg(f"{compat}")
+					for lower in closure:
+						if lower.compatibility == compat:
+							errormsg(f"    - {lower}")
+				raise Exception(f"Invalid label {label} combines labels with conflicting compatibility ({' '.join(map(str, lowerCompat))})")
+
+			compat = lowerCompat.pop()
+			if compat != label.compatibility:
+				raise Exception(f"Invalid label {label} requires labels with conflicting compatibility ({label.compatibility} vs {compat})")
+
 		self.stringMatcher.finalize()
 
 		classificationScheme = self.classificationScheme
@@ -1489,6 +1513,8 @@ class PackageFilter:
 
 			# get the closure of all requirements of @Foo
 			baseDependencies = preliminaryOrder.downwardClosureFor(baseLabel)
+
+			validateCompatibility(baseLabel, baseDependencies)
 
 			for autoFlavor in self.classificationScheme.allAutoFlavors:
 				if autoFlavor.disposition != Classification.DISPOSITION_MAYBE_MERGE:

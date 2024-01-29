@@ -1498,7 +1498,7 @@ class PackageFilter:
 
 			for autoFlavor in self.classificationScheme.allAutoFlavors:
 				if autoFlavor.disposition is Classification.DISPOSITION_SEPARATE:
-					self.maybeInstantiateAutoFlavor(group, autoFlavor)
+					self.maybeInstantiateAutoFlavor(label, autoFlavor)
 
 		# Loop over all @Foo labels and look for auto flavors with disposition maybe_merge, such as python
 		# If @Foo requires everything that the auto flavor requires (in the case of python, this would
@@ -1529,7 +1529,7 @@ class PackageFilter:
 						# infomsg(f"{baseLabel}+{autoFlavor} packages will be merged into {baseLabel}")
 						baseLabel.addMergeableFlavor(autoFlavor)
 				else:
-					self.maybeInstantiateAutoFlavor(group, autoFlavor)
+					self.maybeInstantiateAutoFlavor(baseLabel, autoFlavor)
 
 		for group in list(self._groups.values()):
 			groupLabel = group.label
@@ -1572,12 +1572,6 @@ class PackageFilter:
 		return self.makeGroupInternal(name, type)
 
 	def resolveLabelReference(self, name, labelType = Classification.TYPE_BINARY):
-		group = self.resolveGroupReference(name, labelType)
-		if group.label is None:
-			raise Exception(f"Group {name} has a NULL label")
-		return group.label
-
-	def resolveGroupReference(self, name, labelType = Classification.TYPE_BINARY):
 		baseLabelType, baseName, flavorName, purposeName = Classification.parseLabel(labelType, name)
 
 		newLabel = self.classificationScheme.createLabel(baseName, baseLabelType)
@@ -1587,13 +1581,7 @@ class PackageFilter:
 		if purposeName is not None:
 			newLabel = self.makePurposeLabel(newLabel, purposeName)
 
-		return self.getGroupForLabel(newLabel, create = True);
-
-	def resolveBuildReference(self, name):
-		sourceProjectName, flavorName = Classification.parseBuildconfigLabel(name)
-
-		group = self.makeGroupInternal(sourceProjectName, Classification.TYPE_SOURCE)
-		return self.makeFlavorGroup(group, flavorName)
+		return newLabel
 
 	def makeSourceGroup(self, name):
 		return self.makeGroupInternal(name, Classification.TYPE_SOURCE)
@@ -1602,19 +1590,19 @@ class PackageFilter:
 		return self.makeGroupInternal(name, Classification.TYPE_BINARY)
 
 	# autoFlavor is a Label
-	def maybeInstantiateAutoFlavor(self, baseGroup, autoFlavor):
-		if baseGroup.label.isCompatibleWithAutoFlavor(autoFlavor):
-			self.instantiateAutoFlavor(baseGroup, autoFlavor)
+	def maybeInstantiateAutoFlavor(self, baseLabel, autoFlavor):
+		if baseLabel.isCompatibleWithAutoFlavor(autoFlavor):
+			self.instantiateAutoFlavor(baseLabel, autoFlavor)
 
 	# autoFlavor is a Label
-	def instantiateAutoFlavor(self, baseGroup, autoFlavor):
-		group = self.makeFlavorGroup(baseGroup, autoFlavor.name)
+	def instantiateAutoFlavor(self, baseLabel, autoFlavor):
+		flavor = self.makeFlavorLabel(baseLabel, autoFlavor.name)
 
 		# even if the group existed already, at this point we need to copy any runtime
 		# requirements specified for the auto flavor
-		group.label.copyRequirementsFrom(autoFlavor)
+		flavor.copyRequirementsFrom(autoFlavor)
 
-		return group
+		return flavor
 
 	def instantiateBuildConfigFlavor(self, sourceProject, name):
 		if sourceProject is None:
@@ -1626,8 +1614,8 @@ class PackageFilter:
 			if tmpl is not None:
 				sourceGroup = self.makeGroupInternal(sourceProject.name, Classification.TYPE_SOURCE);
 
-				flavor = self.instantiateAutoFlavor(sourceGroup, tmpl)
-				flavor.label.copyRequirementsFrom(tmpl)
+				flavor = self.instantiateAutoFlavor(sourceGroup.label, tmpl)
+				flavor.copyRequirementsFrom(tmpl)
 
 		return flavor
 
@@ -1725,7 +1713,9 @@ class PackageFilter:
 		if group is None:
 			if not type:
 				raise Exception(f"Cannot create group {name} with no type")
-			group = self.resolveGroupReference(name, labelType = type)
+
+			label = self.resolveLabelReference(name, type)
+			group = self.getGroupForLabel(label, create = True);
 		return group
 
 	def getGroupForLabel(self, label, create = False):

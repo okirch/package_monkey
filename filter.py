@@ -1647,14 +1647,15 @@ class PackageFilter:
 
 	def maybeInstantiateAutoFlavor(self, baseGroup, autoFlavor):
 		if baseGroup.label.isCompatibleWithAutoFlavor(autoFlavor.label):
-			self.instantiateAutoFlavor(baseGroup, autoFlavor)
+			self.instantiateAutoFlavor(baseGroup, autoFlavor.label)
 
+	# autoFlavor is a Label
 	def instantiateAutoFlavor(self, baseGroup, autoFlavor):
 		group = self.makeFlavorGroup(baseGroup, autoFlavor.name)
 
 		# even if the group existed already, at this point we need to copy any runtime
 		# requirements specified for the auto flavor
-		group.label.copyRequirementsFrom(autoFlavor.label)
+		group.label.copyRequirementsFrom(autoFlavor)
 
 		return group
 
@@ -1664,12 +1665,12 @@ class PackageFilter:
 
 		flavor = sourceProject.getBuildFlavor(name)
 		if flavor is None:
-			tmpl = self.getGroup(name, Classification.TYPE_BUILDCONFIG_FLAVOR)
+			tmpl = self.getGroupLabel(name, Classification.TYPE_BUILDCONFIG_FLAVOR)
 			if tmpl is not None:
 				sourceGroup = self.makeGroupInternal(sourceProject.name, Classification.TYPE_SOURCE);
 
 				flavor = self.instantiateAutoFlavor(sourceGroup, tmpl)
-				flavor.label.copyRequirementsFrom(tmpl.label)
+				flavor.label.copyRequirementsFrom(tmpl)
 
 		return flavor
 
@@ -1743,6 +1744,13 @@ class PackageFilter:
 		purpose = self.getGroupForLabel(label, create = True)
 		baseGroup.addObjectPurpose(purpose)
 		return purpose
+
+	def getGroupLabel(self, name, type):
+		label = self.classificationScheme.getLabel(name)
+		if label is not None:
+			if label.type != type:
+				raise Exception(f"Group {name} does not match expected type (has {label.type}; expected {type})")
+		return label
 
 	def getGroup(self, name, type = None):
 		try:

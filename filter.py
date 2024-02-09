@@ -99,6 +99,9 @@ class Classification:
 			if self.type == Classification.TYPE_SOURCE:
 				self._globalPurposeLabels = {}
 
+			self.correspondingAPI = None
+			self.isAPIFor = None
+
 			self.isComponentLevel = False
 
 			self.numImports = 0
@@ -150,6 +153,23 @@ class Classification:
 			while result.parent:
 				result = result.parent
 			return result
+
+		@property
+		def isAPI(self):
+			return bool(self.isAPIFor)
+
+		def setAPI(self, api):
+			assert(self.correspondingAPI is None)
+
+			# This check needs to happen during finalization, rather than here.
+#			if api.sourceProject != self.sourceProject:
+#				raise Exception(f"{api} cannot be declared the API for {self} - conflicting source projects {self.sourceProject} and {api.sourceProject}")
+
+			self.correspondingAPI = api
+
+			if api.isAPIFor is None:
+				api.isAPIFor = Classification.createLabelSet()
+			api.isAPIFor.add(self)
 
 		def okayToAdd(self, other):
 			if self.type == other.type:
@@ -1343,6 +1363,12 @@ class StringMatchBuilder(object):
 					priority = int(argValue)
 				elif argName == 'purpose':
 					purposeLabel = label.getObjectPurpose(argValue)
+
+					# if the purpose is devel, check if we have an API label specified
+					if purposeLabel is None and argValue == 'devel':
+						purposeLabel = label.correspondingAPI
+						infomsg(f"{value} purpose=devel, {label} has API {purposeLabel}")
+
 					if purposeLabel is None:
 						componentLabel = label.componentLabel
 						if componentLabel is not None:
@@ -1730,6 +1756,7 @@ class PackageFilter:
 		'defaultlabels',
 		'feature',
 		'globals',
+		'api',
 	))
 
 	# FIXME: reduce use of `group' in this function
@@ -1877,6 +1904,13 @@ class PackageFilter:
 			name = f"*-{name}"
 			filterSetBuilder.addBinaryPackageFilter(name)
 			filterSetBuilder.addSourcePackageFilter(name)
+
+		# note, we need to set any API before we process any package lists, so purpose=devel
+		# annotations do the right thing
+		apiName = getString(gd, 'api')
+		if apiName:
+			api = self.resolveLabelReference(apiName)
+			groupLabel.setAPI(api)
 
 		nameList = self.getYamlList(gd, 'packages', groupLabel)
 		if nameList and groupLabel.parent is not None:

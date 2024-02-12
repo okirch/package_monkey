@@ -140,6 +140,11 @@ class Application:
 
 			infomsg(f"Loaded database {self.opts.db}: {timing} elapsed")
 			self._store = store
+		elif not readonly:
+			self._store = BackingStoreDB(dbPath)
+		else:
+			raise Exception(f"Unable to find database!")
+
 		return self._store
 
 

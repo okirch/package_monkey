@@ -513,24 +513,20 @@ class Classification:
 			self._globalPurposeLabels[name] = label
 			label.sourceProject = self
 
-		def updateGlobalPurposeLabels(self, classification):
+		def updateGlobalPurposeLabels(self, generalizedRequires):
+			assert(self.type is Classification.TYPE_SOURCE)
 			if not self._globalPurposeLabels:
 				return
-
-			generalizedRequires = Classification.createLabelSet()
-			for label in classification.allBinaryLabels:
-				if label.componentLabel is not self:
-					continue
-
-				if label.isComponentLevel:
-					continue
-
-				generalizedRequires.add(label)
 
 			# Update the label (eg CoreDevel) with all labels that are associated with
 			# component Core, and which are not a component level label themselves.
 			for name, label in self._globalPurposeLabels.items():
 				label.runtimeRequires.update(generalizedRequires)
+
+				# it's possible that FooDevel is inversion-free; in this case,
+				# it would be part of generalizedRequires
+				# To avoid creating a loop in the dependency graph, excplicitly drop it here:
+				label.runtimeRequires.discard(label)
 
 				for requiredComponent in self.runtimeRequires:
 					required = requiredComponent.globalPurposeLabel(name)
@@ -926,23 +922,8 @@ class Classification:
 							label.setSourceProject(source)
 				return label.sourceProject
 
-			if self._final:
-				raise Exception(f"Duplicate call to ClassificationScheme.finalize()")
-
-			componentOrder = self.componentOrder()
-
-			globalPurposeLabelNames = set()
-			for componentLabel in componentOrder.bottomUpTraversal():
-				globalPurposeLabelNames.update(componentLabel.globalPurposeLabelNames)
-
-				globalDevel = componentLabel.globalPurposeLabel('devel')
-				if globalDevel is not None:
-					globalDevel.runtimeRequires.update(componentLabel.buildRequires)
-
-				componentLabel.updateGlobalPurposeLabels(self)
-
+			def inheritBuildConfigs(componentLabel):
 				# build config X11/standard inherits from XXX/standard for all XXX components below X11
-				# for lowerComponent in componentOrder.downwardClosureFor(componentLabel):
 				for lowerComponent in componentLabel.runtimeRequires:
 					for lowerConfig in lowerComponent.flavors:
 						buildConfig = componentLabel.getBuildFlavor(lowerConfig.name)
@@ -951,10 +932,10 @@ class Classification:
 						buildConfig.buildRequires.update(lowerConfig.buildRequires)
 						buildConfig.runtimeRequires.update(lowerConfig.runtimeRequires)
 
-			for name in globalPurposeLabelNames:
-				label = self.getLabel(name)
-				if label is None or label.type != Classification.TYPE_PURPOSE:
-					raise Exception(f"A component defines a global named {name}, but there is no corresponding purpose label")
+			if self._final:
+				raise Exception(f"Duplicate call to ClassificationScheme.finalize()")
+
+			componentOrder = self.componentOrder()
 
 			for label in self._labels.values():
 				if label.sourceProject is None:
@@ -980,11 +961,42 @@ class Classification:
 			for label in self.allBuildConfigs:
 				self.resolveBuildConfigDependencies(label, resolved)
 
+			# Once more, we need a temporary ordering for binary labels
+			topicOrder = self.createOrdering(Classification.TYPE_BINARY)
+
+			from inversions import InversionBuilder
+			inversionBuilder = InversionBuilder(self)
+
+			globalPurposeLabelNames = set()
+			for componentLabel in componentOrder.bottomUpTraversal():
+				globalPurposeLabelNames.update(componentLabel.globalPurposeLabelNames)
+
+				globalDevel = componentLabel.globalPurposeLabel('devel')
+				if globalDevel is not None:
+					globalDevel.runtimeRequires.update(componentLabel.buildRequires)
+
+				inheritBuildConfigs(componentLabel)
+
+				inversionBuilder.process(componentLabel)
+
+			componentOrder = self.freezeComponentOrder()
+
+			inversionMap = inversionBuilder.inversionMap
+			for componentLabel in componentOrder.bottomUpTraversal():
+				selfContained = inversionMap.getGoodComponentTopics(componentLabel)
+				componentLabel.updateGlobalPurposeLabels(selfContained)
+
+			self.inversionMap = inversionMap
+
+			for name in globalPurposeLabelNames:
+				label = self.getLabel(name)
+				if label is None or label.type != Classification.TYPE_PURPOSE:
+					raise Exception(f"A component defines a global named {name}, but there is no corresponding purpose label")
+
 			# ugly... this should really be attached to the classificationScheme *instance*
 			Classification.baseLabelsForSet = fastsets.Transform(Classification.domain, lambda label: label.baseLabel)
 
 			self._final = True
-			self.freezeComponentOrder()
 			self.freezeBinaryOrder()
 
 		def resolveBuildConfigDependencies(self, buildConfig, resolved, resolving = None):

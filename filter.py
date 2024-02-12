@@ -95,6 +95,11 @@ class Classification:
 			# binary labels and build config labels have a source project assigned
 			self.sourceProject = None
 
+			# for a component label, this will hold the set of topic labels that
+			# belong to this component.
+			# It will be set after the component tree has been frozen
+			self._referencingLabels = None
+
 			# if autoSelect is true, then a group referencing a label
 			# "@Foo" will automatically select all flavors "@Foo+bar"
 			# if it supports all requirements of this flavor.
@@ -897,6 +902,10 @@ class Classification:
 			self.freezeCategory(Classification.TYPE_BUILDCONFIG_FLAVOR)
 
 			self._defaultComponentOrder = self.componentOrder()
+
+			for componentLabel in self._defaultComponentOrder.bottomUpTraversal():
+				self.updateReferencingLabels(componentLabel)
+
 			return self._defaultComponentOrder
 
 		def freezeBinaryOrder(self):
@@ -1003,6 +1012,15 @@ class Classification:
 			resolving.discard(buildConfig)
 
 		def getReferencingLabels(self, target):
+			if target._referencingLabels is not None:
+				return target._referencingLabels
+			return self.getReferencingLabelsSlow(target)
+
+		def updateReferencingLabels(self, target):
+			# This creates a circular reference between Labels, but I don't care for now
+			target._referencingLabels = self.getReferencingLabelsSlow(target)
+
+		def getReferencingLabelsSlow(self, target):
 			if target.type != Classification.TYPE_SOURCE:
 				raise Exception(f"getReferencingLabels({target}): label type {target.type} not implemented")
 

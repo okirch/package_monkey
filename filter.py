@@ -1501,7 +1501,7 @@ class StringMatchBuilder(object):
 					# if the purpose is devel, check if we have an API label specified
 					if purposeLabel is None and argValue == 'devel':
 						purposeLabel = label.correspondingAPI
-						infomsg(f"{value} purpose=devel, {label} has API {purposeLabel}")
+						# infomsg(f"{value} purpose=devel, {label} has API {purposeLabel}")
 
 					if purposeLabel is None:
 						componentLabel = label.componentLabel

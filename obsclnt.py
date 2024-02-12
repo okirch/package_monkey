@@ -495,18 +495,34 @@ class OBSClient(object):
 			raise Exception(f"Cannot perform API call to {path} (denied by user)")
 
 		from osc.core import http_request
-		from urllib.error import HTTPError
+		from urllib.error import HTTPError, URLError
+		from http.client import RemoteDisconnected
 
-		debugOBS(f"OBS API Call {path}", prefix = progressMeter)
+		debugOBS(f"OBS API {method} {path}", prefix = progressMeter)
 
-		try:
-			res = http_request(method, fullUrl, **extra_args)
-		except HTTPError as e:
-			if e.code != 404 or not quiet:
-				errormsg(f"OBS: Unable to get {path}: HTTP error {e.code}")
-			if e.code == 404:
-				return None
-			raise e
+		numRetries = 3
+		while True:
+			numRetries -= 1
+
+			try:
+				res = http_request(method, fullUrl, **extra_args)
+				break
+			except HTTPError as e:
+				if e.code != 404 or not quiet:
+					errormsg(f"OBS: Unable to {method} {path}: HTTP error {e.code}")
+				if e.code == 404:
+					return None
+				raise e
+			except URLError as e:
+				errormsg(f"OBS: Unable to {method} {path}: URL error {e}")
+				if numRetries == 0:
+					raise e
+			except http.client.RemoteDisconnected as e:
+				errormsg(f"OBS: Unable to {method} {path}: URL error {e}")
+				if numRetries == 0:
+					raise e
+
+			infomsg("Retrying...")
 
 		if res and cacheEntry is not None:
 			cacheEntry.write(res.read().decode('utf-8'))

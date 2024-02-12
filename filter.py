@@ -223,6 +223,14 @@ class Classification:
 		def isExported(self):
 			return self.componentLabel and self in self.componentLabel.exports
 
+		def finalizeExports(self):
+			assert(self.type == Classification.TYPE_SOURCE)
+
+			# if component Foo exports @BarLibraries, we also want to export @BarAPI
+			apis = filter(bool, (label.correspondingAPI for label in self.exports))
+			self.exports.update(Classification.createLabelSet(apis))
+			assert(None not in self.exports)
+
 		def okayToAccess(self, other, componentLabelOrder):
 			return self.canAccessDirectly(other, componentLabelOrder) or \
 			       other.isExported
@@ -936,6 +944,9 @@ class Classification:
 				raise Exception(f"Duplicate call to ClassificationScheme.finalize()")
 
 			componentOrder = self.componentOrder()
+
+			for componentLabel in componentOrder.bottomUpTraversal():
+				componentLabel.finalizeExports()
 
 			for label in self._labels.values():
 				if label.sourceProject is None:

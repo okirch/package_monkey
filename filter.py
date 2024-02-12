@@ -62,6 +62,7 @@ class Classification:
 			self.parent = None
 			self.flavorName = None
 			self._purposeName = None
+			self.fromAutoFlavor = None
 
 			# This is populated for base flavors like @Core
 			self._flavors = {}
@@ -719,6 +720,7 @@ class Classification:
 			label.parent = baseLabel
 			label.flavorName = baseLabel.flavorName
 			label.purposeName = purposeName
+			label.fromAutoFlavor = baseLabel.fromAutoFlavor
 
 			# the new purpose label inherits the base label's gravity
 			label.gravity = baseLabel.gravity
@@ -1641,6 +1643,7 @@ class PackageFilter:
 	# autoFlavor is a Label
 	def instantiateAutoFlavor(self, baseLabel, autoFlavor):
 		flavor = self.makeFlavorLabel(baseLabel, autoFlavor.name)
+		flavor.fromAutoFlavor = autoFlavor
 
 		# even if the group existed already, at this point we need to copy any runtime
 		# requirements specified for the auto flavor

@@ -1190,7 +1190,7 @@ class BackingStoreDB(DB):
 		self.readonly = False
 
 		if not self.connect(path):
-			barf()
+			raise Exception(f"Unable to open database at {path}")
 
 		self.productCache = ProductCache()
 		self.packageProductLink = {}

@@ -8,10 +8,14 @@ forceRefresh = True
 
 from options import Application
 from obsclnt import OBSClient, OBSProject
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
 application = Application('obs-download-data')
 
-store = application.backingStore
+store = application.loadBackingStore(readonly = False,
+		dependencyTreeLookups = True,
+		sourceLookups = True)
+assert(store)
 
 # Make sure we have all the products that we use recorded in the database
 application.catalog.updateBackingStore(store)

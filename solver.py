@@ -157,11 +157,88 @@ class GlobalPurposeSolver(Solver):
 		return result
 
 
+class APISolver(Solver):
+	precedence = 10
+
+	def __init__(self, purposeLabel, potentialClassification):
+		self.purposeLabel = purposeLabel
+		self.classificationScheme = potentialClassification.classificationScheme
+
+	def __str__(self):
+		return f"API solver"
+
+	def pkgIsLibrary(self, pkg):
+		return pkg.name.startswith("lib") and pkg.name[-1].isdigit()
+
+	def tryToSolve(self, buildPlacement):
+		if buildPlacement.numSolved == 0:
+			return
+
+		candidates = Classification.createLabelSet()
+		altCandidates = Classification.createLabelSet()
+		for pkg, packagePlacement in buildPlacement.packageDict.items():
+			if packagePlacement.label is not None and \
+			   packagePlacement.label.purposeName is None and \
+			   packagePlacement.label.correspondingAPI:
+				if self.pkgIsLibrary(pkg):
+					candidates.add(packagePlacement.label.correspondingAPI)
+				else:
+					altCandidates.add(packagePlacement.label.correspondingAPI)
+
+		if not candidates:
+			if len(altCandidates) == 0:
+				infomsg(f"  {packagePlacement}: no siblings that have an API")
+				return
+			candidates = altCandidates
+
+		infomsg(f"{buildPlacement} candidates APIs: {' '.join(map(str, candidates))}")
+		for packagePlacement in buildPlacement.stage2:
+			if packagePlacement.isFinal:
+				continue
+			if not packagePlacement.isComponentLevelPurpose:
+				continue
+
+			targets = intersectSets(candidates, packagePlacement.candidates)
+
+			if not targets:
+				infomsg(f"  {packagePlacement}: no compatible APIs")
+				continue
+
+			if len(targets) > 1:
+				infomsg(f"  {packagePlacement}: ambiguous APIs {' '.join(map(str, targets))}")
+				continue
+
+			apiLabel = next(iter(targets))
+
+			infomsg(f"{packagePlacement} is placed into {apiLabel} (API label for sibling library package(s))")
+			packagePlacement.setSolution(apiLabel)
+
+		return
+
+	def getComponentForBuild(self, buildPlacement):
+		result = None
+		for placement in buildPlacement.solved:
+			label = placement.label
+			if label is None:
+				continue
+
+			label = label.componentLabel
+			if result is label:
+				continue
+
+			if result is not None:
+				return None
+
+			result = label
+		return result
+
+
 class SolverFactory(object):
 	def __init__(self, potentialClassification):
 		self.potentialClassification = potentialClassification
 		self.componentSolvers = {}
 		self.globalPurposeSolvers = {}
+		self.apiSolvers = {}
 
 	def sourceHintsSolver(self, label):
 		try:
@@ -181,6 +258,16 @@ class SolverFactory(object):
 
 		solver = GlobalPurposeSolver(label, self.potentialClassification)
 		self.globalPurposeSolvers[label] = solver
+		return solver
+
+	def apiSolver(self, label):
+		try:
+			return self.apiSolvers[label]
+		except:
+			pass
+
+		solver = APISolver(label, self.potentialClassification)
+		self.apiSolvers[label] = solver
 		return solver
 
 ##################################################################
@@ -860,7 +947,12 @@ class PotentialClassification(object):
 						if pkg.label.disposition == Classification.DISPOSITION_COMPONENT_WIDE:
 							node.placement.stage = 2
 
-							# This package will not be touched in stage1, install a solver for stage2
+							# This package will not be touched in stage1, install solvers for stage2
+
+							if pkg.label.name == 'devel':
+								solver = self.preferences.solverFactory.apiSolver(pkg.label)
+								node.placement.addSolver(solver)
+
 							solver = self.preferences.solverFactory.globalPurposeSolver(pkg.label)
 							node.placement.addSolver(solver)
 

@@ -42,9 +42,12 @@ class Classification:
 			self.id = id
 			self.description = None
 			self.gravity = None
-			self.runtimeRequires = set()
-			self.buildRequires = set()
-			self.runtimeAugmentations = set()
+			self.runtimeRequires = Classification.createLabelSet()
+			self.buildRequires = Classification.createLabelSet()
+			self.runtimeAugmentations = Classification.createLabelSet()
+			self.configuredRuntimeRequires = Classification.createLabelSet()
+			self.configuredBuildRequires = Classification.createLabelSet()
+			self.configuredRuntimeAugmentations = Classification.createLabelSet()
 			self.imports = Classification.createLabelSet()
 			self.exports = Classification.createLabelSet()
 			self.disposition = Classification.DISPOSITION_SEPARATE
@@ -239,6 +242,30 @@ class Classification:
 			if self.type is not Classification.TYPE_BUILDCONFIG:
 				raise Exception(f"{self}: buildrequires only valid in definition of buildconfig labels")
 			self.buildRequires.add(other)
+
+		def configureRuntimeDependency(self, other):
+			self.addRuntimeDependency(other)
+			self.configuredRuntimeRequires.add(other)
+
+		def configureBuildDependency(self, other):
+			self.addBuildDependency(other)
+			self.configuredBuildRequires.add(other)
+
+		def configureRuntimeAugmentation(self, other):
+			self.addRuntimeAugmentation(other)
+			self.configuredRuntimeAugmentations.add(other)
+
+		def explainRuntimeDependency(self, other, path = []):
+			path = path + [self]
+			if other in self.configuredRuntimeRequires:
+				return path
+
+			found = None
+			for label in self.configuredRuntimeRequires:
+				found = label.explainRuntimeDependency(other, path)
+				if found:
+					break
+			return found
 
 		def addImport(self, other):
 			assert(isinstance(other, Classification.Label))
@@ -1849,7 +1876,7 @@ class PackageFilter:
 					labelType = Classification.TYPE_BINARY
 
 				referencedLabel = self.resolveLabelReference(name, labelType)
-				groupLabel.addRuntimeDependency(referencedLabel)
+				groupLabel.configureRuntimeDependency(referencedLabel)
 
 			# 'augments' are like runtime requirements, except they also flags the
 			# group/flavor as an augmentation. Augmentations will never auto-select any
@@ -1867,12 +1894,12 @@ class PackageFilter:
 			nameList = self.getYamlList(gd, 'augments', groupLabel)
 			for name in nameList:
 				referencedLabel = self.resolveLabelReference(name)
-				groupLabel.addRuntimeAugmentation(referencedLabel)
+				groupLabel.configureRuntimeAugmentation(referencedLabel)
 
 			nameList = self.getYamlList(gd, 'buildrequires', groupLabel)
 			for name in nameList:
 				referencedLabel = self.resolveLabelReference(name)
-				groupLabel.addBuildDependency(referencedLabel)
+				groupLabel.configureBuildDependency(referencedLabel)
 
 			nameList = self.getYamlList(gd, 'imports', groupLabel)
 			for name in nameList:

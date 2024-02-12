@@ -24,6 +24,15 @@ class Classification:
 	TYPE_BUILDCONFIG = 'buildconf'
 	TYPE_BUILDCONFIG_FLAVOR = 'build-flavor'
 
+	VALID_TYPES = (
+		TYPE_BINARY,
+		TYPE_SOURCE,
+		TYPE_AUTOFLAVOR,
+		TYPE_PURPOSE,
+		TYPE_BUILDCONFIG,
+		TYPE_BUILDCONFIG_FLAVOR,
+	)
+
 	DISPOSITION_SEPARATE = 'separate'
 	DISPOSITION_MERGE = 'merge'
 	DISPOSITION_MAYBE_MERGE = 'maybe_merge'
@@ -32,6 +41,17 @@ class Classification:
 
 	# should this be a member of the classification scheme?
 	domain = fastsets.Domain("label")
+
+	class LabelCategory(object):
+		def __init__(self, name):
+			self.name = name
+			self.frozen = False
+
+		def __str__(self):
+			return self.name
+
+		def freeze(self):
+			self.frozen = True
 
 	class Label(domain.member):
 		def __init__(self, name, type, id):
@@ -627,6 +647,13 @@ class Classification:
 			self._nextLabelId = 0
 			self._final = False
 
+			self._defaultComponentOrder = None
+			self._defaultBinaryOrder = None
+
+			self._category = {}
+			for type in Classification.VALID_TYPES:
+				self._category[type] = Classification.LabelCategory(str(type))
+
 		@property
 		def fingerprint(self):
 			values = tuple(label.fingerprint for label in self.allLabels)
@@ -652,6 +679,12 @@ class Classification:
 		def allComponents(self):
 			return set(filter(lambda label: label.type == Classification.TYPE_SOURCE, self._labels.values()))
 
+		def isFrozen(self, type):
+			return self._category[type].frozen
+
+		def freezeCategory(self, type):
+			self._category[type].frozen = True
+
 		@property
 		def isFinal(self):
 			return self._final
@@ -662,6 +695,9 @@ class Classification:
 		def createLabel(self, name, type):
 			label = self._labels.get(name)
 			if label is None:
+				if self.isFrozen(type):
+					raise Exception(f"Refusing to create {type} label after this category has been declared final")
+
 				label = Classification.Label(name, type, self._nextLabelId)
 				self._labels[name] = label
 				self._nextLabelId += 1
@@ -840,10 +876,36 @@ class Classification:
 			return order
 
 		def defaultOrder(self):
+			# Until the binary order has been frozen, we re-create every time
+			# someone calls this function
+			if self._defaultBinaryOrder is not None:
+				return self._defaultBinaryOrder
+
 			return self.createOrdering(Classification.TYPE_BINARY)
 
 		def componentOrder(self):
+			# Until the component order has been frozen, we re-create every time
+			# someone calls this function
+			if self._defaultComponentOrder is not None:
+				return self._defaultComponentOrder
+
 			return self.createOrdering(Classification.TYPE_SOURCE)
+
+		def freezeComponentOrder(self):
+			self.freezeCategory(Classification.TYPE_SOURCE)
+			self.freezeCategory(Classification.TYPE_BUILDCONFIG)
+			self.freezeCategory(Classification.TYPE_BUILDCONFIG_FLAVOR)
+
+			self._defaultComponentOrder = self.componentOrder()
+			return self._defaultComponentOrder
+
+		def freezeBinaryOrder(self):
+			self.freezeCategory(Classification.TYPE_BINARY)
+			self.freezeCategory(Classification.TYPE_PURPOSE)
+			self.freezeCategory(Classification.TYPE_AUTOFLAVOR)
+
+			self._defaultBinaryOrder = self.defaultOrder()
+			return self._defaultBinaryOrder
 
 		@profiling
 		def finalize(self):
@@ -913,6 +975,8 @@ class Classification:
 			Classification.baseLabelsForSet = fastsets.Transform(Classification.domain, lambda label: label.baseLabel)
 
 			self._final = True
+			self.freezeComponentOrder()
+			self.freezeBinaryOrder()
 
 		def resolveBuildConfigDependencies(self, buildConfig, resolved, resolving = None):
 			if resolving is None:

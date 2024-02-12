@@ -271,6 +271,135 @@ class SolverFactory(object):
 		return solver
 
 ##################################################################
+# Helper class that allows you to look up "favorite" siblings
+# Use case:
+#  - you have an OBS package x-foobar that builds several
+#    binaries: libfoo1, python-foo, foo-utils, and foo-devel
+#  - Assuming we're able to place libfoo1 in @FrobnicationLibraries
+#    our goal is to place python-foo in @FrobnicationLibraries+python
+#    and foo-utils near but not necessarily the same place
+##################################################################
+class FavoriteSiblingMap(object):
+	def __init__(self, buildPlacement, classificationScheme):
+		self.obsPackageName = buildPlacement.name
+		self.classificationScheme = classificationScheme
+		self.labelOrder = buildPlacement.labelOrder
+		self.namesToPlacements = {}
+
+		for pkg, packagePlacement in buildPlacement.packageDict.items():
+			if packagePlacement.label is not None:
+				self.inspect(pkg, packagePlacement)
+
+	def inspect(self, pkg, packagePlacement):
+		self.namesToPlacements[pkg.name] = packagePlacement
+
+		label = packagePlacement.label
+
+		# When we've already placed -devel, this rule helps placing -devel-static next to it
+		if label.isPurpose:
+			# find the underlying purpose label (which has the suffixes)
+			purpose = self.classificationScheme.getLabel(label.purposeName)
+
+			# then, see if the package name is of the form $stem-$suffix, and if
+			# so, remove the suffix
+			baseName = self.removePurposeSuffixFromPackageName(pkg, purpose)
+		else:
+			baseName = pkg.name
+
+		if baseName is None:
+			return
+
+		self.namesToPlacements[baseName] = packagePlacement
+		infomsg(f"    {baseName} -> {packagePlacement}")
+
+		# FIXME: this relies on the SUSE lib package naming convention
+		# shorten librsvg-2-2 to librsvg
+		if baseName.startswith("lib"):
+			baseName = baseName.rstrip("-0123456789_")
+			self.namesToPlacements[baseName] = packagePlacement
+			infomsg(f"    {baseName} -> {packagePlacement}")
+
+	def findFavoriteSibling(self, pkg, packagePlacement):
+		purpose = packagePlacement.purpose
+
+		if purpose is None or not purpose.packageSuffixes:
+			return None
+
+		infomsg(f"{pkg} is a {purpose} package; look for favorite siblings")
+
+		baseName = self.removePurposeSuffixFromPackageName(pkg, purpose)
+		if baseName is None:
+			return None
+
+		transformedNames = [baseName]
+		if baseName.startswith("lib"):
+			baseName = baseName.rstrip("-0123456789")
+			transformedNames.append(baseName)
+
+			# strip off "lib" prefix
+			transformedNames.append(baseName[3:])
+		else:
+			# try with lib prefix
+			transformedNames.append("lib" + baseName)
+
+		# try with the obs package name prefixed
+		# This is the "lex ffmpeg" where we have libfoo123 correspond to ffmpeg4-libfoo-devel
+		if baseName.startswith(self.obsPackageName):
+			strippedName = baseName[len(self.obsPackageName):].lstrip("-")
+			if strippedName:
+				transformedNames.append(strippedName)
+
+		for tryName in transformedNames:
+			favoriteSibling = self.namesToPlacements.get(tryName)
+			if favoriteSibling is not None:
+				infomsg(f"       try {tryName} -> {favoriteSibling}")
+				return favoriteSibling
+
+			infomsg(f"       try {tryName} -> [no match]")
+
+		return None
+
+	def chooseLabel(self, pkg, packagePlacement, favoriteSibling):
+		purpose = packagePlacement.purpose
+		label = favoriteSibling.label
+		if label.isPurpose:
+			label = label.parent
+
+		choice = None
+
+		# if we're trying to place a devel package, and our favorite sibling has an API specified,
+		# see if we can place the devel package in that API label
+		# FIXME: maybe this code needs to go into deriveChoiceFromBaseLabel() directly
+		if purpose.name == 'devel':
+			api = label.correspondingAPI
+			if api is not None:
+				choice = packagePlacement.deriveChoiceFromBaseLabel(api)
+				if choice is not None:
+					infomsg(f"{pkg} is placed in {choice} (based on favorite sibling {favoriteSibling} and its API {api})")
+					return choice
+
+				infomsg(f"{favoriteSibling} is in {label} with API {api}, but this API is not a valid candidate")
+
+		choice = packagePlacement.deriveChoiceFromBaseLabel(label)
+		if choice is not None:
+			infomsg(f"{pkg} is placed in {choice} (based on favorite sibling {favoriteSibling} and purpose {purpose})")
+			return choice
+
+		infomsg(f"{purpose} package {pkg} has favorite sibling {favoriteSibling}, but {label} is not a good base label for it")
+		return None
+
+
+	# For a package like libfoo-devel, remove the suffix
+	# This assumes that there is only one matching package suffix; as soon as someone
+	# starts introducing ambiguous suffixes (like -32bit-devel vs -devel), we're in trouble
+	def removePurposeSuffixFromPackageName(self, pkg, purpose):
+		for suffix in purpose.packageSuffixes:
+			if pkg.name.endswith(suffix):
+				return pkg.name[:-len(suffix)].rstrip('-')
+		return None
+
+
+##################################################################
 # The actual solving algorithm
 ##################################################################
 class PotentialClassification(object):
@@ -398,15 +527,24 @@ class PotentialClassification(object):
 						purposes[purposeName] = purposeLabel
 
 					catchAllLabel = componentLabel.globalPurposeLabel(purposeName)
+					if catchAllLabel is not None:
+						self.add(purposeLabel, labelOrder.upwardClosureFor(catchAllLabel))
 
-					labelSet = self._map.get(purposeLabel)
-					if labelSet is None:
-						labelSet = Classification.createLabelSet()
-						self._map[purposeLabel] = labelSet
-					labelSet.update(labelOrder.upwardClosureFor(catchAllLabel))
+			# Check all binary labels that represent an API, and add them here
+			develPurpose = classificationScheme.getLabel('devel')
+			for binary in classificationScheme.allBinaryLabels:
+				if binary.isAPI:
+					self.add(develPurpose, labelOrder.upwardClosureFor(binary))
 
 			for labelSet in self._map.values():
 				self._globalClosure.update(labelSet)
+
+		def add(self, purposeLabel, closure):
+			labelSet = self._map.get(purposeLabel)
+			if labelSet is None:
+				labelSet = Classification.createLabelSet()
+				self._map[purposeLabel] = labelSet
+			labelSet.update(closure)
 
 		def constrainCandidates(self, purposeLabel, candidates):
 			if purposeLabel is None:
@@ -823,6 +961,8 @@ class PotentialClassification(object):
 
 			# used when the filter matches a build
 			self._constrainedBaseLabels = None
+
+			self._favoriteSiblingsMap = None
 
 			self.trace = False
 
@@ -1390,14 +1530,10 @@ class PotentialClassification(object):
 			infomsg(f"    reduced list of all base labels to {maxBaseLabel}")
 			return self.tryToSolveUsingBaseLabel(maxBaseLabel, "max base label")
 
-		# For a package like libfoo-devel, remove the suffix
-		# This assumes that there is only one matching package suffix; as soon as someone
-		# starts introducing ambiguous suffixes (like -32bit-devel vs -devel), we're in trouble
-		def removePurposeSuffixFromPackageName(self, pkg, purpose):
-			for suffix in purpose.packageSuffixes:
-				if pkg.name.endswith(suffix):
-					return pkg.name[:-len(suffix)].rstrip('-')
-			return None
+		def getFavoriteSiblingsMap(self, classificationScheme):
+			if self._favoriteSiblingsMap is None:
+				self._favoriteSiblingsMap = FavoriteSiblingMap(self, classificationScheme)
+			return self._favoriteSiblingsMap
 
 		# place systemd-mini-devel close to systemd-mini
 		def solvePurposeRelativeToSibling(self, classificationScheme):
@@ -1405,88 +1541,29 @@ class PotentialClassification(object):
 			if self.numSolved == 0:
 				return False
 
-			namesToPlacements = {}
+			map = self.getFavoriteSiblingsMap(classificationScheme)
+
 			toBeExamined = []
 			for pkg, packagePlacement in self.packageDict.items():
-				if packagePlacement.label is not None:
-					namesToPlacements[pkg.name] = packagePlacement
-					label = packagePlacement.label
-
-					# When we've already placed -devel, this rule helps placing -devel-static next to it
-					if label.isPurpose:
-						# find the underlying purpose label (which has the suffixes)
-						purpose = classificationScheme.getLabel(label.purposeName)
-
-						# then, see if the package name is of the form $stem-$suffix, and if
-						# so, remove the suffix
-						baseName = self.removePurposeSuffixFromPackageName(pkg, purpose)
-					else:
-						baseName = pkg.name
-
-					if baseName is not None:
-						namesToPlacements[baseName] = packagePlacement
-						infomsg(f"    {baseName} -> {packagePlacement}")
-
-						# FIXME: this relies on the SUSE lib package naming convention
-						# shorten librsvg-2-2 to librsvg
-						if baseName.startswith("lib"):
-							baseName = baseName.rstrip("-0123456789_")
-							namesToPlacements[baseName] = packagePlacement
-							infomsg(f"    {baseName} -> {packagePlacement}")
-
-				elif packagePlacement.purpose and packagePlacement.purpose.packageSuffixes:
+				if packagePlacement.label is None and \
+				   packagePlacement.purpose and packagePlacement.purpose.packageSuffixes:
 					toBeExamined.append((pkg, packagePlacement))
 
 			if not toBeExamined:
 				return False
 
-			obsPackageName = self.name
-
 			for pkg, packagePlacement in toBeExamined:
-				purpose = packagePlacement.purpose
-				infomsg(f"{pkg} is a {purpose} package; look for favorite siblings")
-
-				baseName = self.removePurposeSuffixFromPackageName(pkg, purpose)
-				if baseName is None:
-					continue
-
-				transformedNames = [baseName]
-				if baseName.startswith("lib"):
-					baseName = baseName.rstrip("-0123456789")
-					transformedNames.append(baseName)
-
-					# strip off "lib" prefix
-					transformedNames.append(baseName[3:])
-				else:
-					# try with lib prefix
-					transformedNames.append("lib" + baseName)
-
-				# try with the obs package name prefixed
-				# This is the "lex ffmpeg" where we hav libfoo123 correspond to ffmpeg4-libfoo-devel
-				if baseName.startswith(obsPackageName):
-					strippedName = baseName[len(obsPackageName):].lstrip("-")
-					if strippedName:
-						transformedNames.append(strippedName)
-
-				for tryName in transformedNames:
-					favoriteSibling = namesToPlacements.get(tryName)
-					if favoriteSibling is not None:
-						infomsg(f"       try {tryName} -> {favoriteSibling}")
-						break
-
-					infomsg(f"       try {tryName} -> [no match]")
-
+				favoriteSibling = map.findFavoriteSibling(pkg, packagePlacement)
 				if favoriteSibling is None:
 					continue
 
 				infomsg(f"    {pkg} favorite sibling={favoriteSibling}")
-				label = favoriteSibling.label
-				if label.isPurpose:
-					label = label.parent
-
-				choice = packagePlacement.deriveChoiceFromBaseLabel(label)
-				if choice is None:
-					infomsg(f"{purpose} package {pkg} has favorite sibling {favoriteSibling}, but {label} is not a good base label for it")
+				choice = map.chooseLabel(pkg, packagePlacement, favoriteSibling)
+				if choice is not None:
+					packagePlacement.setSolution(choice)
+				else:
+					purpose = packagePlacement.purpose
+					label = favoriteSibling.label
 					desiredCandidate = label.getObjectPurpose(purpose.name)
 					if desiredCandidate is not None:
 						closure = self.labelOrder.downwardClosureFor(desiredCandidate)
@@ -1494,10 +1571,6 @@ class PotentialClassification(object):
 							if neigh.lowerCone is None or desiredCandidate in neigh.lowerCone:
 								continue
 							infomsg(f"     {packagePlacement} requires {neigh}, which is not in scope of {desiredCandidate}")
-					continue
-
-				infomsg(f"{pkg} is placed in {choice} (based on favorite sibling {favoriteSibling} and purpose {purpose})")
-				packagePlacement.setSolution(choice)
 
 			return self.isFinal
 

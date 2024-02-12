@@ -70,9 +70,11 @@ def displayLabelSetFull(candidates, indent = ""):
 # Solvers - for now, these are used only during stage 2
 ##################################################################
 class Solver(object):
-	pass
+	precedence = 100
 
 class SourceHintsSolver(Solver):
+	precedence = 20
+
 	def __init__(self, componentLabel, potentialClassification):
 		self.componentLabel = componentLabel
 		self.closure = potentialClassification.labelOrder.downwardClosureForSet(componentLabel.buildRequires)
@@ -89,6 +91,8 @@ class SourceHintsSolver(Solver):
 		return buildPlacement.solveWithConstraints(self.closure)
 
 class GlobalPurposeSolver(Solver):
+	precedence = 15
+
 	def __init__(self, purposeLabel, potentialClassification):
 		self.purposeLabel = purposeLabel
 		self.closure = potentialClassification.labelOrder.downwardClosureForSet(purposeLabel.runtimeRequires)
@@ -1610,7 +1614,7 @@ class PotentialClassification(object):
 
 		infomsg(f"{buildPlacement}: {buildPlacement.numSolved}/{buildPlacement.numPackages} solved (stage 2)")
 		with loggingFacade.temporaryIndent(3):
-			for solver in solvers:
+			for solver in sorted(solvers, key = lambda s: s.precedence):
 				infomsg(f"{buildPlacement}: trying to solve using {solver}")
 
 				with loggingFacade.temporaryIndent(3):

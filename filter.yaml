@@ -181,6 +181,7 @@ build_configs:
     - "@Go"
     - "@Rust"
    exports:
+    - "@LibComErr"
     - "@KernelLibraries"
     - "@KernelCrypto"
     - "@KernelCore"
@@ -709,7 +710,10 @@ groups:
     - "@MinimalCRuntime"
     - "@Core0"
    binaries:
-    - gcc*
+    - gcc
+    - cpp
+    - gcc13
+    - cpp13
     - binutils
     - ccache
     - debugedit
@@ -828,6 +832,7 @@ groups:
    sourceproject: Core
 
  - name: "@Glibc"
+#  api: "@GlibcDevel"
    sourceproject: Core
    gravity: 100
    binaries:
@@ -854,6 +859,7 @@ groups:
     - glibc-devel
     - libxcrypt-devel
     - linux-glibc-devel
+    - libpkgconf3
     - pkgconf
     - pkgconf-m4
     - pkgconf-pkg-config
@@ -983,7 +989,6 @@ groups:
     - libblkid-devel
     - libbrotli-devel
     - libbz2-devel
-    - libcom_err-devel
     - libcurl-devel
     - libexpat-devel
     - libffi-devel
@@ -1019,6 +1024,7 @@ groups:
    binaries:
     # llvm15 requires libtool
     - libtool
+    - autogen
     - automake
     - autoconf
     - autoconf213
@@ -1049,6 +1055,7 @@ groups:
     - "@CoreConfig"
     - "@MinimalCRuntime"
     - "@WorkbenchRuntime"
+    - "@LibComErr"
    packages:
     - zlib
    binaries:
@@ -1095,7 +1102,6 @@ groups:
     - libbz2-1
     - libcap2
     - libcap-ng0
-    - libcom_err2
     - libcrack2
     - libdb-4_8
     - libdouble-conversion3
@@ -1103,7 +1109,6 @@ groups:
     - libedit0
     - libelf1
     - libevent-2*
-    - libext2fs2
     - libffi8
     - libfftw3-3
     - libfftw3_mpi3
@@ -1258,7 +1263,6 @@ groups:
     - dosfstools
     - dos2unix
     - dwarves
-    - e2fsprogs
     - ed
     - elfutils
     - fdupes
@@ -1280,7 +1284,6 @@ groups:
     - kbd
     - less
     - libarchive13
-    - libbtrfs*
     - libcap-progs
     - libcurl4
     - libdebuginfod1
@@ -1351,11 +1354,6 @@ groups:
     - libmicrohttpd12
     - libpamtest0 purpose=devel
    buildflavors:
-    - name: kernel
-      requires:
-       - "@Kernel"
-      binaries:
-       - fuse2fs
     - name: kernellibs
       requires:
        - "@KernelLibraries"
@@ -1537,9 +1535,6 @@ groups:
     - libhidapi-libusb0
     - libusb-*
     - libfido2-1
-    # maybe we need a @Filesystems label
-    - btrfsprogs
-    - btrfsprogs-udev-rules
     - libinput10
     - libstoragemgmt1
     - libconfig11
@@ -1602,6 +1597,7 @@ groups:
     - "@CoreHardware"
     - "@Boost"
     - "@UpdateStack"
+    - "@FilesystemLibraries"
    packages:
     - snapper
    binaries:
@@ -1619,6 +1615,7 @@ groups:
     - "@Snapper"
     - "@UpdateStack"
     - "@PlusUtilities"
+    - "@Filesystems"
    binaries:
     - libtukit4
     - tukit
@@ -1673,7 +1670,7 @@ groups:
       requires:
        - "@KernelCore+systemdlibs"
       binaries:
-       - e2fsprogs-scrub
+#      - e2fsprogs-scrub
     - name: systemd
       requires:
        - "@Core+systemdlibs"
@@ -1703,7 +1700,6 @@ groups:
        - "@Core+systemdlibs"
        - "@Core+udevlibs"
       binaries:
-       - python-btrfsutil
        - sudo-plugin-python
     - name: kernellibs
       requires:
@@ -1737,6 +1733,7 @@ groups:
     # for keyutils-devel
     - "@KernelAPI"
     - "@CoreAPI"
+    - "@LibComErrAPI"
    binaries:
     - krb5-devel
     - krb5-mini-devel
@@ -1872,6 +1869,7 @@ groups:
     - "@UpdateStack"
     - "@Kernel"
     - "@Boot"
+    - "@Filesystems"
     - "@MinimalSystemd"
     - "@PythonModules"
     - "@TransactionalServer"
@@ -2599,6 +2597,7 @@ groups:
    binaries:
     - imake
     - xorg-cf-files
+    - gccmakedep
 
  - name: "@X11ServerSDK"
    sourceproject: X11
@@ -3447,6 +3446,8 @@ groups:
    sourceproject: Gnome
    requires:
     - "@DesktopLibraries"
+    # for libfuse3
+    - "@FilesystemLibraries"
    binaries:
     - xdg-dbus-proxy
     - xdg-desktop-portal
@@ -3841,6 +3842,7 @@ groups:
     - "@CoreHardware"
     - "@KernelLibraries+udev"
     - "@KernelCore+systemdlibs"
+    - "@Filesystems"
    packages:
     - libblockdev
    binaries:
@@ -3949,7 +3951,6 @@ groups:
     - "@Core"
    binaries:
     - apcupsd
-    - btrfsmaintenance
 
  - name: "@Security"
    sourceproject: Security
@@ -4125,6 +4126,7 @@ groups:
     - "@Snappy"
     - "@ELFDebugging"
     - "@CoreHardware+python"
+    - "@Filesystems"
    binaries:
     - ceph
 
@@ -4426,7 +4428,17 @@ groups:
       binaries:
        - skopeo-fish-completion
 
+ - name: "@FlatpakAPI"
+   sourceproject: Container
+   requires:
+    - "@Flatpak"
+    - "@CoreAPI"
+    - "@Glib2API"
+   binaries:
+    - flatpak-devel
+
  - name: "@Flatpak"
+   api: "@FlatpakAPI"
    sourceproject: Container
    requires:
     - "@Core"
@@ -4434,6 +4446,7 @@ groups:
     - "@Webkit"
     - "@PolicyKit"
     - "@Bubblewrap"
+    - "@FilesystemLibraries"
    packages:
     - flatpak
     - libostree
@@ -4441,6 +4454,27 @@ groups:
     - system-user-flatpak
     - libostree-1*
     - libostree
+
+ - name: "@LibComErrAPI"
+   sourceproject: KernelPlus
+   requires:
+    - "@LibComErr"
+    - "@GlibcDevel"
+   binaries:
+    - libcom_err-devel
+
+ - name: "@LibComErr"
+   description: |
+     This thing exists solely because e2fsprogs includes libcom_err, which
+     is used by half of this planet.
+     It would be cleaner to split this library off e2fsprogs and stick it
+     into @CoreLibraries
+   api: "@LibComErrAPI"
+   sourceproject: KernelPlus
+   requires:
+    - "@Glibc"
+   binaries:
+    - libcom_err2
 
  - name: "@KernelLibraries"
    description: |
@@ -4454,8 +4488,6 @@ groups:
    binaries:
     - libkmod2
     - libnuma1
-    - libfuse2
-    - libfuse3*
     - libsgutils2
     - libpciaccess0
     - libhwloc15
@@ -4469,6 +4501,7 @@ groups:
     - libtraceevent1-plugins
     - libkcapi1
     - libpci3
+    - libpfm4
    buildflavors:
     - name: udev
       requires:
@@ -4549,6 +4582,7 @@ groups:
     - "@Core0"
     - "@PerlCore"
     - "@KernelLibraries"
+    - "@FilesystemLibraries"
     - "@KernelNetworkLibraries"
    binaries:
     - suse-module-tools
@@ -4785,6 +4819,57 @@ groups:
        - "@TclCore+x11"
       binaries:
        - xorriso
+
+ - name: "@FilesystemAPI"
+   sourceproject: KernelPlus
+   requires:
+    - "@Filesystems"
+    - "@CoreAPI"
+   binaries:
+    - libbtrfs-devel
+    - libbtrfsutil-devel
+#   - libntfs-3g-devel
+
+ - name: "@FilesystemLibraries"
+   sourceproject: KernelPlus
+   requires:
+    - "@CoreLibraries"
+    - "@LibComErr"
+   binaries:
+    - libbtrfs0
+    - libbtrfsutil1
+    - libext2fs2
+    - libfuse2
+    - libfuse3*
+#   - libntfs-3g*
+
+ - name: "@Filesystems"
+   sourceproject: KernelPlus
+   requires:
+    - "@FilesystemLibraries"
+    - "@UdevLibraries"
+    - "@Core0"
+   binaries:
+    - btrfsprogs
+    - btrfsprogs-udev-rules
+    - btrfsprogs-static
+    - btrfsprogs-bash-completion
+    - btrfsmaintenance
+    - e2fsprogs
+    - fuse2fs
+#   - ntfsprogs
+#   - ntfsprogs-extra
+   buildflavors:
+    - name: python
+      requires:
+       - "@SystemPython"
+      binaries:
+       - python-btrfsutil
+    - name: systemd
+      requires:
+       - "@KernelCore+systemdlibs"
+      binaries:
+       - e2fsprogs-scrub
 
  - name: HardwareAccessDevel
    requires:
@@ -6311,6 +6396,7 @@ groups:
     - "@NetworkCore"
     - "@PerlCore"
     - "@KernelCore"
+    - "@FilesystemLibraries"
     - "@SystemdServices"
    binaries:
     - dracut

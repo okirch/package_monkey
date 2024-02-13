@@ -123,6 +123,7 @@ purposes:
     - x86-64-v3
  - name: 32bit
    priority: 0
+   autoselect: no
    packagesuffixes:
     - 32bit
    # catch other 32bit stuff, but do not use this infix in placement decisions (yet)
@@ -180,11 +181,6 @@ build_configs:
     - "@KernelHeaders"
     - "@Go"
     - "@Rust"
-   exports:
-    - "@LibComErr"
-    - "@KernelLibraries"
-    - "@KernelCrypto"
-    - "@KernelCore"
  - name: Kiwi/standard
    buildrequires:
     - "@WorkbenchEssentials"
@@ -328,6 +324,8 @@ components:
     - "@GccRuntime"
     # for libltdl and gettext-runtime:
     - "@WorkbenchRuntime"
+   exports:
+    - "@CoreLibraries"
  - name: CorePlus
    globals:
     devel: CorePlusDevel
@@ -337,7 +335,8 @@ components:
    exports:
     - "@Glib2NoDBus"
     - "@Glib2API"
-    - "@GraphicsLibraries"
+    - "@Glib2"
+    - "@EssentialGraphicsLibraries"
  - name: KernelPlus
    globals:
     devel: KernelDevel
@@ -345,9 +344,12 @@ components:
     - Core
    exports:
     - "@KernelAPI"
+    - "@LibComErr"
     # exporting these is a bit risky
     - "@KernelLibraries"
     - "@KernelLibraries+udev"
+    - "@KernelCrypto"
+    - "@KernelCore"
  - name: Perl
    globals:
     devel: PerlDevel
@@ -401,6 +403,7 @@ components:
     - "@MariaDB10Libraries"
     - "@Postgres15Libraries"
     - "@SystemDatabaseLibraries"
+    - "@CommonDatabaseLibraries"
  - name: HA
    globals:
     devel: HADevel
@@ -433,8 +436,6 @@ components:
     - "@DBusService"
     - "@SystemdServices"
     - "@PolicyKit"
-    - "@Glib2NoDBus"
-    - "@Glib2"
  - name: Python
    globals:
     devel: PythonDevel
@@ -469,6 +470,8 @@ components:
     - Typesetting
     - HardwareAccess
     - Python
+   exports:
+    - "@GraphicsLibraries"
  - name: X11
    globals:
     devel: X11Devel
@@ -620,6 +623,7 @@ components:
     - Core
     - CorePlus
    exports:
+    - "@FreetypeLibraries"
     - "@FontLibraries"
  - name: DocumentFormats
    globals:
@@ -637,7 +641,6 @@ components:
     - Core
     - Perl
     - DocumentFormats
-    - Multimedia
     - Java
  - name: Container
    globals:
@@ -676,6 +679,8 @@ components:
     - Python
     - Systemd
     - Ruby
+   exports:
+    - "@UpdateStackLibraries"
  - name: Virtualization
    globals:
     devel: VirtualizationDevel
@@ -688,6 +693,7 @@ components:
     - X11
     - Ruby
     - Python
+    - UpdateStack
  - name: Kiwi
    globals:
     devel: KiwiDevel
@@ -817,11 +823,9 @@ groups:
    sourceproject: Workbench
    requires:
     - "@WorkbenchCore"
-    - "@PythonStandard"
-    - "@Texinfo" # for info
+    - "@SystemPythonStandard"
    binaries:
     - bison
-    - net-tools-deprecated
     - datefudge
     - gnu-efi
     # do these really belong here?
@@ -874,18 +878,29 @@ groups:
     - "@Glibc"
     - "@GccRuntime"
 
- - name: "@GlibcDevel"
+ - name: "@PkgConfig"
+   description: |
+    Mostly, pkgconf is used by -devel packages, but there's the odd
+    runtime package (like libstorage-ng1) that pulls in pkgconf.
+    So we create a label separate from GlibcDevel
    sourceproject: Core
    requires:
-    - "@Core0"
+    - "@CoreLibraries"
    binaries:
-    - glibc-devel
-    - libxcrypt-devel
-    - linux-glibc-devel
     - libpkgconf3
     - pkgconf
     - pkgconf-m4
     - pkgconf-pkg-config
+
+ - name: "@GlibcDevel"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+    - "@PkgConfig"
+   binaries:
+    - glibc-devel
+    - libxcrypt-devel
+    - linux-glibc-devel
     - cross-*-glibc-devel priority=3
 
  - name: "@WorkbenchRuntime"
@@ -1006,7 +1021,6 @@ groups:
     - "@GCC"
    binaries:
     - flex
-    - freetype2-devel
     - gdbm-devel
     - libatomic_ops-devel
     - libblkid-devel
@@ -1040,10 +1054,9 @@ groups:
    requires:
     - "@WorkbenchRuntime"
     - "@GCC"
-    # some -devel packages require info when installed; usually through gettext but sometimes directly
-    - "@Texinfo"
     - "@Guile" # for autogen
-    - "@PythonCore" # for cmake-mini
+    - "@SystemPython" # for cmake-mini
+    - "@PerlCore"
    binaries:
     # llvm15 requires libtool
     - libtool
@@ -1139,8 +1152,6 @@ groups:
     - libfftw3_threads3
     - libfl2
     - libfreebl3
-    # It's a font library, but it's used in so many places that it makes sense to place it here
-    - libfreetype6
     - libfribidi0
     - libiniparser1
     # libpng is required by libfreetype6
@@ -1160,6 +1171,7 @@ groups:
     - liblzma5
     - liblzo2*
     - libminizip1
+    - libmount1
     - libmpc3
     - libmpdec3
     - libmpfr6
@@ -1197,6 +1209,7 @@ groups:
     - libssh-config
     - libunistring5
     - libunwind8
+    - liburcu8
     - liburing2
     - libuuid1
     - libuv1
@@ -1230,9 +1243,6 @@ groups:
        - "@JDK"
       binaries:
        - timezone-java
-    - name: hpc
-      requires:
-       - "@HPC"
 
  - name: "@CoreInstUtils"
    sourceproject: Core
@@ -1291,7 +1301,6 @@ groups:
     - fdupes
     - file
     - findutils
-    - ftdump
     - gawk
     - gc
     - gnutls
@@ -1370,7 +1379,6 @@ groups:
     - zip
     - zsh
     - zstd
-    - freetype2-profile-tti35
     - system-users
     - librpmbuild9
     # must be placed somewhere in Core because elfutils-debuginfod uses it
@@ -1532,7 +1540,7 @@ groups:
       binaries:
        - tpm2.0-abrmd
        - libtss2-tcti-tabrmd0
-    - name: perl
+    - name: git
       requires:
        - "@Perl"
       binaries:
@@ -1970,7 +1978,7 @@ groups:
     - utempter
 
  - name: "@ManDoc"
-   sourceproject: Core
+   sourceproject: DocumentFormats
    requires:
     - "@Core0"
     - "@PerlCore"
@@ -1986,6 +1994,10 @@ groups:
        - "@FontLibraries"
        - "@Postscript"
        - "@X11Libraries"
+       - "@GraphicsLibraries+x11"
+      binaries:
+       - groff-full
+       - gxditview
     - name: ruby
       requires:
        - "@Ruby"
@@ -2968,7 +2980,7 @@ groups:
    api: "@Glib2API"
    sourceproject: CorePlus
    requires:
-    - "@Core0"
+    - "@CoreLibraries"
    binaries:
     - libglib-2_0*
     - libgmodule-2*
@@ -2997,7 +3009,7 @@ groups:
    buildflavors:
     - name: python
       requires:
-       - "@PythonCore"
+       - "@SystemPython"
       binaries:
    purposes:
 #   - name: devel
@@ -3164,6 +3176,7 @@ groups:
    sourceproject: Gtk
    requires:
     - "@Glib2NoDBus"
+    - "@Core0"
    binaries:
     - desktop-file-utils
     - update-desktop-files
@@ -3816,7 +3829,7 @@ groups:
     - "@Core1"
     - "@CoreServices"
     - "@SystemdLibraries"
-    - "@PythonCore"
+    - "@SystemPython"
 
  - name: "@DBusService"
    sourceproject: Systemd
@@ -3904,7 +3917,7 @@ groups:
        - systemd-testsuite
     - name: python
       requires:
-       - "@PythonCore"
+       - "@SystemPython"
       binaries:
        - systemd-experimental
 
@@ -4126,28 +4139,26 @@ groups:
     - "@Core+glib"
     - "@SystemdServices"
     - "@KernelCore"
+    - "@Filesystems"
    binaries:
     - autofs
     - bcache-tools
     - dump
     - duperemove
-    - ecryptfs-utils
     - hdparm
-    - hfsutils
-    - jfsutils
     - mdadm
     - multipath-tools
     - parted
-    - reiserfs
     - smartmontools
+    # filesystems?
+    - ecryptfs-utils
     - squashfs
     - sysfsutils
-    - xfsdump
-    - xfsprogs
     - pam_mount
     - kpartx
     - dmraid
     - growpart
+    - lsscsi
    buildflavors:
     - name: python
       requires:
@@ -4298,7 +4309,7 @@ groups:
     - autoyast2
     - yast2*
     - libyui*
-    - libstorage-ng
+    - libstorage-ng1
     - ruby3.2-rubygem-agama
     - ruby-yui
     - agama
@@ -4337,11 +4348,53 @@ groups:
 #      - yast2-buildtools
 #      - yast2-devtools
 
- - name: "@FontLibraries"
+ - name: "@FreetypeAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@FreetypeLibraries"
+    - "@CoreAPI"
+   binaries:
+    - freetype2-devel
+    - freetype2-profile-tti35
+
+ - name: "@FreetypeLibraries"
+   api: "@FreetypeAPI"
    sourceproject: Typesetting
    requires:
     - "@CoreLibraries"
-#   - "@Glib2"
+   binaries:
+    - libfreetype6
+
+ - name: "@FreetypeUtils"
+   api: "@FreetypeAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@FreetypeLibraries"
+    - "@FontLibraries+x11"
+    # temporarily until we fix librsvg
+    - "@GtkCommon"
+   packages:
+    - freetype2:ft2demos
+   binaries:
+    - ftdiff
+    - ftgamma
+    - ftmulti
+    - ftbench
+    - ftlint
+    - ftvalid
+   buildflavors:
+    - name: qt
+      requires:
+       - "@Qt"
+      binaries:
+       - ftinspect
+
+ - name: "@FontLibraries"
+   sourceproject: Typesetting
+   requires:
+    - "@FreetypeLibraries"
+    - "@CoreLibraries"
+    - "@Core0"
     - "@PlusLibraries"
     # harfbuzz requires glib2
     - "@Glib2NoDBus"
@@ -4353,6 +4406,7 @@ groups:
    binaries:
     - libfontconfig
     - fontconfig
+    - libgraphite2*
     - libharfbuzz0
     - libharfbuzz-icu0
     - libharfbuzz-subset0
@@ -4401,6 +4455,7 @@ groups:
     - "@CoreAPI"
     - "@I18nAPI"
     - "@FontLibraries"
+    - "@FreetypeAPI"
    binaries:
     - fontconfig-devel
    buildflavors:
@@ -4943,6 +4998,7 @@ groups:
     - libext2fs2
     - libfuse2
     - libfuse3*
+    - libinih0
 #   - libntfs-3g*
 
  - name: "@Filesystems"
@@ -4959,6 +5015,11 @@ groups:
     - btrfsmaintenance
     - e2fsprogs
     - fuse2fs
+    - xfsdump
+    - xfsprogs
+    - xfsprogs-scrub
+    - jfsutils
+# ntfsprogs wants libhd which is part of hwinfo (why does it need that?)
 #   - ntfsprogs
 #   - ntfsprogs-extra
    buildflavors:
@@ -5150,7 +5211,7 @@ groups:
     - "@KernelLibraries"
 
  - name: "@HostNetworking"
-   sourceproject: Core
+   sourceproject: Host
    requires:
     - "@Core"
     - "@NetworkCore"
@@ -5262,7 +5323,7 @@ groups:
     - "@HostNetworking"
     - "@MinimalSystemd"
     - "@AvahiLibraries"
-    - "@GnomeLibraries"
+    - "@DesktopIcons"
     - "@Console"
     - "@PolicyKit"
     - "@BluetoothLibraries"
@@ -5297,7 +5358,7 @@ groups:
    sourceproject: Multimedia
    requires:
     - "@Core"
-    - "@PythonCore"
+    - "@SystemPython"
    binaries:
     - libid3tag0*
 
@@ -5555,15 +5616,9 @@ groups:
    requires:
     - "@HPCCoreLibraries"
     - "@LUA"
-    - "@HostNetworking"
     - "@TclCore"
    binaries:
     - lua-lmod
-#   - gnu-compilers-hpc
-#   - libfftw3*-hpc
-   buildflavors:
-    - name: python
-      binaries:
 
  - name: "@HPC"
    sourceproject: HPC
@@ -5617,6 +5672,8 @@ groups:
     - rsync
     - tcpdump
     - traceroute
+    - net-tools
+    - net-tools-deprecated
     # move to MailClient?
     - fetchmail
     - whois
@@ -5644,6 +5701,9 @@ groups:
        - "@NetworkAnalysis+systemd"
       binaries:
        - wireshark
+       - libwireshark16
+       - libwiretap13
+       - libwsutil14
 
  - name: "@NetworkLibraries"
    api: "@NetworkAPI"
@@ -5752,7 +5812,7 @@ groups:
    sourceproject: Network
    requires:
     - "@NetworkCore"
-    - "@PythonCore"
+    - "@SystemPython"
     - "@Guile"
     # FIXME: mailutils requires cups. *shrug*
     - "@PrintServer"
@@ -6029,7 +6089,7 @@ groups:
     - "@HostStorage"
     - "@NetworkStorage"
     - "@MinimalManagement"
-    - "@PythonCore"
+    - "@SystemPython"
     - "@Rados"
     - "@Kernel"
     - "@Boot+xen"
@@ -6264,6 +6324,7 @@ groups:
     - perl-Bit-Vector
     - perl-Text-Unidecode
     - perl-Unicode-EastAsianWidth
+    - perl-JSON
 #   - perl-libintl-perl
     - perl-gettext
 
@@ -6355,6 +6416,7 @@ groups:
     - java-17-openjdk-jmods
     - javapackages-local
     - javapackages-ivy
+    - felix-utils
    purposes:
     - name: doc
       binaries:
@@ -6403,6 +6465,7 @@ groups:
     - maven-wagon*
     - maven-shared
     - maven-parent
+    - maven-dependency-tree
 
  - name: "@Plexus"
    sourceproject: Java
@@ -6500,6 +6563,7 @@ groups:
     - "@KernelCore"
     - "@FilesystemLibraries"
     - "@SystemdServices"
+    - "@FreetypeLibraries"
    binaries:
     - dracut
     - dracut-*
@@ -6605,7 +6669,8 @@ groups:
     - python31?-salt priority=0
 
  - name: "@Texlive"
-   sourceproject: Texlive
+   api: "@TexAPI"
+   sourceproject: DocumentFormats
    priority: 3
    requires:
     - "@Core"
@@ -6637,8 +6702,8 @@ groups:
     - perl-Text-BibTeX-devel priority=0
     - transfig
 
- - name: TexliveDevel
-   sourceproject: Texlive
+ - name: "@TexAPI"
+   sourceproject: DocumentFormats
    requires:
     - CoreDevel
     - "@Texlive"

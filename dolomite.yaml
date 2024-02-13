@@ -66,6 +66,13 @@ resolverhints:
     - "libboost_numpy3-devel -> libboost_numpy-py3-1_82_0-devel"
     # We have a bunch of these, but they're not really relevant to our task:
     - "fuse-devel -> fuse-doc"
+    ##################################################
+    # HACK: In order not to pull in the complete Gnome
+    # Multimedia mess into a minimal desktop library set,
+    # we assume we can build xdg-desktop-portal without
+    # multimedia support
+    ##################################################
+    - "xdg-desktop-portal -> libpipewire-0_3-0"
   rewrite:
    - "systemd-mini -> environment_with_systemd"
    - "udev-mini -> environment_with_udev"

@@ -971,7 +971,7 @@ groups:
    packages:
     - boost:base
     - boost-defaults
-   binaries: 
+   binaries:
     # place one libboost rpm here explicitly. There's still something wrong with the
     # label hierarchy, because if I don't do this, the libboost_* packages from
     # boost:base will not be placed at all.
@@ -2648,8 +2648,6 @@ groups:
     - "@FontLibraries"
     - "@SystemdLibraries"
    binaries:
-    - desktop-file-utils
-    - update-desktop-files
     - xdg-utils
 
  - name: "@DesktopBuild"
@@ -2664,7 +2662,7 @@ groups:
     - "@Core0"
     - "@FontLibraries"
     - "@Fonts"
-    - "@DesktopCore"
+#   - "@DesktopCore"
     # the only reason this is here is imlib2-loaders which requires libheif1
     # which implements AVIF by using libdav1d
     - "@EssentialVideoLibraries"
@@ -3152,7 +3150,7 @@ groups:
     - name: desktop
       requires:
        - "@PythonStandard+desktop"
-      binaries: 
+      binaries:
        - speech-dispatcher-configure
 
  - name: "@DesktopIcons"
@@ -3161,6 +3159,24 @@ groups:
    binaries:
     - adwaita-icon-theme
     - hicolor-icon-theme
+
+ - name: "@DesktopQuarks"
+   sourceproject: Gtk
+   requires:
+    - "@Glib2NoDBus"
+   binaries:
+    - desktop-file-utils
+    - update-desktop-files
+    - xdg-dbus-proxy
+
+ - name: "@DConf"
+   sourceproject: Gtk
+   requires:
+    - "@DBusService"
+   binaries:
+    - dconf
+    - libdconf1
+    - gsettings-backend-dconf
 
  - name: "@GtkCommonAPI"
    sourceproject: Gtk
@@ -3352,6 +3368,28 @@ groups:
    binaries:
     - librsvg-devel
 
+ - name: "@AppstreamAPI"
+   sourceproject: Gtk
+   requires:
+    - "@AppstreamLibraries"
+    - "@GdkPixbufAPI"
+   binaries:
+    - AppStream-devel
+    - AppStream-compose-devel
+
+ - name: "@AppstreamLibraries"
+   api: "@AppstreamAPI"
+   sourceproject: Gtk
+   requires:
+    - "@SystemdLibraries"
+    - "@Glib2NoDBus"
+    - "@GtkCommon"
+    - "@AudioLibraries"
+   binaries:
+    - libappstream4
+    - libappstream-compose0
+    - AppStream
+
  - name: "@GnomeVTE"
    sourceproject: Gnome
    requires:
@@ -3374,8 +3412,10 @@ groups:
     - "@PlusLibraries"
     - "@USBLibraries"
     - "@DesktopIcons"
+    - "@DesktopQuarks"
+    - "@AppstreamLibraries"
+    - "@DConf"
    binaries:
-    - dconf
     - libgjs0
 
  - name: "@GStreamerLibraries"
@@ -3438,8 +3478,6 @@ groups:
     - libnotify4
     - gstreamer-*
     - gstreamer-plugins-vaapi
-    - libappstream4
-    - libappstream-compose0
     - libgstcuda-*
     - libcanberra0
     - libgcr3
@@ -3464,12 +3502,6 @@ groups:
        - "@Python"
       binaries:
        - gstreamer-plugin-python
-#  purposes:
-#   - name: devel
-#     requires:
-#      - "@Python"
-#     binaries:
-#      - gstreamer-devtools
 
  # could possibly be folded into @Desktop* or @Gnome*
  - name: "@CJK"
@@ -3512,8 +3544,6 @@ groups:
     # for libfuse3
     - "@FilesystemLibraries"
    binaries:
-    - xdg-dbus-proxy
-    - xdg-desktop-portal
     - xml2po
 
  - name: "@PolicyKitAPI"
@@ -3567,8 +3597,7 @@ groups:
     - "@X11Server"
     - "@PolicyKit"
     - "@ApplicationLibraries"
-#   - "@HostNetworking+gnomelibs"
-#   - "@Flatpak"
+    - "@DesktopCore"
     - "@NetworkManager"
     - "@Bluetooth"
     - "@PulseAudio"
@@ -3584,7 +3613,6 @@ groups:
     - gcr-viewer*
     - WebKitGTK*
     - gnome-bluetooth
-    - AppStream
     - gspell
     - libgsound0
     - pulseaudio-module-bluetooth
@@ -3738,7 +3766,7 @@ groups:
        - apache2-mod_apparmor
 
  - name: SystemdDevel
-   requires: 
+   requires:
     - "@SystemdAPI"
 
  - name: "@SystemdAPI"
@@ -4501,11 +4529,23 @@ groups:
    sourceproject: Container
    requires:
     - "@Core"
-    - "@DesktopLibraries"
-    - "@Webkit"
+    - "@GtkCommon"
+#   - "@DesktopLibraries"
+#   - "@Webkit"
     - "@PolicyKit"
     - "@Bubblewrap"
     - "@FilesystemLibraries"
+    - "@DesktopQuarks"
+    - "@AppstreamLibraries"
+    - "@DConf"
+    - "@AvahiLibraries"
+    - "@BluetoothLibraries"
+# xdg-desktop-portal is currently linked against libpipewire.
+# Given that we may have to build a set of UI libraries without
+# pulling in all of Gnome, hide the dependency in alp.yaml:
+#   xdg-desktop-portal -> libpipewire-3_0
+# As a consequence, we no longer need a dependency on PA or PW
+#   - "@PulseAudioLibraries"
    packages:
     - flatpak
     - libostree
@@ -4513,6 +4553,9 @@ groups:
     - system-user-flatpak
     - libostree-1*
     - libostree
+    - libflatpak0
+    - flatpak
+    - xdg-desktop-portal
 
  - name: "@LibComErrAPI"
    sourceproject: KernelPlus
@@ -4572,7 +4615,7 @@ groups:
        - thin-provisioning-tools
     - name: x11
       requires:
-       - "@GraphicsLibraries+x11"
+       - "@DesktopQuarks"
        - "@FontLibraries+x11"
       binaries:
        - hwloc
@@ -6146,7 +6189,7 @@ groups:
 #   - python31?-notebook*
 #   - python31?-nbclassic
 #   - python31?-nbconvert
-   buildflavors: 
+   buildflavors:
     - name: tex
       requires:
        - "@Texlive"

@@ -934,9 +934,10 @@ class Classification:
 				# build config X11/standard inherits from XXX/standard for all XXX components below X11
 				for lowerComponent in componentLabel.runtimeRequires:
 					for lowerConfig in lowerComponent.flavors:
-						buildConfig = componentLabel.getBuildFlavor(lowerConfig.name)
+						flavorName = lowerConfig.flavorName
+						buildConfig = componentLabel.getBuildFlavor(flavorName)
 						if buildConfig is None:
-							buildConfig = self.createFlavor(componentLabel, lowerConfig.name)
+							buildConfig = self.createFlavor(componentLabel, flavorName)
 						buildConfig.buildRequires.update(lowerConfig.buildRequires)
 						buildConfig.runtimeRequires.update(lowerConfig.runtimeRequires)
 

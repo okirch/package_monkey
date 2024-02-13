@@ -221,6 +221,9 @@ build_configs:
  - name: Management/standard
    buildrequires:
     - "@WorkbenchEssentials"
+ - name: Gtk/standard
+   buildrequires:
+    - "@WorkbenchEssentials"
  - name: Gnome/standard
    buildrequires:
     - "@WorkbenchEssentials"
@@ -481,6 +484,25 @@ components:
     - "@OpenGL"
     # this is really just exported for devel labels
     - "@X11API"
+ - name: Gtk
+   globals:
+    devel: GtkDevel
+   requires:
+    - X11
+    - Network
+    - Security
+    - AppArmor
+    - HardwareAccess
+    - DocumentFormats
+    - Python
+   exports:
+    - "@Gtk2"
+    - "@Gtk2API"
+    - "@Gtk3"
+    - "@Gtk3API"
+    - "@Gtk4"
+    - "@Gtk4API"
+    - "@GtkAPI"
  - name: Gnome
    globals:
     devel: GnomeDevel
@@ -495,6 +517,7 @@ components:
     - Container
     - Python
     - Samba
+    - Gtk
    exports:
     - "@GnomeLibraries"
     - "@PulseAudioLibraries"
@@ -3024,6 +3047,8 @@ groups:
     - "@StorageServiceAPI"
     - "@WxWidgets"
     - "@I18nTools"
+    - "@GtkAPIs"
+    - "@SoupAPI"
    binaries:
     - gnome-doc-utils
     - gnome-doc-utils-lang
@@ -3130,16 +3155,15 @@ groups:
       binaries: 
        - speech-dispatcher-configure
 
- # Is Gnome really the proper place for icon themes?
  - name: "@DesktopIcons"
-   sourceproject: Gnome
+   sourceproject: Gtk
    requires:
    binaries:
     - adwaita-icon-theme
     - hicolor-icon-theme
 
  - name: "@GtkCommonAPI"
-   sourceproject: Gnome
+   sourceproject: Gtk
    requires:
     - "@GtkCommon"
     - "@AccessibilityAPI"
@@ -3152,7 +3176,7 @@ groups:
 
  - name: "@GtkCommon"
    api: "@GtkCommonAPI"
-   sourceproject: Gnome
+   sourceproject: Gtk
    requires:
     - "@Glib2"
     - "@EssentialGraphicsLibraries"
@@ -3165,15 +3189,13 @@ groups:
     - libcolord2
     - librsvg-2*
     - libtracker-sparql-3*
-    - typelib-1_0-Tracker*
     - libjson-glib-1*
-    - libsoup-2*
     - glib-networking
     - gsettings-desktop-schemas
     - gettext-its-gtk*
 
  - name: "@Gtk2API"
-   sourceproject: Gnome
+   sourceproject: Gtk
    requires:
     - "@Gtk2"
     - "@GtkCommonAPI"
@@ -3183,7 +3205,7 @@ groups:
     - gtkmm2-devel
 
  - name: "@Gtk2"
-   sourceproject: Gnome
+   sourceproject: Gtk
    packages:
     - gtk2
    requires:
@@ -3202,9 +3224,10 @@ groups:
     - gtk2-schema
     - gtk2-tools
     - gtk2-data
+    - gtk2-immodule-*
 
  - name: "@Gtk3API"
-   sourceproject: Gnome
+   sourceproject: Gtk
    requires:
     - "@Gtk3"
     - "@GtkCommonAPI"
@@ -3214,7 +3237,7 @@ groups:
     - gtkmm3-devel
 
  - name: "@Gtk3"
-   sourceproject: Gnome
+   sourceproject: Gtk
    api: "@Gtk3API"
    requires:
     - "@Core0"
@@ -3237,7 +3260,7 @@ groups:
     - gtk3-immodule-*
 
  - name: "@Gtk4API"
-   sourceproject: Gnome
+   sourceproject: Gtk
    requires:
     - "@Gtk4"
     - "@GtkCommonAPI"
@@ -3246,7 +3269,7 @@ groups:
     - gtk4-devel-tools
 
  - name: "@Gtk4"
-   sourceproject: Gnome
+   sourceproject: Gtk
    api: "@Gtk4API"
    requires:
     - "@Core0"
@@ -3267,12 +3290,59 @@ groups:
     - gtk4-tools
     - gtk4-data
 
- - name: "@GtkAPI"
-   sourceproject: Gnome
+ - name: "@GtkAllVersions"
+   sourceproject: Gtk
+   requires:
+    - "@Gtk2"
+    - "@Gtk3"
+    - "@Gtk4"
+
+ - name: "@GtkAPIs"
+   sourceproject: Gtk
    requires:
     - "@Gtk2API"
     - "@Gtk3API"
     - "@Gtk4API"
+
+ - name: "@SoupAPI"
+   sourceproject: Gtk
+   requires:
+    - "@Soup3Libraries"
+    - "@Glib2API"
+   binaries:
+    - libsoup-devel
+
+ - name: "@Soup3Libraries"
+   api: "@SoupAPI"
+   sourceproject: Gtk
+   requires:
+    - "@GtkAllVersions"
+   binaries:
+    - libsoup-3*
+
+ - name: "@GtkLeftovers"
+   api: "@GtkAPIs"
+   description: |
+     This label is used for data and tools that go with libraries
+     that GTK depends upon (such as colord profiles or the tracker
+     application)
+   sourceproject: Gtk
+   requires:
+    - "@GtkAllVersions"
+    - "@PolicyKitLibraries"
+    - "@USBLibraries+typelib"
+    - "@Soup3Libraries"
+   binaries:
+    - tracker
+    - colord-color-profiles
+    - colord
+    - colord-gtk
+    - argyllcms
+
+ - name: "@GtkAPI"
+   sourceproject: Gtk
+   requires:
+    - "@GtkAllVersions"
     - "@FontLibsAPI+x11"
     - "@Glib2API"
     - "@CairoAPI"
@@ -3307,7 +3377,6 @@ groups:
    binaries:
     - dconf
     - libgjs0
-    - hicolor-icon-theme
 
  - name: "@GStreamerLibraries"
    sourceproject: Gnome
@@ -3338,7 +3407,6 @@ groups:
    requires:
     - "@GtkCommon"
    binaries:
-    - tracker
 
  - name: "@DesktopLibraries"
    sourceproject: Gnome
@@ -3364,12 +3432,8 @@ groups:
     - "@Gtk4"
     - "@GnomeRelatedUtilities"
     - "@GStreamerLibraries"
+    - "@Soup3Libraries"
    binaries:
-    - libgtk-2*
-    - gtk2-schema
-    - gtk2-tools
-    - gtk2-data
-    - libgtk-4*
     - libnice10
     - libnotify4
     - gstreamer-*
@@ -3381,7 +3445,6 @@ groups:
     - libgcr3
     # or move to AudioLibraries:
     - libgstvulkan-1*
-    - colord-color-profiles
     - gcab
     - appstream-glib
     - libical3
@@ -3511,15 +3574,10 @@ groups:
     - "@PulseAudio"
     - "@USBLibraries+typelib"
    packages:
-    - colord
    binaries:
-    - gtk2
-    - gtk3
-    - gtk4
     - geoclue2
     - system-user-srvGeoClue
     - gsettings-*
-    - gtk*
     - gnome-*
     - polkit-gnome*
     - xdg-menu
@@ -3547,6 +3605,7 @@ groups:
     - "@StorageServices"
     - "@Flatpak"
     - "@Boost"
+    - "@GtkLeftovers"
    binaries:
     - gdm
     - gnome-control-center
@@ -5215,7 +5274,7 @@ groups:
     - "@SIMDLibraries"
    packages:
     - libcaca
-    - argyllcms
+#   - argyllcms
    binaries:
     - libpaper2
     - libjasper7
@@ -5245,7 +5304,7 @@ groups:
       augments:
        - "@Gnome"
       binaries:
-       - argyllcms
+#      - argyllcms
 
  - name: "@AudioAPI"
    sourceproject: Multimedia
@@ -6539,9 +6598,11 @@ groups:
    sourceproject: Texlive
    requires:
     - CoreDevel
+    - "@Texlive"
    binaries:
     - texlive-synctex-devel
     - texlive-devel
+    - texlive-*-devel priority=0
 
 # why do all editors have to have such messy dependencies?
  - name: "@Vim"

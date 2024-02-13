@@ -22,6 +22,9 @@ def intersectSets(a, b):
 		return a
 	return a.intersection(b)
 
+def generalSetContains(elem, gset):
+	return (gset is None) or (elem in gset)
+
 def renderLabelSet(name, labels):
 	if labels is None:
 		return f"[unconstrained {name}]"
@@ -187,7 +190,7 @@ class APISolver(Solver):
 
 		if not candidates:
 			if len(altCandidates) == 0:
-				infomsg(f"  {packagePlacement}: no siblings that have an API")
+				infomsg(f"  {buildPlacement}: no siblings that have an API")
 				return
 			candidates = altCandidates
 
@@ -870,6 +873,16 @@ class PotentialClassification(object):
 					infomsg(f"{self}: {baseLabel} is a valid candidate")
 				return baseLabel
 			else:
+				if self.autoLabel:
+					exactMatch = None
+					if self.autoLabel.type == Classification.TYPE_PURPOSE:
+						exactMatch = baseLabel.getObjectPurpose(self.autoLabel.name)
+					elif self.autoLabel.type == Classification.TYPE_AUTOFLAVOR:
+						exactMatch = baseLabel.getBuildFlavor(self.autoLabel.name)
+					if exactMatch and generalSetContains(exactMatch, candidates):
+						# infomsg(f"### {self} exact match {exactMatch}")
+						return exactMatch
+
 				# filter those candidates that have the chosen base label or parent
 				if baseLabel.parent is None:
 					# This is truly a base label

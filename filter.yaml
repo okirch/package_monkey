@@ -270,9 +270,6 @@ build_configs:
  - name: DocumentFormats/standard
    buildrequires:
     - "@WorkbenchEssentials"
- - name: Texlive/standard
-   buildrequires:
-    - "@WorkbenchEssentials"
  - name: Qt/standard
    buildrequires:
     - "@WorkbenchEssentials"
@@ -350,6 +347,7 @@ components:
     - "@KernelLibraries+udev"
     - "@KernelCrypto"
     - "@KernelCore"
+    - "@KernelNetworkUtils"
  - name: Perl
    globals:
     devel: PerlDevel
@@ -472,6 +470,7 @@ components:
     - Python
    exports:
     - "@GraphicsLibraries"
+    - "@DrawingLibraries"
  - name: X11
    globals:
     devel: X11Devel
@@ -499,6 +498,7 @@ components:
     - DocumentFormats
     - Python
    exports:
+    - "@DesktopIcons"
     - "@Gtk2"
     - "@Gtk2API"
     - "@Gtk3"
@@ -543,7 +543,6 @@ components:
     devel: JavaDevel
    requires:
     - CorePlus
-    - Gnome
     - Security
     - AppArmor
     - Systemd
@@ -632,16 +631,12 @@ components:
     - CorePlus
     - Typesetting
     - Multimedia
+    - Java
     # for printing:
     - Network
- - name: Texlive
-   globals:
-    devel: TexliveDevel
-   requires:
-    - Core
-    - Perl
-    - DocumentFormats
-    - Java
+   exports:
+    - "@ManDoc"
+    - "@Docbook"
  - name: Container
    globals:
     devel: ContainerDevel
@@ -652,8 +647,8 @@ components:
     - KernelPlus
     - Security
     - Systemd
-    # because flatpak is currently in the Container component
-#   - Gnome
+   exports:
+    - "@Bubblewrap"
  - name: Management
    globals:
     devel: ManagementDevel
@@ -715,6 +710,18 @@ components:
     devel: PublicCloudDevel
    requires:
     - Python
+ - name: Applications
+   globals:
+    devel: ApplicationsDevel
+   requires:
+    - CorePlus
+    - Network
+    - Systemd
+    - Gtk
+   exports:
+    - "@Graphviz"
+    - "@Flatpak"
+    - "@OpenVSwitch"
 
 groups:
  - name: "@GccRuntime"
@@ -921,10 +928,7 @@ groups:
     - rpm-build
     - compat-usrmerge-build
 #   - libbz2-devel
-    - libelf-devel
-    - libbsd-devel
 #   - libxml2-devel
-    - fftw3-devel priority=0
     # misnamed package (should have been static-devel)
     - newt-static
     - libgpgme-devel priority=0
@@ -1021,12 +1025,15 @@ groups:
     - "@GCC"
    binaries:
     - flex
+    - fftw3-devel priority=0
     - gdbm-devel
     - libatomic_ops-devel
     - libblkid-devel
     - libbrotli-devel
+    - libbsd-devel
     - libbz2-devel
     - libcurl-devel
+    - libelf-devel
     - libexpat-devel
     - libffi-devel
     - libidn2-devel
@@ -1736,15 +1743,10 @@ groups:
       requires:
        - "@KernelLibraries"
        - "@KernelLibraries+udev"
+       - "@Core0+kernellibs"
       binaries:
-#      - pciutils
-#      - libcryptsetup12
        - cryptsetup
        - efivar
-      purposes:
-#      - name: devel
-#        requires:
-#         - "@HostStorage-devel"
 
  - name: "@KerberosLibraries"
    sourceproject: Core
@@ -2071,7 +2073,7 @@ groups:
     - sgml-skel
 
  - name: "@Docbook"
-   sourceproject: CorePlus
+   sourceproject: DocumentFormats
    requires:
     - "@XMLPlus"
     - "@SystemPython"
@@ -2086,12 +2088,13 @@ groups:
     - xmlstarlet
     - xmlto
    buildflavors:
-    - name: texlive
+    - name: tex
       requires:
        - "@Texlive"
       binaries:
        - asciidoc-latex-backend
        - docbook-toys
+       - dblatex
     - name: pdf
       requires:
        - "@ImageMagick"
@@ -2136,6 +2139,8 @@ groups:
        - "@X11Libraries"
       binaries:
        - libwmf-0*
+       - libnetpbm11
+       - netpbm
     - name: glib
       requires:
        - "@Glib2NoDBus"
@@ -3038,6 +3043,7 @@ groups:
     - name: tex
       requires:
        - "@Texlive"
+       - "@Docbook+tex"
       binaries:
        - gtk-doc-mkpdf
 
@@ -3213,11 +3219,12 @@ groups:
     - "@PlusLibraries"
     - "@DesktopIcons"
     - "@GdkPixbuf"
+    - "@SVGLibraries"
     - "@NetworkProxyLibraries"
    binaries:
     - libcolord2
-    - librsvg-2*
     - libtracker-sparql-3*
+    - typelib-*-Tracker-3*
     - libjson-glib-1*
     - glib-networking
     - gsettings-desktop-schemas
@@ -3244,7 +3251,7 @@ groups:
     - "@GtkCommon"
     - "@PrintingLibraries"
     - "@AccessibilityLibraries"
-    - "@GStreamerLibraries"
+#   - "@GStreamerLibraries"
     - "@OpenGL"
    binaries:
     - libgtk-2*
@@ -3275,7 +3282,7 @@ groups:
     - "@GtkCommon"
     - "@PrintingLibraries"
     - "@AccessibilityLibraries"
-    - "@GStreamerLibraries"
+#   - "@GStreamerLibraries"
     - "@OpenGL"
    packages:
     - gtk3
@@ -3306,10 +3313,12 @@ groups:
     - "@X11"
     - "@GtkCommon"
     - "@PrintingLibraries"
-    - "@GStreamerLibraries"
-    - "@PulseAudio"
     - "@OpenGL"
     - "@EssentialGraphicsLibraries+typelib"
+   # Unfortunately, gtk4 links directly against pulseaudio and gstreamer
+   # This needs to go
+    - "@GStreamerLibraries"
+    - "@PulseAudio"
    packages:
     - gtk4
    binaries:
@@ -3378,8 +3387,6 @@ groups:
     - "@AccessibilityAPI"
     - "@EssentialGraphicsAPI"
     - "@GdkPixbufAPI"
-   binaries:
-    - librsvg-devel
 
  - name: "@AppstreamAPI"
    sourceproject: Gtk
@@ -3413,7 +3420,17 @@ groups:
     - libvte-2*
     - vte-tools*
 
+ - name: "@GnomeAPI"
+   sourceproject: Gnome
+   requires:
+    - "@GnomeLibraries"
+    - "@Glib2API"
+    - "@SystemdAPI"
+    - "@X11API"
+    - "@FontLibsAPI+x11"
+
  - name: "@GnomeLibraries"
+   api: "@GnomeAPI"
    sourceproject: Gnome
    requires:
     - "@Core0"
@@ -3503,6 +3520,7 @@ groups:
     - libmanette
     - libdecor
     - librevenge-0*
+    - libzbar0
    buildflavors:
     - name: qt
       requires:
@@ -3663,26 +3681,32 @@ groups:
     - libmalcontent-0*
 
  - name: "@GraphvizLibraries"
-   sourceproject: Gnome
+   api: "@GraphvizAPI"
+   sourceproject: Applications
    requires:
     - "@Core0"
+    - "@Glib2NoDBus"
    binaries:
     - libcgraph6
     - libgvc6
     - libgvpr2
+    - libgts-0*
 
  - name: "@GraphvizAPI"
-   sourceproject: Gnome
+   sourceproject: Applications
    requires:
     # it would be nice if this would just depend on GraphvizLibraries, but
     # the devel package wants the full graphviz.
     - "@Graphviz"
+    - "@Glib2API"
+    - "@EssentialGraphicsLibraries+x11"
    binaries:
     - graphviz-devel
+    - gts-devel
 
  # doesn't have to be Gnome
  - name: "@Graphviz"
-   sourceproject: Gnome
+   sourceproject: Applications
    requires:
     - "@GraphvizLibraries"
     - "@Glib2NoDBus"
@@ -3761,6 +3785,7 @@ groups:
     - name: utils
       requires:
        - "@SystemPythonStandard+dbus"
+       - "@SystemPythonStandard+systemd"
        - "@SystemPythonModules"
        - "@PerlCore"
        - "@CoreServices"
@@ -3891,6 +3916,8 @@ groups:
     - "@AppArmor"
     - "@NetworkCore"
     - "@SystemdServices"
+   packages:
+    - python-systemd
    binaries:
     - acct
     - biosdevname
@@ -4371,8 +4398,7 @@ groups:
    requires:
     - "@FreetypeLibraries"
     - "@FontLibraries+x11"
-    # temporarily until we fix librsvg
-    - "@GtkCommon"
+    - "@SVGLibraries"
    packages:
     - freetype2:ft2demos
    binaries:
@@ -4390,6 +4416,7 @@ groups:
        - ftinspect
 
  - name: "@FontLibraries"
+   api: "@FontLibsAPI"
    sourceproject: Typesetting
    requires:
     - "@FreetypeLibraries"
@@ -4437,6 +4464,33 @@ groups:
        # typelib-1_0-HarfBuzz placed through the normal mechanism
        # (which fails in this case).
        - typelib-1_0-HarfBuzz* priority=0
+
+ - name: "@SVGAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@SVGLibraries"
+    - "@GdkPixbufAPI"
+    - "@Glib2API"
+    - "@CairoAPI"
+   binaries:
+    - librsvg-devel
+
+ - name: "@SVGUtils"
+   sourceproject: Typesetting
+   requires:
+    - "@SVGLibraries"
+   binaries:
+    - rsvg-convert
+    - rsvg-thumbnailer
+
+ - name: "@SVGLibraries"
+   api: "@SVGAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@FontLibraries+x11"
+    - "@GdkPixbuf"
+   binaries:
+    - librsvg-2*
 
  - name: "@Fonts"
    sourceproject: Typesetting
@@ -4571,7 +4625,7 @@ groups:
        - skopeo-fish-completion
 
  - name: "@FlatpakAPI"
-   sourceproject: Container
+   sourceproject: Applications
    requires:
     - "@Flatpak"
     - "@CoreAPI"
@@ -4581,7 +4635,7 @@ groups:
 
  - name: "@Flatpak"
    api: "@FlatpakAPI"
-   sourceproject: Container
+   sourceproject: Applications
    requires:
     - "@Core"
     - "@GtkCommon"
@@ -4725,6 +4779,7 @@ groups:
     - wireless-*
     - nftables
     - linux-atm
+    - lksctp-tools
    buildflavors:
     - name: python
       binaries:
@@ -4756,7 +4811,7 @@ groups:
     - name: systemdlibs
       requires:
        - "@SystemdLibraries"
-       - "@UdevLibraries"
+       - "@KernelLibraries+udev"
       binaries:
        - lvm2
        - liblvm2cmd2_03
@@ -5282,6 +5337,8 @@ groups:
     - python311-avahi
    buildflavors:
     - name: python310
+      requires:
+       - "@PythonStandard310+dbus"
       binaries:
        - python310-avahi
 
@@ -5378,7 +5435,6 @@ groups:
     - "@SIMDLibraries"
    packages:
     - libcaca
-#   - argyllcms
    binaries:
     - libpaper2
     - libjasper7
@@ -5396,8 +5452,8 @@ groups:
        - "@X11Libraries"
        - "@FontLibraries"
        - "@X11Libraries+multimedia"
+       - "@EssentialGraphicsLibraries+x11"
       binaries:
-       - netpbm
        - caca-utils
     - name: opengpl
       requires:
@@ -5705,21 +5761,32 @@ groups:
        - libwiretap13
        - libwsutil14
 
+ - name: "@NetworkAPI"
+   sourceproject: Network
+   requires:
+    - "@NetworkLibraries"
+    - "@CoreAPI"
+   binaries:
+#   - unbound-devel
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@NetworkAnalysis+systemd"
+       - "@SystemdAPI"
+      binaries:
+       - libpcap-devel
+
  - name: "@NetworkLibraries"
    api: "@NetworkAPI"
    sourceproject: Network
    requires:
     - "@NetworkCore"
+   packages:
+    - unbound
    binaries:
     - libprotobuf-c1
     - libdaemon0
     - libfstrm0
-
- - name: "@NetworkAPI"
-   sourceproject: Network
-   requires:
-    - "@NetworkLibraries"
-#   - "@CoreAPI"
 
  - name: "@NetworkServices"
    sourceproject: Network
@@ -5753,6 +5820,7 @@ groups:
     - perl-SNMP
     - snmp-mibs
 #   - unbound
+    - openvpn
    buildflavors:
     - name: mysql
       requires:
@@ -5771,14 +5839,14 @@ groups:
        - freeradius-server-python3
 
  - name: "@IPSec"
-   sourceproject: Network
+   sourceproject: Applications
    requires:
     - "@NetworkCore"
     - "@CoreServices"
     - "@MinimalSystemd"
     - "@Perl"
     # strongswan-libs0 pulls in everything under the sun :-(
-    - "@DesktopLibraries"
+#   - "@DesktopLibraries"
     - "@Smartcards"
     # Really just libnm0 but I haven't yet pried that apart
     - "@NetworkManager"
@@ -5792,8 +5860,20 @@ groups:
        - strongswan-mysql
 
  # Maybe we should call this PacketSwitching or something along those lines
+ - name: "@OpenVSwitchAPI"
+   sourceproject: Applications
+   requires:
+    - "@OpenVSwitch"
+    - "@NetworkAPI"
+    - "@InfinibandAPI"
+    - "@SystemdAPI"
+    - "@SystemPythonAPI"
+   binaries:
+    - dpdk-devel
+
  - name: "@OpenVSwitch"
-   sourceproject: Network
+   api: "@OpenVSwitchAPI"
+   sourceproject: Applications
    requires:
     - "@NetworkCore"
     - "@CoreServices"
@@ -6207,6 +6287,13 @@ groups:
     - "@PythonModules310"
     - "@PythonModules311"
 
+ - name: "@SystemPythonAPI"
+   # we do not accept any autoflavors:
+   compatibility: none
+   sourceproject: Python
+   requires:
+    - PythonAPI311
+
  - name: "@SystemPythonStandard"
    # we do not accept any autoflavors:
    compatibility: none
@@ -6217,6 +6304,9 @@ groups:
     - name: dbus
       requires:
        - "@PythonStandard311+dbus"
+    - name: systemd
+      requires:
+       - "@PythonStandard311+systemd"
     - name: desktop
       requires:
        - "@PythonStandard311+desktop"
@@ -6356,6 +6446,7 @@ groups:
     - "@AudioLibraries"
     - "@GraphicsLibraries"
     - "@Smartcards"
+    - "@KernelNetworkUtils"
    binaries:
     - java-17-openjdk
     - java-17-openjdk-demo
@@ -6755,6 +6846,7 @@ groups:
        - "@DrawingLibraries"
        - "@Bubblewrap"
        - "@Webkit"
+       - "@SVGLibraries"
       binaries:
        - emacs-x11
 
@@ -6869,8 +6961,14 @@ templates:
           - pythonXXX-dbus-python
           - pythonXXX-notify2
           - pythonXXX-slip-dbus
+       - name: systemd
+         requires:
+          - "@CoreServices"
+         binaries:
+          - pythonXXX-psutil
        - name: tcl
          requires:
+          - "@PythonCoreXXX+tcl"
           - "@TclCore+x11"
          binaries:
           - pythonXXX-Pympler

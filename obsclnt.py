@@ -1091,7 +1091,10 @@ class OBSProject:
 
 		result = []
 		for dep in requires:
-			if len(dep.packages) <= 1:
+			if len(dep.packages) == 0:
+				continue
+
+			if len(dep.packages) == 1:
 				target = dep.packages[0]
 				if isValidTarget(target.name):
 					result.append(target)

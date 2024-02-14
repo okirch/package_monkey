@@ -665,6 +665,8 @@ components:
     - UpdateStack
     - Ruby
     - Container
+   exports:
+    - "@ManagementLibraries"
  - name: UpdateStack
    globals:
     devel: UpdateStackDevel
@@ -925,10 +927,6 @@ groups:
     - "@CoreAPI"
     - "@SystemdAPI"
    binaries:
-    - rpm-build
-    - compat-usrmerge-build
-#   - libbz2-devel
-#   - libxml2-devel
     # misnamed package (should have been static-devel)
     - newt-static
     - libgpgme-devel priority=0
@@ -1011,6 +1009,31 @@ groups:
    binaries:
 #   - fftw3-mpi-devel hide
 
+ - name: "@RpmBuild"
+   sourceproject: Core
+   requires:
+    - "@CoreAPI"
+    - "@LUA"
+    - "@SystemPython"
+   binaries:
+    - compat-usrmerge-build
+    - rpm-build
+   buildflavors:
+    - name: lint
+      requires:
+       - "@DesktopQuarks"
+       - "@AppstreamLibraries"
+       - "@Permissions"
+       - "@Spelling+python"
+       - "@SystemPythonStandard+desktop"
+      binaries:
+       - rpmlint
+       - rpmlint-mini
+       - rpmlint-strict
+       - checkbashisms
+       - dash
+       - dash-sh
+
  - name: "@CoreAPI"
    sourceproject: Core
    description: |
@@ -1082,7 +1105,7 @@ groups:
    buildflavors:
     - name: qt
       requires:
-       - "@Qt"
+       - "@EssentialQtLibraries"
       binaries:
        - cmake-gui
 
@@ -1162,7 +1185,7 @@ groups:
     - libfribidi0
     - libiniparser1
     # libpng is required by libfreetype6
-    - libpng16
+    - libpng16-16
     - libgdbm6
     - libgdbm_compat4
     - libibmtss1
@@ -1536,7 +1559,6 @@ groups:
     - ibmswtpm2
     - git-core
     - checkmedia
-    - rpm-build-perl
     - libtidyp-1*
     - libtidy5*
     - fmt
@@ -1555,9 +1577,11 @@ groups:
        - git-email
        - git-svn
        - git
-    - name: test
+    - name: gtk
+      requires:
+       - "@Gtk3"
       binaries:
-#      - libglib-testing-0-0
+       - openssh-askpass-gnome
 
  - name: "@CoreHardware"
    sourceproject: Core
@@ -1680,6 +1704,7 @@ groups:
     - permissions
     - chkstat
     - sysuser-shadow
+    - polkit-default-privs
    buildflavors:
     - name: zypp
       requires:
@@ -1809,7 +1834,7 @@ groups:
        - pcp-pmda-oracle
     - name: qt
       requires:
-       - "@Qt"
+       - "@Qt5ExtendedLibraries"
       binaries:
        - pcp-gui
     - name: network
@@ -1825,7 +1850,7 @@ groups:
        - pcp-pmda-lio
     - name: test
       requires:
-       - "@Qt"
+       - "@EssentialQtLibraries"
       binaries:
        - pcp-testsuite
     - name: tk
@@ -1869,6 +1894,7 @@ groups:
    binaries:
     - agrep
     - lsof
+    - pkc11-helper
 
  - name: "@Spelling"
    feature: True
@@ -1877,6 +1903,8 @@ groups:
     - "@Core0"
     - "@Glib2NoDBus"
     - "@PlusLibraries"
+   packages:
+    - python-pyenchant
    binaries:
     - myspell-dictionaries
     - enchant
@@ -2016,6 +2044,7 @@ groups:
    binaries:
     - psutils
     - ghostscript
+    - ghostscript-mini
    buildflavors:
     - name: x11
       requires:
@@ -2133,6 +2162,7 @@ groups:
     - libopenjp2-*
     - liblcms2-2
     - libwebp7
+    - libimagequant0
    buildflavors:
     - name: x11
       requires:
@@ -2282,6 +2312,7 @@ groups:
    binaries:
     - libjemalloc2
     - libkyotocabinet16
+    - libpkcs11-helper1
 
  - name: "@Snappy"
    sourceproject: CorePlus
@@ -2346,8 +2377,6 @@ groups:
     - "@ManDoc"
     - "@Texinfo"
     - "@SystemPython"
-    # rpmlint-mini needs polkit-default-privs needs polkit, but we're configured
-    # to ignore that dependency
    binaries:
     - memory-constraints
     - brp-check-suse
@@ -2356,7 +2385,6 @@ groups:
     - doxygen
     - gperf
     - post-build-checks
-    - rpmlint-mini
     - swig
     - valgrind
     - pesign-obs-integration
@@ -2365,7 +2393,7 @@ groups:
    buildflavors:
     - name: qt
       requires:
-       - "@Qt"
+       - "@EssentialQtLibraries"
     - name: llvm
       requires:
        - "@LLVMRuntime"
@@ -2872,8 +2900,6 @@ groups:
     - "@CoreAPI"
     - "@X11API"
     - "@HardwareAccessAPI"
-    # This is silly:
-#   - "@Meson"
    binaries:
     - libQt5Widgets-devel
     - libQt5OpenGL-devel
@@ -2889,24 +2915,264 @@ groups:
     # This is silly:
     - "@Meson"
    binaries:
-    - libQt5Charts5-designer
     - qt6-macros
 
- - name: "@Qt"
+ - name: "@EssentialQtLibraries"
+   api: "@QtAPI"
    sourceproject: Qt
    requires:
-    - "@Core0"
-    - "@X11"
-    - "@PythonCore"
+    - "@CoreLibraries"
+    - "@X11Libraries"
     - "@OpenGL"
-    - "@Databases"
-#   - "@Gnome"
+#   - "@DatabaseLibraries"
     - "@PrintServer"
-    - "@DesktopLibraries"
+    - "@PrintingLibraries"
+    - "@Multimedia"
+    - "@PlusLibraries"
+    - "@NetworkProxyLibraries"
+    - "@SmartcardLibraries"
+   packages:
+    - qt6-base
+    - libqt5-qtbase
+   binaries:
+    - libQt6Concurrent6
+    - libQt6Core6
+    - libQt6DBus6
+    - libQt6Gui6
+    - libQt6Network6
+    - libQt6OpenGL6
+    - libQt6OpenGLWidgets6
+    - libQt6PrintSupport6
+    - libQt6Sql6
+    - libQt6Test6
+    - libQt6Widgets6
+    - libQt6Xml6
+    - libQt6Concurrent6
+    - libQt6Core6
+    - libQt6DBus6
+    - libQt6Gui6
+    - libQt6Network6
+    - libQt6OpenGL6
+    - libQt6OpenGLWidgets6
+    - libQt6PrintSupport6
+    - libQt6Sql6
+    - libQt6Test6
+    - libQt6Widgets6
+    - libQt6Xml6
+    - qt6-network-tls
+    - libQt5Concurrent5
+    - libQt5Core5
+    - libQt5DBus5
+    - libQt5Gui5
+    - libQt5Network5
+    - libQt5OpenGL5
+    - libQt5PrintSupport5
+    - libqt5-qtbase
+#   - libqt5-qtbase-examples
+#   - libqt5-qtbase-platformtheme-gtk3
+#   - libqt5-qtbase-platformtheme-xdgdesktopportal
+    - libQt5Test5
+    - libQt5Widgets5
+    - libQt5Xml5
+
+ - name: "@CommonQtExtRequirements"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libassimp5
+
+ - name: "@Qt5ExtendedLibraries"
+   api: "@Qt5ExtendedAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@PulseAudioLibraries+x11"
+    - "@GStreamerLibraries"
+    - "@CommonQtExtRequirements"
+    - "@PrintingAPI"
+   binaries:
+    - libQtQuick5
+    - libQt5Multimedia5
+    - libQt5X11Extras5
+    - libQt5WaylandClient5
+    - libQt5Sql5
+    - libQt5Sql5-sqlite
+    - libQt5Svg5
+    - qtdeclarative-imports-provides-qt5
+
+ - name: "@Qt5ExtendedAPI"
+   sourceproject: Qt
+   requires:
+    - "@Qt5StickyLumpOfLibraries"
+    - "@QtAPI"
+    - "@SystemdAPI"
+    - "@PulseAudioAPI"
+   binaries:
+    - libQt5Charts5-designer
+    - libQt5Charts5-devel
+    - libQt5*-devel priority=0
+    - libQt5*-devel-static priority=0
+    - libqt5*-devel priority=0
+    - libQt5Network-devel
+    - libQt5DBus-devel
+    - libQt5PlatformHeaders-devel
+    - libQt5Xml-devel
+    - libQt5*-private-headers-devel priority=0
+
+ - name: "@Qt5StickyLumpOfLibraries"
+   api: "@Qt5ExtendedAPI"
+   sourceproject: Qt
+   requires:
+    - "@Qt5ExtendedLibraries"
+    - "@SystemDatabaseLibraries"
+    - "@Gtk3"
+    - "@Snappy"
+    - "@SpeechSynthesis"
+   binaries:
+    - libqt5-qtdeclarative
+    - qtdeclarative-imports-provides-qt5
+    - libQt5Sql5-mysql
+    - libQt5Sql5-postgresql
+    - libQt5Sql5-unixODBC
+    - libQt5*
+    - libqt5-*
+
+ - name: "@QtQuickLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+   binaries:
+    - qt6-declarative-imports
+    - qt6-declarative
+    - libQt6Quick*
+    - libQt6Qml*
+    - libQt6Labs*
+
+ - name: "@QtMultimediaLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
     - "@Multimedia"
     - "@PulseAudioLibraries"
-    - "@GnomeLibraries"
+    - "@GStreamerLibraries"
+    - "@QtDatabaseLibraries"
+   binaries:
+    - qt6-multimedia
+    - libQt6Multimedia6
+
+ - name: "@QtDatabaseLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@SystemDatabaseLibraries"
+   binaries:
+    - qt6-sql-*
+
+ - name: "@Qt3DLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@QtMultimediaLibraries"
+    - "@CommonQtExtRequirements"
+   binaries:
+    - qt6-shadertools
+    - libQt6ShaderTools6
+    - libQt6SpatialAudio6
+    - libQt63D*
+
+ - name: "@QtDatabaseBindings"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@QtDatabaseLibraries"
+    - "@QtQuickLibraries"
+   binaries:
+ #  - qt6-multimedia-imports
+
+ - name: "@QtMultimediaBindings"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@QtMultimediaLibraries"
+    - "@QtQuickLibraries"
+    # qt6-multimedia-imports requires spatial audio, which in turn wants the 3D stuff
+    - "@Qt3DBindings"
+   binaries:
+    - qt6-multimedia-imports
+    - libQt6MultimediaQuick6
+
+ - name: "@Qt3DBindings"
+   sourceproject: Qt
+   requires:
+    - "@Qt3DLibraries"
+    - "@QtQuickLibraries"
+   binaries:
+    - qt6-quick3d
+    - qt6-quick3d-imports
+    - libQt6Quick3D*
+    - libQt63DQuick*
+
+ - name: "@QtAllBindings"
+   sourceproject: Qt
+   requires:
+    - "@QtDatabaseBindings"
+    - "@QtMultimediaBindings"
+    - "@Qt3DBindings"
+
+ - name: "@QtSpeechLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
     - "@SpeechSynthesis"
+    - "@QtQuickLibraries"
+   binaries:
+    - qt6-texttospeech
+    - libQt6TextToSpeech6
+
+ - name: "@QtGtkIntegration"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@GtkAllVersions"
+   binaries:
+
+ - name: "@QtBluetoothLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@BluetoothLibraries"
+   binaries:
+    - qt6-connectivity
+    - libqt5-qtconnectivity
+    - libqt5-qtconnectivity-tools
+
+ - name: "@Qt"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@QtDatabaseLibraries"
+    - "@QtMultimediaLibraries"
+    - "@QtGtkIntegration"
+    - "@QtBluetoothLibraries"
+    - "@Qt3DLibraries"
+    - "@QtAllBindings"
+    - "@Core0"
+    - "@X11"
+    - "@SystemPython"
+    - "@OpenGL"
+    - "@Databases"
+    - "@PrintServer"
+    - "@Multimedia"
     - "@PlusLibraries"
     - "@NetworkProxyLibraries"
     - "@SmartcardLibraries"
@@ -2918,10 +3184,7 @@ groups:
     - python-PyQt6-*
     - python-pytest-qt
    binaries:
-    - libQt5*
-    - libqt5-*
     - libQt6*
-    - qt6-sql-*
     - qt6-*
    buildflavors:
     - name: nfc
@@ -2930,29 +3193,30 @@ groups:
       binaries:
 #      - libQt5Nfc5
 #      - libQt6Nfc6
-    - name: pyqt
-      requires:
-       - "@Qt+nfc"
-      binaries:
-#      - python31?-qt5
-#      - python31?-PyQt6*
     - name: meta
       requires:
        - "@Qt-doc"
       binaries:
        - qt6-tools
    purposes:
-#   - name: devel
-#     requires:
-#      # I think this should be picked up automatically, but it's not
-#      - "@GPU-devel"
-#      - "@WorkbenchAll"
-#     binaries:
-#      - libQt5Charts5-designer
-#      - qt6-macros
     - name: doc
       binaries:
        - qt6-tools-helpgenerators
+
+ - name: "@PythonQt"
+   sourceproject: Qt
+   requires:
+    - "@Qt"
+    - "@PythonStandard"
+    - "@DBus"
+    - "@QtSpeechLibraries"
+    - "@Qt5StickyLumpOfLibraries"
+   binaries:
+    - python3??-qt5
+    - python3??-qt5-*
+    - python3??-PyQt6
+    - python3??-PyQt6-*
+    - python3??-qtwebengine-qt5
 
  - name: "@CorePlusAPI"
    sourceproject: CorePlus
@@ -3406,9 +3670,20 @@ groups:
     - "@GtkCommon"
     - "@AudioLibraries"
    binaries:
+    - openSUSE-appstream-process
+    - openSUSE-appdata-extra
     - libappstream4
     - libappstream-compose0
+    - appstream-glib
+    - gcab
+    - pngquant
     - AppStream
+   buildflavors:
+    - name: zypp
+      requires: 
+       - "@UpdateStack"
+      binaries:
+       - libzypp-plugin-appdata
 
  - name: "@GnomeVTE"
    sourceproject: Gnome
@@ -3513,18 +3788,17 @@ groups:
     - libgcr3
     # or move to AudioLibraries:
     - libgstvulkan-1*
-    - gcab
-    - appstream-glib
     - libical3
     - libsecret-1*
     - libmanette
     - libdecor
     - librevenge-0*
     - libzbar0
+    - libcamera*0*
    buildflavors:
     - name: qt
       requires:
-       - "@Qt"
+       - "@Qt5ExtendedLibraries"
        - "@OpenGL"
       binaries:
        - gstreamer-plugins-good-qtqml
@@ -3654,6 +3928,13 @@ groups:
        - "@SystemPythonStandard+desktop"
       binaries:
        - ibus
+    - name: qt
+      requires:
+       - "@Qt5ExtendedLibraries"
+       - "@ImageMagick"
+      binaries:
+       - libzbarqt0
+       - zbar
 
  - name: "@GnomeEverythingElse"
    sourceproject: Gnome
@@ -3718,6 +3999,17 @@ groups:
        - "@PHP"
       binaries:
        - graphviz-php
+    - name: x11
+      requires:
+       - "@FontLibraries+x11"
+      binaries:
+       - graphviz-gd
+    - name: gtk
+      requires:
+       - "@Gtk2"
+       - "@Postscript"
+      binaries:
+       - graphviz-gnome
 
  - name: "@GnomeApplications"
    sourceproject: Gnome
@@ -3756,7 +4048,7 @@ groups:
    sourceproject: Gnome
    requires:
     - "@Webkit"
-    - "@Qt"
+    - "@EssentialQtLibraries"
     - "@Bubblewrap"
     - "@Webkit"
    binaries:
@@ -4012,14 +4304,38 @@ groups:
    binaries:
 #   - rpm-ndb
 
+ - name: "@ManagementAPI"
+   sourceproject: Management
+   requires:
+    - "@ManagementLibraries"
+    - "@CoreAPI"
+
+ - name: "@ManagementLibraries"
+   sourceproject: Management
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libaugeas0
+    - libfa1
+
  - name: "@MinimalManagement"
    sourceproject: Management
    requires:
-    - "@Core"
+    - "@ManagementLibraries"
    binaries:
     - augeas
 
+ - name: "@UpdateStackAPI"
+   sourceproject: UpdateStack
+   requires:
+    - "@UpdateStackLibraries"
+    - "@SystemdAPI"
+    - "@BoostAPI"
+   binaries:
+    - libzypp-devel
+
  - name: "@UpdateStackLibraries"
+   api: "@UpdateStackAPI"
    sourceproject: UpdateStack
    requires:
     - "@Boost"
@@ -4045,7 +4361,7 @@ groups:
     - "@SystemPython"
     - "@Ruby"
     - "@MinimalSystemd"
-    - "@MinimalManagement"
+    - "@ManagementLibraries"
     - "@Glib2"
     - "@UpdateStackLibraries"
     - "@SystemPythonStandard"
@@ -4128,6 +4444,8 @@ groups:
 #   - pcsc-tools
     - libcacard0
 
+ # Some of the security stuff below is more of a desktop user thing (eg yubikeys), so we should
+ # look at those
  - name: "@HostSecurity"
    requires:
     - "@Core"
@@ -4147,6 +4465,8 @@ groups:
     - yubikey-*
     - pam_yubico
     - pam_krb5
+    - openCryptoki
+    - openCryptoki-64bit
 
  - name: "@StorageAPI"
    sourceproject: Host
@@ -4227,6 +4547,12 @@ groups:
     - ntfs-3g_ntfsprogs
     - libpmem*1
     - lib1pmem1
+   buildflavors:
+    - name: infiniband
+      requires:
+       - "@Infiniband"
+      binaries:
+       - rpmemd
 
  - name: "@RadosAPI"
    sourceproject: Host
@@ -4311,9 +4637,129 @@ groups:
    binaries:
     - python-aliyun-*
 
- - name: "@Yast2"
+ - name: "@YastCommonAPI"
    sourceproject: Management
    requires:
+    - "@YastCommon"
+    - "@CoreAPI"
+    - "@Ruby"
+   binaries:
+    - yast2-core-devel
+
+ - name: "@YastCommon"
+   api: "@YastCommonAPI"
+   sourceproject: Management
+   requires:
+    - "@Core"
+    - "@StorageServices"
+    - "@SystemPythonModules"
+    - "@UpdateStack"
+    - "@PolicyKit"
+    - "@Container"
+    - "@RubyStandard"
+    - "@Management"
+    - "@TransactionalServer+systemd"
+    - "@WorkbenchEssentials"
+    - "@HostSecurity"
+    - "@HardwareAccessUtilities"
+    - "@Perl"
+   binaries:
+    - yast2
+    - yast2-ruby-bindings
+    - yast2-perl-bindings
+    - yast2-ycp-ui-bindings
+    - yast2-core
+    - yast2-network
+    - yast2-country
+    - yast2-bootloader
+    - yast2-users
+    - yast2-hardware-detection
+    - yast2-iscsi-client
+    - yast2-installation
+    - yast2-proxy
+    - yast2-packager
+    - yast2-storage-ng
+    - libyui-ncurses-pkg16
+    - libyui-ncurses16
+    - libyui16
+    - libstorage-ng1
+    - libstorage-ng-ruby
+    - yast2-transfer
+    - yast2-country-data
+    - yast2-pkg-bindings
+    - yast2-xml
+    - yast2-security
+    - yast2-logs
+    - libstorage-ng1
+    - yast2-trans-stats
+    - yast2-ldap
+    - yast2-pam
+    - yast2-services-manager
+    - distribution-logos-SLE
+    - initviocons
+    - libsuseconnect
+    - suseconnect-ng
+    - suseconnect-ruby-bindings
+
+ - name: "@Agama"
+   sourceproject: Management
+   requires:
+    - "@YastCommon"
+    - "@StorageServices"
+    - "@NetworkStorage"
+    - "@SystemPythonModules"
+    - "@UpdateStack"
+    - "@PolicyKit"
+    - "@Container"
+#   - "@RubyStandard"
+#   - "@Management"
+#   - "@TransactionalServer+systemd"
+#   - "@WorkbenchEssentials"
+#   - "@HostSecurity"
+#   - "@NetworkManager"
+#   - "@Snapper"
+#   - "@NetworkProxyLibraries"
+#   - "@NetworkAnalysis+systemd"
+#   - "@Qt5ExtendedLibraries"
+    - "@HardwareAccessUtilities"
+    - "@Kernel+xen"
+   binaries:
+    - ruby3.2-rubygem-agama
+    - agama
+    - agama-cli
+    - agama-dbus-server
+    - cockpit*
+   buildflavors:
+    - name: pcp
+      requires:
+       - "@PCP"
+      binaries:
+       - cockpit-pcp
+
+ - name: "@Yast2API"
+   sourceproject: Management
+   requires:
+    - "@YastCommonAPI"
+    - "@Yast2"
+    - "@BoostAPI"
+    - "@FontLibsAPI"
+    - "@SystemdAPI"
+    - "@UpdateStackAPI"
+   binaries:
+    - libyui*-devel priority=0
+    - yast2-ycp-ui-bindings-devel
+   buildflavors:
+    - name: qt
+      requires:
+       - "@Yast2+qt"
+      binaries:
+       - libyui-qt-graph-devel
+
+ - name: "@Yast2"
+   sourceproject: Management
+   api: "@Yast2API"
+   requires:
+    - "@YastCommon"
     - "@Core"
     - "@StorageServices"
     - "@SystemPythonModules"
@@ -4330,20 +4776,19 @@ groups:
     - "@Snapper"
     - "@NetworkProxyLibraries"
     - "@NetworkAnalysis+systemd"
-    - "@Qt"
+    - "@Qt5ExtendedLibraries"
     - "@HardwareAccessUtilities"
    binaries:
     - autoyast2
+    - autoyast2-installation
     - yast2*
     - libyui*
-    - libstorage-ng1
     - ruby3.2-rubygem-agama
     - ruby-yui
-    - agama
-    - agama-dbus-server
-    - cockpit*
-    - libstorage-ng-ruby
+    - libstorage-ng-*
     - yast2-ruby-bindings
+    - perl-yui
+    - python3-yui
    buildflavors:
     - name: test
       requires:
@@ -4357,23 +4802,11 @@ groups:
        - libyui-ncurses-tools
     - name: qt
       requires:
-       - "@Qt"
+       - "@EssentialQtLibraries"
        - "@GnomeApplications" # for graphviz
       binaries:
        - libyui-qt
        - libyui-qt-graph16
-    - name: pcp
-      requires:
-       - "@PCP"
-      binaries:
-       - cockpit-pcp
-   purposes:
-#   - name: devel
-#     requires:
-#      - "@BaseDevTools"
-#     binaries:
-#      - yast2-buildtools
-#      - yast2-devtools
 
  - name: "@FreetypeAPI"
    sourceproject: Typesetting
@@ -4411,7 +4844,7 @@ groups:
    buildflavors:
     - name: qt
       requires:
-       - "@Qt"
+       - "@EssentialQtLibraries"
       binaries:
        - ftinspect
 
@@ -4632,6 +5065,25 @@ groups:
     - "@Glib2API"
    binaries:
     - flatpak-devel
+   buildflavors:
+    - name: gtk3
+      requires:
+       - "@Gtk3API"
+       - "@Flatpak+gtk3"
+      binaries:
+       - libportal-gtk3-devel
+    - name: gtk4
+      requires:
+       - "@Flatpak+gtk4"
+       - "@Gtk4API"
+      binaries:
+       - libportal-gtk4-devel
+    - name: qt5
+      requires:
+       - "@Flatpak+qt5"
+       - "@Qt5ExtendedAPI"
+      binaries:
+       - libportal-qt5-devel
 
  - name: "@Flatpak"
    api: "@FlatpakAPI"
@@ -4665,6 +5117,25 @@ groups:
     - libflatpak0
     - flatpak
     - xdg-desktop-portal
+    - libportal-1*
+   buildflavors:
+    - name: gtk3
+      requires:
+       - "@Gtk3"
+      binaries:
+       - typelib-1_0-XdpGtk3
+       - libportal-gtk3-1*
+    - name: gtk4
+      requires:
+       - "@Gtk4"
+      binaries:
+       - typelib-1_0-XdpGtk4
+       - libportal-gtk4-1*
+    - name: qt5
+      requires:
+       - "@Qt5ExtendedLibraries"
+      binaries:
+       - libportal-qt5-1*
 
  - name: "@LibComErrAPI"
    sourceproject: KernelPlus
@@ -4847,7 +5318,6 @@ groups:
     - kernel-syms
     - kernel-syms-*
     - systemtap-headers
-    - systemtap-dtrace
     # do not ship this, ever:
     - cpupower-rebuild
 
@@ -4920,6 +5390,7 @@ groups:
       requires:
        - "@Virtualization"
       binaries:
+       # more recent builds of kdump/kexec no longer require XEN
        - kexec-tools
        - kdump
 
@@ -5134,6 +5605,7 @@ groups:
     - "@CoreLibraries"
    binaries:
     - libbluetooth3
+    - libsbc1
 
  - name: "@Bluetooth"
    api: "@HardwareAccessAPI"
@@ -5298,13 +5770,23 @@ groups:
    buildflavors:
     - name: desktop
       requires:
-       - "@Qt"
+       - "@EssentialQtLibraries"
        - "@HostNetworking+gnomelibs"
        - "@SystemPythonStandard+desktop"
       binaries:
        - wpa_supplicant-gui
 
+ - name: "@AvahiAPI"
+   sourceproject: Network
+   requires:
+    - "@AvahiLibraries"
+    - "@CoreAPI"
+    - "@SystemdAPI"
+   binaries:
+    - libavahi-devel
+
  - name: "@AvahiLibraries"
+   api: "@AvahiAPI"
    sourceproject: Network
    requires:
     - "@CoreNetworkLibraries"
@@ -5360,7 +5842,7 @@ groups:
     - name: gui
       requires:
        - "@Gnome"
-       - "@Qt"
+       - "@PythonQt"
        - "@SystemPythonStandard+desktop"
       binaries:
        - firewall-config
@@ -5405,7 +5887,7 @@ groups:
     - name: gui
       requires:
        - "@Gnome"
-       - "@Qt"
+       - "@EssentialQtLibraries"
        - "@PythonStandard+desktop"
       binaries:
        - firewall-config
@@ -5441,7 +5923,6 @@ groups:
     - libdjvulibre2*
     - libraw23
     - libexif12
-    - pngquant
     - libpotrace0
     - libcaca0
     - python3-caca
@@ -5705,6 +6186,7 @@ groups:
     - openmpi2:standard
     - openmpi3:standard
     - openmpi4:standard
+    - gsl:gnu-hpc
    binaries:
     - mvapich2*
     - mpi-selector
@@ -5742,24 +6224,32 @@ groups:
    sourceproject: Network
    requires:
     - "@HostNetworking"
+   binaries:
    buildflavors:
     - name: systemd
       requires:
        - "@SystemdLibraries"
+       - "@BluetoothLibraries"
+       - "@Snappy"
       binaries:
        - libpcap1
-    - name: gui
-      requires:
-       - "@GnomeLibraries"
-       - "@Qt"
-       - "@Multimedia"
-       - "@Snappy"
-       - "@NetworkAnalysis+systemd"
-      binaries:
-       - wireshark
        - libwireshark16
        - libwiretap13
        - libwsutil14
+    - name: gui
+      requires:
+       - "@EssentialQtLibraries"
+       - "@Multimedia"
+       - "@NetworkAnalysis+systemd"
+      binaries:
+       - wireshark
+    - name: qt
+      requires:
+       - "@Qt5ExtendedLibraries"
+       - "@NetworkAnalysis+gui"
+       - "@DesktopCore"
+      binaries:
+       - wireshark-ui-qt
 
  - name: "@NetworkAPI"
    sourceproject: Network
@@ -5888,6 +6378,15 @@ groups:
    binaries:
     - openvswitch
 
+ - name: "@Systemtap"
+   sourceproject: Applications
+   requires:
+    - "@CoreLibraries"
+    - "@AvahiLibraries"
+   binaries:
+    - systemtap
+    - systemtap-dtrace
+
  - name: "@MailClient"
    sourceproject: Network
    requires:
@@ -5899,12 +6398,31 @@ groups:
    binaries:
     - mailutils
 
+ - name: "@PrintingAPI"
+   sourceproject: Network
+   requires:
+    - "@PrintingLibraries"
+    - "@SystemdAPI"
+    - "@SystemPython"
+    - "@AvahiAPI"
+    - "@RpmBuild"
+   binaries:
+    - cups-devel
+    - cups-rpm-helper
+   buildflavors:
+    - name: ddk
+      requires:
+       - "@PrintServer"
+      binaries:
+       - cups-ddk
+
  - name: "@PrintingLibraries"
+   api: "@PrintingAPI"
    sourceproject: Network
    requires:
     - "@NetworkServices"
     # for libusb:
-    - "@Core1"
+    - "@CoreHardware"
    binaries:
     - libcups2
     - cups-config
@@ -6168,7 +6686,7 @@ groups:
     - "@HostNetworking"
     - "@HostStorage"
     - "@NetworkStorage"
-    - "@MinimalManagement"
+    - "@ManagementLibraries"
     - "@SystemPython"
     - "@Rados"
     - "@Kernel"
@@ -6991,8 +7509,7 @@ templates:
        - name: desktop
          augments:
           - "@Glib2+python"
-          - "@GnomeLibraries"
-          - "@DesktopLibraries"
+          - "@GtkAllVersions"
           - "@PythonStandardXXX+graphics"
           - "@PythonStandardXXX+dbus"
          binaries:
@@ -7039,7 +7556,7 @@ templates:
       buildflavors:
        - name: qt
          requires:
-          - "@Qt"
+          - "@PythonQt"
          binaries:
           - pythonXXX-matplotlib-qt*
        - name: gnome

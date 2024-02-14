@@ -226,10 +226,24 @@ class Classification:
 		def finalizeExports(self):
 			assert(self.type == Classification.TYPE_SOURCE)
 
-			# if component Foo exports @BarLibraries, we also want to export @BarAPI
-			apis = filter(bool, (label.correspondingAPI for label in self.exports))
-			self.exports.update(Classification.createLabelSet(apis))
-			assert(None not in self.exports)
+			apis = Classification.createLabelSet()
+			for exportedLabel in self.exports:
+				if exportedLabel.componentLabel != self:
+					raise Exception(f"{self}: illegal export of {exportedLabel} which is part of component {api.componentLabel}")
+
+				# if component Foo exports @BarLibraries, we also want to export @BarAPI
+				api = exportedLabel.correspondingAPI
+				if api is not None:
+					if exportedLabel.componentLabel != self:
+						raise Exception(f"{self}: api {api} for {exportedLabel} is in different component {api.componentLabel}")
+					apis.add(api)
+
+			if False:
+				adding = apis.difference(self.exports)
+				if adding:
+					infomsg(f"{self}: automatically exporting the following APIs: {' '.join(map(str, adding))}")
+
+			self.exports.update(apis)
 
 		def okayToAccess(self, other, componentLabelOrder):
 			return self.canAccessDirectly(other, componentLabelOrder) or \
@@ -944,11 +958,7 @@ class Classification:
 			if self._final:
 				raise Exception(f"Duplicate call to ClassificationScheme.finalize()")
 
-			componentOrder = self.componentOrder()
-
-			for componentLabel in componentOrder.bottomUpTraversal():
-				componentLabel.finalizeExports()
-
+			infomsg(f"Finalizing classification")
 			for label in self._labels.values():
 				if label.sourceProject is None:
 					inheritSourceProject(label)
@@ -959,6 +969,11 @@ class Classification:
 							raise Exception(f"Label {label}: no buildconfig specified")
 					elif not label.sourceProject.defined:
 						raise Exception(f"Label {label} references project {label.sourceProject}, but it's not defined anywhere")
+
+			componentOrder = self.componentOrder()
+
+			for componentLabel in componentOrder.bottomUpTraversal():
+				componentLabel.finalizeExports()
 
 			# create a partial order but throw it away afterwards. the label hierarchy
 			# is changing as part of this exercise

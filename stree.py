@@ -1003,7 +1003,7 @@ class SolvingTree(object):
 		for build in self.multiBuilds:
 			baseName = build.basePackageName
 			# This is all used for handling HPC builds
-			if build.name in ('boost:base', 'fftw3:standard', 'python-scipy:gnu-hpc'):
+			if build.name in ('boost:base', 'fftw3:standard', 'python-scipy:gnu-hpc', 'systemtap:systemtap-headers'):
 				infomsg(f"HACK: we allow {build} to be placed in a different component than other {baseName}:* builds")
 				continue
 

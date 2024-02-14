@@ -557,7 +557,7 @@ class Classification:
 			self._globalPurposeLabels[name] = label
 			label.sourceProject = self
 
-		def updateGlobalPurposeLabels(self, generalizedRequires):
+		def updateGlobalPurposeLabels(self, generalizedRequires, componentOrder):
 			assert(self.type is Classification.TYPE_SOURCE)
 			if not self._globalPurposeLabels:
 				return
@@ -565,12 +565,18 @@ class Classification:
 			# Update the label (eg CoreDevel) with all labels that are associated with
 			# component Core, and which are not a component level label themselves.
 			for name, label in self._globalPurposeLabels.items():
-				label.runtimeRequires.update(generalizedRequires)
 
-				# it's possible that FooDevel is inversion-free; in this case,
-				# it would be part of generalizedRequires
-				# To avoid creating a loop in the dependency graph, excplicitly drop it here:
-				label.runtimeRequires.discard(label)
+				for req in generalizedRequires:
+					# should not happen:
+					if req.componentLabel is None:
+						continue
+
+					# prevent loops
+					if req is label:
+						continue
+
+					if label.canAccessDirectly(req, componentOrder) or req.isExported:
+						label.runtimeRequires.add(req)
 
 				for requiredComponent in self.runtimeRequires:
 					required = requiredComponent.globalPurposeLabel(name)
@@ -1033,7 +1039,7 @@ class Classification:
 			inversionMap = inversionBuilder.inversionMap
 			for componentLabel in componentOrder.bottomUpTraversal():
 				selfContained = inversionMap.getGoodComponentTopics(componentLabel)
-				componentLabel.updateGlobalPurposeLabels(selfContained)
+				componentLabel.updateGlobalPurposeLabels(selfContained, componentOrder)
 
 			self.inversionMap = inversionMap
 

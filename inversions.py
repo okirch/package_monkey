@@ -54,16 +54,39 @@ class InversionInspector(object):
 	def filterStrangeInversions(self, label, inversions):
 		imports = self.allExportedTopics.intersection(inversions)
 
+		labelClosure = self.topicOrder.downwardClosureFor(label)
+		baseLabelClosure = self.topicOrder.downwardClosureFor(label.baseLabel)
+
+		autoLabelClosure = Classification.createLabelSet()
+		if label.fromAutoFlavor:
+			for autoReq in label.fromAutoFlavor.runtimeRequires:
+				autoLabelClosure.update(self.topicOrder.downwardClosureFor(autoReq))
+
 		strangeInversions = Classification.createLabelSet()
 		for dep in inversions.difference(imports):
 			if dep in self.allExportedTopics:
 				continue
 
-			# if @Foo+python requires @Bar+python, and @Foo requires @Bar
-			# then it's not a "strange" inversion
-			if dep.fromAutoFlavor == label.fromAutoFlavor and \
-			   dep.baseLabel in label.baseLabel.configuredRuntimeRequires:
-				continue
+			# handle @Foo+python requires @Bar+python:
+			if dep.fromAutoFlavor == label.fromAutoFlavor:
+				# if @Foo requires @Bar then it's not a "strange" inversion
+				if dep.baseLabel in baseLabelClosure:
+					continue
+
+				# if the @Bar comes in through +python, then it's
+				# not a "strange" inversion either
+				if label.fromAutoFlavor and \
+				   dep.baseLabel in autoLabelClosure:
+					continue
+
+			if False:
+				path = label.baseLabel.explainRuntimeDependency(dep.baseLabel)
+				if path is None:
+					path = label.explainRuntimeDependency(dep.baseLabel)
+				if path is not None:
+					infomsg(f"  strange {dep} {' -> '.join(map(str, path))}")
+				else:
+					infomsg(f"  strange {dep} inexplicable")
 
 			strangeInversions.add(dep)
 

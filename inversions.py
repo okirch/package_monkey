@@ -238,6 +238,11 @@ class InversionBuilder:
 
 				strangeInversions = scope.filterStrangeInversions(label, inversions)
 
+				# do not consiser auto-selected runtime dependencies "strange"
+				# The reason being, they were auto-selected because all their requirements
+				# were already met by label before they were added.
+				strangeInversions.difference_update(label.automaticRuntimeRequires)
+
 				if label.purposeName is None and strangeInversions:
 					warnmsg(f"{scope.component}: {label} has strange inversions {' '.join(map(str, strangeInversions))}")
 

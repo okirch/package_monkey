@@ -109,6 +109,10 @@ class Classification:
 			# closure
 			self.autoSelect = True
 
+			# In the label that receives auto-selected flavors,
+			# track the labels that were added due to auto-selection
+			self.automaticRuntimeRequires = Classification.createLabelSet()
+
 			# if isFeature is true, then the solving algorithm may give
 			# this label greater significance than other labels.
 			# The idea is to distinguish between labels that exist purely
@@ -482,7 +486,7 @@ class Classification:
 				return
 
 			myClosure = order.downwardClosureFor(self).copy()
-			availableFlavors = set()
+			availableFlavors = Classification.createLabelSet()
 			for requiredLabel in myClosure:
 				if requiredLabel is self:
 					continue
@@ -504,14 +508,15 @@ class Classification:
 			# @DBus+x11
 			while candidateFlavors:
 				# infomsg(f"{self} try to select from {' '.join(map(str, candidateFlavors))}")
-				eligibleFlavors = set()
+				eligibleFlavors = Classification.createLabelSet()
 				for flavor in order.bottomUpTraversal(candidateFlavors):
 					flavorBaseClosure = order.downwardClosureFor(flavor)
 					if flavor in flavorBaseClosure:
 						flavorBaseClosure.remove(flavor)
 
 					if flavorBaseClosure.issubset(myClosure):
-						# infomsg(f"{self} auto-selected {flavor}")
+						if False:
+							infomsg(f"{self} auto-selected {flavor} (disposition {flavor.disposition})")
 						myClosure.update(order.downwardClosureFor(flavor))
 						eligibleFlavors.add(flavor)
 
@@ -520,6 +525,7 @@ class Classification:
 
 				for flavor in eligibleFlavors:
 					self.addRuntimeDependency(flavor) 
+				self.automaticRuntimeRequires.update(eligibleFlavors)
 
 				candidateFlavors.difference_update(eligibleFlavors)
 

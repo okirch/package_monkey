@@ -106,10 +106,16 @@ class InversionBuilder:
 
 		self.inversionMap = InversionMap()
 
+		self.inspectedTopics = Classification.createLabelSet()
+
 	def allComponentTopics(self, componentLabel):
 		return self.classification.getReferencingLabels(componentLabel)
 
 	def addInversion(self, topic, inversions):
+		# do not allow overwriting inversions for a given topic (it usually
+		# means we have re-evaluated it in a different context)
+		if self.inversionMap.get(topic) is not None:
+			raise Exception(f"Refusing to overwrite inversions for {topic}")
 		self.inversionMap.add(topic, inversions)
 
 	@staticmethod
@@ -133,6 +139,7 @@ class InversionBuilder:
 		result = InversionInspector(componentLabel, self)
 
 		componentClosure = self.componentOrder.downwardClosureFor(componentLabel)
+		fishyTopics = Classification.createLabelSet()
 		for component in componentClosure:
 			result.initialTopics.update(component.imports)
 
@@ -149,9 +156,13 @@ class InversionBuilder:
 #					if lll.parent is None:
 #						infomsg(f"    * {lll}")
 
+				fishyTopics.update(topicLabels.difference(goodTopics))
+
 		# Do not inspect any binary labels that we already found to be inversion-free
 		# within the context of the component they belong to.
 		result.candidateTopics.difference_update(result.goodTopics)
+
+		result.candidateTopics.update(fishyTopics)
 
 		# if we pull in @GccRuntime, we also want @GccRuntime-{doc,i18n,32bit,...}
 		InversionBuilder.extendTopicsPurposes(result.initialTopics)
@@ -231,8 +242,20 @@ class InversionBuilder:
 				# were already met by label before they were added.
 				strangeInversions.difference_update(label.automaticRuntimeRequires)
 
-				if label.purposeName is None and strangeInversions:
-					warnmsg(f"{scope.component}: {label} has strange inversions {' '.join(map(str, strangeInversions))}")
+				if False:
+					if label.purposeName is None and strangeInversions:
+						warnmsg(f"{scope.component}: {label} has strange inversions {' '.join(map(str, strangeInversions))}")
+
+				# We often end up visiting the same label several times.
+				#  - when evaluating the runtime scope
+				#  - when evaluating the build scope
+				#  - when re-evaluating a label with inversions in the context of a higher level component
+				if label in self.inspectedTopics:
+					continue
+
+				if label.componentLabel != scope.component:
+					infomsg(f"   we inspected {label} but we should not update inversions")
+					continue
 
 				self.addInversion(label, inversions)
 
@@ -271,6 +294,10 @@ class InversionBuilder:
 						for i in minimal:
 							explainDependency("minimal label", label, i)
 						zzz
+
+		# record that we have looked at these topics already
+		self.inspectedTopics.update(scope.candidateTopics)
+
 		return scope.goodTopics
 
 	class ComponentState(object):

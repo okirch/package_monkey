@@ -189,7 +189,7 @@ class InversionBuilder:
 					result.initialTopics.add(purpose)
 
 		# if a topic is free of inversions in a runtime context, then it'll also be
-		# find in a build context
+		# fine in a build context
 		result.candidateTopics = runtimeScope.candidateTopics.difference(runtimeScope.goodTopics)
 
 		result.topicsOfInterest = Classification.createLabelSet(filter(lambda label: label.isAPI, result.candidateTopics))
@@ -203,6 +203,8 @@ class InversionBuilder:
 		return result
 
 	def process(self, componentLabel):
+		debugmsg(f"Detecting all inversions for {componentLabel}")
+
 		runtimeScope = self.createRuntimeScope(componentLabel)
 		self.evaluate(runtimeScope)
 
@@ -264,7 +266,7 @@ class InversionBuilder:
 				# on @Glib2 because the typelib auto flavor specifies this as a
 				# runtime requirement
 
-				if True and label.purposeName is None:
+				if False and label.purposeName is None:
 					if len(inversions) > 10:
 						infomsg(f"  {label} has {len(inversions)} inversions")
 					else:

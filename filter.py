@@ -465,6 +465,22 @@ class Classification:
 			if not self.autoSelect:
 				return
 
+			# "Normal" case:
+			#	a label @Foo, requiredLabel @Bar
+			#	 - we want to add all @Bar+something if its requirements are
+			#	   a subset of @Foo's requirements
+			#	 - question: should we do this for all +something flavors,
+			#	   or just for those that have disposition maybe_merge?
+			# "DONT" case
+			#	a label @Foo+python, requiredLabel @Bar+typelib
+			# Borderline cases
+			#	a label @Foo+python, requiredLabel @Bar
+			#	 - we may want to add @Bar+python
+			#
+			# For the time being, we just handle the "normal" case
+			if self.parent is not None:
+				return
+
 			myClosure = order.downwardClosureFor(self).copy()
 			availableFlavors = set()
 			for requiredLabel in myClosure:

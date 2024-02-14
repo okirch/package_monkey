@@ -49,41 +49,6 @@ class InversionInspector(object):
 			inversions.update(indirectInversions)
 			return True
 
-		if label.name == "@GdkPixbuf" and req.name == "@Core+systemdlibs":
-			infomsg(f"req base label is good: {req.baseLabel in self.goodTopics}")
-
-		return False
-
-		# All of the stuff below is highly speculative and probably not a good idea at all
-
-		autoLabel = req.fromAutoFlavor
-		if autoLabel is None:
-			return False
-
-		# Consider @Foo requiring inversion @UdevLibraries
-		# Then @Foo+python will depend on inversion @UdevLibraries+python
-		# Detect whether that adds any new inversions or not.
-		infomsg(f"{label} requires {req}, auto = {autoLabel}")
-		if autoLabel and label.fromAutoFlavor is autoLabel and \
-		   req.purposeName == label.purposeName:
-			baseLabel = label.baseLabel
-			reqBaseLabel = req.baseLabel
-			if reqBaseLabel in baseLabel.runtimeRequires:
-				infomsg(f"{label} requires {req}, and {baseLabel} requires {reqBaseLabel}")
-
-				x = autoLabel.runtimeRequires.copy()
-				x.add(baseLabel)
-				x.add(reqBaseLabel)
-				supOfBaseLabels = self.topicOrder.downwardClosureForSet(x)
-
-				if label.runtimeRequires.issubset(supOfBaseLabels):
-					infomsg(f"{label} requires {req}, and its requirements are satisfied by {req} and {baseLabel}")
-					inversions.update(autoLabel.runtimeRequires)
-					req = reqBaseLabel
-				else:
-					lacking = label.runtimeRequires.difference(supOfBaseLabels)
-					infomsg(f"   lacking {' '.join(map(str, lacking))}")
-
 		return False
 
 	def filterStrangeInversions(self, label, inversions):

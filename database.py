@@ -232,11 +232,10 @@ class Table(object):
 	def insertKeysAndValues(self, keys, values):
 		db = self.db
 
-		c = db.conn.cursor()
 		nameFmt = ",".join(keys)
 		valueFmt = ",".join(["?"] * len(values))
 		sql = f"INSERT INTO {self.name}({nameFmt}) VALUES ({valueFmt})"
-		c.execute(sql, values)
+		c = self.execute(sql, values)
 		db.commit()
 
 		return ObjectHandle(db, self.name, c.lastrowid)

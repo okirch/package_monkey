@@ -20,6 +20,10 @@ products:
    obsname:     Dolomite
 
 resolverhints:
+  fake:
+   - environment_with_systemd
+   - environment_with_udev
+   - environment_with_polkit
   ignore:
     # we want to place these somewhere in Core, but dont want to pollute Core
     # with any systemd dependencies.

@@ -119,6 +119,7 @@ class ResolverHints:
 		self._ignoredTargets = None
 
 		self._rewriteDependencies = {}
+		self.fakeDependencies = set()
 
 	def addNameOrder(self, words):
 		self._rules.append(self.NameOrderRule(words))
@@ -172,6 +173,12 @@ class ResolverHints:
 
 		ignoredNames = self._ignoredDependencies.get(targetName)
 		return ignoredNames is not None and packageName in ignoredNames
+
+	##########################################################
+	# define fake depdendency targets
+	##########################################################
+	def addFakeDependency(self, name):
+		self.fakeDependencies.add(name)
 
 	##########################################################
 	# Handling of dependency rewrites

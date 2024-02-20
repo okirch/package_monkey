@@ -166,6 +166,9 @@ class ProductFamily:
 		hints = data.get('resolverhints')
 		if hints is not None:
 			self.resolverHints = ResolverHints()
+			fake = hints.get('fake')
+			if fake is not None:
+				self.expandFakeDependencies(fake)
 			prefs = hints.get('prefer')
 			if prefs is not None:
 				self.expandResolverPreferences(prefs)
@@ -220,6 +223,11 @@ class ProductFamily:
 		info.sourceProjects = data.get('source') or []
 		info.buildProjects = data.get('build') or []
 		return info
+
+	def expandFakeDependencies(self, data):
+		for name in data:
+			assert(type(name) is str)
+			self.resolverHints.addFakeDependency(name)
 
 	def expandResolverPreferences(self, data):
 		for expr in data:

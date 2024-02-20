@@ -47,8 +47,10 @@ traceMatcher = application.traceMatcher
 # we should probably make this part of PackageCollection
 allBuilds = []
 
-# hard-code for now
-for name in ('environment_with_systemd', 'environment_with_udev', ):
+# Add all fake dependency targets like "environment_with_systemd" to the package collection
+resolverHints = application.productFamily.resolverHints
+for name in resolverHints.fakeDependencies:
+	infomsg(f"FAKE {name}")
 	collection.addSynthetic(name)
 
 with TimedExecutionBlock("load all packages from database"):

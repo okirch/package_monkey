@@ -650,6 +650,18 @@ class PackageTable(UniqueTable):
 			pinfo = PackageInfo(name, epoch, version, release, arch, id)
 			yield (pinfo, buildTime)
 
+	def updateBuildMembership(self, buildId, rpmIds):
+		# Clear any RPMs referencing this build
+		# UPDATE packages SET buildId=None WHERE buildId=NNN
+		self.updateKeysAndValues(['buildId'], [None], buildId = buildId)
+
+		# Insert new references to this build
+		# UPDATE packages SET buildId=NNN WHERE id=[rpmIds]
+		if rpmIds:
+			self.updateMultiple(['buildId'], [buildId], 'id', rpmIds)
+
+		self.knownBuilds[buildId] = rpmIds.copy()
+
 	@property
 	def allValidIds(self):
 		return set(self.knownPackageIDs.values())
@@ -1671,6 +1683,35 @@ class BackingStoreDB(DB):
 			return None
 
 		return self.retrieveOBSPackageByBuildId(buildId)
+
+	def insertOBSPackage(self, obsPackage):
+		id = self.builds.update(obsPackage.name, None)
+		if id is None:
+			raise Exception(f"Unable to update table {self.builds.name} for OBS package {obsPackage.name}")
+
+		obsPackage.backingStoreId = id
+
+	def updateOBSPackage(self, build, rpms, updateTimestamp = False):
+		rpmIds = [rpm.backingStoreId for rpm in rpms]
+		if not all(rpmIds):
+			for rpm in rpms:
+				if rpm.backingStoreId is None:
+					errormsg(f"{build}: {rpm.fullname()} is not in the database")
+			raise Exception(f"Cannot update {build}: at least one RPM lacks a DB Id")
+
+		if build.backingStoreId is None:
+			self.insertOBSPackage(build)
+
+		self.packages.updateBuildMembership(build.backingStoreId, rpmIds)
+
+		# update the build->package relation table as well
+		self.buildPkgRelation.removePackagesForList([build.backingStoreId])
+
+		for rpm in rpms:
+			self.buildPkgRelation.addPackage(buildId = build.backingStoreId, pkgId = rpm.backingStoreId)
+
+		if updateTimestamp:
+			self.builds.updateDict({'buildTime': build.buildTime, 'sourcePackageId' : 0}, id = build.backingStoreId)
 
 	def constructOBSPackage(self, d):
 		obsPackage = self.builds.constructObject(OBSPackage, d)

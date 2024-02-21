@@ -710,6 +710,12 @@ class LatestPackageTable(UniqueTable):
 
 		self._latestIds = None
 
+	def getPackageByName(self, name):
+		b = self._buckets.get(name)
+		if b is not None:
+			return b.pinfo
+		return None
+
 	# FIXME: something is wrong here; we end up with duplicate entries in the DB
 	def update(self, pkg):
 		assert(pkg.backingStoreId)
@@ -1484,6 +1490,12 @@ class BackingStoreDB(DB):
 				if rpm.sourcePackage is None:
 					rpm.sourcePackage = src
 				yield rpm
+
+	def recoverLatestPackageByName(self, name):
+		pinfo = self.latest.getPackageByName(name)
+		if pinfo is None:
+			return None
+		return self.retrievePackage(pinfo)
 
 	def retrievePackage(self, pinfo):
 		pkg = self.retrievePackageById(pinfo.backingStoreId, pinfo.product)

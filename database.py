@@ -1513,7 +1513,7 @@ class BackingStoreDB(DB):
 	def retrievePackage(self, pinfo):
 		pkg = self.retrievePackageById(pinfo.backingStoreId, pinfo.product)
 
-		if pkg.fullname() != pinfo.fullname():
+		if pkg and pkg.fullname() != pinfo.fullname():
 			raise Exception(f"DB inconsistency. Looking up {pinfo.fullname()} returned {pkg.fullname()}")
 
 		return pkg
@@ -1573,16 +1573,16 @@ class BackingStoreDB(DB):
 
 		# FIXME: cleanup
 		# locate the OBS package from which this was built
-		if True:
+		if False:
 			buildId = self.buildPkgRelation.retrieveBuildForPackage(pkgId)
 			if buildId is None:
-				warnmsg(f"Warning: {pkg.fullname()} (id {pkgId}) not tracked by any build")
+				warnmsg(f"{pkg.fullname()} (id {pkgId}) not tracked by any build")
 			elif pkg.obsBuildId == buildId:
 				pass
 			elif buildId is not None:
 				pkg.obsBuildId = buildId
 			else:
-				warnmsg(f"Warning: {pkg.fullname()} (id {pkgId}) does not seem to belong to any build (previously {pkg.obsBuildId})")
+				warnmsg(f"{pkg.fullname()} (id {pkgId}) does not seem to belong to any build (previously {pkg.obsBuildId})")
 
 	def chasePackageDependencies(self, pkg):
 		resolved = set()
@@ -1688,7 +1688,6 @@ class BackingStoreDB(DB):
 		# infomsg(f"{obsPackage.name} -> {', '.join(names)}")
 
 		# discover the build dependencies if desired
-		assert(self._allowDepTreeLookups)
 		if self._allowDepTreeLookups:
 			rawRequired = self.buildDep.retrieveRequired(obsPackage.backingStoreId)
 

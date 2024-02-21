@@ -1071,6 +1071,10 @@ class DirectedGraphTable(UniqueTable):
 		self._knownPackages = set(self.fetchColumn('requiringPkgId'))
 		infomsg(f"{self.name}: we have dependencies for {len(self._knownPackages)} packages")
 
+	def removeDependenciesForPkgId(self, pkgId):
+		self.delete(requiringPkgId = pkgId)
+		self._knownPackages.discard(pkgId)
+
 	def removeDependenciesForList(self, idList):
 		self.deleteMultiple('requiringPkgId', idList)
 		self._knownPackages.difference_update(set(idList))
@@ -1378,6 +1382,34 @@ class BackingStoreDB(DB):
 
 			for source, target, depId in edges:
 				self.tree.addEdge(requiringPkgId = source, requiredPkgId = target, dependencyId = depId)
+
+	def updateDependencyTree(self, rpmObj, requiredObjs):
+		assert(rpmObj.backingStoreId)
+
+		requiredIds = set(req.backingStoreId for req in requiredObjs)
+		if not all(requiredIds):
+			for required in requiredObjs:
+				if required.backingStoreId is None:
+					raise Exception(f"Cannot add dependency to DB: {rpmObj.fullname()} requires {required.fullname()}, but the latter has no ID set")
+
+		self.tree.removeDependenciesForPkgId(rpmObj.backingStoreId)
+		for targetId in requiredIds:
+			self.tree.addEdge(requiringPkgId = rpmObj.backingStoreId, requiredPkgId = targetId)
+
+	def updateReverseDependency(self, requiringPkg, requiredPkg, oldRequiredPkg):
+		srcId = requiredPkg.backingStoreId
+		tgtId = requiredPkg.backingStoreId
+
+		if oldRequiredPkg is not None:
+			self.tree.delete(requiringPkgId = srcId, requiredPkgId = oldRequiredPkg.backingStoreId)
+
+		if False:
+			currentRequired = set(self.tree.fetchColumn('requiredPkgId', requiringPkgId = srcId))
+			allIds = set(self.packages.fetchColumn('id', name = requiredPkg.name))
+			for oldId in currentRequired.intersection(allIds):
+				self.tree.delete(requiringPkgId = srcId, requiredPkgId = oldId)
+
+		self.tree.insert(requiringPkgId = newPkg.backingStoreId, requiredPkgId = tgtId)
 
 	def updatePackageSource(self, obj):
 		sourceId = obj.sourceBackingStoreId

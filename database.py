@@ -1061,13 +1061,13 @@ class DirectedGraphTable(UniqueTable):
 		if self._cacheByRequringPkg is not None:
 			return self._cacheByRequringPkg.get(pkgId)
 
-		c = self.selectFrom(fields = ('dependencyId', 'requiredPkgId'), selector = {'requiringPkgId':  pkgId})
+		c = self.selectFrom(fields = ('requiredPkgId', ), selector = {'requiringPkgId':  pkgId})
 		if c is None:
 			return None
 
 		result = []
 		for row in c.fetchall():
-			result.append((row[0], row[1]))
+			result.append(row[0])
 
 		return result
 
@@ -1578,10 +1578,8 @@ class BackingStoreDB(DB):
 		if not pkg.isSourcePackage and pkg.backingStoreId not in self.latest.currentPackageIds:
 			warnmsg(f"chasing dependencies for outdated package {pkg}")
 
-		# this returns a list of (dependencyId, packageId) pairs
-		rawRequired = self.tree.retrieveRequired(pkg.backingStoreId)
+		requiredPackageIds = set(self.tree.retrieveRequired(pkg.backingStoreId))
 
-		requiredPackageIds = set(pkgId for depId, pkgId in rawRequired)
 		stalePackageIds = requiredPackageIds.difference(self.latest.currentPackageIds)
 		if stalePackageIds:
 			warnmsg(f"{pkg} requires one or more stale packages: {' '.join(map(str, stalePackageIds))}")
@@ -1589,15 +1587,13 @@ class BackingStoreDB(DB):
 		# make sure we have proper Package objects in our cache for each requisite
 		self.loadPackagesIntoCache(requiredPackageIds)
 
-		for depId, targetId in rawRequired:
+		for targetId in requiredPackageIds:
 			target = self.packageCache.get(targetId)
-			dep = self.requires.retrieveDependencyById(depId)
-			assert(depId is None or dep)
+			resolved.add((None, target))
 
-			resolved.add((dep, target))
-
-		# really list? or better set?
-		pkg.resolvedRequires = list(resolved)
+		if resolved is not None:
+			# really list? or better set?
+			pkg.resolvedRequires = list(resolved)
 
 	def loadPackagesIntoCache(self, pkgIdList):
 		result = set()
@@ -1681,10 +1677,7 @@ class BackingStoreDB(DB):
 		# discover the build dependencies if desired
 		assert(self._allowDepTreeLookups)
 		if self._allowDepTreeLookups:
-			# this returns a list of (dependencyId, packageId) pairs
 			rawRequired = self.buildDep.retrieveRequired(obsPackage.backingStoreId)
-			# discard the dependency ID, we didn't store anything useful to begin with
-			rawRequired = list(map(lambda pair: pair[1], rawRequired))
 
 			# make sure we have proper Package objects in our cache for each requisite
 			self.loadPackagesIntoCache(rawRequired)

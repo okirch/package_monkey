@@ -705,6 +705,7 @@ class OBSPackage:
 	def __init__(self, name):
 		self.name = name
 		self.buildStatus = None
+		self._buildStatusString = None
 		self.backingStoreId = None
 		self.buildTime = None
 		self.rpmsUsedForBuild = None
@@ -783,10 +784,27 @@ class OBSPackage:
 		None : "not set",
 	}
 
+	REVERSE_BUILD_STATUS_TABLE = {
+		"succeeded"	: STATUS_SUCCEEDED,
+		"failed"	: STATUS_FAILED,
+		"unresolvable"	: STATUS_FAILED,
+		"excluded"	: STATUS_EXCLUDED,
+	}
+
 	@property
 	def buildStatusString(self):
-		s = self.BUILD_STATUS_TABLE.get(self.buildStatus)
-		return s or "undefined"
+		if self._buildStatusString is not None:
+			return self._buildStatusString
+
+		return self.BUILD_STATUS_TABLE.get(self.buildStatus) or "undefined"
+
+	def setBuildStatus(self, value):
+		self.buildStatus = self.stringToBuildStatus(value)
+		self._buildStatusString = value
+
+	@classmethod
+	def stringToBuildStatus(klass, value):
+		return klass.REVERSE_BUILD_STATUS_TABLE.get(value) or klass.STATUS_UNKNOWN
 
 # All of the XML handling here should probably live in OBSSchema
 class OBSProjectConfig:

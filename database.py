@@ -689,19 +689,13 @@ class LatestPackageTable(UniqueTable):
 
 
 	class Latest:
-		UNCHANGED = 0
-		CREATED = 1
-		UPDATED = 2
-
 		def __init__(self, name):
 			self.name = name
 			self.id = None
 			self.pinfo = None
-			self.changed = False
 
 		def update(self, pkg):
-			# This is wrong - we need to look at the build time
-			if self.pinfo and pkg.parsedVersion <= self.pinfo.parsedVersion:
+			if self.pinfo is not None and self.pinfo.backingStoreId == pkg.backingStoreId:
 				return False
 			self.pinfo = pkg
 			return True
@@ -730,6 +724,7 @@ class LatestPackageTable(UniqueTable):
 				self._duplicates.append(bucket.pinfo)
 
 			bucket.pinfo = pinfo
+			bucket.id = d['id']
 
 		self._latestIds = None
 
@@ -745,19 +740,14 @@ class LatestPackageTable(UniqueTable):
 
 		b = self.getBucket(pkg.name)
 		if b.update(pkg):
-			if b.pinfo:
-				infomsg(f"remove {b.pinfo.backingStoreId}")
+			sqlDebug(f"updating latest {pkg} from id={b.id} to {pkg.fullname()} id={pkg.backingStoreId}")
 
 			if b.id is None:
-				# infomsg(f"latest: insert object {pkg.fullname()}")
 				h = self.insertObject(pkg)
 				assert(h)
 				b.id = h.id
 			else:
-				# infomsg(f"latest: update object {pkg.fullname()} (id {b.id})")
 				self.updateObject(pkg, id = b.id)
-
-			infomsg(f"add {pkg.backingStoreId}")
 
 			# data changed, invalidate the cached list of current package ids
 			self._latestIds = None
@@ -820,7 +810,7 @@ class BuildTable(UniqueTable):
 			self.buildTime = None
 
 		def update(self, buildTime):
-			if self.buildTime == buildTime:
+			if buildTime and self.buildTime == buildTime:
 				return False
 			self.buildTime = buildTime
 			return True

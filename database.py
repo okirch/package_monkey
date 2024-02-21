@@ -376,7 +376,7 @@ class Table(object):
 
 		self.deleteMultipleWork(whereField, values)
 
-		# we currently do not commit the deletion right away.
+		# we currently do not commit these changes right away.
 		# not sure whether this is a good idea or not.
 		# self.db.commit()
 
@@ -393,6 +393,29 @@ class Table(object):
 
 	def deleteAll(self):
 		self.execute(f"DELETE FROM {self.name}")
+
+	def updateMultiple(self, keys, values, whereField, whereValues):
+		result = []
+		while len(whereValues) > 100:
+			self.updateMultipleWork(keys, values, whereField, whereValues[:100])
+			del whereValues[:100]
+
+		self.updateMultipleWork(keys, values, whereField, whereValues)
+
+		# we currently do not commit these changes right away.
+		# not sure whether this is a good idea or not.
+		# self.db.commit()
+
+	def updateMultipleWork(self, keys, values, whereField, whereValues):
+		setFmt = ", ".join([f"{name}=?" for name in keys])
+
+		sql = f"UPDATE {self.name} SET {setFmt}"
+
+		count = len(whereValues)
+		sql += " WHERE (" + " OR ".join([f"{whereField}=?"] * count) + ")"
+
+		c = self.execute(sql, values + whereValues)
+		self.db.commit()
 
 	def clearColumn(self, field):
 		sql = f"UPDATE {self.name} SET {field}=NULL"

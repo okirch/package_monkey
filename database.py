@@ -439,39 +439,25 @@ class Table(object):
 	def constructObject(self, klass, d):
 		return self.objectTemplate.constructObjectFromDB(klass, d)
 
-class UniqueTable(Table):
-	NAME = None
+class NamedTable(Table):
 	OBJECT_TEMPLATE = None
 
-	_instance = None
+	def __init__(self, db, tableName):
+		super().__init__(db, tableName)
 
-	def __init__(self, db):
-		assert(self.__class__.NAME)
-		super().__init__(db, self.__class__.NAME)
-
-	@classmethod
-	def instantiate(klass, db):
-		tbl = klass(db)
+		klass = self.__class__
 
 		sql = getattr(klass, 'createTableSQL', None)
 		if sql is None:
 			fields = klass.TABLE_FIELDS.strip()
-			sql = f"""CREATE TABLE IF NOT EXISTS {klass.NAME} (
+			sql = f"""CREATE TABLE IF NOT EXISTS {self.name} (
 					{fields}
 				);"""
-		if not tbl.create(sql):
+		if not self.create(sql):
 			return None
 
 		if klass.OBJECT_TEMPLATE:
-			tbl.setObjectTemplate(klass.OBJECT_TEMPLATE)
-
-		klass._instance = tbl
-		return tbl
-
-	@staticmethod
-	def instance():
-		assert(self._instance)
-		return self._instance
+			self.setObjectTemplate(klass.OBJECT_TEMPLATE)
 
 class ProductCache:
 	class CacheEntry:
@@ -519,9 +505,7 @@ class ProductCache:
 		return f"{name}:{version}:{arch}"
 
 
-class ProductTable(UniqueTable):
-	NAME = "products"
-
+class ProductTable(NamedTable):
 	createTableSQL = """CREATE TABLE IF NOT EXISTS products (
 				id integer PRIMARY KEY,
 				key text NOT NULL,
@@ -545,8 +529,7 @@ class ProductTable(UniqueTable):
 		return h.id
 
 # FIXME: the buildId should go away
-class PackageTable(UniqueTable):
-	NAME = "packages"
+class PackageTable(NamedTable):
 	OBJECT_TEMPLATE = ObjectTemplate("package", {
 				'backingStoreId' : 'id',
 				'name' : 'name',
@@ -584,8 +567,8 @@ class PackageTable(UniqueTable):
 				rpmGroup text NOT NULL
 			);"""
 
-	def __init__(self, db):
-		super().__init__(db)
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 
 		self.knownPackageIDs = dict()
 		self.knownBuilds = dict()
@@ -673,8 +656,7 @@ class PackageTable(UniqueTable):
 # than just the name. Some architectures have 32bit and 64bit
 # versions of the same package.
 ##################################################################
-class LatestPackageTable(UniqueTable):
-	NAME = "latest"
+class LatestPackageTable(NamedTable):
 	TABLE_FIELDS = """
 			id integer PRIMARY KEY,
 			name text NOT NULL,
@@ -712,8 +694,8 @@ class LatestPackageTable(UniqueTable):
 			self.pinfo = pkg
 			return True
 
-	def __init__(self, db):
-		super().__init__(db)
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 		self._buckets = {}
 		self._duplicates = []
 		self._latestIds = None
@@ -797,8 +779,7 @@ class LatestPackageTable(UniqueTable):
 		self._duplicates = []
 
 
-class BuildTable(UniqueTable):
-	NAME = "builds"
+class BuildTable(NamedTable):
 	OBJECT_TEMPLATE = ObjectTemplate("obsPackage", {
 				'backingStoreId' : 'id',
 				'name' : 'name',
@@ -827,8 +808,8 @@ class BuildTable(UniqueTable):
 			self.buildTime = buildTime
 			return True
 
-	def __init__(self, db):
-		super().__init__(db)
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 		self._entries = {}
 
 	def fetchKnownPackages(self, store):
@@ -875,17 +856,15 @@ class BuildTable(UniqueTable):
 		return entry
 
 
-class FilesTable(UniqueTable):
-	NAME = "files"
-
+class FilesTable(NamedTable):
 	createTableSQL = """CREATE TABLE IF NOT EXISTS files (
 				id integer PRIMARY KEY,
 				pkgId integer,
 				path text
 			);"""
 
-	def __init__(self, db):
-		super().__init__(db)
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 		self._cacheByPkgId = None
 		self._cacheByPath = None
 
@@ -916,7 +895,7 @@ class FilesTable(UniqueTable):
 
 		return self.fetchColumn('pkgId', path = path)
 
-class DependencyTable(UniqueTable):
+class DependencyTable(NamedTable):
 	TABLE_FIELDS = """
 			id integer PRIMARY KEY,
 			pkgId integer,
@@ -1041,13 +1020,7 @@ class DependencyTable(UniqueTable):
 		self._cacheById.put(id, dep)
 		return dep
 
-class RequiresTable(DependencyTable):
-	NAME = "requires"
-
-class ProvidesTable(DependencyTable):
-	NAME = "provides"
-
-class DirectedGraphTable(UniqueTable):
+class DirectedGraphTable(NamedTable):
 	TABLE_FIELDS = """
 			id integer PRIMARY KEY,
 			requiringPkgId integer NOT NULL,
@@ -1100,15 +1073,7 @@ class DirectedGraphTable(UniqueTable):
 
 		return result
 
-class TreeTable(DirectedGraphTable):
-	NAME = "tree"
-
-class BuildTreeTable(DirectedGraphTable):
-	NAME = "builddep"
-
-class BuildPackageRelationTable(UniqueTable):
-	NAME = "buildpkgs"
-
+class BuildPackageRelationTable(NamedTable):
 	TABLE_FIELDS = """
 			id integer PRIMARY KEY,
 			buildId integer NOT NULL,
@@ -1181,9 +1146,7 @@ class BuildPackageRelationTable(UniqueTable):
 		for row in c.fetchall():
 			yield row
 
-class KeyValueTable(UniqueTable):
-	NAME = "keyvalue"
-
+class KeyValueTable(NamedTable):
 	TABLE_FIELDS = """
 			key string NOT NULL,
 			value string
@@ -1229,22 +1192,22 @@ class BackingStoreDB(DB):
 		self.productCache = ProductCache()
 		self.packageProductLink = {}
 
-		self.products = ProductTable.instantiate(self)
+		self.products = ProductTable(self, 'products')
 		self.products.createIndex("idx_prod_key", ["key"])
 		self.products.populateCache(self.productCache)
 
-		self.packages = PackageTable.instantiate(self)
+		self.packages = PackageTable(self, 'packages')
 		self.packages.createIndex("idx_pkg_name", ["name"])
 		self.packages.createIndex("idx_pkg_product", ["productId"])
 		# FIXME: rename to idx_pkg_hash
 		self.packages.createUniqueIndex("id_pkg_hash", ["repoPackageID"])
 		self.packages.updateKnownIDs()
 
-		self.latest = LatestPackageTable.instantiate(self)
+		self.latest = LatestPackageTable(self, 'latest')
 		self.latest.createIndex("idx_latest_name", ["name"])
 		self.latest.fetchKnownPackages(self)
 
-		self.builds = BuildTable.instantiate(self)
+		self.builds = BuildTable(self, 'builds')
 		self.builds.createUniqueIndex("idx_build_name", ["name"])
 		self.builds.fetchKnownPackages(self)
 
@@ -1254,30 +1217,37 @@ class BackingStoreDB(DB):
 		# and version/release strings to an ID, and have
 		# files and dependency tables just refer to these strings.
 
-		self.files = FilesTable.instantiate(self)
+		self.files = FilesTable(self, 'files')
 		self.files.createIndex("idx_file_package", ["pkgId"])
 
-		self.requires = RequiresTable.instantiate(self)
+		self.requires = DependencyTable(self, 'requires')
 		self.requires.createIndex("idx_req_package", ['pkgId'])
 		self.requires.fetchKnownPackages()
 
-		self.provides = ProvidesTable.instantiate(self)
+		self.provides = DependencyTable(self, 'provides')
 		self.provides.createIndex("idx_prov_package", ['pkgId'])
 		self.provides.fetchKnownPackages()
 
-		self.tree = TreeTable.instantiate(self)
+		self.dependencies = DependencyStringTable(self, 'depstrings')
+		self.dependencies.onLoad()
+
+		self.tree = DirectedGraphTable(self, 'tree')
 		self.tree.createIndex("idx_tree_down", ['requiringPkgId'])
 		self.tree.createIndex("idx_tree_up", ['requiredPkgId'])
 		self.tree.fetchKnownPackages()
 
-		self.buildDep = BuildTreeTable.instantiate(self)
+		self.fulltree = DirectedGraphTable(self, 'fulltree')
+		self.fulltree.createIndex("idx_fulltree_down", ['requiringPkgId'])
+		self.fulltree.createIndex("idx_fulltree_up", ['requiredPkgId'])
+
+		self.buildDep = DirectedGraphTable(self, 'builddep')
 		self.buildDep.createIndex("idx_bdep_down", ['requiringPkgId'])
 
-		self.buildPkgRelation = BuildPackageRelationTable.instantiate(self)
+		self.buildPkgRelation = BuildPackageRelationTable(self, 'buildpkgs')
 		self.buildPkgRelation.createIndex("idx_build_pkg", ['buildId'])
 		self.buildPkgRelation.fetchKnownBuilds()
 
-		self.keyValueStore = KeyValueTable.instantiate(self)
+		self.keyValueStore = KeyValueTable(self, 'keyvalue')
 		self.keyValueStore.onLoad()
 
 		self.packageCache = PackageCache()

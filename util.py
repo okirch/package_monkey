@@ -193,9 +193,13 @@ class LoggingExecTimer(ExecTimer):
 #
 ##################################################################
 class ThatsProgress:
-	def __init__(self, total):
+	def __init__(self, total, withETA = False):
 		self.count = 0
 		self.total = total
+
+		self.timer = None
+		if withETA:
+			self.timer = ExecTimer()
 
 	@property
 	def percent(self):
@@ -205,6 +209,28 @@ class ThatsProgress:
 
 	def __str__(self):
 		return f"{self.percent:3.1f}%"
+
+	@property
+	def eta(self):
+		if not self.timer:
+			return None
+		if not self.count:
+			return 0
+
+		elapsed = self.timer.elapsed
+		secRemaining = int(elapsed / self.count * (self.total - self.count))
+
+		minRemaining = int(secRemaining / 60)
+		secRemaining %= 60
+		if minRemaining == 0:
+			return f"{secRemaining:02}s"
+
+		hrsRemaining = int(minRemaining / 60)
+		minRemaining %= 60
+		if hrsRemaining == 0:
+			return f"{minRemaining:02}:{secRemaining:02}"
+
+		return f"{hrsRemaining:02}:{minRemaining:02}:{secRemaining:02}"
 
 	def tick(self):
 		self.count += 1

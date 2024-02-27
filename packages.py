@@ -1569,7 +1569,7 @@ class Product:
 		self.sources = {}
 		self._byID = {}
 
-		Versiontools.test()
+		# Versiontools.test()
 
 		self.name = None
 		self.version = None

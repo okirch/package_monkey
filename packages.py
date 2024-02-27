@@ -433,7 +433,7 @@ class ResolverContext:
 		pkg.resolvedRequires = result
 		return result
 
-	def rewriteDependencies(self, pkg):
+	def transformDependencies(self, pkg):
 		if self._resolver.hints is None:
 			return
 
@@ -444,18 +444,27 @@ class ResolverContext:
 		filtered = []
 
 		for dep, target in self.resolveDownward(pkg):
-			if hints.isIgnoredDependency(pkg.name, target.name):
-				self.suppressedDependencies.append((pkg, target))
-			else:
-				rewrittenName = hints.rewriteDependency(target.name)
-				if rewrittenName:
-					newTarget = self.worker.getKnownPackage(rewrittenName)
-					if newTarget is None:
-						raise Exception(f"cannot translate dependency {target} to {rewrittenName}: no such package")
+			xfrm = hints.transformDependency(pkg.name, target.name)
 
-					debugmsg(f"{pkg}: rewrite dependency {target} -> {newTarget}")
-					target = newTarget
-				filtered.append((dep, target))
+			if xfrm is None:
+				pass
+			elif xfrm.action == xfrm.IGNORE:
+				self.suppressedDependencies.append((pkg, target))
+				if xfrm.warning:
+					warnmsg(f"Dependency {pkg} -> {target}: {xfrm.warning}")
+				continue
+			elif xfrm.action == xfrm.REWRITE:
+				assert(xfrm.rewriteTo)
+				newTarget = self.worker.getKnownPackage(xfrm.rewriteTo)
+				if newTarget is None:
+					raise Exception(f"cannot translate dependency {target} to {xfrm.rewriteTo}: no such package")
+
+				debugmsg(f"{pkg}: rewrite dependency {target} -> {newTarget}")
+				target = newTarget
+			elif xfrm.action == xfrm.COPY:
+				pass
+
+			filtered.append((dep, target))
 
 		pkg.resolvedRequires = filtered
 

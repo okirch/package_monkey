@@ -115,10 +115,12 @@ class ResolverHints:
 		self._rules = []
 		self._cache = {}
 
+		# These are for dependency transformation
+		self._warnings = {}
 		self._ignoredDependencies = {}
 		self._ignoredTargets = None
-
 		self._rewriteDependencies = {}
+
 		self.fakeDependencies = set()
 
 	def addNameOrder(self, words):
@@ -155,9 +157,62 @@ class ResolverHints:
 		return result
 
 	##########################################################
+	# inspect dependency
+	##########################################################
+	class DependencyTransform(object):
+		COPY = 0
+		REWRITE = 1
+		IGNORE = 2
+
+		def __init__(self, action, sourceName = None, targetName = None, warning = None, rewriteTo = None):
+			self.action = action
+			self.sourceName = sourceName
+			self.targetName = targetName
+			self.rewriteTo = rewriteTo
+			self.warning = warning
+
+		@classmethod
+		def createCopyTransform(klass, sourceName, targetName):
+			return klass(klass.COPY, sourceName = sourceName, targetName = targetName)
+
+		@classmethod
+		def createIgnoreTransform(klass, sourceName, targetName):
+			return klass(klass.IGNORE, sourceName = sourceName, targetName = targetName)
+
+		@classmethod
+		def createRewriteTransform(klass, sourceName, targetName, rewriteTo):
+			return klass(klass.REWRITE, sourceName = sourceName, targetName = targetName, rewriteTo = rewriteTo)
+
+		@property
+		def key(self):
+			return self.makekey(self.sourceName, self.targetName)
+
+		@staticmethod
+		def makekey(sourceName, targetName):
+			if sourceName is None:
+				sourceName = '*'
+
+			return f"{sourceName}:{targetName}"
+
+	def transformDependency(self, sourceName, targetName):
+		result = None
+
+		if self.isIgnoredDependency(sourceName, targetName):
+			result = self.DependencyTransform.createIgnoreTransform(sourceName, targetName)
+
+			key = f"{sourceName or '*'}:{targetName}"
+			result.warning = self._warnings.get(key)
+		else:
+			rewriteTo = self.rewriteDependency(targetName)
+			if rewriteTo:
+				result = self.DependencyTransform.createRewriteTransform(sourceName, targetName, rewriteTo = rewriteTo)
+
+		return result
+
+	##########################################################
 	# Handling of ignored dependencies
 	##########################################################
-	def addIgnoredDependency(self, packageName, targetName):
+	def addIgnoredDependency(self, packageName, targetName, warning = None):
 		if packageName == '*':
 			if self._ignoredTargets is None:
 				self._ignoredTargets = set()
@@ -166,6 +221,10 @@ class ResolverHints:
 			if targetName not in self._ignoredDependencies:
 				self._ignoredDependencies[targetName] = set()
 			self._ignoredDependencies[targetName].add(packageName)
+
+		if warning is not None:
+			key = f"{packageName}:{targetName}"
+			self._warnings[key] = warning
 
 	def isIgnoredDependency(self, packageName, targetName):
 		if self._ignoredTargets is not None and targetName in self._ignoredTargets:

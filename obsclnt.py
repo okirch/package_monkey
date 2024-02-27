@@ -5,7 +5,7 @@ import posix
 import time
 import xml.etree.ElementTree as ET
 
-from packages import Package, PackageInfo, PackageInfoFactory
+from packages import Package, PackageInfo, PackageInfoFactory, UniquePackageInfoFactory
 from util import ChunkingQueue, ThatsProgress
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
@@ -134,7 +134,7 @@ class OBSSchema(object):
 			elif key == 'release':
 				result.obsrelease = value
 			elif key == 'bdep':
-				bdep = self.processSimpleXML(child, ("name", "version", "release", "arch", "hdrmd5", ), ("notmeta",))
+				bdep = self.processSimpleXML(child, ("name", "version", "release", "arch", "hdrmd5", ), ("notmeta", "preinstall", "vminstall", "project", "repository", ))
 				result.builddeps.append(bdep)
 			elif key in ('constraint', ):
 				pass
@@ -163,9 +163,12 @@ class OBSSchema(object):
 
 		return result
 
-	def processFileInfo(self, xmlnode):
+	def processFileInfo(self, xmlnode, infoFactory = None):
 		if not self.checkRootNodeTag(xmlnode, 'fileinfo'):
 			return None
+
+		if infoFactory is None:
+			infoFactory = PackageInfoFactory()
 
 		result = OBSSchema.Dummy()
 		result.filename = xmlnode.attrib['filename']
@@ -201,7 +204,7 @@ class OBSSchema(object):
 					a = grandchild.attrib
 					del a['project']
 					del a['repository']
-					pinfo = PackageInfo(**a, epoch = None, backingStoreId = None)
+					pinfo = infoFactory(**a)
 
 					dep.packages.add(pinfo)
 			else:
@@ -584,9 +587,9 @@ class OBSClient(object):
 		res = self.apiCallXML("build", project, repository, arch, package, "_buildinfo", **kwargs)
 		return self._schema.processBuildInfo(res)
 
-	def getFileInfoExt(self, project, repository, package, arch, filename, **kwargs):
+	def getFileInfoExt(self, project, repository, package, arch, filename, infoFactory = None, **kwargs):
 		res = self.apiCallXML("build", project, repository, arch, package, filename, view = 'fileinfo_ext', **kwargs)
-		return self._schema.processFileInfo(res)
+		return self._schema.processFileInfo(res, infoFactory)
 
 	def putSourcePackageXML(self, project, package, file, body):
 		return self.apiCallPUT("source", project, package, file, xmldoc = body)

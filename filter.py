@@ -2027,6 +2027,9 @@ class PackageFilter:
 				else:
 					labelType = Classification.TYPE_BINARY
 
+				if not name:
+					raise Exception(f"{groupLabel}: empty string in requires list")
+
 				referencedLabel = self.resolveLabelReference(name, labelType)
 				groupLabel.configureRuntimeDependency(referencedLabel)
 

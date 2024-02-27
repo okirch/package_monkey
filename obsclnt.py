@@ -191,10 +191,7 @@ class OBSSchema(object):
 			if key in ('provides', 'requires', 'recommends', 'suggests', 'conflicts', 'supplements', 'enhances'):
 				getattr(result, key).append(value)
 			elif key in ('provides_ext', 'requires_ext', 'recommends_ext', 'suggests_ext', 'conflicts_ext'):
-				dep = OBSSchema.Dummy()
-				dep.type = key[:-4]
-				dep.expression = child.attrib['dep']
-				dep.packages = []
+				dep = OBSDependency(expression = child.attrib['dep'], type = key[:-4])
 
 				member = getattr(result, key)
 				member.append(dep)
@@ -206,7 +203,7 @@ class OBSSchema(object):
 					del a['repository']
 					pinfo = PackageInfo(**a, epoch = None, backingStoreId = None)
 
-					dep.packages.append(pinfo)
+					dep.packages.add(pinfo)
 			else:
 				if getattr(result, key, None) is not None:
 					oldValue = getattr(result, key)
@@ -695,6 +692,13 @@ class BinaryMap(dict):
 			e = self.Entry(name)
 			self[e.name] = e
 		return e
+
+class OBSDependency(object):
+	def __init__(self, expression, backingStoreId = None, type = None):
+		self.expression = expression
+		self.type = type
+		self.backingStoreId = backingStoreId
+		self.packages = set()
 
 class OBSPackage:
 	STATUS_SUCCEEDED = 1

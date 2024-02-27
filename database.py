@@ -1,10 +1,12 @@
 import sqlite3
 from packages import Package, PackageInfo
-from obsclnt import OBSPackage
+from obsclnt import OBSPackage, OBSDependency
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
 sqlLogger = loggingFacade.getLogger('sql')
 sqlDebug = sqlLogger.debug
+dbLogger = loggingFacade.getLogger('database')
+debugDB = sqlLogger.debug
 
 def splitDictKeyValues(d):
 	keys = []
@@ -66,6 +68,12 @@ class DB(object):
 			self.lock = lock
 
 		def __del__(self):
+			self.commit()
+
+		def __enter__(self):
+			pass
+
+		def __exit__(self, *args):
 			self.commit()
 
 		def commit(self):
@@ -697,6 +705,7 @@ class LatestPackageTable(NamedTable):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self._buckets = {}
+		self._id2bucket = {}
 		self._duplicates = []
 		self._latestIds = None
 
@@ -718,9 +727,13 @@ class LatestPackageTable(NamedTable):
 				self._duplicates.append(bucket.pinfo)
 
 			bucket.pinfo = pinfo
-			bucket.id = d['id']
+			self.setBucketId(bucket, d['id'])
 
 		self._latestIds = None
+
+	def setBucketId(self, bucket, id):
+		bucket.id = id
+		self._id2bucket[id] = bucket
 
 	def getPackageByName(self, name):
 		b = self._buckets.get(name)
@@ -739,7 +752,7 @@ class LatestPackageTable(NamedTable):
 			if b.id is None:
 				h = self.insertObject(pkg)
 				assert(h)
-				b.id = h.id
+				self.setBucketId(b, h.id)
 			else:
 				self.updateObject(pkg, id = b.id)
 
@@ -761,6 +774,24 @@ class LatestPackageTable(NamedTable):
 			b = self.Latest(name)
 			self._buckets[name] = b
 		return b
+
+	def getIdForRpm(self, rpm):
+		b = self._buckets.get(rpm.name)
+		if b is None:
+			raise Exception(f"No entry in table 'latest' for {rpm.fullname()}")
+
+		if False:
+			# Does package X require a version of Y that is not the latest?
+			# This is not an error; it happens a lot due to the way we update the DB
+			if b.pinfo.backingStoreId != rpm.backingStoreId:
+				raise Exception(f"Conflicting entry in table 'latest' for {rpm.fullname()}: found {b.pinfo.fullname()} instead")
+
+		return b.id
+
+	def getPackageInfoForId(self, id):
+		b = self._id2bucket.get(id)
+		if b is not None:
+			return b.pinfo
 
 	def prune(self):
 		idsToDrop = []
@@ -972,6 +1003,7 @@ class DependencyTable(NamedTable):
 		if dep or self._allCached:
 			return dep
 
+		assert(id)
 		d = self.fetchOne(id = id)
 		if d is None:
 			return None
@@ -1038,7 +1070,8 @@ class DirectedGraphTable(NamedTable):
 
 		self._cacheByRequringPkg = GenericSetCache()
 		for d in self.fetchAll():
-			self._cacheByRequringPkg.put(d['requiringPkgId'], (d['dependencyId'], d['requiredPkgId']))
+			# self._cacheByRequringPkg.put(d['requiringPkgId'], (d['dependencyId'], d['requiredPkgId']))
+			self._cacheByRequringPkg.put(d['requiringPkgId'], d['requiredPkgId'])
 
 	def fetchKnownPackages(self):
 		self._knownPackages = set(self.fetchColumn('requiringPkgId'))
@@ -1046,6 +1079,10 @@ class DirectedGraphTable(NamedTable):
 
 	def removeDependenciesForPkgId(self, pkgId):
 		self.delete(requiringPkgId = pkgId)
+		self._knownPackages.discard(pkgId)
+
+	def removeReverseDependenciesForPkgId(self, pkgId):
+		self.delete(requiredPkgId = pkgId)
 		self._knownPackages.discard(pkgId)
 
 	def removeDependenciesForList(self, idList):
@@ -1059,6 +1096,7 @@ class DirectedGraphTable(NamedTable):
 	def addEdge(self, **kwargs):
 		self.insert(**kwargs)
 
+	# This returns a list of indices for table "latest"
 	def retrieveRequired(self, pkgId):
 		if self._cacheByRequringPkg is not None:
 			return self._cacheByRequringPkg.get(pkgId)
@@ -1168,10 +1206,50 @@ class KeyValueTable(NamedTable):
 	def get(self, key):
 		return self._data.get(key)
 
+class DependencyStringTable(NamedTable):
+	TABLE_FIELDS = """
+			id integer PRIMARY KEY,
+			expression string
+		"""
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self._idToString = {}
+		self._stringToId = {}
+
+	def onLoad(self):
+		for d in self.fetchAll():
+			(id, expression) = (d['id'], d['expression'])
+			self._idToString[id] = expression
+			self._stringToId[expression] = id
+
+		for id, expression in self._idToString.items():
+			assert(self._stringToId[expression] == id)
+
+	def add(self, expression):
+		id = self._stringToId.get(expression)
+		if id is None:
+			h = self.insert(expression = expression)
+			self._stringToId[expression] = h.id
+			self._idToString[id] = expression
+		return id
+
+	def idToString(self, id):
+		return self._idToString.get(id)
+
+	def stringToId(self, expression):
+		return self._stringToId.get(expression)
+
 class PackageCache(dict):
 	def put(self, pkg):
 		assert(pkg.backingStoreId is not None)
 		self[pkg.backingStoreId] = pkg
+
+	def drop(self, pkg):
+		try:
+			del self[pkg.backingStoreId]
+		except:
+			pass
 
 class ProvidesCache(dict):
 	def put(self, name, packages):
@@ -1310,6 +1388,11 @@ class BackingStoreDB(DB):
 		return self.packages.insert(**kwargs)
 
 	def isKnownPackageObject(self, obj):
+		assert(obj is not None)
+
+		if obj.backingStoreId is not None:
+			return True
+
 		id = self.packages.isKnownPackageObject(obj)
 		if id is not None:
 			obj.backingStoreId = id
@@ -1326,7 +1409,8 @@ class BackingStoreDB(DB):
 			errormsg(f"ALERT: {obj.fullname()} has no database id")
 			return
 
-		if obj.arch not in ('src', 'nosrc'):
+		# do we do this unconditionally?
+		if not obj.isSourcePackage:
 			self.latest.update(obj)
 
 		return obj.backingStoreId
@@ -1353,33 +1437,152 @@ class BackingStoreDB(DB):
 			for source, target, depId in edges:
 				self.tree.addEdge(requiringPkgId = source, requiredPkgId = target, dependencyId = depId)
 
-	def updateDependencyTree(self, rpmObj, requiredObjs):
-		assert(rpmObj.backingStoreId)
+	def updateSimplifiedDependencies(self, rpmObj, dependencyList):
+		rpmLatestId = self.latest.getIdForRpm(rpmObj)
+
+		self.tree.delete(requiringPkgId = rpmLatestId)
+		for dep in dependencyList:
+			if dep.backingStoreId is None and dep.expression:
+				dep.backingStoreId = self.dependencies.add(dep.expression)
+			for requiredId in map(self.latest.getIdForRpm, dep.packages):
+				self.tree.insert(dependencyId = dep.backingStoreId, requiringPkgId = rpmLatestId, requiredPkgId = requiredId)
+
+	@classmethod
+	def updateForwardDependenciesWork(klass, tree, requiringRpm, requiredObjs):
+		assert(requiringRpm.backingStoreId)
+		sourceId = requiringRpm.backingStoreId
 
 		requiredIds = set(req.backingStoreId for req in requiredObjs)
 		if not all(requiredIds):
 			for required in requiredObjs:
 				if required.backingStoreId is None:
-					raise Exception(f"Cannot add dependency to DB: {rpmObj.fullname()} requires {required.fullname()}, but the latter has no ID set")
+					raise Exception(f"Cannot add dependency to DB: {requiringRpm.fullname()} requires {required.fullname()}, but the latter has no ID set")
 
-		self.tree.removeDependenciesForPkgId(rpmObj.backingStoreId)
+		tree.removeDependenciesForPkgId(sourceId)
 		for targetId in requiredIds:
-			self.tree.addEdge(requiringPkgId = rpmObj.backingStoreId, requiredPkgId = targetId)
+			tree.addEdge(requiringPkgId = sourceId, requiredPkgId = targetId)
 
-	def updateReverseDependency(self, requiringPkg, requiredPkg, oldRequiredPkg):
-		srcId = requiredPkg.backingStoreId
-		tgtId = requiredPkg.backingStoreId
+	@classmethod
+	def updateReverseDependencyWork(klass, tree, requiredRpm, requiringObjs):
+		assert(requiredRpm.backingStoreId)
+		targetId = requiredRpm.backingStoreId
 
-		if oldRequiredPkg is not None:
-			self.tree.delete(requiringPkgId = srcId, requiredPkgId = oldRequiredPkg.backingStoreId)
+		requiringIds = set(req.backingStoreId for req in requiringObjs)
+		if not all(requiringIds):
+			for requiring in requiringObjs:
+				if requiring.backingStoreId is None:
+					raise Exception(f"Cannot add dependency to DB: {requiredRpm.fullname()} is required by {requiring.fullname()}, but the latter has no ID set")
 
-		if False:
-			currentRequired = set(self.tree.fetchColumn('requiredPkgId', requiringPkgId = srcId))
-			allIds = set(self.packages.fetchColumn('id', name = requiredPkg.name))
-			for oldId in currentRequired.intersection(allIds):
-				self.tree.delete(requiringPkgId = srcId, requiredPkgId = oldId)
+		tree.removeReverseDependenciesForPkgId(targetId)
+		for sourceId in requiringIds:
+			tree.addEdge(requiringPkgId = sourceId, requiredPkgId = targetId)
 
-		self.tree.insert(requiringPkgId = newPkg.backingStoreId, requiredPkgId = tgtId)
+	def updateForwardDependencyFullTree(self, rpmObj, requiredObjs):
+		self.updateForwardDependenciesWork(self.fulltree, rpmObj, requiredObjs)
+
+	def updateReverseDependencyFullTree(self, rpmObj, requiredObjs):
+		self.updateReverseDependenciesWork(self.fulltree, rpmObj, requiredObjs)
+
+	def updateForwardDependency(self, rpmObj, requiredObjs):
+		self.updateForwardDependenciesWork(self.tree, rpmObj, requiredObjs)
+
+	def updateReverseDependency(self, rpmObj, requiredObjs):
+		self.updateReverseDependenciesWork(self.tree, rpmObj, requiredObjs)
+
+	def updateDependencyTree(self, rpmObj, dependencyList):
+		assert(rpmObj.backingStoreId)
+		rpmId = rpmObj.backingStoreId
+
+		for dep in dependencyList:
+			if dep.expression and not dep.backingStoreId:
+				dep.backingStoreId = self.dependencies.add(dep.expression)
+			for rpm in dep.packages:
+				assert(rpm.backingStoreId is not None)
+
+		self.fulltree.delete(requiringPkgId = rpmId)
+		for dep in dependencyList:
+			for rpm in dep.packages:
+				self.fulltree.insert(dependencyId = dep.backingStoreId,
+						requiringPkgId = rpmId,
+						requiredPkgId = rpm.backingStoreId)
+
+	def retrieveForwardDependenciesFullTree(self, rpmObj):
+		assert(rpmObj.backingStoreId)
+
+		resultDict = {}
+		result = []
+		for d in self.fulltree.fetchAll(('dependencyId', 'requiredPkgId'), requiringPkgId = rpmObj.backingStoreId):
+			depId = d['dependencyId']
+			if depId is None:
+				# already resolved any ambiguities and/or didn't care to record the actual dep expression
+				dep = OBSDependency(expression = None)
+				result.append(dep)
+			else:
+				dep = resultDict.get(depId)
+				if dep is None:
+					expression = self.dependencies.idToString(depId)
+					dep = OBSDependency(expression = expression, backingStoreId = depId)
+					resultDict[depId] = dep
+
+			requiredRpm = self.retrievePackageById(d['requiredPkgId'], product = rpmObj.product)
+			assert(requiredRpm)
+
+			dep.packages.add(requiredRpm)
+
+		return result + list(resultDict.values())
+
+	def retrieveReverseDependenciesFullTree(self, rpmObj):
+		assert(rpmObj.backingStoreId)
+
+		resultDict = {}
+		result = []
+		for d in self.fulltree.fetchAll(('dependencyId', 'requiringPkgId'), requiredPkgId = rpmObj.backingStoreId):
+			depId = d['dependencyId']
+			if depId is None:
+				# already resolved any ambiguities and/or didn't care to record the actual dep expression
+				dep = OBSDependency(expression = None)
+				result.append(dep)
+			else:
+				dep = resultDict.get(depId)
+				if dep is None:
+					expression = self.dependencies.idToString(depId)
+					dep = OBSDependency(expression = expression, backingStoreId = depId)
+					resultDict[depId] = dep
+
+			requiringRpm = self.retrievePackageById(d['requiringPkgId'], product = rpmObj.product)
+			assert(requiringRpm)
+
+			dep.packages.add(requiringRpm)
+
+		return result + list(resultDict.values())
+
+	def retrieveForwardDependenciesTree(self, rpmObj):
+		rpmLatestId = self.latest.getIdForRpm(rpmObj)
+
+		resultDict = {}
+		result = []
+		for d in self.tree.fetchAll(('dependencyId', 'requiredPkgId'), requiringPkgId = rpmLatestId):
+			depId = d['dependencyId']
+			if depId is None:
+				# already resolved any ambiguities and/or didn't care to record the actual dep expression
+				dep = OBSDependency(expression = None)
+				result.append(dep)
+			else:
+				dep = resultDict.get(depId)
+				if dep is None:
+					expression = self.dependencies.idToString(depId)
+					dep = OBSDependency(expression = expression, backingStoreId = depId)
+					resultDict[depId] = dep
+
+			pinfo = self.latest.getPackageInfoForId(d['requiredPkgId'])
+			assert(pinfo)
+
+			requiredRpm = self.retrievePackage(pinfo)
+			assert(requiredRpm)
+
+			dep.packages.add(requiredRpm)
+
+		return result + list(resultDict.values())
 
 	def updatePackageSource(self, obj):
 		sourceId = obj.sourceBackingStoreId
@@ -1393,6 +1596,7 @@ class BackingStoreDB(DB):
 		values = [sourceId]
 		self.packages.updateKeysAndValues(keys, values, id = obj.backingStoreId)
 
+	# still needed?
 	def updatePackageDependenciesWork(self, objList):
 		# Clean out all files and dependencies that belong to this package
 		pkgIdList = list(set(_.backingStoreId for _ in objList))
@@ -1525,6 +1729,9 @@ class BackingStoreDB(DB):
 		return self.retrievePackage(pinfo)
 
 	def retrievePackage(self, pinfo):
+		if pinfo.backingStoreId is None:
+			raise Exception(f"DB: cannot retrieve package {pinfo.fullname()}: no backing store Id")
+
 		pkg = self.retrievePackageById(pinfo.backingStoreId, pinfo.product)
 
 		if pkg and pkg.fullname() != pinfo.fullname():
@@ -1605,22 +1812,25 @@ class BackingStoreDB(DB):
 		if not pkg.isSourcePackage and pkg.backingStoreId not in self.latest.currentPackageIds:
 			warnmsg(f"chasing dependencies for outdated package {pkg}")
 
-		requiredPackageIds = set(self.tree.retrieveRequired(pkg.backingStoreId))
+		if pkg.isSourcePackage:
+			# for now
+			return
 
-		stalePackageIds = requiredPackageIds.difference(self.latest.currentPackageIds)
-		if stalePackageIds:
-			warnmsg(f"{pkg} requires one or more stale packages: {' '.join(map(str, stalePackageIds))}")
+		latestId = self.latest.getIdForRpm(pkg)
+		debugDB(f"chasing package dependencies for {pkg} latestID={latestId}")
 
-		# make sure we have proper Package objects in our cache for each requisite
-		self.loadPackagesIntoCache(requiredPackageIds)
+		# This returns a list of indices into "latest"
+		for id in self.tree.retrieveRequired(latestId):
+			# map "latest" id to package info
+			pinfo = self.latest.getPackageInfoForId(id)
+			if pinfo is None:
+				raise Exception(f"{pkg} requires latest pkg id {id}, but I could not find it")
 
-		for targetId in requiredPackageIds:
-			target = self.packageCache.get(targetId)
+			target = self.retrievePackage(pinfo)
 			resolved.add((None, target))
 
-		if resolved is not None:
-			# really list? or better set?
-			pkg.resolvedRequires = list(resolved)
+		# really list? or better set?
+		pkg.resolvedRequires = list(resolved)
 
 	def loadPackagesIntoCache(self, pkgIdList):
 		result = set()
@@ -1655,7 +1865,7 @@ class BackingStoreDB(DB):
 
 	def enumerateOBSPackages(self):
 		# FIXME: in readonly mode, once we've completed all loads, this routine should just
-		# iteratre over obsPackageCache
+		# iterate over obsPackageCache
 		result = []
 		for d in self.builds.fetchAll():
 			buildId = d['id']
@@ -1694,6 +1904,8 @@ class BackingStoreDB(DB):
 		obsPackage.backingStoreId = id
 
 	def updateOBSPackage(self, build, rpms, updateTimestamp = False):
+		self.obsPackageCache.drop(build)
+
 		rpmIds = [rpm.backingStoreId for rpm in rpms]
 		if not all(rpmIds):
 			for rpm in rpms:
@@ -1717,6 +1929,8 @@ class BackingStoreDB(DB):
 
 	def constructOBSPackage(self, d):
 		obsPackage = self.builds.constructObject(OBSPackage, d)
+
+		assert(d['buildTime'] == obsPackage.buildTime)
 
 		# For now, only the packages that succeed make it into the DB
 		obsPackage.buildStatus = OBSPackage.STATUS_SUCCEEDED

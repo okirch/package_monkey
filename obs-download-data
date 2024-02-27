@@ -9,11 +9,14 @@ forceRefresh = True
 from options import Application
 from obsclnt import OBSClient, OBSProject
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from util import NameMatcher
 
 application = Application('obs-download-data')
+application.addArgument('--only', help = 'Restrict what this tool will do (download, postproc)')
+application.addArgument('--package', action = 'append', help = 'Specify package(s) to update')
 
 store = application.loadBackingStore(readonly = False,
-		dependencyTreeLookups = True,
+		dependencyTreeLookups = False,
 		sourceLookups = True)
 assert(store)
 
@@ -40,13 +43,28 @@ for release in application.enumerateProducts():
 
 		cachePath = application.getCachePath(f"obs/{obs.hostname}")
 		project.setCachePath(cachePath)
-
-		project.primeCache(obs)
 		projects.append(project)
 
-	# now we should have everything we need. only go to OBS if something's really missing
-	obs.setCacheStrategy('opportunistic')
+nameMatcher = None
+if application.opts.package:
+	nameMatcher = NameMatcher(application.opts.package)
 
+action = application.opts.only
+if action in (None, 'download'):
+	application.beginChapter(f"Updating package data for all {application.productFamily} projects")
 	for project in projects:
-		project.updateBinaryList(obs)
-		project.updateBackingStore(application.backingStore, obs)
+		project.updateEverything(obs, store,
+				onlyPackages = nameMatcher)
+
+if action in (None, 'postproc'):
+	# Close the DB and reopen it. This ensures that the DB object starts out with no
+	# incorrect cached data
+	store = application.reloadBackingStore(readonly = False,
+			dependencyTreeLookups = False,
+			sourceLookups = True)
+
+	application.beginChapter(f"Postprocessing package data for all {application.productFamily} projects")
+	for project in projects:
+		project.processDependencies(store,
+			onlyPackages = nameMatcher)
+		project.purgeStale(store)

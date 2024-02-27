@@ -583,6 +583,18 @@ class OBSClient(object):
 		res = self.apiCallXML("build", project, repository, arch, "_builddepinfo")
 		return self._schema.processBuildDepInfo(res)
 
+	def queryPackageBuild(self, project, repository, package, arch, **params):
+		xml = self.apiCallXML('build', project, repository, arch, package, **params)
+		if xml is None:
+			errormsg(f"Cannot find build/{project}/{repository}/{arch}/{package}")
+			return None
+
+		return self._schema.processBinaryListing(xml)
+
+	def getBuildEnvironment(self, project, repository, package, arch, **kwargs):
+		res = self.apiCallXML("build", project, repository, arch, package, "_buildenv", **kwargs)
+		return self._schema.processBuildInfo(res)
+
 	def getBuildInfo(self, project, repository, package, arch, **kwargs):
 		res = self.apiCallXML("build", project, repository, arch, package, "_buildinfo", **kwargs)
 		return self._schema.processBuildInfo(res)
@@ -730,6 +742,8 @@ class OBSPackage:
 		else:
 			self._basePackageName = None
 
+		self.requires = None
+
 	def __str__(self):
 		return self.name
 
@@ -847,6 +861,185 @@ class OBSProjectConfig:
 	def addPerson(self, userName, role):
 		self.persons.append(self.Person(userName, role))
 
+class DependencyWorker:
+	def __init__(self, project, client, backingStore):
+		self.project = project
+		self.client = client
+		self.backingStore = backingStore
+
+		self.resolverHints = project.resolverHints
+		self.product = project.product
+
+		self.knownPackages = {}
+		for storedBuild in backingStore.enumerateOBSPackages():
+			self.knownPackages[storedBuild.name] = storedBuild
+
+		self.progressMeter = None
+
+		self.previousIncarnation = {}
+
+		self.inProgress = None
+		self.queue = []
+
+	def maybeQueueForInspection(self, build, nameMatcher):
+		shouldInspect = True
+
+		storedBuild = self.knownPackages.get(build.name)
+		if storedBuild is None:
+			debugOBS(f"  -> {build.name} not known yet")
+		elif nameMatcher:
+			shouldInspect = nameMatcher.match(build.name)
+		elif storedBuild.buildTime != build.buildTime:
+			debugOBS(f"  -> {build.name} has been rebuilt")
+		else:
+			# debugOBS(f"  -> {build.name} unchanged")
+			shouldInspect = False
+
+		if shouldInspect:
+			self.queue.append(build)
+
+		if storedBuild is not None:
+			self.previousIncarnation[build] = storedBuild
+			build.backingStoreId = storedBuild.backingStoreId
+		else:
+			# fixme add the build to the DB
+			pass
+
+		for rpm in build.binaries:
+			if not rpm.isSourcePackage:
+				storedRpm = self.backingStore.recoverLatestPackageByName(rpm.name)
+				if storedRpm is not None:
+					self.previousIncarnation[rpm] = storedRpm
+
+	def __bool__(self):
+		return bool(self.queue)
+
+	def startProgressMeter(self, numTotal):
+		if self.progressMeter is not None:
+			return
+
+		numRebuilt = len(self.queue)
+		infomsg(f"{numRebuilt}/{numTotal} packages have been rebuilt")
+		self.progressMeter = ThatsProgress(numRebuilt, withETA = True)
+
+	def next(self):
+		if self.progressMeter is not None:
+			self.done()
+
+		if not self.queue:
+			return None
+
+		obsPackage = self.queue.pop(0)
+
+		storedBuild = self.previousIncarnation.get(obsPackage)
+
+		if storedBuild is None:
+			versionInfo = f"NEW {obsPackage.sourceVersion}"
+		else:
+			versionInfo = f"{storedBuild.sourceVersion} -> {obsPackage.sourceVersion}"
+
+		infomsg(f"Inspecting {obsPackage} {versionInfo} (status={obsPackage.buildStatusString})")
+
+		self.inProgress = obsPackage
+		return obsPackage
+
+	def done(self):
+		if self.inProgress is None:
+			return
+
+		self.progressMeter.tick()
+		self.inProgress = None
+
+		if len(self.queue) == 0:
+			infomsg("Completed.")
+		else:
+			infomsg(f"{self.progressMeter} complete, {self.progressMeter.eta} remaining")
+
+	def buildToBackingStore(self, obsPackage):
+		for rpm in obsPackage.binaries:
+			self.rpmToBackingStore(rpm)
+		self.backingStore.insertOBSPackage(obsPackage)
+
+	def rpmToBackingStore(self, rpm):
+		if not self.backingStore.isKnownPackageObject(rpm):
+			# beware, this will currently update the entry in 'latest' as well, which is
+			# probably not what we want here
+			if rpm.productId is None:
+				rpm.productId = self.product.productId
+			self.backingStore.addPackageObject(rpm)
+
+	def resolvePackageInfo(self, pinfoList):
+		result = set()
+
+		if not pinfoList:
+			return result
+
+		n = 0
+		for pinfo in pinfoList:
+			n += 1
+			if type(pinfo) is str:
+				infomsg(f"item {n} is {pinfo}")
+				xxx
+			if self.ignorePackage(pinfo):
+				continue
+
+			dependent = self.product.findPackage(pinfo.name, pinfo.version, pinfo.release, pinfo.arch)
+#				if dependent is None:
+#					# try a looser match - ignore version and release
+#					dependent = self.product.findPackage(pinfo.name, arch = pinfo.arch)
+#					if dependent:
+#						warnmsg(f"{filename} references unknown rpm {pinfo.fullname()}, using {dependent} instead")
+
+			if dependent is None:
+				dependent = Package.fromPackageInfo(pinfo)
+				self.product.addPackage(dependent)
+
+			self.rpmToBackingStore(dependent)
+
+			assert(dependent.backingStoreId)
+			result.add(dependent)
+
+		return result
+
+	def updateDependencies(self, disambiguationContext, rpm, info):
+		self.rpmToBackingStore(rpm)
+
+		if rpm.isSourcePackage:
+			return
+
+		assert(info.requires_ext is not None)
+		assert(info.provides_ext is not None)
+
+		requires = info.requires_ext
+		for dep in requires:
+			rpms = set()
+			for pinfo in dep.packages:
+				requiredRpm = Package.fromPackageInfo(pinfo)
+				self.rpmToBackingStore(requiredRpm)
+				rpms.add(requiredRpm)
+			dep.packages = rpms
+
+		self.backingStore.updateDependencyTree(rpm, requires)
+		rpm.updateResolvedRequires(requires)
+
+		requiredby = []
+		for dep in info.provides_ext:
+			requiredby += dep.packages
+
+		requiredby = self.resolvePackageInfo(requiredby)
+
+		rpm.updateResolvedProvides(requiredby)
+
+	def ignorePackage(self, pinfo):
+		name = pinfo.name
+
+		for suffix in ("-debuginfo", "-debugsource"):
+			if name.endswith(suffix):
+				return True
+
+		return False
+
+
 class OBSProject:
 	def __init__(self, name, product = None):
 		self.name = name
@@ -882,34 +1075,87 @@ class OBSProject:
 			self._projectConfig = OBSProjectConfig(self.name)
 		return self._projectConfig
 
-	def primeCache(self, client):
+	def updateEverything(self, client, backingStore, onlyPackages = None):
 		if client.cachePolicy == 'exclusive':
 			infomsg(f"Skipping download of data from OBS - cache policy is {client.cachePolicy}")
 			return
 
 		packages = self.updateBinaryList(client)
 
-		progress = ThatsProgress(len(packages))
+		numTotal = len(packages)
 
-		failures = 0
+		worker = DependencyWorker(self, client, backingStore)
+
 		for obsPackage in packages:
-			infomsg(f"[{progress}] retrieving OBS information for {obsPackage}")
+			if obsPackage.buildTime is not None:
+				worker.maybeQueueForInspection(obsPackage, onlyPackages)
+
+		if onlyPackages is not None:
+			badNames = onlyPackages.reportUnmatched()
+			if badNames:
+				errormsg(f"Bad package name(s) given on command line: {' '.join(badNames)}")
+				raise Exception(f"Package names not found")
+
+		worker.startProgressMeter(numTotal)
+
+		packages = self.updatePackagesFromOBS(client, worker, backingStore)
+		infomsg(f"{len(packages)} out of {numTotal} packages were updated")
+
+	def processDependencies(self, backingStore, onlyPackages = None):
+		with backingStore.deferCommit():
+			self.processDependenciesWork(backingStore, onlyPackages)
+
+	# In OBS fileinfo_ext data, resolved requirements are represented showing all possible
+	# candidates. In a few cases, it is important to retain this ambiguity when labelling
+	# packages, but in many cases, this redundancy needs to be hidden (eg. OBS expands
+	# requirements on the perl interpreter as "perl" and "perl-32bit".
+	def processDependenciesWork(self, backingStore, onlyPackages):
+		# for rpm in backingStore.enumerateLatestPackages():
+		if self.resolverHints is None:
+			raise Exception("Unable to post-process package dependencies: no resolver hints")
+
+		worker = DependencyWorker(self, None, backingStore)
+
+		unresolvableAmbiguities = 0
+		for obsPackage in backingStore.enumerateOBSPackages():
+			if onlyPackages and not onlyPackages.match(obsPackage.name):
+				continue
+
+			disambiguationContext = self.resolverHints.createDisambiguationContext(obsPackage)
+			src = obsPackage.sourcePackage
 			for rpm in obsPackage.binaries:
-				info = client.getFileInfoExt(self.name, self.buildRepository, obsPackage.name, self.buildArch, rpm.fullname(),
-						progressMeter = progress)
-				if info is None:
-					errormsg(f"Unable to obtain fileinfo for {rpm.fullname()}")
-					failures += 1
+				if rpm.isSourcePackage:
+					continue
 
-			if obsPackage.buildStatus == OBSPackage.STATUS_SUCCEEDED and \
-			   not self.queryPackageBuildInfo(client, obsPackage, progressMeter = progress):
-				errormsg(f"Unable to obtain buildinfo for obs package {obsPackage}")
-				failures += 1
+				if rpm.sourcePackage is None:
+					rpm.sourcePackage = src
 
-			progress.tick()
+				requires = backingStore.retrieveForwardDependenciesFullTree(rpm)
 
-		if failures:
-			raise Exception(f"Encountered {failures} errors while trying to download project information on {self.name} from OBS")
+				result = disambiguationContext.inspect(rpm, requires)
+				if result.ambiguous:
+					if dep.expression:
+						errormsg(f"{rpm}: unable to resolve ambiguous dependency {dep.expression}")
+					else:
+						errormsg(f"{rpm}: unable to resolve ambiguous dependency")
+					for req in result.ambiguous:
+						names = sorted(req.names)
+						errormsg(f"     {req.name:30} {names[0]}")
+						for other in names[1:]:
+							errormsg(f"     {' ':30} {other}")
+
+					unresolvableAmbiguities += 1
+					continue
+
+				requires = result.createUpdatedDependencies()
+
+				backingStore.updateSimplifiedDependencies(rpm, requires)
+
+		if unresolvableAmbiguities:
+			raise Exception(f"Detected {unresolvableAmbiguities} unresolvable ambiguities while post-processing dependencies")
+
+	def purgeStale(self, backingStore):
+		pass
 
 	def ignorePackage(self, pinfo):
 		name = pinfo.name
@@ -1028,6 +1274,93 @@ class OBSProject:
 		build.buildTime = buildTime
 		build._binaries = binaries
 		build._source = None
+
+	def updatePackagesFromOBS(self, client, worker, backingStore):
+
+		result = []
+		while worker:
+			obsPackage = worker.next()
+
+			with loggingFacade.temporaryIndent(3):
+				with backingStore.deferCommit():
+					if obsPackage.backingStoreId is None:
+						worker.buildToBackingStore(obsPackage)
+
+					# ensure we have a backing store ID for the source
+					# Not all builds will have a source package; such as those
+					# that merely import packages from a different buildarch
+					# (eg glibc:686)
+					src = obsPackage.sourcePackage
+					if src is not None:
+						worker.rpmToBackingStore(src)
+
+					context = None
+					if self.resolverHints is not None:
+						context = self.resolverHints.createDisambiguationContext(obsPackage)
+
+					for rpm, info in self.retrieveBuildExtendedInfo(client, obsPackage):
+						# make sure we've set the source ID
+						if not rpm.isSourcePackage and src is not None:
+							rpm.setSourcePackage(src)
+
+						if rpm.buildArch != self.buildArch:
+							infomsg(f"{rpm}: do not update dependencies, as it has been imported from a different build arch")
+							worker.rpmToBackingStore(rpm)
+							continue
+
+						worker.updateDependencies(context, rpm, info)
+
+					backingStore.updateOBSPackage(obsPackage, obsPackage.binaries, updateTimestamp = True)
+
+			result.append(obsPackage)
+
+		return result
+
+	def retrieveBuildExtendedInfo(self, client, obsPackage):
+		try:
+			return self.tryRetrieveBuildExtendedInfo(client, obsPackage)
+		except Exception as e:
+			infomsg(f"Exception while trying to get depdency info for {obsPackage}: {e}")
+			infomsg("Retrying...")
+
+		# refresh the binarylist for this build, do NOT cache
+		updatedListing = client.queryPackageBuild(self.name, self.buildRepository, obsPackage.name, self.buildArch, cachingOff = True)
+		self.updateBuildFromBinaryList(obsPackage, updatedListing)
+
+		return self.tryRetrieveBuildExtendedInfo(client, obsPackage)
+
+	def tryRetrieveBuildExtendedInfo(self, client, obsPackage):
+		result = []
+
+		infoFactory = UniquePackageInfoFactory()
+
+		buildInfo = self.queryPackageBuildInfo(client, obsPackage)
+		for rpm in obsPackage.binaries:
+			info = client.getFileInfoExt(self.name, self.buildRepository, obsPackage.name, rpm.buildArch, rpm.fullname(), infoFactory = infoFactory)
+			if info is None:
+				raise Exception(f"Unable to obtain fileinfo for {rpm.fullname()}")
+
+			if rpm.isSourcePackage:
+				requires_ext = []
+				for dep in buildInfo.builddeps:
+					if dep.preinstall == "1" or dep.vminstall == "1" or dep.notmeta == "1":
+						# FIXME: record these somewhere
+						# infomsg(f"{rpm}: ignoring build dependency {dep.name} preinstall={dep.preinstall} vminstall={dep.vminstall} notmeta={dep.notmeta}")
+						continue
+
+					pinfo = infoFactory(name = dep.name, version = dep.version, release = dep.release, arch = dep.arch)
+
+					req = OBSDependency(expression = f'obsbuild({pinfo.name})')
+					req.packages.add(pinfo)
+
+					requires_ext.append(req)
+
+				infomsg(f"{rpm}: fudging {len(requires_ext)} dependencies")
+				info.requires_ext = requires_ext
+
+			result.append((rpm, info))
+
+		return result
 
 	def updateBuildDependencies(self, client, arch, packageIterator):
 		processed = []

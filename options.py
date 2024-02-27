@@ -111,6 +111,10 @@ class Application:
 	def backingStore(self):
 		return self.loadBackingStore()
 
+	def reloadBackingStore(self, *args, **kwargs):
+		self._store = None
+		return self.loadBackingStore(*args, **kwargs)
+
 	def loadBackingStore(self, readonly = False, dependencyTreeLookups = False, sourceLookups = False):
 		if self._store is not None:
 			return self._store
@@ -195,3 +199,8 @@ class Application:
 		if family is None:
 			raise Exception(f"Unknown product family {self.opts.family}")
 		return family
+
+	def beginChapter(self, msg):
+		infomsg("")
+		infomsg(f"*** {msg} ***")
+		infomsg("")

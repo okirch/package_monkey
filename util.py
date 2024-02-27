@@ -241,26 +241,45 @@ class ThatsProgress:
 #
 ##################################################################
 class NameMatcher:
-	def __init__(self, names = []):
-		self.patterns = []
-		self.names = []
+	class ExactMatch(object):
+		def __init__(self, pattern):
+			self.pattern = pattern
+			self.hit = False
 
+		def match(self, name):
+			return self.pattern == name
+
+	class ShellMatch(object):
+		def __init__(self, pattern):
+			self.pattern = pattern
+			self.hit = False
+
+		def match(self, name):
+			return fnmatch.fnmatchcase(name, self.pattern)
+
+	def __init__(self, names = []):
+		self.matches = []
 		for name in names:
 			if '*' in name or '?' in name:
-				self.patterns.append(name)
+				m = self.ShellMatch(name)
 			else:
-				self.names.append(name)
+				m = self.ExactMatch(name)
+			self.matches.append(m)
 
 	def match(self, candidate):
-		for name in self.names:
-			if name == candidate:
-				return True
-
-		for pattern in self.patterns:
-			if fnmatch.fnmatchcase(candidate, pattern):
+		for m in self.matches:
+			if m.match(candidate):
+				m.hit = True
 				return True
 
 		return False
+
+	def reportUnmatched(self):
+		result = []
+		for m in self.matches:
+			if not m.hit:
+				result.append(m.pattern)
+		return result
 
 ##################################################################
 #

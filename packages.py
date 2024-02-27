@@ -1342,6 +1342,7 @@ class Package:
 		self.sourceName = None
 		self.sourcePackage = None
 		self.sourcePackageHash = None
+		self._sourceBackingStoreId = None
 		self.group = ''
 		self.buildTime = None
 		self.status = None
@@ -1476,12 +1477,14 @@ class Package:
 	@property
 	def sourceBackingStoreId(self):
 		if self.sourcePackage is None:
-			return None
+			return self._sourceBackingStoreId
 		return self.sourcePackage.backingStoreId
 
 	@sourceBackingStoreId.setter
 	def sourceBackingStoreId(self, value):
-		pass
+		if self.sourcePackage is not None:
+			assert(self.sourcePackage.backingStoreId == value)
+		self._sourceBackingStoreId = value
 
 	def updateResolvedRequires(self, toAdd):
 		if self.resolvedRequires is None:

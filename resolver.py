@@ -4,6 +4,193 @@
 #
 ##################################################################
 import fnmatch
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+
+resolvLogger = loggingFacade.getLogger('resolver')
+
+def debugResolver(msg, *args, prefix = None, **kwargs):
+        if prefix:
+                msg = f"[{prefix}] {msg}"
+        resolvLogger.debug(msg, *args, **kwargs)
+
+class Disambiguation(object):
+	class Requires:
+		def __init__(self, name, packages):
+			self._name = name
+			self._packages = packages
+			self.names = set(p.name for p in packages)
+
+		@property
+		def name(self):
+			return self._name or "<unspec>"
+
+		@property
+		def resolved(self):
+			return list(filter(lambda p: p.name in self.names, self._packages))
+
+		def asOBSDependency(self):
+			from obsclnt import OBSDependency
+
+			result = OBSDependency(self._name)
+			result.packages = self.resolved
+			return result
+
+	class RpmContext(object):
+		def __init__(self, name, requires_ext):
+			self.name = name
+
+			self.ambiguous = []
+			self.unambiguous = []
+
+			for dep in requires_ext:
+				if len(dep.packages) == 0:
+					continue
+
+				if len(dep.packages) == 1:
+					self.unambiguous.append(Disambiguation.Requires(dep.expression, dep.packages))
+				else:
+					self.ambiguous.append(Disambiguation.Requires(dep.expression, dep.packages))
+
+		@property
+		def resolved(self):
+			result = set()
+			for dep in self.unambiguous:
+				result.update(dep.resolved)
+			return result
+
+		def createUpdatedDependencies(self):
+			if self.ambiguous:
+				return None
+
+			return [dep.asOBSDependency() for dep in self.unambiguous]
+
+	class BuildContext:
+		def __init__(self, ruleSet, obsBuild):
+			self.ruleSet = ruleSet
+
+			self.preferred = set()
+			for rpm in obsBuild.binaries:
+				if not rpm.isSourcePackage:
+					self.preferred.add(rpm.name)
+
+			self.nameToPkg = {}
+
+		def uniqueDependencies(self, requires_ext):
+			result = []
+
+			for dep in requires_ext:
+				if len(dep.packages) == 0:
+					continue
+
+				packages = set()
+				for pinfo in dep.packages:
+					uniq = self.nameToPkg.get(pinfo.name)
+					if uniq:
+						assert(uniq.fullname() == pinfo.fullname())
+					else:
+						self.nameToPkg[pinfo.name] = pinfo
+						packages.append(pinfo)
+
+		def inspect(self, rpm, requires_ext):
+			if rpm.isSourcePackage:
+				return None
+
+			result = Disambiguation.RpmContext(rpm.shortname, requires_ext)
+			if result.ambiguous:
+				self.ruleSet.disambiguate(result, self.preferred)
+
+			if result.ambiguous:
+				self.ruleSet.verifyAcceptable(result)
+
+			return result
+
+	class CollapseRule:
+		def __init__(self, target, collapsible):
+			self.target = target
+			self.collapsible = collapsible
+
+	class AcceptRule:
+		def __init__(self, acceptable):
+			self.acceptable = acceptable
+
+
+	def __init__(self):
+		self.accept = []
+		self.collapse = []
+
+	def addAcceptableRule(self, *names):
+		self.accept.append(self.AcceptRule(set(names)))
+
+	def addCollapsingRule(self, target, aliases):
+		collapsible = set(aliases)
+		collapsible.add(target)
+
+		self.collapse.append(self.CollapseRule(target, collapsible))
+
+	def begin(self, obsPackage):
+		return Disambiguation.BuildContext(self, obsPackage)
+
+	def disambiguate(self, rpmContext, siblingNames):
+		result = []
+
+		for req in rpmContext.ambiguous:
+			modified = False
+
+			# This is "lex libomp16-devel"
+			# libomp16-devel has some weird requirements that expand to libomp{15,16,17,...}-devel
+			# Of course it makes no sense for libomp16-devel to pull in libomp17-devel, so pretend
+			# they didn't say that.
+			if rpmContext.name in req.names:
+				req.names = set(rpmContext.name)
+				rpmContext.unambiguous.append(req)
+				continue
+
+			# Another hack to deal with LLVM. requiring libclang13.so will be resolved by OBS as
+			# llvm{13,14,15,16}-clang and libclang13. If this occurs while building eg llvm14, we
+			# want to pick llvm14-clang. IOW, when we have an ambiguous requires, by default
+			# pick the rpms that are produced by the same build
+			common = req.names.intersection(siblingNames)
+			if common:
+				debugResolver(f"{rpmContext.name}: {req.name} can be resolved by sibling(s)")
+				modified = True
+				req.names = common
+
+			for rule in self.collapse:
+				if rule.collapsible.issubset(req.names):
+					req.names.difference_update(rule.collapsible)
+					req.names.add(rule.target)
+					modified = True
+
+			if modified:
+				if len(req.names) <= 1:
+					debugResolver(f"{rpmContext.name}: {req.name} is now unambiguous")
+					rpmContext.unambiguous.append(req)
+					continue
+
+			result.append(req)
+
+		rpmContext.ambiguous = result
+
+	def verifyAcceptable(self, rpmContext):
+		stillAmbiguous = []
+
+		for req in rpmContext.ambiguous:
+			acceptable = False
+
+			for rule in self.accept:
+				if req.names.issubset(rule.acceptable):
+					debugResolver(f"{rpmContext.name}: ambiguous requirement {req.name} is acceptable")
+					acceptable = True
+					break
+
+			if acceptable:
+				rpmContext.unambiguous.append(req)
+				continue
+
+			stillAmbiguous.append(req)
+
+		rpmContext.ambiguous = stillAmbiguous
+
 
 class ResolverHints:
 	class ExactMatch:
@@ -123,6 +310,8 @@ class ResolverHints:
 
 		self.fakeDependencies = set()
 
+		self.disambiguation = Disambiguation()
+
 	def addNameOrder(self, words):
 		self._rules.append(self.NameOrderRule(words))
 
@@ -155,6 +344,18 @@ class ResolverHints:
 			self._cache[key] = result
 
 		return result
+
+	##########################################################
+	# disambiguation of requirements
+	##########################################################
+	def addAcceptableRule(self, nameList):
+		self.disambiguation.addAcceptableRule(*nameList)
+
+	def addCollapsingRule(self, target, aliases):
+		self.disambiguation.addCollapsingRule(target, aliases)
+
+	def createDisambiguationContext(self, obsPackage):
+		return self.disambiguation.begin(obsPackage)
 
 	##########################################################
 	# inspect dependency

@@ -139,6 +139,9 @@ class ProductFamily:
 		self.resolverHints = None
 		self.loaded = False
 
+	def __str__(self):
+		return self.name
+
 	def load(self):
 		if self.loaded:
 			return
@@ -178,6 +181,13 @@ class ProductFamily:
 			rewrite = hints.get('rewrite')
 			if rewrite is not None:
 				self.expandDependencyRewrites(rewrite)
+			packages = hints.get('packages')
+			if packages is not None:
+				self.expandPackageRules(packages)
+
+			disambiguate = hints.get('disambiguate')
+			if disambiguate is not None:
+				self.expandDisambiguationRules(disambiguate)
 			self.resolverHints.finalize()
 
 			# self.resolverHints.selfTest()
@@ -266,6 +276,61 @@ class ProductFamily:
 
 			(fromName, toName) = expr.split('->')
 			self.resolverHints.addDependencyRewrite(fromName.strip(), toName.strip())
+
+	def expandPackageRules(self, data):
+		for item in data:
+			name = item['name']
+
+			warning = item.get('warning')
+
+			ignore = item.get('ignore')
+			if ignore is not None:
+				if type(ignore) is str:
+					self.resolverHints.addIgnoredDependency(name, ignore)
+				else:
+					for targetName in ignore:
+						self.resolverHints.addIgnoredDependency(name, targetName)
+
+	def expandDisambiguationRules(self, ruleSetData):
+		for pos in range(len(ruleSetData)):
+			ruleData = ruleSetData[pos]
+			if type(ruleData) is not dict:
+				raise Exception(f"Invalid rule #{pos} in disambiguation resolver hints: not a dict")
+
+			acceptData = ruleData.get('acceptable')
+			collapseData = ruleData.get('collapse')
+
+			n = 0
+			for data in (acceptData, collapseData):
+				if data:
+					n += 1
+			if n != 1:
+				raise Exception(f"Invalid rule #{pos} in disambiguation resolver hints: expect exactly one of: accept, collape")
+
+			if acceptData:
+				if type(acceptData) is not list:
+					raise Exception(f"Invalid rule #{pos} in disambiguation resolver hints: acceptable should be a list of strings")
+
+				rule = self.resolverHints.addAcceptableRule(acceptData)
+
+			if collapseData:
+				if type(collapseData) is not str:
+					raise Exception(f"Invalid rule #{pos} in disambiguation resolver hints: collapse should be a string")
+				target = collapseData
+				aliases = []
+
+				aliasData = ruleData.get('alias')
+				if aliasData is not None:
+					aliases.append(aliasData)
+				aliasData = ruleData.get('aliases')
+				if aliasData is not None:
+					aliases += aliasData
+
+				rule = self.resolverHints.addCollapsingRule(target, aliases)
+
+			rpmData = ruleData.get('context')
+			if rpmData:
+				rule.setContextPackage(rpmData)
 
 	def enumerate(self, **args):
 		if args.get('version') == 'latest':

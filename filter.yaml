@@ -789,7 +789,19 @@ groups:
     - cross-amdgcn-gcc13
     - cross-nvptx-gcc13
 
+ - name: "@LLVMAPI"
+   sourceproject: LLVM
+   requires:
+    - "@CoreAPI"
+    - "@LLVM"
+   binaries:
+    - lldb*-devel priority=0
+    - llvm-devel
+    - llvm-polly-devel
+    - clang-devel
+
  - name: "@LLVMRuntime"
+   api: "@LLVMAPI"
    sourceproject: LLVM
    requires:
     - "@CoreLibraries"
@@ -798,7 +810,6 @@ groups:
     - libLTO1?
     - libomp1?
     - libclang1?
-    - libclang1?-cpp*
     - libc++1
     - libc++abi1
 
@@ -812,10 +823,15 @@ groups:
    binaries:
     - llvm
     - clang
+    - clang1?
     - llvm1?
     - llvm1?-polly
     - lldb
-#   - liblldb1?
+    - liblldb1?
+    - libclang-cpp14
+    - libclang1?-cpp*
+    - llvm1?-libclang13
+    - llvm1?-libc++abi1
 
  - name: WorkbenchDevel
    requires:
@@ -878,6 +894,10 @@ groups:
     - filesystem
     - compat-usrmerge-tools
     - system-user-root
+   purposes:
+    - name: 32bit
+      binaries:
+       - glibc-32bit
 
  # This label exists because we need to hide the fact that somewhat oddly,
  # Glibc sits below gcc runtime
@@ -919,6 +939,15 @@ groups:
    binaries:
     - libltdl7
     - gettext-runtime-mini
+
+ - name: "@GettextTools"
+   sourceproject: Workbench
+   requires:
+    - "@Core0"
+   binaries:
+    - gettext-runtime
+    - gettext-tools-mini
+    - gettext-tools
 
  - name: CoreDevel
    requires:
@@ -1057,7 +1086,6 @@ groups:
     - libbz2-devel
     - libcurl-devel
     - libelf-devel
-    - libexpat-devel
     - libffi-devel
     - libidn2-devel
     - libjson-c-devel
@@ -1087,6 +1115,9 @@ groups:
     - "@Guile" # for autogen
     - "@SystemPython" # for cmake-mini
     - "@PerlCore"
+    - "@CoreXMLLibraries"
+    - "@ArchivingLibraries"
+    - "@GettextTools"
    binaries:
     # llvm15 requires libtool
     - libtool
@@ -1099,8 +1130,6 @@ groups:
     # libssh-devel requires cmake
     - cmake
     - make
-    - gettext-tools-mini
-    - gettext-tools
     - nasm
    buildflavors:
     - name: qt
@@ -1194,6 +1223,7 @@ groups:
     - libibmtss1
     - libjansson4
     - libjson-c5
+    - libjsoncpp25*
     - libldap-data
     - libldap2
     - libldapcpp0
@@ -1275,6 +1305,30 @@ groups:
       binaries:
        - timezone-java
 
+ - name: "@CoreXMLLibraries"
+   api: "@CoreXMLAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libexpat1
+    - libyajl2
+
+ - name: "@CoreXMLAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreXMLLibraries"
+    - "@CoreAPI"
+   binaries:
+    - libexpat-devel
+
+ - name: "@CoreXMLTools"
+   sourceproject: Core
+   requires:
+    - "@CoreXMLLibraries"
+   binaries:
+    - expat
+
  - name: "@CoreInstUtils"
    sourceproject: Core
    requires:
@@ -1346,12 +1400,10 @@ groups:
     - jq
     - kbd
     - less
-    - libarchive13
     - libcap-progs
     - libcurl4
     - libdebuginfod1
     - libnghttp2-*
-    - libexpat1
     - libexslt0
     - libgsasl7
     - libnscd1
@@ -1373,7 +1425,6 @@ groups:
     - lmdb
     - lndir
     - logrotate
-    - lz4
     - lzip
     - m4
     - mailx
@@ -1459,6 +1510,7 @@ groups:
    sourceproject: Core
    requires:
     - "@PythonBuildConfig"
+    - "@CoreXMLLibraries"
    binaries:
     - python-rpm-generators
     - python311
@@ -1549,6 +1601,7 @@ groups:
     - "@Core0"
     - "@PerlCore"
     - "@CoreNetworkLibraries"
+    - "@CoreXMLLibraries"
     - "@SystemPython"
     - "@OpenLDAP"
    binaries:
@@ -1562,7 +1615,6 @@ groups:
     - openslp
     - libduktape*
     - suse-build-key
-#   - perl-libintl-perl
     - ibmtss
     - ibmswtpm2
     - git-core
@@ -1888,6 +1940,7 @@ groups:
     - "@Core0"
     - "@Glib2NoDBus"
     - "@SystemPython"
+    - "@CoreXMLLibraries"
    packages:
     - source-highlight
    binaries:
@@ -1927,6 +1980,7 @@ groups:
     - hunspell
     - hyphen
     - libvoikko1
+    - libhunspell-1*
 #  purposes:
 #   - name: devel
 #     requires:
@@ -1992,10 +2046,19 @@ groups:
        - "@Glib2"
       binaries:
        - restorecond
-#  purposes:
-#   - name: devel
-#     requires:
-#      - "@PythonStandard"
+    - name: gtk
+      requires:
+       - "@Gtk3"
+       - "@SystemPythonStandard"
+       - "@CoreLibraries+python"
+       - "@PythonStandard311+dbus"
+       # lives in X11
+       - "@DesktopCore"
+       # lives in Gtk
+       - "@DesktopQuarks"
+      binaries:
+       - setroubleshoot
+       - setroubleshoot-server
 
  - name: "@ConsoleLibraries"
    sourceproject: Core
@@ -2091,11 +2154,13 @@ groups:
    sourceproject: Core
    requires:
     - "@Core0"
-    - "@PerlCore"
+    - "@Perl"
+    - "@GettextTools"
    binaries:
     - texi2info
     - texi2html
     - makeinfo
+    - perl-libintl-perl
    buildflavors:
     - name: tex
       requires:
@@ -2150,11 +2215,13 @@ groups:
    packages:
     - openblas:serial
     - openblas:pthreads
+    - libcerf
    binaries:
     - libColPack0
     - libadolc2
     - liblapack3
     - liblapacke3
+    - libcerf2
 
  - name: "@EssentialGraphicsLibraries"
    sourceproject: CorePlus
@@ -2167,6 +2234,7 @@ groups:
     - libjpeg-turbo
     - libjpeg-turbo:libjpeg62-turbo
     - libwebp
+    - libmng
    binaries:
     - libjpeg8
     - libturbojpeg0
@@ -2176,10 +2244,12 @@ groups:
     - liblcms2-2
     - libwebp7
     - libimagequant0
+    - libmng2
    buildflavors:
     - name: x11
       requires:
        - "@X11Libraries"
+       - "@CoreXMLLibraries"
       binaries:
        - libwmf-0*
        - libnetpbm11
@@ -2306,6 +2376,26 @@ groups:
    binaries:
     - libhwy1
     - liborc-0*
+    - libcrc32c1
+
+ - name: "@ArchivingLibraries"
+   api: "@CorePlusAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - snappy
+    - blosc
+    - blosc2
+    - libarchive
+    - lz4
+   binaries:
+    - libsnappy1
+    - libblosc1
+    - libblosc2
+    - liblz4*
+    - libarchive13
+    - bsdtar
 
  - name: "@PlusLibraries"
    api: "@CorePlusAPI"
@@ -2314,6 +2404,7 @@ groups:
     - "@CoreLibraries"
     - "@I18nLibraries"
     - "@SIMDLibraries"
+    - "@ArchivingLibraries"
    packages:
     - re2
     - tre
@@ -2325,6 +2416,9 @@ groups:
     - libssh2_org
     - abseil-cpp
     - protobuf
+    # used by python-numba only
+    # used by python-numba only
+    - tbb
    binaries:
     - libjemalloc2
     - libkyotocabinet16
@@ -2332,13 +2426,20 @@ groups:
     - libprotobuf-lite23*
     - libprotoc23_4*
     - libprotobuf23_4*
-
- - name: "@Snappy"
-   sourceproject: CorePlus
-   requires:
-    - "@CoreLibraries"
-   binaries:
     - libsnappy1
+    # used by python-numba only
+    - libtbb12
+   buildflavors:
+    - name: java
+      requires:
+       - "@JDK"
+      binaries:
+       - protobuf-java
+    - name: kernel
+      requires:
+       - "@KernelLibraries"
+      binaries:
+       - libtbbbind_2*
 
  # it would make sense to put Tcl into Core, because it's not really
  # changing anymore, anyway. However, as it depends on X11 to a degree,
@@ -2505,6 +2606,9 @@ groups:
    sourceproject: Databases
    requires:
     - "@CommonDatabaseLibraries"
+   packages:
+    - python-asyncpg
+    - python-psycopg
    binaries:
     - libpq5
     - libecpg6
@@ -2520,9 +2624,6 @@ groups:
     - "@SystemPython"
     - "@PerlCore"
     - "@LLVMRuntime"
-   packages:
-    - python-asyncpg
-    - python-psycopg
    binaries:
     - postgresql-*
     - postgresql15-*
@@ -2923,6 +3024,7 @@ groups:
     - gnome-settings-daemon
 
  - name: "@X11Server"
+   api: "@X11ServerSDK"
    sourceproject: X11
    requires:
     - "@X11"
@@ -3093,8 +3195,9 @@ groups:
     - "@Qt5ExtendedLibraries"
     - "@SystemDatabaseLibraries"
     - "@Gtk3"
-    - "@Snappy"
+    - "@PlusLibraries"
     - "@SpeechSynthesis"
+    - "@Spelling"
    binaries:
     - libqt5-qtdeclarative
     - qtdeclarative-imports-provides-qt5
@@ -3242,7 +3345,7 @@ groups:
     - "@PlusLibraries"
     - "@NetworkProxyLibraries"
     - "@SmartcardLibraries"
-    - "@Snappy"
+    - "@PlusLibraries"
    packages:
     - python-qt5
     - python-qt5-*
@@ -3262,8 +3365,10 @@ groups:
     - name: meta
       requires:
        - "@Qt-doc"
+       - "@LLVM"
       binaries:
        - qt6-tools
+       - qt6-tools-qdoc
    purposes:
     - name: doc
       binaries:
@@ -3305,6 +3410,7 @@ groups:
    sourceproject: CorePlus
    requires:
     - "@Glib2"
+    - "@Glib2+notify"
     - "@CoreAPI"
     - "@GCC"
     - "@SystemPython"
@@ -3330,6 +3436,23 @@ groups:
     - shared-mime-info
     - libgirepository-1*
     - girepository-1*
+   buildflavors:
+    - name: notify
+      requires:
+       - "@GdkPixbuf"
+      binaries:
+       - libnotify4
+       - libnotify-tools
+
+ - name: "@Glib2Notify"
+   api: "@Glib2API"
+   sourceproject: CorePlus
+   requires:
+    - "@Glib2NoDBus"
+    - "@GdkPixbuf"
+   binaries:
+    - libnotify4
+    - libnotify-tools
 
  - name: "@Glib2"
    sourceproject: CorePlus
@@ -3725,6 +3848,7 @@ groups:
    requires:
     - "@AppstreamLibraries"
     - "@GdkPixbufAPI"
+    - "@CorePlusAPI"
    binaries:
     - AppStream-devel
     - AppStream-compose-devel
@@ -3848,7 +3972,6 @@ groups:
     - "@Soup3Libraries"
    binaries:
     - libnice10
-    - libnotify4
     - gstreamer-*
     - gstreamer-plugins-vaapi
     - libgstcuda-*
@@ -4046,6 +4169,7 @@ groups:
    requires:
     - "@Core0"
     - "@Glib2NoDBus"
+    - "@CoreXMLLibraries"
    binaries:
     - libcgraph6
     - libgvc6
@@ -4136,6 +4260,7 @@ groups:
     - "@EssentialQtLibraries"
     - "@Bubblewrap"
     - "@Webkit"
+    - "@CoreXMLLibraries"
    binaries:
     - libwx_gtk2u*
     - libwx_gtk3u*
@@ -4205,6 +4330,10 @@ groups:
    binaries:
     - libudev1
     - libudev-mini1
+   buildflavors:
+    - name: python
+      binaries:
+       - python311-pyudev
 
  - name: "@SystemdLibraries"
    sourceproject: Systemd
@@ -4212,6 +4341,7 @@ groups:
    requires:
     - "@Core0"
     - "@UdevLibraries"
+    - "@ArchivingLibraries"
    packages:
     - libbytesize
    binaries:
@@ -4239,6 +4369,7 @@ groups:
     - "@Core0"
     - "@SystemdLibraries"
     - "@Glib2NoDBus"
+    - "@CoreXMLLibraries"
    binaries:
     - dbus-1
 
@@ -4548,16 +4679,26 @@ groups:
 
  # Some of the security stuff below is more of a desktop user thing (eg yubikeys), so we should
  # look at those
+ - name: "@HostSecurityAPI"
+   sourceproject: Security
+   requires:
+    - "@HostSecurity"
+    - "@CoreAPI"
+    - "@KernelAPI"
+
  - name: "@HostSecurity"
+   sourceproject: Security
+   api: "@HostSecurityAPI"
    requires:
     - "@Core"
     - "@Security"
     - "@SystemPython"
     - "@CoreNetworkLibraries"
-   sourceproject: Security
+    - "@KernelCrypto"
    binaries:
     - ima-evm-utils
     - ima-inspect
+    - evmctl
     - pam_u2f
     - tpm-*
     - trousers
@@ -4589,6 +4730,7 @@ groups:
     - "@SystemdServices"
     - "@KernelCore"
     - "@Filesystems"
+    - "@ArchivingLibraries"
    binaries:
     - autofs
     - bcache-tools
@@ -4676,7 +4818,6 @@ groups:
     - "@GCC"
     - "@Core+systemd"
     - "@PlusLibraries"
-    - "@Snappy"
     - "@ELFDebugging"
     - "@CoreHardware+python"
     - "@Filesystems"
@@ -4826,6 +4967,7 @@ groups:
     - "@SUSEConnect"
     - "@HardwareAccessUtilities"
     - "@Kernel+xen"
+    - "@SELinux+gtk"
    binaries:
     - ruby3.2-rubygem-agama
     - agama
@@ -4958,6 +5100,7 @@ groups:
    requires:
     - "@FreetypeLibraries"
     - "@CoreLibraries"
+    - "@CoreXMLLibraries"
     - "@Core0"
     - "@PlusLibraries"
     # harfbuzz requires glib2
@@ -5047,6 +5190,7 @@ groups:
     - "@I18nAPI"
     - "@FontLibraries"
     - "@FreetypeAPI"
+    - "@CoreXMLAPI"
    binaries:
     - fontconfig-devel
    buildflavors:
@@ -5293,6 +5437,7 @@ groups:
     - name: udev
       requires:
        - "@UdevLibraries"
+       - "@CoreXMLLibraries"
       binaries:
        - libdevmapper1*
        - libdevmapper-event1*
@@ -5753,17 +5898,22 @@ groups:
    api: "@InfinibandAPI"
    requires:
     - "@CoreNetworkLibraries"
+    - "@CoreXMLLibraries"
     - "@Glib2"
     - "@SystemdServices"
     - "@UdevLibraries"
     - "@KernelCore"
     - "@TclCore"
+    - "@NetworkServices"
+    - "@CoreServices"
    packages:
     - openucx
     - libqb
    binaries:
     - dapl
     - dapl-*
+    - eth-basic-tools
+    - eth-fastfabric
     - ibutils*
     - infinipath*
     - qperf
@@ -5894,6 +6044,8 @@ groups:
     - name: nvme
       requires:
        - "@KernelNetworkLibraries+python"
+       - "@UdevLibraries+python"
+       - "@MinimalSystemd+python"
        - "@Avahi"
       binaries:
        - nvme-stas
@@ -5904,6 +6056,7 @@ groups:
     - "@AvahiLibraries"
     - "@CoreAPI"
     - "@SystemdAPI"
+    - "@CoreXMLLibraries"
    binaries:
     - libavahi-devel
 
@@ -6129,6 +6282,7 @@ groups:
    sourceproject: X11
    requires:
     - "@Core"
+    - "@CoreXMLLibraries"
     - "@X11"
     - "@LLVMRuntime"
     - "@GPU"
@@ -6159,6 +6313,9 @@ groups:
     - "@EssentialGraphicsAPI"
     - "@AudioAPI"
     - "@SystemdAPI"
+   binaries:
+    - libvamp-sdk2
+    - rubberband-vamp
 
  - name: "@AVLibraries"
    api: "@AVAPI"
@@ -6222,6 +6379,7 @@ groups:
     - libcamera
    binaries:
     - libcamera0*
+    - libcamera-base0*
    buildflavors:
     - name: gnome
       requires:
@@ -6282,6 +6440,7 @@ groups:
     - "@CoreLibraries"
    binaries:
     - libgsl27
+    - libmunge2
 
  - name: HPCDevel
    requires:
@@ -6300,6 +6459,8 @@ groups:
     - "@HPCCoreLibraries"
     - "@LUA"
     - "@TclCore"
+   packages:
+    - munge
    binaries:
     - lua-lmod
 
@@ -6375,7 +6536,7 @@ groups:
       requires:
        - "@SystemdLibraries"
        - "@BluetoothLibraries"
-       - "@Snappy"
+       - "@PlusLibraries"
       binaries:
        - libpcap1
        - libwireshark16
@@ -6535,6 +6696,7 @@ groups:
  - name: "@Gnuplot"
    sourceproject: Applications
    requires:
+    - "@NumericLibraries"
     - "@GraphicsLibraries"
     - "@FontLibraries+x11"
     - "@Qt5ExtendedLibraries"
@@ -6616,7 +6778,14 @@ groups:
       binaries:
        - libproxy1-pacrunner-webkit
 
+ - name: "@BrowserAPI"
+   sourceproject: Network
+   requires:
+    - "@BrowsersConsole"
+    - "@CoreAPI"
+
  - name: "@BrowsersConsole"
+   api: "@BrowserAPI"
    sourceproject: Network
    requires:
     - "@Core"
@@ -6624,6 +6793,9 @@ groups:
     - "@XMLPlus"
    binaries:
     - w3m
+    - libhubbub0
+    - libdom0
+    - libcss0
    buildflavors:
     - name: x11
       requires:
@@ -6638,6 +6810,7 @@ groups:
        - "@Ruby"
        - "@PlusLibraries"
        - "@KerberosLibraries"
+       - "@CoreXMLLibraries"
       binaries:
        - elinks
 
@@ -6782,6 +6955,7 @@ groups:
    sourceproject: Webserver
    requires:
     - "@Core0"
+    - "@CoreXMLLibraries"
    packages:
     - libapr
     - libapr-util
@@ -6812,6 +6986,7 @@ groups:
    requires:
     - "@Apache"
     - "@CoreAPI"
+    - "@CoreXMLAPI"
     - "@GCC"
    binaries:
     - apache2-devel
@@ -6856,7 +7031,7 @@ groups:
     # for the wireshark plugin
     - "@NetworkAnalysis+gui"
     - "@GnomeVTE"
-    - "@Snappy"
+    - "@PlusLibraries"
     - "@OpticalMedia+tcl"
    binaries:
     - xen
@@ -7079,6 +7254,7 @@ groups:
    sourceproject: Core
    requires:
     - "@Core0"
+    - "@CoreXMLLibraries"
    binaries:
     - perl
     - perl-base
@@ -7103,9 +7279,11 @@ groups:
    sourceproject: Perl
    requires:
     - "@PerlCore"
+    - "@CoreXMLTools"
    binaries:
     - perl-libwww-perl
     - strip-nondeterminism
+    - perl-XML-Twig
 
  - name: "@Javascript"
    sourceproject: Javascript
@@ -7137,6 +7315,8 @@ groups:
     - java-1_8_0-openjdk-demo
     - java-1_8_0-openjdk-headless
     - java-1_8_0-openjdk-src
+    # Explicitly make this a regular package rather than a -devel one
+    - java-1_8_0-openjdk-devel
     - java-11-openjdk
     - java-11-openjdk-demo
     - java-11-openjdk-headless
@@ -7193,6 +7373,7 @@ groups:
     - jdepend
     - jakarta-mail
     - regexp
+    - servletapi4
     - servletapi5
     - jlex
     - junit5
@@ -7206,6 +7387,13 @@ groups:
     - javapackages-local
     - javapackages-ivy
     - felix-utils
+    - relaxngDatatype
+    - jaxen
+    - felix-bundlerepository
+    - jline
+    - truth
+    - auto-service
+    - auto-service-annotations
    purposes:
     - name: doc
       binaries:
@@ -7226,6 +7414,7 @@ groups:
     - httpcomponents-client
     - slf4j-jcl
     - bcel
+    - tomcat-*
    purposes:
 #   - name: devel
 #     binaries:
@@ -7352,6 +7541,7 @@ groups:
     - "@FilesystemLibraries"
     - "@SystemdServices"
     - "@FreetypeLibraries"
+    - "@GettextTools"
    binaries:
     - dracut
     - dracut-*
@@ -7605,6 +7795,7 @@ templates:
        - "@TclCore"
        - "@CoreNetworkLibraries"
        - "@NumericLibraries"
+       - "@PlusLibraries"
       binaries:
        - pythonXXX-alabaster
        - pythonXXX-apipkg
@@ -7612,6 +7803,7 @@ templates:
        - pythonXXX-Babel
        - pythonXXX-bcrypt
        - pythonXXX-beniget
+       - pythonXXX-blosc
        - pythonXXX-certifi
        - pythonXXX-cffi
        - pythonXXX-charset-normalizer
@@ -7633,6 +7825,8 @@ templates:
        - pythonXXX-lxml
        - pythonXXX-MarkupSafe
        - pythonXXX-packaging
+       - pythonXXX-pandas
+       - pythonXXX-pandas-*
        - pythonXXX-pexpect
        - pythonXXX-ply
        - pythonXXX-py
@@ -7669,6 +7863,8 @@ templates:
          requires:
           - "@DBus"
          binaries:
+          # python-dbus and python-gobject may be better off in their
+          # respective components
           - pythonXXX-dbus-python
           - pythonXXX-notify2
           - pythonXXX-slip-dbus
@@ -7712,7 +7908,9 @@ templates:
           - pythonXXX-atspi
        - name: database
          requires:
-          - "@Databases"
+          - "@SystemDatabaseLibraries"
+         binaries:
+          - pythonXXX-pandas-postgresql
        - name: tex
          requires:
           - "@Texlive"
@@ -7727,13 +7925,35 @@ templates:
          binaries:
           - pythonXXX-pythran
           - pythonXXX-numpy-devel
+       - name: kernel
+         requires:
+          - "@Kernel"
+         binaries:
+          - pythonXXX-pandas-fss
+          - pythonXXX-libkdumpfile
+          - pythonXXX-drgn
+       - name: hpc
+         requires:
+          - "@Infiniband"
+          - "@HPC"
+          - "@CythonXXX"
+         binaries:
+          - pythonXXX-pandas-hdf5
 
     - name: "@PythonModulesXXX"
-      # buildconfig: Python/pythonXXX
       sourceproject: Python
       compatibility: pythonXXX
       requires:
        - "@PythonStandardXXX"
+      binaries:
+       - pythonXXX-numba
+       - pythonXXX-pandas-performance
+      buildflavors:
+       - name: qt
+         requires:
+          - "@PythonQt"
+         binaries:
+          - pythonXXX-pandas-clipboard
 
     - name: "@PythonMatplotXXX"
       # buildconfig: Python/pythonXXX
@@ -7746,6 +7966,7 @@ templates:
       binaries:
        - pythonXXX-matplotlib
        - pythonXXX-matplotlib-tk
+       - pythonXXX-pandas-plot
       buildflavors:
        - name: qt
          requires:
@@ -7769,9 +7990,7 @@ templates:
          binaries:
           - pythonXXX-matplotlib-wx
 
-
     - name: "@CythonXXX"
-      # buildconfig: Python/pythonXXX
       sourceproject: Python
       compatibility: pythonXXX
       requires:
@@ -7779,4 +7998,21 @@ templates:
        - "@PythonCoreXXX"
       binaries:
        - pythonXXX-Cython
+       - pythonXXX-Cython0
        - pythonXXX-Cython3
+
+    - name: "@PythonWeirdXXX"
+      sourceproject: Python
+      disposition: ignore
+#     requires:
+#      - "@PythonModulesXXX"
+#      - "@PythonModulesXXX+qt"
+#      - "@PythonStandardXXX+qt"
+#      - "@PythonStandardXXX+kernel"
+#      - "@PythonStandardXXX+hpc"
+#      - "@PythonStandardXXX+database"
+#      - "@PythonQt"
+#      - "@PythonMatplotXXX"
+      binaries:
+       - pythonXXX-pandas-all
+

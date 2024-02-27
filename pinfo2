@@ -1,0 +1,124 @@
+#!/usr/bin/python3
+
+from options import Application
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+
+application = Application('pkginfo')
+application.addArgument('--long', action = 'store_true', default = False)
+application.addArgument('--raw', action = 'store_true', default = False)
+application.addArgument('--labels', action = 'store_true', default = False)
+application.addArgument(dest = 'packages', metavar = 'PACKAGES', nargs = '+', help = 'list of packages to query')
+
+store = application.loadBackingStore(readonly = False,
+                dependencyTreeLookups = False,
+                sourceLookups = True)
+
+class RpmRenderer(object):
+	def __init__(self):
+		pass
+
+	def render(self, rpm):
+		return rpm.shortname
+
+class LabellingRpmRenderer(RpmRenderer):
+	def __init__(self, classification):
+		super().__init__()
+
+		self.classification = classification
+
+		self._label = {}
+		for label, members in classification.enumeratePackages():
+			for rpm in members:
+				self._label[rpm.shortname] = label
+
+	def render(self, rpm):
+		rpmName = super().render(rpm)
+
+		label = self._label.get(rpm.shortname)
+		if label is not None:
+			return f"{rpmName} ({label.componentName}:{label})"
+		return rpmName
+
+class DependencyRenderer(object):
+	def __init__(self):
+		pass
+
+	def render(self, depList, renderer):
+		packages = set()
+		for dep in depList:
+			packages.update(dep.packages)
+
+		if not packages:
+			print(f"  {self.MSG_EMPTY}")
+			return
+
+		print(f"  {self.MSG_HEADER}:")
+		for rpm in sorted(packages, key = lambda p: p.name):
+			print(f"   - {renderer.renderRpm(rpm)}")
+
+class RequiresRenderer(DependencyRenderer):
+	MSG_EMPTY = "does not require anything"
+	MSG_HEADER = "requires"
+
+class ProvidesRenderer(DependencyRenderer):
+	MSG_EMPTY = "not required by anything"
+	MSG_HEADER = "required by"
+
+class RequiresRendererLong(RequiresRenderer):
+	def render(self, depList, renderer):
+		if not depList:
+			print(f"  {self.MSG_EMPTY}")
+			return
+
+		print(f"  requires:")
+		for dep in depList:
+			expr = dep.expression or "?"
+			print(f"    {dep.expression or '?'}")
+			for rpm in dep.packages:
+				print(f"     - {renderer.renderRpm(rpm)}")
+
+class Renderer(object):
+	def __init__(self):
+		self.rpm = RpmRenderer()
+		self.requires = RequiresRenderer()
+		self.provides = ProvidesRenderer()
+
+	def renderRpm(self, rpm):
+		return self.rpm.render(rpm)
+
+	def renderRequires(self, rpm):
+		return self.requires.render(rpm, self)
+
+	def renderProvides(self, rpm):
+		return self.provides.render(rpm, self)
+
+renderer = Renderer()
+
+if application.opts.long:
+	renderer.requires = RequiresRendererLong()
+
+if application.opts.labels:
+	classification = application.loadClassification()
+	renderer.rpm = LabellingRpmRenderer(classification)
+
+for packageName in application.opts.packages:
+	rpm = store.recoverLatestPackageByName(packageName)
+	if rpm is None:
+		print(f"{packageName}: not found")
+		continue
+
+	print(f"{renderer.renderRpm(rpm)}")
+
+	if rpm.obsBuildId is not None:
+		obsPackage = store.retrieveOBSPackageByBuildId(rpm.obsBuildId)
+		if obsPackage is not None:
+			print(f"  OBS package: {obsPackage}")
+
+	if application.opts.raw:
+		depList = store.retrieveForwardDependenciesFullTree(rpm)
+	else:
+		depList = store.retrieveForwardDependenciesTree(rpm)
+	renderer.renderRequires(depList)
+
+	depList = store.retrieveReverseDependenciesFullTree(rpm)
+	renderer.renderProvides(depList)

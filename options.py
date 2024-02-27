@@ -151,6 +151,17 @@ class Application:
 
 		return self._store
 
+	def loadClassification(self, classificationScheme = None):
+		from filter import Classification
+		from writers import XmlReader
+
+		if classificationScheme is None:
+			classificationScheme = Classification.Scheme()
+
+		path = self.getOutputPath("packages.xml")
+		infomsg(f"Reading classification result from {path}")
+		reader = XmlReader(classificationScheme)
+		return reader.read(path)
 
 	@property
 	def traceMatcher(self):

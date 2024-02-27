@@ -5,3 +5,6 @@ product_families:
  - family: Dolomite
    repos: dolomite.yaml
    database: dolomite.db
+ - family: ALP
+   repos: alp.yaml
+   database: alp.db

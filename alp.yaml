@@ -1,0 +1,764 @@
+baseurl: https://download.suse.de/ibs/SUSE:/
+alternateurls:
+ - http://download.suse.de/ibs/SUSE:/
+repositories:
+ - https://download.suse.de/ibs/SUSE:/ALP:/Products:/Dolomite:/$VERSION/images/repo/ALP-Dolomite-1.0-x86_64-Media1/
+ - https://download.suse.de/ibs/SUSE:/ALP:/Products:/Dolomite:/$VERSION/images/repo/ALP-Dolomite-1.0-x86_64-Media2/
+versions:
+ - name: "1.0"
+architectures:
+ - x86_64
+buildservice:
+ source:
+  - SUSE:ALP:Source:Standard:$VERSION
+ build:
+  - SUSE:ALP:Source:Standard:Core:$VERSION:Build
+
+products:
+ - name:        ALPCore
+   nickname:    alp
+   obsname:     ALPCore
+
+resolverhints:
+  fake:
+   - environment_with_systemd
+   - environment_with_udev
+   - environment_with_polkit
+  packages:
+   - name: e2fsprogs-scrub
+     ignore: postfix
+   - name: policy-default-privs
+     ignore:
+      - policy
+   - name: gio-branding-SLE
+     # This requirement creates a loop, break it
+     ignore: libgio-2_0-0
+   - name: libgio-2_0-0
+     # This is not an API requirement, it's just "I want dbus"
+     ignore:
+      - dbus-1
+      - dbus-1-x11
+   - name: fftw3-mpi-devel
+     # This hard dependency on openmpi4 looks wrong to me
+     ignore: openmpi4-devel
+   - name: libboost_mpi1_82_0-devel
+     # This hard dependency on openmpi4 looks wrong to me
+     ignore: openmpi4-devel
+   - name: fuse-devel
+     # A devel package should not pull in -doc packages
+     ignore: fuse-doc
+   - name: glib2-tools
+     ignore: dbus-1-x11
+   - name: emacs
+     ignore: emacs-x11
+   - name: libecpg6
+     ignore:
+      - postgresql15-devel-mini
+   - name: postgresql15
+     ignore:
+      - postgresql15-devel-mini
+   # We need to build flatpak without pipewire support
+   - name: xdg-desktop-portal
+     warning: "we need to remove pipewire support from xdg-desktop-portal"
+     ignore:
+      - libpipewire-0_3-0
+   - name: appstream-glib-devel
+     ignore: libuuid-devel-32bit
+  ignore:
+    # we want to place these somewhere in Core, but dont want to pollute Core
+    # with any systemd dependencies.
+    # Maybe we should have a core package that specifies a systemd unit file version
+    # boost dependencies are a mess. Quite a few devel packages from boost-defaults require packages from boost:extra
+    # (and it's not clear why the python bindings are in boost:extra, for instance)
+    - "libboost_python3-devel -> libboost_python-py3-1_82_0-devel"
+    - "libboost_mpi_python3-devel -> libboost_mpi_python-py3-1_82_0-devel"
+    - "libboost_graph_parallel-devel -> libboost_graph_parallel1_82_0-devel"
+    - "libboost_mpi-devel -> libboost_mpi1_82_0-devel"
+    - "libboost_numpy3-devel -> libboost_numpy-py3-1_82_0-devel"
+  rewrite:
+   - "systemd -> environment_with_systemd"
+   - "systemd-mini -> environment_with_systemd"
+   - "udev -> environment_with_udev"
+   - "udev-mini -> environment_with_udev"
+   - "polkit -> environment_with_polkit"
+  prefer:
+    - "order libcontainers-openSUSE-policy libcontainers-default-policy"
+    - "order libjpeg8 libjpeg*"
+    - "order libjpeg8-devel libjpeg*-devel"
+    - "order lua53 lua5?"
+    - "order lua53-devel lua5?-devel"
+    - "order ImageMagick-config-7-SUSE ImageMagick-config-7-*"
+
+    # for a variety of packages, we support installing several (major) versions in parallel.
+    # these usually have the major number somewhere in the RPM name.
+    # In addition, there can be unversioned packages that require what is the "default"
+    # version at a certain point in time.
+    # The OBS dependency resolver will usually pick up and report both; so we try to go
+    # with unversioned package name
+    - "order libopenssl-devel libopenssl-*devel"
+    - "order libpq5 libecpg6 postgresql*-devel-mini postgresql-devel postgresql*-devel"
+    - "order postgresql-server-devel postgresql*-server-devel"
+    - "order go go1.*"
+    - "order cargo cargo1.*"
+    - "order rust rust1.*"
+    - "order libgtop libgtop-2*"
+    - "order glibmm2-devel glibmm2_*-devel"
+
+    # other packages do not have such a default version
+    - "order libomp16-devel libomp15-devel"
+
+    # Packages like systemd and krb5 come with *-mini versions of their packages
+    # When chasing runtime dependencies, we should prefer these mini versions
+    # over the full-blown ones to keep the depdency tree slender
+    - "order systemd-mini systemd"
+    - "order systemd-mini-devel systemd-devel"
+    - "order systemd-mini-container systemd-container"
+    - "order libsystemd0-mini libsystemd0"
+    - "order udev-mini udev"
+    - "order krb5-mini krb5"
+    - "order krb5-mini-devel krb5-devel"
+    - "order libudev-mini1 libudev1"
+    - "order gettext-runtime-mini gettext-runtime"
+    - "order gettext-tools-mini gettext-tools"
+    - "order ghostscript-mini ghostscript"
+    - "order cmake-mini cmake cmake-full"
+
+    - "suffixorder -mini ''"
+    - "suffixorder -mini-devel -devel"
+
+    # when chasing hard requirements, we prefer the dbus version with the least
+    # baggage
+    - "order dbus-1 dbus-1-glib dbus-1-x11"
+
+    - "order mozilla-nss-certs p11-kit-nss-trust"
+    - "order chrony-pool-suse chrony-pool-*"
+
+    - "order libyui-ncurses-pkg16 libyui-qt-pkg16"
+    - "order strongswan-ipsec strongswan"
+
+    # libOpenIPMI0 vs full OpenIPMI
+    - "order libOpenIPMI0 OpenIPMI"
+
+    # prefer kernel-default over other kernel flavors
+    - "order kernel-default kernel-*"
+
+    # for some packages where there's a variant implementation of some
+    # 'original' go with the original for now
+    - "order unzip unzip-rcc"
+    - "order gzip zstd-gzip"
+
+    # pick java 1.7 over 1.8
+    - "order java-17* java-21* java-11* java-1_8_0*"
+
+    # java-1_8_0-openjdk-headless over java-1_8_0-openjdk-devel
+    - "order java-1_8_0-openjdk-headless java-1_8_0-openjdk-devel"
+
+    - "order coreutils-single coreutils"
+    - "order grub2-x86_64-efi grub2-i386-efi"
+    - "order libopenblas_pthreads0 libopenblas_serial0 libopenblas_openmp0"
+    - "order libXaw7 xaw3dd"
+
+    # debuginfod has some dummy packages
+    - "order *debuginfod* *debuginfod*-dummy*"
+    - "order libdebuginfod1 libdebuginfod1-dummy"
+    - "order debuginfod-client debuginfod-dummy-client"
+    - "order libdebuginfod-devel libdebuginfod-dummy-devel"
+
+    # Disambiguating some dependencies in HPC
+    # Not all of this makes sense, because these are actual alternatives, all of which should
+    # work when a product ships @HPC.
+    # So what we really want is to mark these as valid alternatives and allow the preferences
+    # engine to return several alternatives. Currently, that can't be done because it's considered
+    # an error.
+    - "order libpsm_infinipath1 libpsm2-compat"
+    - "order mvapich2-psm2 mpich mvapich2-psm mpich-ofi mvapich2"
+    - "order mvapich2-psm openmpi1-libs"
+    - "order libmca_common_dstore1 openmpi4-libs openmpi3-libs"
+    - "prefixorder openmpi4- openmpi3- openmpi2- openmpi1-"
+    - "order openmpi4-config openmpi3-config openmpi2-config openmpi1-config pmix-mca-params"
+
+    - "order ocaml-runtime ocaml"
+    - "order ocaml-compiler-libs ocaml-compiler-libs-devel"
+
+    - "order perl-base perl perl-ExtUtils-MakeMaker"
+    - "order perl-base perl perl-CPAN-Meta-Requirements"
+    - "order perl-base perl perl-File-Path"
+
+    # same here; these would be valid alternatives (if one wants to use BDB)
+    - "order postfix postfix-bdb"
+    - "order cyrus-sasl-devel cyrus-sasl-bdb-devel"
+
+    # prefer libfoo over llvm15-libfoo
+    - "prefixorder lib llvm15-lib"
+
+    # xml-commons-apis over xml-commons-apis-bootstrap
+    # antlr over antlr-bootstrap
+    # javacc over javacc-bootstrap
+    # scala over scala-bootstrap
+    - "suffixorder '' -bootstrap"
+
+    - "order javamail geronimo-j2ee*"
+    - "order geronimo-j2ee-1_4-apis geronimo-*-api servletapi4 servletapi5 tomcat-servlet-*-api"
+
+    # apache2-MPM can be resolved by apache2-worker apache2-prefork apache2-event
+    - "order apache2-prefork apache2-*"
+
+    # various python modules that come in different versions
+    - "order python3*-Cython3 python3*-Cython"
+    - "order python3*-SQLAlchemy python3*-SQLAlchemy1"
+    - "order python3*-sip-devel python3*-sip6-devel"
+    - "order python3*-tornado python3*-tornado6"
+    - "order python3*-jupyter-client python3*-jupyter-client7"
+
+    # Some packages do not specify the python abi when requiring other python modules;
+    # so OBS will report both the 3.10 and 3.11 version.
+    # Choose 3.11 over 3.10
+    - "prefixorder python311- python310-"
+
+    # javascript has -default versiuons of some of its packages
+    - "order npm-default npm*"
+    - "order nodejs-default nodejs*"
+    - "order nodejs-devel-default nodejs*-devel"
+
+    # not sure
+    - "order libpcp-devel pcp-devel"
+
+    # libcolord-gtk1 is an older version of this package
+    - "order colord-gtk libcolord-gtk1"
+    - "order typelib-1_0-Gtk-4* typelib-1_0-Gtk-*"
+    - "order gettext-its-gtk4 gettext-its-gtk3"
+    - "order libgnome-desktop-4* libgnome-desktop-*"
+
+    # SELinux
+    - "order selinux-policy-targeted selinux-policy-*"
+
+    - "order cracklib-dict-full cracklib-dict-*"
+
+    # not sure why this is there
+    - "order system-user-lp system-group-hardware"
+
+    - "order man mandoc"
+    - "order emacs-nox emacs-x11"
+
+    # preferred spelling engine?
+    - "order enchant-2-backend-hunspell enchant-2-backend-*"
+    # both packages seem to provide the shared library
+    - "order libgspell-1* gspell"
+
+    # libjack-devel over pipewire-libjack-devel
+    # libjack0 over pipewire-libjack0
+    - "order libjack-devel pipewire-libjack-0*-devel"
+    - "order libjack0 pipewire-libjack-0*"
+    - "order libjackserver0 pipewire-libjack-0*"
+    - "order pulseaudio pipewire-pulseaudio"
+
+    # not sure about this choice
+    - "order php8-embed apache2-mod_php8 php8-cli php8-fastcgi php8-fpm"
+
+    # I have no idea whether these are actual alternatives or whether we should
+    # actually chase both dependency edges
+    - "order texlive-hyphen-base texlive-lambda"
+    - "order qt6-location: qt6-location qt6-positioning"
+
+    - "order icewm-lite icewm-default"
+
+    - "order health-checker-plugins-MicroOS health-checker-plugins-caasp health-checker-plugins-kubic health-checker-testing"
+
+    - "order yast2-schema-micro yast2-schema-* yast2-schema"
+    - "order python311-Cython python311-Cython0"
+    # FIXME: we should allow more versatile disambiguation (including saying "use all of them")
+    - "order cloud-regionsrv-client-generic-config regionServiceClientConfigAzure regionServiceClientConfigEC2 regionServiceClientConfigGCE"
+    - "order python311-urllib3 python311-urllib3_1"
+    - "order protobuf21-devel protobuf-devel"
+    - "order docker podman-docker"
+    - "order go1.18-openssl go1.18"
+    - "order elemental-plugin-toolkit elemental-plugin-dummy"
+    - "order gnu13-compilers-hpc gnu-compilers-hpc"
+    - "order gnu13-compilers-hpc-devel gnu-compilers-hpc-devel"
+
+    - "suffixorder '' -32bit"
+    - "suffixorder '' -hmac"
+    - "suffixorder -ALP -SLE -SLE_15 -SLE-Micro -SUSE -openSUSE -upstream"
+
+  disambiguate:
+     - acceptable:
+         - geronimo-jta-1_0_1B-api
+         - geronimo-jta-1_1-api
+     - acceptable:
+         - protobuf-devel
+         - protobuf21-devel
+     - acceptable:
+         - colord-gtk
+         - libcolord-gtk1
+     - acceptable:
+         - java-11-openjdk-headless
+         - java-17-openjdk-headless
+         - java-1_8_0-openjdk-headless
+         - java-21-openjdk-headless
+     - acceptable:
+         - java-11-openjdk
+         - java-17-openjdk
+         - java-1_8_0-openjdk
+         - java-21-openjdk
+     - acceptable:
+         - java-11-openjdk-devel
+         - java-17-openjdk-devel
+         - java-1_8_0-openjdk-devel
+         - java-21-openjdk-devel
+     - acceptable:
+         - kernel-debug
+         - kernel-default
+         - kernel-kvmsmall
+         - kernel-rt
+         - kernel-rt_debug
+     - acceptable:
+         - apache2-event
+         - apache2-prefork
+         - apache2-worker
+     - acceptable:
+         - yast2-schema
+         - yast2-schema-default
+         - yast2-schema-micro
+     - acceptable:
+         - openmpi3-libs
+         - openmpi4-libs
+     - acceptable:
+         - selinux-policy-minimum
+         - selinux-policy-mls
+         - selinux-policy-targeted
+     - acceptable:
+         - cracklib-dict-full
+         - cracklib-dict-small
+     - acceptable:
+         - system-group-hardware
+         - system-user-lp
+     - acceptable:
+         - docker
+         - podman-docker
+     - acceptable:
+         - product-builder-plugin-ALP
+         - product-builder-plugin-SLE_15
+     - acceptable:
+         - kernel-default
+         - kernel-default-base
+     - acceptable:
+         - dbus-1
+         - dbus-1-x11
+     - acceptable:
+         - mozilla-nss-certs
+         - p11-kit-nss-trust
+     - acceptable:
+         - lua51
+         - lua53
+         - lua54
+     - acceptable:
+         - go
+         - go1.16
+         - go1.17
+         - go1.18
+         - go1.18-openssl
+         - go1.19
+         - go1.20
+         - go1.21
+         - go1.22
+     - acceptable:
+         - libgnome-desktop-3-20
+         - libgnome-desktop-4-2
+     - acceptable:
+         - enchant-2-backend-aspell
+         - enchant-2-backend-hunspell
+         - enchant-2-backend-nuspell
+         - enchant-2-backend-voikko
+     - acceptable:
+         - health-checker-plugins-MicroOS
+         - health-checker-plugins-caasp
+         - health-checker-plugins-kubic
+     - acceptable:
+         - regionServiceClientConfigAzure
+         - regionServiceClientConfigEC2
+         - regionServiceClientConfigGCE
+     - acceptable:
+         - libjpeg62-devel
+         - libjpeg8-devel
+     - acceptable:
+         - typelib-1_0-Gtk-2_0
+         - typelib-1_0-Gtk-3_0
+         - typelib-1_0-Gtk-4_0
+     - acceptable:
+         - man
+         - mandoc
+     - acceptable:
+         - openmpi1-config
+         - openmpi2-config
+         - openmpi3-config
+         - openmpi4-config
+     - acceptable:
+         - glibmm2-devel
+         - glibmm2_4-devel
+     - acceptable:
+         - cyrus-sasl-bdb-devel
+         - cyrus-sasl-devel
+     - acceptable:
+         - libgtop
+         - libgtop-2_0-11
+     - acceptable:
+         - unzip
+         - unzip-rcc
+     - acceptable:
+         - texlive-hyphen-base
+         - texlive-lambda
+     - acceptable:
+         - python311-Cython
+         - python311-Cython0
+     - acceptable:
+         - python310-tornado
+         - python310-tornado6
+     - acceptable:
+         - python311-tornado
+         - python311-tornado6
+     - acceptable:
+         - python310-jupyter-client
+         - python310-jupyter-client7
+     - acceptable:
+         - python311-jupyter-client
+         - python311-jupyter-client7
+     - acceptable:
+         - python310-jupyter-client
+         - python310-jupyter-client7
+         - python311-jupyter-client
+         - python311-jupyter-client7
+     - acceptable:
+         - python310-sip-devel
+         - python310-sip6-devel
+     - acceptable:
+         - python311-sip-devel
+         - python311-sip6-devel
+     - acceptable:
+         - python310-SQLAlchemy
+         - python310-SQLAlchemy1
+     - acceptable:
+         - python311-SQLAlchemy
+         - python311-SQLAlchemy1
+     - acceptable:
+         - python310-urllib3
+         - python310-urllib3_1
+     - acceptable:
+         - python311-urllib3
+         - python311-urllib3_1
+     - acceptable:
+         - systemd-default-settings-branding-SLE
+         - systemd-default-settings-branding-SLE-Micro
+         - systemd-default-settings-branding-openSUSE
+     - acceptable:
+         - systemd-presets-branding-ALP-transactional
+         - systemd-presets-branding-Elemental
+     - acceptable:
+         - busybox-sendmail
+         - postfix
+         - postfix-bdb
+     - acceptable:
+         - gzip
+         - zstd-gzip
+     - acceptable:
+         - libyui-ncurses-pkg16
+         - libyui-qt-pkg16
+     - acceptable:
+         - libopenblas_openmp0
+         - libopenblas_pthreads0
+         - libopenblas_serial0
+     - acceptable:
+         - tomcat-el-3_0-api
+         - tomcat10-el-5_0-api
+     - acceptable:
+         - tomcat-servlet-4_0-api
+         - tomcat10-servlet-6_0-api
+     - acceptable:
+         - monitoring-plugins-dbi-mysql
+         - monitoring-plugins-dbi-pgsql
+         - monitoring-plugins-dbi-sqlite3
+     - acceptable:
+         - libclang13
+         - llvm14-libclang13
+         - llvm15-libclang13
+         - llvm16-libclang13
+     - acceptable:
+         - strongswan
+         - strongswan-ipsec
+     - acceptable:
+         - geronimo-servlet-2_4-api
+         - geronimo-servlet-2_5-api
+         - servletapi4
+         - servletapi5
+         - tomcat-servlet-4_0-api
+         - tomcat10-servlet-6_0-api
+     - acceptable:
+         - libhdf5-200
+         - libhdf5-200-mvapich2
+         - libhdf5-200-openmpi4
+     - acceptable:
+         - libhdf5_hl200
+         - libhdf5_hl200-mvapich2
+         - libhdf5_hl200-openmpi4
+     - acceptable:
+         - libhdf5_fortran200
+         - libhdf5_fortran200-mvapich2
+         - libhdf5_fortran200-openmpi4
+     - acceptable:
+         - mpich
+         - mpich-ofi
+         - mvapich2
+         - mvapich2-psm2
+     - collapse: libbz2-devel
+       alias: libbz2-devel-32bit
+     - collapse: ncurses-devel
+       alias: ncurses-devel-32bit
+     - collapse: xz-devel
+       alias: xz-devel-32bit
+     - collapse: libzstd-devel
+       alias: libzstd-devel-32bit
+     - collapse: zlib-devel
+       alias: zlib-devel-32bit
+     - collapse: popt-devel
+       alias: popt-devel-32bit
+     - collapse: libuuid-devel
+       alias: libuuid-devel-32bit
+     - collapse: gmp-devel
+       alias: gmp-devel-32bit
+     - collapse: libblkid-devel
+       alias: libblkid-devel-32bit
+     - collapse: libelf-devel
+       alias: libelf-devel-32bit
+     - collapse: libexpat-devel
+       alias: libexpat-devel-32bit
+     - collapse: libffi-devel
+       alias: libffi-devel-32bit
+     - collapse: libgcrypt-devel
+       alias: libgcrypt-devel-32bit
+     - collapse: libgpg-error-devel
+       alias: libgpg-error-devel-32bit
+     - collapse: libmount-devel
+       alias: libmount-devel-32bit
+     - collapse: libopenssl-3-devel
+       alias: libopenssl-3-devel-32bit
+     - collapse: libuuid-devel
+       alias: libuuid-devel-32bit
+     - collapse: libX11-devel
+       alias: libX11-devel-32bit
+     - collapse: libXau-devel
+       alias: libXau-devel-32bit
+     - collapse: libXext-devel
+       alias: libXext-devel-32bit
+     - collapse: libXp-devel
+       alias: libXp-devel-32bit
+     - collapse: libXprintUtil-devel
+       alias: libXprintUtil-devel-32bit
+     - collapse: libXt-devel
+       alias: libXt-devel-32bit
+     - collapse: mpfr-devel
+       alias: mpfr-devel-32bit
+     - collapse: readline-devel
+       alias: readline-devel-32bit
+     - collapse: dbus-1-devel
+       alias: dbus-1-devel-32bit
+     - collapse: libqt5-qtconnectivity-devel
+       alias: libqt5-qtconnectivity-devel-32bit
+     - collapse: libqt5-qttools-devel
+       alias: libqt5-qttools-devel-32bit
+     - collapse: libqt5-qttools-devel
+       alias: libqt5-qttools-devel-32bit
+     - collapse: libqt5-qtlocation-devel
+       alias: libqt5-qtlocation-devel-32bit
+     - collapse: libqt5-qtmultimedia-devel
+       alias: libqt5-qtmultimedia-devel-32bit
+     - collapse: libqt5-qtmultimedia-devel
+       alias: libqt5-qtmultimedia-devel-32bit
+     - collapse: libqt5-qtconnectivity-devel
+       alias: libqt5-qtconnectivity-devel-32bit
+     - collapse: libqt5-qtlocation-devel
+       alias: libqt5-qtlocation-devel-32bit
+     - collapse: libqt5-qtdeclarative-devel
+       alias: libqt5-qtdeclarative-devel-32bit
+     - collapse: libqt5-qtdeclarative-devel
+       alias: libqt5-qtdeclarative-devel-32bit
+     - collapse: libqt5-qtdeclarative-devel
+       alias: libqt5-qtdeclarative-devel-32bit
+     - collapse: libqt5-qtserialport-devel
+       alias: libqt5-qtserialport-devel-32bit
+     - collapse: libqt5-qtsvg-devel
+       alias: libqt5-qtsvg-devel-32bit
+     - collapse: libqt5-qtspeech-devel
+       alias: libqt5-qtspeech-devel-32bit
+     - collapse: libqt5-qttools-devel
+       alias: libqt5-qttools-devel-32bit
+     - collapse: libqt5-qtwebchannel-devel
+       alias: libqt5-qtwebchannel-devel-32bit
+     - collapse: libqt5-qtwebsockets-devel
+       alias: libqt5-qtwebsockets-devel-32bit
+     - collapse: libqt5-qtx11extras-devel
+       alias: libqt5-qtx11extras-devel-32bit
+     - collapse: libqt5-qtxmlpatterns-devel
+       alias: libqt5-qtxmlpatterns-devel-32bit
+     - collapse: libqt5-qtremoteobjects-devel
+       alias: libqt5-qtremoteobjects-devel-32bit
+     - collapse: systemd
+       alias: systemd-mini
+     - collapse: systemd-devel
+       alias: systemd-mini-devel
+     - collapse: systemd-container
+       alias: systemd-mini-container
+     - collapse: libsystemd0
+       alias: libsystemd0-mini
+     - collapse: libudev1
+       alias: libudev-mini1
+     - collapse: udev
+       alias: udev-mini
+     - collapse: krb5
+       alias: krb5-mini
+     - collapse: krb5-devel
+       alias: krb5-mini-devel
+     - collapse: ghostscript
+       alias: ghostscript-mini
+     - collapse: gettext-runtime
+       alias: gettext-runtime-mini
+     - collapse: gettext-tools
+       alias: gettext-tools-mini
+     - collapse: coreutils
+       alias: coreutils-single
+     - collapse: postgresql15-devel
+       alias: postgresql15-devel-mini
+     - collapse: MozillaFirefox-branding-openSUSE
+       alias: MozillaFirefox-branding-upstream
+     - collapse: NetworkManager-branding-SLE
+       alias: NetworkManager-branding-upstream
+     - collapse: gdm-branding-SLE
+       alias: gdm-branding-upstream
+     - collapse: gio-branding-SLE
+       alias: gio-branding-upstream
+     - collapse: plymouth-branding-SLE
+       alias: plymouth-branding-upstream
+     - collapse: libcontainers-openSUSE-policy
+       alias: libcontainers-default-policy
+     - collapse: pulseaudio
+       alias: pipewire-pulseaudio
+     - collapse: libOpenIPMI0
+       alias: OpenIPMI
+     - collapse: libgspell-1-2
+       alias: gspell
+     - collapse: chrony-pool-suse
+       aliases:
+         - chrony-pool-empty
+         - chrony-pool-openSUSE
+     - collapse: ImageMagick-config-7-SUSE
+       aliases:
+         - ImageMagick-config-7-upstream-limited
+         - ImageMagick-config-7-upstream-open
+         - ImageMagick-config-7-upstream-secure
+         - ImageMagick-config-7-upstream-websafe
+     - collapse: libpq5
+       alias: postgresql15-devel-mini
+     - collapse: libecpg6
+       alias: postgresql15-devel-mini
+     - collapse: java-1_8_0-openjdk-headless
+       alias: java-1_8_0-openjdk-devel
+     - collapse: libjack0
+       alias: pipewire-libjack-0_3
+     - collapse: libjackserver0
+       alias: pipewire-libjack-0_3
+     - collapse: libjack0
+       alias: pipewire-libjack-0_3
+     - collapse: libjack-devel
+       alias: pipewire-libjack-0_3-devel
+     - collapse: geronimo-jaf-1_0_2-api
+       alias: geronimo-j2ee-1_4-apis
+     - collapse: geronimo-servlet-2_4-api
+       alias: geronimo-j2ee-1_4-apis
+     - collapse: geronimo-jta-1_0_1B-api
+       alias: geronimo-j2ee-1_4-apis
+     - collapse: libmca_common_dstore1
+       alias: openmpi4-libs
+     - collapse: typelib-1_0-Gst-1_0-32bit
+       alias: typelib-1_0-Gst-1_0
+     - collapse: geronimo-ejb-2_1-api
+       alias: geronimo-j2ee-1_4-apis
+     - collapse: container-build-checks-vendor-openSUSE
+       alias: container-build-checks-vendor-SUSE
+     - collapse: libdebuginfod1-dummy
+       alias: libdebuginfod1
+     - collapse: debuginfod-dummy-client
+       alias: debuginfod-client
+     - collapse: libpq5
+       alias: postgresql15-devel-mini
+     - collapse: ocaml-compiler-libs
+       alias: ocaml-compiler-libs-devel
+     - collapse: ocaml-runtime
+       alias: ocaml
+     - collapse: nodejs-default
+       alias: nodejs20
+     - collapse: npm-default
+       alias: npm20
+     - collapse: icewm
+       alias: mutter
+     - collapse: icewm-lite
+       alias: icewm-default
+     - collapse: libXaw7
+       alias: xaw3dd
+     - collapse: emacs-nox
+       alias: emacs-x11
+     - collapse: health-checker-plugins-kubic
+       alias: health-checker-testing
+     - collapse: regionServiceClientConfigAzure
+       alias: cloud-regionsrv-client-generic-config
+     - collapse: systemd-default-settings-branding-openSUSE
+       alias: systemd-default-settings-branding-upstream
+     - collapse: llvm16-libc++1
+       alias: libc++1
+     - collapse: llvm16-libc++abi1
+       alias: libc++abi1
+     - collapse: llvm16-libc++abi-devel
+       alias: libc++abi-devel
+     - collapse: libpcp-devel
+       alias: pcp-devel
+     - collapse: elemental-plugin-dummy
+       alias: elemental-plugin-toolkit
+     - collapse: libnetcdf19
+       alias: libnetcdf19-openmpi4
+     - collapse: gnu-compilers-hpc
+       alias: gnu13-compilers-hpc
+     - collapse: gnu-compilers-hpc-devel
+       alias: gnu13-compilers-hpc-devel
+     - collapse: libopenssl-devel
+       aliases:
+         - libopenssl-1_1-devel
+         - libopenssl-3-devel
+     - collapse: libopenssl-devel
+       alias: libopenssl-3-devel
+     - collapse: libpsm_infinipath1
+       alias: libpsm2-compat
+     - collapse: perl-ExtUtils-MakeMaker
+       alias: perl
+     - collapse: perl-File-Path
+       alias: perl-base
+     - collapse: perl-base
+       alias: perl-base-32bit
+     - collapse: perl
+       alias: perl-32bit
+     - collapse: cmake-full
+       alias: cmake-mini
+     - collapse: xml-commons-apis
+       alias: xml-commons-apis-bootstrap
+     - collapse: xml-commons-resolver
+       alias: xml-commons-resolver-bootstrap
+     - collapse: maven-compiler-plugin
+       alias: maven-compiler-plugin-bootstrap
+     - collapse: maven-jar-plugin
+       alias: maven-jar-plugin-bootstrap
+     - collapse: maven-surefire-plugin
+       alias: maven-surefire-plugin-bootstrap
+     - collapse: java-cup
+       alias: java-cup-bootstrap
+     - collapse: javacc
+       alias: javacc-bootstrap
+     - collapse: scala
+       alias: scala-bootstrap
+     - collapse: maven-resources-plugin
+       alias: maven-resources-plugin-bootstrap

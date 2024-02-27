@@ -1662,6 +1662,13 @@ class Product:
 	def findPackageByID(self, pkgid):
 		return self._byID.get(pkgid)
 
+	def findPackageByInfo(self, pinfo, create = False):
+		rpm = self.findPackage(pinfo.name, pinfo.version, pinfo.release, pinfo.arch)
+		if rpm is None and create:
+			rpm = Package.fromPackageInfo(pinfo)
+			self.addPackage(rpm)
+		return rpm
+
 	def findPackagesBefore(self, refPackage):
 		if not refPackage.buildTime:
 			infomsg("ERROR %s has no build time" % refPackage.fullname())

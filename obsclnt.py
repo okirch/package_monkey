@@ -970,54 +970,64 @@ class OBSProject:
 		return client.getBuildInfo(self.name, self.buildRepository, obsPackage.name, self.buildArch,
 				cacheEntry = cacheEntry, **params)
 
-	def updateBinaryList(self, client, with_binaries = True):
+
+	def updateBinaryList(self, client):
 		debugOBS(f"Getting build results for {self.name}")
 		resList = self.queryBuildResults(client)
 
 		for st in resList[0].status_list:
 			pkg = self.addPackage(st.package)
+			pkg.setBuildStatus(st.code)
 
-			status = st.code
-			if status == "succeeded":
-				pkg.buildStatus = pkg.STATUS_SUCCEEDED
-			elif status == "failed" or status == "unresolvable":
-				pkg.buildStatus = pkg.STATUS_FAILED
-			elif status == "excluded":
-				pkg.buildStatus = pkg.STATUS_EXCLUDED
-			else:
-				pkg.buildStatus = pkg.STATUS_UNKNOWN
-
-		result = []
+		result = set()
 		for p in resList[0].binary_list:
 			pkg = self.addPackage(p.package)
 
-			binaries = []
-			version = None
-
-			for f in p.files:
-				filename = f.filename
-
-				if filename == "_statistics":
-					pkg.buildTime = int(f.mtime)
-					continue
-
-				if filename.startswith("::"):
-					continue
-				if not filename.endswith(".rpm"):
-					continue
-				pinfo = PackageInfo.parsePackageName(filename)
-				pinfo.buildTime = int(f.mtime)
-
-				if self.ignorePackage(pinfo):
-					continue
-
-				rpm = Package.fromPackageInfo(pinfo)
-				self.product.addPackage(rpm)
-				pkg.addBinary(rpm)
-
-			result.append(pkg)
+			self.updateBuildFromBinaryList(pkg, p.files)
+			result.add(pkg)
 
 		return result
+
+	def updateBuildFromBinaryList(self, build, binaryList):
+		binaries = []
+		buildTime = None
+
+		for f in binaryList:
+			filename = f.filename
+
+			if filename == "_statistics":
+				buildTime = int(f.mtime)
+				continue
+
+			buildArch = self.buildArch
+			if filename.startswith("::"):
+				words = filename[2:].split("::")
+				if not words:
+					raise Exception(filename)
+
+				special = words.pop(0)
+				if special == 'import' and len(words) == 2:
+					buildArch, filename = words
+				else:
+					warnmsg(f"build results for {self.name} contain unexpected binary element {filename}")
+					continue
+
+			if not filename.endswith(".rpm"):
+				continue
+			pinfo = PackageInfo.parsePackageName(filename)
+			pinfo.buildTime = int(f.mtime)
+
+			if self.ignorePackage(pinfo):
+				continue
+
+			rpm = self.product.findPackageByInfo(pinfo, create = True)
+			rpm.buildArch = buildArch
+			binaries.append(rpm)
+			assert(rpm)
+
+		build.buildTime = buildTime
+		build._binaries = binaries
+		build._source = None
 
 	def updateBuildDependencies(self, client, arch, packageIterator):
 		processed = []

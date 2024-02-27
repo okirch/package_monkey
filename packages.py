@@ -1810,15 +1810,19 @@ class PackageInfo:
 			raise Exception(f"Refusing to change {self.fullname()} label from {self.label} to {label}")
 
 
-class PackageInfoFactory:
+class PackageInfoFactory(object):
+	def __call__(self, name, version, release, arch):
+		return PackageInfo(name = name, version = version, release = release, arch = arch, epoch = None, backingStoreId = None)
+
+class UniquePackageInfoFactory(PackageInfoFactory):
 	def __init__(self):
 		self._map = dict()
 
-	def create(self, name, version, release, arch):
+	def __call__(self, name, version, release, arch):
 		key = f"{name}-{version}-{release}.{arch}"
-		pinfo = self._map.get(jey)
+		pinfo = self._map.get(key)
 		if pinfo is None:
-			pinfo = PackageInfo(name, None, version, release, arch, None)
+			pinfo = PackageInfo(name = name, version = version, release = release, arch = arch, epoch = None, backingStoreId = None)
 			self._map[key] = pinfo
 		return pinfo
 

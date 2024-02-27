@@ -1174,7 +1174,10 @@ groups:
     - libeconf0
     - libedit0
     - libelf1
+    - libdw1
+    - libasm1
     - libevent-2*
+    - libfdisk1
     - libffi8
     - libfftw3-3
     - libfftw3_mpi3
@@ -1218,9 +1221,6 @@ groups:
     - libpcre2*
     - libpipeline1
     - libpopt0
-    - libprotobuf3*
-    - libprotoc3*
-    - libprotobuf-lite3*
     - libpsx2
     - libpwquality1
     - libqrencode4
@@ -1235,6 +1235,7 @@ groups:
     - libsha1detectcoll1
     - libsigc-2*
     - libsigc-3*
+    - libsmartcols1
     - libsqlite3*
     - libssh-config
     - libunistring5
@@ -1413,6 +1414,8 @@ groups:
     - librpmbuild9
     # must be placed somewhere in Core because elfutils-debuginfod uses it
     - libmicrohttpd12
+    - libdebuginfod1-dummy
+    - debuginfod-dummy-client
     - libpamtest0 purpose=devel
    buildflavors:
     - name: kernellibs
@@ -1421,6 +1424,11 @@ groups:
        - "@KernelLibraries+udev"
       binaries:
        - libcryptsetup12
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - pam-extra
 
  - name: "@OpenLDAP"
    sourceproject: Core
@@ -1590,6 +1598,8 @@ groups:
     - "@CoreLibraries"
     - "@UdevLibraries"
     - "@Glib2NoDBus"
+   packages:
+    - python-libevdev
    binaries:
     # these don't actually need systemd, they only depend on udev
     # one way or other
@@ -1608,6 +1618,7 @@ groups:
        - "@UdevLibraries+python"
       binaries:
        - libwacom-tools
+       - libinput-tools
        - libstoragemgmt
        - libstoragemgmt-*-plugin
 
@@ -1627,6 +1638,7 @@ groups:
 
  - name: "@CoreServices"
    sourceproject: Core
+   api: "@CoreAPI"
    requires:
 #   - "@Core1"
     - "@SystemdLibraries"
@@ -1856,6 +1868,7 @@ groups:
     - name: tk
       requires:
        - "@TclCore+x11"
+       - "@Gnuplot"
       binaries:
        - sysstat-isag
 
@@ -2106,7 +2119,7 @@ groups:
    requires:
     - "@XMLPlus"
     - "@SystemPython"
-    - "@PerlCore"
+    - "@Perl"
    binaries:
     - docbook_3
     - docbook_4
@@ -2193,6 +2206,8 @@ groups:
     - "@EssentialGraphicsLibraries"
     - "@Glib2API"
     - "@CoreAPI"
+   binaries:
+    - libjpeg8-devel
 
  # We need to put some low-level AVIF libraries into a small bucket of their own, otherwise
  # X11 and the AV Libraries become one huge messy tangle
@@ -2309,10 +2324,14 @@ groups:
     - libconfuse
     - libssh2_org
     - abseil-cpp
+    - protobuf
    binaries:
     - libjemalloc2
     - libkyotocabinet16
     - libpkcs11-helper1
+    - libprotobuf-lite23*
+    - libprotoc23_4*
+    - libprotobuf23_4*
 
  - name: "@Snappy"
    sourceproject: CorePlus
@@ -2871,11 +2890,44 @@ groups:
 #      - imake
 #      - xorg-cf-files
 
+
+ - name: "@WaylandLibraries"
+   sourceproject: X11
+   requires:
+    - "@FontLibraries+x11"
+    # libdecor wants libdbus *shrug*
+    - "@SystemdLibraries"
+   packages:
+    - libdecor
+   binaries:
+    - libdecor-0*
+
+ - name: "@X11WindowManager"
+   sourceproject: Gnome
+   requires:
+    - "@X11"
+    - "@FontLibraries+x11"
+    - "@GdkPixbuf"
+    - "@DesktopIcons"
+    - "@DesktopCore"
+    - "@SystemdLibraries"
+    - "@AccessibilityLibraries"
+    - "@DesktopLibraries"
+    - "@NetworkManager"
+    - "@PolicyKitLibraries"
+   binaries:
+    - mutter
+    - icewm
+    - xdg-menu
+    # mutter require g-s-d
+    - gnome-settings-daemon
+
  - name: "@X11Server"
    sourceproject: X11
    requires:
     - "@X11"
     - "@OpenGL"
+    - "@WaylandLibraries"
     # both x11-xorg-server and xwayland want pkgconfig
     - "@MinimalCDevelopment"
    packages:
@@ -2885,7 +2937,17 @@ groups:
     - xorg-x11-server-*
     - xdm
     - xf86-input-libinput
+    - xf86-video-amdgpu
+    - xf86-video-ati
+    - xf86-video-qxl
+    - xf86-video-vmware
     - xwayland
+   buildflavors:
+    - name: spice
+      requires:
+       - "@Virtualization"
+      binaries:
+       - xorg-x11-server-Xspice
 
  - name: "@X11Applications"
    sourceproject: X11
@@ -2960,6 +3022,8 @@ groups:
     - libQt6Widgets6
     - libQt6Xml6
     - qt6-network-tls
+    - qt6-networkinformation-nm
+    - qt6-networkinformation-glib
     - libQt5Concurrent5
     - libQt5Core5
     - libQt5DBus5
@@ -3009,6 +3073,7 @@ groups:
     - "@QtAPI"
     - "@SystemdAPI"
     - "@PulseAudioAPI"
+    - "@EssentialGraphicsAPI"
    binaries:
     - libQt5Charts5-designer
     - libQt5Charts5-devel
@@ -3132,6 +3197,7 @@ groups:
     - "@EssentialQtLibraries"
     - "@SpeechSynthesis"
     - "@QtQuickLibraries"
+    - "@QtMultimediaLibraries"
    binaries:
     - qt6-texttospeech
     - libQt6TextToSpeech6
@@ -3407,6 +3473,8 @@ groups:
     - "@FontLibraries+x11"
     - "@SambaLibraries"
     - "@Bubblewrap"
+    - "@BluetoothLibraries"
+    - "@Camera"
    binaries:
     - pulseaudio
     - gstreamer
@@ -3791,10 +3859,8 @@ groups:
     - libical3
     - libsecret-1*
     - libmanette
-    - libdecor
     - librevenge-0*
     - libzbar0
-    - libcamera*0*
    buildflavors:
     - name: qt
       requires:
@@ -3909,12 +3975,11 @@ groups:
     - "@USBLibraries+typelib"
    packages:
    binaries:
-    - geoclue2
-    - system-user-srvGeoClue
+#   - geoclue2
+#   - system-user-srvGeoClue
     - gsettings-*
     - gnome-*
     - polkit-gnome*
-    - xdg-menu
     - gcr-viewer*
     - WebKitGTK*
     - gnome-bluetooth
@@ -3936,6 +4001,20 @@ groups:
        - libzbarqt0
        - zbar
 
+ - name: "@VNC"
+   sourceproject: Gnome
+   requires:
+    - "@DBus+x11"
+    - "@FontLibraries"
+    - "@Gnome"
+    - "@X11WindowManager"
+   binaries:
+    - xorg-x11-server-Xvnc
+    - xorg-x11-Xvnc
+    - xorg-x11-Xvnc-novnc
+    - xorg-x11-Xvnc-module
+    - xorg-x11-Xvnc-java
+
  - name: "@GnomeEverythingElse"
    sourceproject: Gnome
    requires:
@@ -3946,11 +4025,11 @@ groups:
     - "@Flatpak"
     - "@Boost"
     - "@GtkLeftovers"
+    - "@X11WindowManager"
    binaries:
     - gdm
     - gnome-control-center
     - gnome-control-center-*
-    - gnome-settings-daemon
     - gnome-session
     - gnome-session-wayland
     - gnome-session-default-session
@@ -4010,6 +4089,12 @@ groups:
        - "@Postscript"
       binaries:
        - graphviz-gnome
+    - name: tcl
+      requires:
+       - "@Graphviz+x11"
+       - "@TclCore+x11"
+      binaries:
+       - graphviz-tcl
 
  - name: "@GnomeApplications"
    sourceproject: Gnome
@@ -4334,6 +4419,22 @@ groups:
    binaries:
     - libzypp-devel
 
+ - name: "@SUSEConnect"
+   api: "@UpdateStackAPI"
+   sourceproject: UpdateStack
+   requires:
+    - "@SystemPython"
+    - "@Glib2NoDBus"
+    - "@Core1"
+    - "@Kernel"
+    - "@UpdateStack"
+   packages:
+    - suseconnect-ng
+   binaries:
+    - libsuseconnect
+    - suseconnect-ng
+    - suseconnect-ruby-bindings
+
  - name: "@UpdateStackLibraries"
    api: "@UpdateStackAPI"
    sourceproject: UpdateStack
@@ -4350,6 +4451,8 @@ groups:
     - libzypp
     - libsolv
     - libmodulemd2
+    - libcreaterepo_c0
+    - libcreaterepo_c1
 
  - name: "@UpdateStack"
    sourceproject: UpdateStack
@@ -4374,7 +4477,6 @@ groups:
     - perl-solv
     - ruby-solv
     - createrepo_c
-    - libcreaterepo_c0
     - librepo0
 
  - name: "@LegacyServices"
@@ -4616,11 +4718,21 @@ groups:
    sourceproject: PublicCloud
    requires:
     - "@SystemPythonModules"
+    - "@HostNetworking"
+    - "@Core+systemd"
     - "@ManDoc"
+    # most of the following are pulled in by cloud-init
+    - "@HostStorage"
+    - "@NetworkProxyLibraries"
+    - "@NetworkUtils"
+    - "@Kernel"
+    # python-azure-agent wants sysvinit-tools
+    - "@LegacyServices"
    binaries:
     - cloud-init
     - python3-ec2*
     - python3-azure*
+    - python-azure-agent
     - azure-cli*
     - aws-cli*
     - cloud-netconfig-*
@@ -4663,6 +4775,7 @@ groups:
     - "@HostSecurity"
     - "@HardwareAccessUtilities"
     - "@Perl"
+    - "@Qt5ExtendedLibraries"
    binaries:
     - yast2
     - yast2-ruby-bindings
@@ -4681,6 +4794,8 @@ groups:
     - yast2-storage-ng
     - libyui-ncurses-pkg16
     - libyui-ncurses16
+    - libyui-qt-pkg16
+    - libyui-qt16
     - libyui16
     - libstorage-ng1
     - libstorage-ng-ruby
@@ -4697,9 +4812,6 @@ groups:
     - yast2-services-manager
     - distribution-logos-SLE
     - initviocons
-    - libsuseconnect
-    - suseconnect-ng
-    - suseconnect-ruby-bindings
 
  - name: "@Agama"
    sourceproject: Management
@@ -4711,16 +4823,7 @@ groups:
     - "@UpdateStack"
     - "@PolicyKit"
     - "@Container"
-#   - "@RubyStandard"
-#   - "@Management"
-#   - "@TransactionalServer+systemd"
-#   - "@WorkbenchEssentials"
-#   - "@HostSecurity"
-#   - "@NetworkManager"
-#   - "@Snapper"
-#   - "@NetworkProxyLibraries"
-#   - "@NetworkAnalysis+systemd"
-#   - "@Qt5ExtendedLibraries"
+    - "@SUSEConnect"
     - "@HardwareAccessUtilities"
     - "@Kernel+xen"
    binaries:
@@ -4778,6 +4881,7 @@ groups:
     - "@NetworkAnalysis+systemd"
     - "@Qt5ExtendedLibraries"
     - "@HardwareAccessUtilities"
+    - "@SUSEConnect"
    binaries:
     - autoyast2
     - autoyast2-installation
@@ -5012,7 +5116,7 @@ groups:
     - "@SELinux"
     - "@ManDoc"
     - "@HostWorkloads"
-#   - "@Bubblewrap"
+    - "@NetworkUtils"
    binaries:
     - skopeo
     - podman
@@ -5036,6 +5140,7 @@ groups:
     - docker-rootless-extras
     - buildkit
     - nerdctl
+    - flannel
 
  - name: "@Fish"
    sourceproject: Container
@@ -5218,7 +5323,7 @@ groups:
     - libnvme
    binaries:
     - libnvme1
-    - libnvme-mi1
+#   - libnvme-mi1
     - libnftables1
     - libxtables12
     - libip4tc2
@@ -5233,6 +5338,11 @@ groups:
     - name: python
       binaries:
        - python3-libnvme
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - libnvme-mi1
 
  # arptables, ebtables and friends should probably live here, too
  - name: "@KernelNetworkUtils"
@@ -5647,6 +5757,7 @@ groups:
     - "@SystemdServices"
     - "@UdevLibraries"
     - "@KernelCore"
+    - "@TclCore"
    packages:
     - openucx
     - libqb
@@ -5665,6 +5776,11 @@ groups:
     - name: test
       requires:
        - "@WorkbenchCore"
+    - name: gui
+      requires:
+       - "@Graphviz+tcl"
+      binaries:
+       - ibutils-ui
 
  - name: "@InfinibandAPI"
    sourceproject: HardwareAccess
@@ -5775,6 +5891,12 @@ groups:
        - "@SystemPythonStandard+desktop"
       binaries:
        - wpa_supplicant-gui
+    - name: nvme
+      requires:
+       - "@KernelNetworkLibraries+python"
+       - "@Avahi"
+      binaries:
+       - nvme-stas
 
  - name: "@AvahiAPI"
    sourceproject: Network
@@ -5797,6 +5919,7 @@ groups:
     - libavahi-common3
     - libavahi-core7
     - libavahi-libevent1
+    - libdns_sd
    buildflavors:
     - name: glib
       requires:
@@ -6008,6 +6131,7 @@ groups:
     - "@Core"
     - "@X11"
     - "@LLVMRuntime"
+    - "@GPU"
    packages:
     - libvdpau
     - libglvnd
@@ -6073,6 +6197,9 @@ groups:
     - name: pulseaudio
       requires:
        - "@PulseAudioLibraries"
+       - "@AvahiLibraries"
+       - "@BluetoothLibraries"
+       - "@Camera"
       binaries:
        - libavdevice5*
 
@@ -6087,12 +6214,31 @@ groups:
 #   - libcdda
 #   - libcddb2
 
+ - name: "@Camera"
+   sourceproject: Multimedia
+   requires:
+    - "@GraphicsLibraries"
+   packages:
+    - libcamera
+   binaries:
+    - libcamera0*
+   buildflavors:
+    - name: gnome
+      requires:
+      - "@PulseAudio"
+      binaries:
+       - gstreamer-plugins-libcamera
+
  - name: "@Multimedia"
    sourceproject: Multimedia
    requires:
     - "@GraphicsLibraries"
     - "@AudioLibraries"
     - "@AVLibraries"
+    - "@AvahiLibraries"
+    - "@PulseAudioLibraries"
+    - "@BluetoothLibraries"
+    - "@Camera"
    binaries:
     - lame
     - mpg123
@@ -6216,7 +6362,6 @@ groups:
     - fetchmail
     - whois
     - telnet
-    - nmap
     - mutt
     - socat
 
@@ -6236,6 +6381,7 @@ groups:
        - libwireshark16
        - libwiretap13
        - libwsutil14
+       - nmap
     - name: gui
       requires:
        - "@EssentialQtLibraries"
@@ -6300,7 +6446,6 @@ groups:
     - vsftpd
     - rpcbind
     - spamassassin
-    - libtcnative*
     - yp-tools
     - ypbind
     - ypserv
@@ -6386,6 +6531,17 @@ groups:
    binaries:
     - systemtap
     - systemtap-dtrace
+
+ - name: "@Gnuplot"
+   sourceproject: Applications
+   requires:
+    - "@GraphicsLibraries"
+    - "@FontLibraries+x11"
+    - "@Qt5ExtendedLibraries"
+    - "@WxWidgets"
+    - "@Gtk3"
+   binaries:
+    - gnuplot
 
  - name: "@MailClient"
    sourceproject: Network
@@ -6582,6 +6738,7 @@ groups:
     - name: python
       requires:
        - "@Python"
+       - "@DBusService"
       binaries:
        - samba-libs-python3
        - libsamba-policy0-python3
@@ -6589,6 +6746,7 @@ groups:
        - samba-ad-dc
        - samba-gpupdate
        - samba-tool
+       - certmonger
     - name: rados
       requires:
        - "@Rados"
@@ -6632,6 +6790,7 @@ groups:
     - apache-rpm-macros-control
     - libapr-util1
     - libapr-util1*-dbd-sqlite*
+    - libapr1-*
    buildflavors:
     - name: database
       requires:
@@ -6647,12 +6806,6 @@ groups:
     - "@ApacheLibraries"
    binaries:
     - apache2*
-   buildflavors:
-    - name: php
-      requires:
-       - "@PHP"
-      binaries:
-       - apache2-mod_php8
 
  - name: "@ApacheAPI"
    sourceproject: Webserver
@@ -6845,6 +6998,7 @@ groups:
    requires:
     - "@PythonStandard+desktop"
     - "@PythonModules"
+    - "@Javascript"
    binaries:
     - python-nbdime
     - jupyter-*
@@ -6853,10 +7007,6 @@ groups:
     - python31?-jupyter-server
     - python31?-jupyter-client*
     - python31?-ipykernel
-#   - python31?-jupyter*
-#   - python31?-notebook*
-#   - python31?-nbclassic
-#   - python31?-nbconvert
    buildflavors:
     - name: tex
       requires:
@@ -6900,8 +7050,17 @@ groups:
     - "@Ruby"
     - "@Boot"
     - "@UpdateStack"
+    - "@Management"
+    - "@Virtualization"
+    - "@Docbook"
    binaries:
     - rubygem-libguestfs
+   buildflavors:
+    - name: ocaml
+      requires:
+       - "@Ocaml"
+      binaries:
+       - ocaml-libguestfs
 
  - name: RubyDevel
    requires:
@@ -6935,6 +7094,10 @@ groups:
     - perl-JSON
 #   - perl-libintl-perl
     - perl-gettext
+   purposes:
+    - name: 32bit
+      binaries:
+       - perl-32bit
 
  - name: "@Perl"
    sourceproject: Perl
@@ -6966,19 +7129,38 @@ groups:
     - "@Smartcards"
     - "@KernelNetworkUtils"
    binaries:
-    - java-17-openjdk
-    - java-17-openjdk-demo
-    - java-17-openjdk-headless
-    - java-17-openjdk-src
-    # Explicitly make this a regular package rather than a -devel one
-    - java-17-openjdk-devel priority=0
+    - javapackages-tools
+    - javapackages-filesystem
+    - java-atk-wrapper
     - java-1_8_0-openjdk
     - java-1_8_0-openjdk-accessibility
     - java-1_8_0-openjdk-demo
     - java-1_8_0-openjdk-headless
     - java-1_8_0-openjdk-src
-    - javapackages-filesystem
-    - javapackages-tools
+    - java-11-openjdk
+    - java-11-openjdk-demo
+    - java-11-openjdk-headless
+    - java-11-openjdk-src
+    - java-11-openjdk-jmods
+    - java-11-openjdk-javadoc
+    # Explicitly make this a regular package rather than a -devel one
+    - java-11-openjdk-devel priority=0
+    - java-17-openjdk
+    - java-17-openjdk-demo
+    - java-17-openjdk-headless
+    - java-17-openjdk-src
+    - java-17-openjdk-jmods
+    - java-17-openjdk-javadoc
+    # Explicitly make this a regular package rather than a -devel one
+    - java-17-openjdk-devel priority=0
+    - java-21-openjdk
+    - java-21-openjdk-demo
+    - java-21-openjdk-headless
+    - java-21-openjdk-src
+    - java-21-openjdk-jmods
+    - java-21-openjdk-javadoc
+    # Explicitly make this a regular package rather than a -devel one
+    - java-21-openjdk-devel priority=0
 
  - name: "@JavaTimezoneTools"
    sourceproject: Java
@@ -7011,7 +7193,6 @@ groups:
     - jdepend
     - jakarta-mail
     - regexp
-    - bcel
     - servletapi5
     - jlex
     - junit5
@@ -7022,7 +7203,6 @@ groups:
     - mysql-connector-java
     - jline1
     - libreadline-java
-    - java-17-openjdk-jmods
     - javapackages-local
     - javapackages-ivy
     - felix-utils
@@ -7045,6 +7225,7 @@ groups:
     - httpcomponents-core
     - httpcomponents-client
     - slf4j-jcl
+    - bcel
    purposes:
 #   - name: devel
 #     binaries:
@@ -7112,6 +7293,7 @@ groups:
    requires:
     - "@Core"
     - "@GCC"
+    - "@CoreAPI"
    binaries:
     - go1.*
     - go
@@ -7125,16 +7307,13 @@ groups:
     - "@Databases"
     - "@AppArmor"
     - "@Spelling"
+    - "@Apache"
     # For libsnmp40 - maybe this should move into NetworkLibraries
     - "@NetworkServices"
    binaries:
     - php*
+    - apache2-mod_php8
    buildflavors:
-    - name: apache
-      augments:
-       - "@Apache"
-      binaries:
-       - php8-fpm-apache
     - name: PECL
       requires:
        - "@GCC"
@@ -7182,7 +7361,6 @@ groups:
     - mokutil
     - shim
     - u-boot
-    - rollback-helper
     - fde-tools
     - gfxboot
     - ignition
@@ -7204,6 +7382,11 @@ groups:
       binaries:
        - grub2-x86_64-xen
        - grub2-x86_64-xen-extras
+    - name: zypper
+      requires:
+       - "@SUSEConnect"
+      binaries:
+       - rollback-helper
     - name: splash
       requires:
 #      - "@Core"
@@ -7263,6 +7446,12 @@ groups:
     - ruby*-rubygem-cfa*
     - ruby*-rubygem-ruby-augeas
     - freeipmi
+   buildflavors:
+    - name: ocaml
+      requires:
+       - "@Ocaml"
+      binaries:
+       - ocaml-augeas
 
  - name: "@Salt"
    sourceproject: Management
@@ -7380,11 +7569,15 @@ groups:
    sourceproject: Core
    disposition: ignore
    binaries:
+    - product-composer
     - product-builder
     - product-builder-plugin-ALP
     - product-builder-plugin-SLE_15
     - SLE-EULAs
     - instsource-susedata
+#   - patterns-alp-bootloader
+#   - patterns-alp-ima-evm
+#   - patterns-alp-*
 
 templates:
  - name: PythonGroups
@@ -7587,4 +7780,3 @@ templates:
       binaries:
        - pythonXXX-Cython
        - pythonXXX-Cython3
-

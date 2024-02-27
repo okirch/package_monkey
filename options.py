@@ -18,7 +18,7 @@ class Application:
 		self.args.add_argument('--statedir', default = '.')
 		self.args.add_argument('--db', default = None)
 		self.args.add_argument('--cache', default = '/work/projects/report/cache')
-		self.args.add_argument('--family', default = 'dolomite')
+		self.args.add_argument('--family', default = 'alp')
 		self.args.add_argument('--version', default = 'latest')
 		self.args.add_argument('--arch', default = 'x86_64')
 		self.args.add_argument('--quiet', action = 'store_true', default = False)

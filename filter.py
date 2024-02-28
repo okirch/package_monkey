@@ -1204,6 +1204,7 @@ class ClassificationResult(object):
 		self._unclassified = []
 
 		self._brokenDependencies = None
+		self._effectiveRequirements = {}
 
 	def enableBrokenDependencyTracking(self):
 		if self._brokenDependencies is None:
@@ -1285,6 +1286,9 @@ class ClassificationResult(object):
 		if not label.runtimeRequires:
 			return set()
 
+		if label in self._effectiveRequirements:
+			return self._effectiveRequirements[label]
+
 		actualRequirements = self.collectActualRuntimeRequirements(label)
 		if actualRequirements is None:
 			# at least return something, even if it may be inconsistent
@@ -1297,6 +1301,8 @@ class ClassificationResult(object):
 			if len(label.runtimeRequires) < 10 and len(effectiveRequirements) < 10:
 				infomsg(f"  orig:    {' '.join(map(str, label.runtimeRequires))}")
 				infomsg(f"  reduced: {' '.join(map(str, effectiveRequirements))}")
+
+		self._effectiveRequirements[label] = effectiveRequirements
 
 		return effectiveRequirements
 

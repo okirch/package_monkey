@@ -360,6 +360,7 @@ class XmlReader:
 
 		self._packages = {}
 		self._builds = []
+		self._unclassified = {}
 
 	def read(self, path):
 		import xml.etree.ElementTree as ET
@@ -378,7 +379,7 @@ class XmlReader:
 			elif node.tag == 'component':
 				self.processComponent(node)
 			elif node.tag == 'unclassified':
-				pass
+				self.processUnclassified(node)
 			else:
 				raise Exception(f"unsupported element <{node.tag}> in {path}")
 
@@ -387,6 +388,8 @@ class XmlReader:
 			result.labelOnePackage(rpm, rpm.label, None)
 		for name, component, binaries, sources in self._builds:
 			result.labelOneBuild(name, component, binaries, sources)
+		for rpm, candidates in self._unclassified.items():
+			result.addUnclassified(rpm, candidates)
 
 		return result
 
@@ -437,6 +440,24 @@ class XmlReader:
 				component.addExport(api)
 
 		return component
+
+	def processUnclassified(self, node):
+		for rpmNode in node:
+			rpm = self.processRpm(rpmNode)
+
+			if rpmNode.find('anywhere') is not None:
+				candidates = None
+			else:
+				candidates = set()
+
+				listNode = rpmNode.find('candidates')
+				for candNode in listNode:
+					assert(candNode.tag == 'n')
+					componentName = candNode.text.strip()
+					component = self.validateLabel(componentName, Classification.TYPE_SOURCE)
+					candidates.add(component)
+
+			self._unclassified[rpm] = candidates
 
 	def validateComponent(self, label, componentName):
 		if componentName is None:

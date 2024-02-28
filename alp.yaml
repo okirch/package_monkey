@@ -62,8 +62,12 @@ resolverhints:
      warning: "we need to remove pipewire support from xdg-desktop-portal"
      ignore:
       - libpipewire-0_3-0
-   - name: appstream-glib-devel
-     ignore: libuuid-devel-32bit
+   # We need to build imlib2 without libheif support
+   - name: imlib2-loaders
+     warning: "we need to remove HEIF support from imlib2"
+     ignore:
+      - libheif1
+
   ignore:
     # we want to place these somewhere in Core, but dont want to pollute Core
     # with any systemd dependencies.
@@ -491,16 +495,19 @@ resolverhints:
          - servletapi5
          - tomcat-servlet-4_0-api
          - tomcat10-servlet-6_0-api
-     - acceptable:
-         - libhdf5-200
+     # we want to avoid pulling in all HPC compiles of libhdf5 and friends
+     - collapse: libhdf5-200
+       aliases:
          - libhdf5-200-mvapich2
          - libhdf5-200-openmpi4
-     - acceptable:
-         - libhdf5_hl200
+     # we want to avoid pulling in all HPC compiles of libhdf5 and friends
+     - collapse: libhdf5_hl200
+       aliases:
          - libhdf5_hl200-mvapich2
          - libhdf5_hl200-openmpi4
-     - acceptable:
-         - libhdf5_fortran200
+     # we want to avoid pulling in all HPC compiles of libhdf5 and friends
+     - collapse: libhdf5_fortran200
+       aliases:
          - libhdf5_fortran200-mvapich2
          - libhdf5_fortran200-openmpi4
      - acceptable:

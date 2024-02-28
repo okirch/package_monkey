@@ -1,4 +1,7 @@
 # vi: ai et
+defines:
+ systemPythonVersion: 311
+
 autoflavors:
  - name: perl
    # If Foo requires @PerlCore, then merge all packages that would be
@@ -837,6 +840,7 @@ groups:
    requires:
     - "@Ocaml"
    binaries:
+    - valgrind-client-headers
 
  - name: "@Testing"
    sourceproject: Workbench
@@ -1055,6 +1059,7 @@ groups:
        - "@Permissions"
        - "@Spelling+python"
        - "@SystemPythonStandard+desktop"
+       - "@Core0+python"
       binaries:
        - rpmlint
        - rpmlint-mini
@@ -1103,6 +1108,9 @@ groups:
     - qrencode-devel
     - tpm2-0-tss-devel
     - zlib-devel
+    - cyrus-sasl-bdb-devel
+    - libopenssl-fips-provider
+    - psl-make-dafsa
 
  - name: "@MinimalCDevelopment"
    description: |
@@ -1297,13 +1305,30 @@ groups:
       requires:
        - "@SystemPython"
       binaries:
-       - python311-libxml2
+       - python${systemPythonVersion}-libxml2
+       - python${systemPythonVersion}-libeconf
+       - python${systemPythonVersion}-libmount
        - python3-pwquality
+       - python3-capng
+       - python3-seccomp
     - name: java
       requires:
        - "@JDK"
       binaries:
        - timezone-java
+       - libdb_java-4_8
+    - name: glib
+      requires:
+       - "@Glib2NoDBus"
+      binaries:
+       - libverto-glib1
+
+ - name: "@CoreLegacy"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libnsl1
 
  - name: "@CoreXMLLibraries"
    api: "@CoreXMLAPI"
@@ -1402,7 +1427,6 @@ groups:
     - less
     - libcap-progs
     - libcurl4
-    - libdebuginfod1
     - libnghttp2-*
     - libexslt0
     - libgsasl7
@@ -1452,21 +1476,21 @@ groups:
     - tar
     - tcsh
     - time
-    - unzip
     - utempter
     - util-linux*
 #   - wget
     - which
+    - wtmpdb
     - xz
     - zip
     - zsh
     - zstd
     - system-users
     - librpmbuild9
-    # must be placed somewhere in Core because elfutils-debuginfod uses it
-    - libmicrohttpd12
     - libdebuginfod1-dummy
     - debuginfod-dummy-client
+    # must be placed somewhere in Core because elfutils-debuginfod uses it
+    - libmicrohttpd12
     - libpamtest0 purpose=devel
    buildflavors:
     - name: kernellibs
@@ -1480,6 +1504,17 @@ groups:
        - "@SystemdLibraries"
       binaries:
        - pam-extra
+       - coreutils-systemd
+    - name: python
+      requires:
+       - "@SystemPython"
+      binaries:
+       - python${systemPythonVersion}-magic
+       - python${systemPythonVersion}-rpm
+   purposes:
+    - name: doc
+      binaries:
+       - bash-completion-doc
 
  - name: "@OpenLDAP"
    sourceproject: Core
@@ -1528,6 +1563,7 @@ groups:
     - name: doc
       binaries:
        - python311-doc
+       - python-six-doc
    buildflavors:
     - name: tcl
       requires:
@@ -1607,8 +1643,6 @@ groups:
    binaries:
     - gpgme
     - libgpgme11
-# for some weird reason, polkit-default-privs now requires polkit
-#   - polkit-default-privs
     - openssh-clients
     - gpg2
     - libldapcpp0
@@ -1618,10 +1652,15 @@ groups:
     - ibmtss
     - ibmswtpm2
     - git-core
+    - git-arch
+    - git-p4
+    - git-daemon
     - checkmedia
     - libtidyp-1*
     - libtidy5*
     - fmt
+    - glibc-extra
+    - glibc-profile
    buildflavors:
     - name: glib2
       requires:
@@ -1636,12 +1675,30 @@ groups:
        - perl-Git
        - git-email
        - git-svn
+       - git-cvs
+       - git-web
        - git
     - name: gtk
       requires:
        - "@Gtk3"
       binaries:
        - openssh-askpass-gnome
+    - name: tcl
+      requires:
+       - "@TclCore+x11"
+      binaries:
+       - git-gui
+       - gitk
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - openslp-server
+    - name: fancy
+      requires:
+       - "@DrawingLibraries"
+      binaries:
+       - glibc-utils
 
  - name: "@CoreHardware"
    sourceproject: Core
@@ -1692,11 +1749,9 @@ groups:
    sourceproject: Core
    api: "@CoreAPI"
    requires:
-#   - "@Core1"
     - "@SystemdLibraries"
     - "@CoreHardware"
     - "@KerberosLibraries"
-#   - "@Boost"
    binaries:
     - nscd
     # this is here because the sasl libraries are currently in Core
@@ -1859,6 +1914,7 @@ groups:
    binaries:
     - krb5-devel
     - krb5-mini-devel
+    - libgsasl-devel
 
  - name: "@PCP"
    sourceproject: Management
@@ -1946,11 +2002,26 @@ groups:
    binaries:
     - gdb
     - libsource-highlight4
+    - source-highlight
     - babeltrace
     - strace
     # all the other pieces of gperftools go into @PlusLibraries:
     - gperftools
     - pprof
+   purposes: 
+    - name: doc
+      binaries:
+       - gdb-testresults
+
+ - name: "@ELFDebugInfoD"
+   sourceproject: CorePlus
+   requires:
+    - "@ELFDebugging"
+    - "@ArchivingLibraries"
+   binaries:
+    - libdebuginfod1
+    - elfutils-debuginfod
+    - debuginfod-client
 
  - name: "@PlusUtilities"
    sourceproject: CorePlus
@@ -2012,6 +2083,7 @@ groups:
     - python3-kiwi
     - pv
     - dracut-kiwi-*
+    - appx-util
    buildflavors:
     - name: xen
       requires:
@@ -2031,6 +2103,7 @@ groups:
    binaries:
     - checkpolicy
     - setools
+    - setools-console
     - policycoreutils
     - selinux-policy-targeted
     - selinux-policy-minimum
@@ -2038,8 +2111,8 @@ groups:
     - selinux-policy-sandbox
     - policycoreutils-python-utils
     - python3-policycoreutils
-    - python3??-semanage
-    - python3??-setools
+    - python${systemPythonVersion}-semanage
+    - python${systemPythonVersion}-setools
    buildflavors:
     - name: glib
       requires:
@@ -2051,6 +2124,7 @@ groups:
        - "@Gtk3"
        - "@SystemPythonStandard"
        - "@CoreLibraries+python"
+       - "@Core0+python"
        - "@PythonStandard311+dbus"
        # lives in X11
        - "@DesktopCore"
@@ -2082,6 +2156,11 @@ groups:
     - console-setup
     - screen
     - utempter
+    - slang-slsh
+   purposes:
+    - name: doc
+      binaries:
+       - newt-doc
 
  - name: "@ManDoc"
    sourceproject: DocumentFormats
@@ -2170,6 +2249,8 @@ groups:
    sourceproject: CorePlus
    requires:
     - "@Core0"
+   packages:
+    - opensp
    binaries:
     - libxml++
     - libxmlsec1*
@@ -2178,6 +2259,10 @@ groups:
     - opensp
     - openjade
     - sgml-skel
+   purposes:
+    - name: doc
+      binaries:
+       - opensp-doc
 
  - name: "@Docbook"
    sourceproject: DocumentFormats
@@ -2216,12 +2301,23 @@ groups:
     - openblas:serial
     - openblas:pthreads
     - libcerf
+    - lapack
+    - suitesparse
+    - metis
+    - metis:serial
    binaries:
     - libColPack0
     - libadolc2
     - liblapack3
     - liblapacke3
     - libcerf2
+    - libopenblas_pthreads0
+    - libopenblas_serial0
+    - libmetis5
+   purposes:
+    - name: doc
+      binaries:
+       - lapack-man
 
  - name: "@EssentialGraphicsLibraries"
    sourceproject: CorePlus
@@ -2291,9 +2387,6 @@ groups:
     - librav1e0
     - libdav1d6
     - libSvtAv1Enc1
-    - libheif1
-    - libheif-rav1e
-    - libheif-svtenc
 
  - name: "@EssentialVideoAPI"
    sourceproject: CorePlus
@@ -2322,7 +2415,6 @@ groups:
     - libgdk_pixbuf-2*
     - libgdk_pixbuf_xlib-2*
     - liblqr-1*
-    - gdk-pixbuf-loader-libheif
     - gdk-pixbuf-query-loaders
    buildflavors:
     - name: useless
@@ -2395,7 +2487,30 @@ groups:
     - libblosc2
     - liblz4*
     - libarchive13
+
+ - name: "@Archivers"
+   api: "@CorePlusAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@ArchivingLibraries"
+   binaries:
+    - unzip
+    - unzip-rcc
     - bsdtar
+
+ - name: "@DebianCompat"
+   api: "@CoreAPI"
+   sourceproject: Core
+   requires:
+    - "@ArchivingLibraries"
+    - "@Core1"
+    - "@CoreAPI"
+    - "@SystemPython"
+    - "@RpmBuild+lint"
+   binaries:
+    - dpkg
+    - dpkg-devel
+    - devscripts
 
  - name: "@PlusLibraries"
    api: "@CorePlusAPI"
@@ -2594,6 +2709,9 @@ groups:
     - unixODBC
    binaries:
     - libct4
+    - libdbi3
+    - libdbi-drivers-dbd-sqlite3
+    - libdbi-drivers-dbd-freetds
 
  - name: "@Postgres15API"
    sourceproject: Databases
@@ -2612,6 +2730,7 @@ groups:
    binaries:
     - libpq5
     - libecpg6
+    - libdbi-drivers-dbd-pgsql
 
  - name: "@Postgres15"
    api: "@Postgres15API"
@@ -2663,6 +2782,7 @@ groups:
     - "@CommonDatabaseLibraries"
    binaries:
     - libmariadb3
+    - libdbi-drivers-dbd-mysql
 
  - name: "@MariaDB10"
    sourceproject: Databases
@@ -2910,6 +3030,7 @@ groups:
     - libXdamage1
     - util-macros
     - xkeyboard-config
+    - xkeyboard-config-lang
     - xbitmaps
     - libXevie1
     - libXfontcache1
@@ -3470,19 +3591,9 @@ groups:
        - "@SystemPython"
       binaries:
    purposes:
-#   - name: devel
-#     requires:
-#      - "@Python"
-#      - "@Glibc-devel"
-#      - "@GCC-devel"
-#      - "@GnomeLibraries"
-#      - "@GraphvizLibraries"
-#     binaries:
-#      - glib2-devel
-#      - vala
-#      - glibmm2-devel
-#      - glibmm2_4-devel
-#      - libvaladoc-0*
+    - name: doc
+      binaries:
+       - glib2-doc
 
  - name: "@GtkDoc"
    sourceproject: Gnome
@@ -3569,6 +3680,8 @@ groups:
     - libpulse0
     - libpulse-mainloop-glib0
     - libpcaudio0
+    - libdc1394*
+    - libv4l*
    buildflavors:
     - name: x11
       requires:
@@ -3861,6 +3974,7 @@ groups:
     - "@Glib2NoDBus"
     - "@GtkCommon"
     - "@AudioLibraries"
+    - "@SVGLibraries"
    binaries:
     - openSUSE-appstream-process
     - openSUSE-appdata-extra
@@ -3870,6 +3984,7 @@ groups:
     - gcab
     - pngquant
     - AppStream
+    - AppStream-compose
    buildflavors:
     - name: zypp
       requires: 
@@ -3984,6 +4099,9 @@ groups:
     - libmanette
     - librevenge-0*
     - libzbar0
+    - libgcr-*
+    - libgck-*
+    - libupower-glib3
    buildflavors:
     - name: qt
       requires:
@@ -4096,6 +4214,7 @@ groups:
     - "@Bluetooth"
     - "@PulseAudio"
     - "@USBLibraries+typelib"
+    - "@Apple"
    packages:
    binaries:
 #   - geoclue2
@@ -4109,6 +4228,8 @@ groups:
     - gspell
     - libgsound0
     - pulseaudio-module-bluetooth
+    - upower
+    - thermald
    buildflavors:
     - name: python
       requires:
@@ -4124,14 +4245,26 @@ groups:
        - libzbarqt0
        - zbar
 
+ - name: "@VNCAPI"
+   sourceproject: Gnome
+   requires:
+    - "@VNC"
+    - "@X11API"
+   binaries:
+    - libXvnc-devel
+
  - name: "@VNC"
    sourceproject: Gnome
+   api: "@VNCAPI"
    requires:
     - "@DBus+x11"
     - "@FontLibraries"
     - "@Gnome"
     - "@X11WindowManager"
+   packages:
+    - python-websockify
    binaries:
+    - python${systemPythonVersion}-websockify
     - xorg-x11-server-Xvnc
     - xorg-x11-Xvnc
     - xorg-x11-Xvnc-novnc
@@ -4275,6 +4408,16 @@ groups:
     - wxQt-*-devel priority=0
     - libwx_base-suse-devel
 
+ - name: "@Vala"
+   sourceproject: Gnome
+   requires:
+    - "@Glib2"
+    - "@GraphvizLibraries"
+   binaries:
+    - vala
+    - valadoc
+    - valadoc-doclet-*
+
  - name: "@AppArmor"
    sourceproject: AppArmor
    requires:
@@ -4333,7 +4476,7 @@ groups:
    buildflavors:
     - name: python
       binaries:
-       - python311-pyudev
+       - python${systemPythonVersion}-pyudev
 
  - name: "@SystemdLibraries"
    sourceproject: Systemd
@@ -4354,6 +4497,16 @@ groups:
     - bscalc
     - libhavege2
     - libblogger2
+   buildflavors:
+    - name: glibc
+      requires:
+       - "@Glib2NoDBus"
+      binaries:
+       - libdbus-c++-glib-1*
+      purposes:
+       - name: doc
+      binaries:
+       - libdbus-c++-api-docs
 
  - name: "@SystemdUtilities"
    sourceproject: Systemd
@@ -4755,7 +4908,7 @@ groups:
       requires:
        - "@UdevLibraries+python"
       binaries:
-       - python311-rtslib-fb
+       - python${systemPythonVersion}-rtslib-fb
        - python-rtslib-fb-common
 
  - name: "@HostWorkloads"
@@ -4790,12 +4943,14 @@ groups:
     - glusterfs
     - ntfs-3g_ntfsprogs
     - libpmem*1
-    - lib1pmem1
+    - pmdk-tools
    buildflavors:
     - name: infiniband
       requires:
        - "@Infiniband"
+       - "@Core+systemd"
       binaries:
+       - librpmem1
        - rpmemd
 
  - name: "@RadosAPI"
@@ -4844,6 +4999,8 @@ groups:
     - "@GnomeLibraries"
     # for libsnmp
     - "@NetworkServices"
+   packages:
+    - resource-agents
    binaries:
     - corosync*
     - pacemaker*
@@ -4854,6 +5011,14 @@ groups:
     - libsanlock1
     - libdlm
     - libdlm3
+    - ldirectord
+    - resource-agents-zfs
+   buildflavors:
+    - name: nagios
+      requires:
+       - "@Nagios"
+      binaries:
+       - monitoring-plugins-metadata
 
  - name: "@PublicCloud"
    sourceproject: PublicCloud
@@ -4917,6 +5082,7 @@ groups:
     - "@HardwareAccessUtilities"
     - "@Perl"
     - "@Qt5ExtendedLibraries"
+    - "@Archivers"
    binaries:
     - yast2
     - yast2-ruby-bindings
@@ -4968,12 +5134,14 @@ groups:
     - "@HardwareAccessUtilities"
     - "@Kernel+xen"
     - "@SELinux+gtk"
+    - "@MicrosoftTools"
    binaries:
     - ruby3.2-rubygem-agama
     - agama
     - agama-cli
     - agama-dbus-server
     - cockpit*
+    - lshw
    buildflavors:
     - name: pcp
       requires:
@@ -5272,6 +5440,9 @@ groups:
     - helm-*
     - kubernetes*
     - docker
+    - docker-compose
+    - docker-compose-switch
+    - udica
     - buildah
     - libcontainers-common
     - containerized-data-importer
@@ -5285,6 +5456,9 @@ groups:
     - buildkit
     - nerdctl
     - flannel
+    - k3s-install
+    - k3s-selinux
+    - elemental-post-build-extract-iso
 
  - name: "@Fish"
    sourceproject: Container
@@ -5433,6 +5607,7 @@ groups:
     - libkcapi1
     - libpci3
     - libpfm4
+    - hwloc-data
    buildflavors:
     - name: udev
       requires:
@@ -5447,8 +5622,11 @@ groups:
       requires:
        - "@DesktopQuarks"
        - "@FontLibraries+x11"
+       - "@OpenGL"
       binaries:
        - hwloc
+       - hwloc-gui
+       - hwloc-gl
 
  - name: "@KernelCrypto"
    sourceproject: KernelPlus
@@ -5626,6 +5804,7 @@ groups:
     - sdparm
     - ucode-intel
     - dtc
+    - sensors
    buildflavors:
     - name: python
       requires:
@@ -5648,6 +5827,11 @@ groups:
        # more recent builds of kdump/kexec no longer require XEN
        - kexec-tools
        - kdump
+   purposes:
+    - name: doc
+      binaries:
+       - kernel-docs
+       - kernel-docs-html
 
  - name: "@KernelDebugging"
    sourceproject: KernelPlus
@@ -5656,7 +5840,13 @@ groups:
    binaries:
     - acpica
 
+ - name: "@GPUAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreAPI"
+
  - name: "@GPU"
+   api: "@GPUAPI"
    sourceproject: HardwareAccess
    requires:
     - "@CoreLibraries"
@@ -5666,6 +5856,7 @@ groups:
     - name: x11
       requires:
        - "@X11Libraries"
+      binaries:
 
  - name: "@USBLibraries"
    sourceproject: HardwareAccess
@@ -5732,7 +5923,6 @@ groups:
     - lirc
    binaries:
    buildflavors:
-    # FIXME FIXME FIXME - lirc-core requires typelib-{Gtk,Vte} - I don't know how they end up in @DesktopLibs right now :-(
     - name: desktop
       requires:
        - "@GnomeVTE"
@@ -5742,6 +5932,7 @@ groups:
        - lirc-core
        - lirc-drv-ftdi
        - lirc-disable-kernel-rc
+       - lirc-tools-gui
 
  - name: "@OpticalMedia"
    sourceproject: HardwareAccess
@@ -5968,6 +6159,7 @@ groups:
     - "@UdevLibraries"
     - "@SystemdServices"
     - "@PulseAudioLibraries"
+    - "@AccessibilityLibraries"
     - "@PlusLibraries"
     - "@Console"
     - "@Glib2"
@@ -5975,12 +6167,38 @@ groups:
     - "@PolicyKit"
    binaries:
     - brltty
+    - brltty-utils
+    - brltty-udev-generic
+    - brltty-driver-*
    buildflavors:
     - name: ocaml
       requires:
        - "@Ocaml"
       binaries:
        - ocaml-brlapi
+    - name: python
+      requires:
+       - "@SystemPython"
+      binaries:
+       - python3-brlapi
+    - name: x11
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - brltty-driver-xwindow
+       - xbrlapi
+    - name: tcl
+      requires:
+       - "@TclCore"
+      binaries:
+       - tcl-brlapi
+    - name: speech
+      requires:
+       - "@PulseAudioLibraries"
+       - "@SpeechSynthesis"
+      binaries:
+       - brltty-driver-espeak
+       - brltty-driver-speech-dispatcher
 
  - name: "@HardwareAccessUtilities"
    sourceproject: HardwareAccess
@@ -6053,12 +6271,21 @@ groups:
  - name: "@AvahiAPI"
    sourceproject: Network
    requires:
-    - "@AvahiLibraries"
+    - "@AvahiLibraries+glib"
     - "@CoreAPI"
     - "@SystemdAPI"
     - "@CoreXMLLibraries"
+    - "@CoreXMLLibraries"
    binaries:
     - libavahi-devel
+   buildflavors:
+    - name: gtk
+      requires:
+       - "@AvahiLibraries+gtk"
+       - "@Gtk3API"
+      binaries:
+       - libavahi-glib-devel
+       - libavahi-gobject-devel
 
  - name: "@AvahiLibraries"
    api: "@AvahiAPI"
@@ -6080,6 +6307,11 @@ groups:
       binaries:
        - libavahi-glib1
        - libavahi-gobject0
+    - name: gtk
+      requires:
+       - "@Gtk3"
+      binaries:
+       - libavahi-ui-gtk3-0
 
  - name: "@Avahi"
    sourceproject: Network
@@ -6092,13 +6324,18 @@ groups:
     - avahi-autoipd
     - avahi-utils
     - libhowl0
-    - python311-avahi
+    - python${systemPythonVersion}-avahi
    buildflavors:
     - name: python310
       requires:
        - "@PythonStandard310+dbus"
       binaries:
        - python310-avahi
+    - name: gtk
+      requires:
+       - "@AvahiLibraries+gtk"
+      binaries:
+       - avahi-utils-gtk
 
  - name: "@Firewall"
    sourceproject: Systemd
@@ -6152,6 +6389,8 @@ groups:
     - NetworkManager-bluetooth
     - NetworkManager-branding-SLE
     - NetworkManager-branding-upstream
+    - NetworkManager-cloud-setup
+    - NetworkManager-tui
     - libmm-glib0
     - ModemManager
     - ppp
@@ -6278,7 +6517,16 @@ groups:
       binaries:
        - lv2-examples
 
+ - name: "@OpenGLAPI"
+   sourceproject: X11
+   requires:
+    - "@OpenGL"
+    - "@X11API"
+   binaries:
+    - libXNVCtrl-devel
+
  - name: "@OpenGL"
+   api: "@OpenGLAPI"
    sourceproject: X11
    requires:
     - "@Core"
@@ -6303,6 +6551,8 @@ groups:
     - spirv-Headers             purpose=devel
     - spirv-llvm-Headers        purpose=devel
     - libxatracker2
+    - libXNVCtrl0
+    - libfltk1*
 
  - name: "@AVAPI"
    sourceproject: Multimedia
@@ -6322,6 +6572,7 @@ groups:
    sourceproject: Multimedia
    requires:
     - "@GraphicsLibraries"
+    - "@GdkPixbuf"
     - "@AudioLibraries"
     - "@FontLibraries"
     - "@EssentialVideoLibraries"
@@ -6345,6 +6596,15 @@ groups:
     - libinstpatch-1*
     - mjpegtools
     - libschroedinger-1*
+    - librubberband2
+    - libheif1
+    - libheif-rav1e
+    - libheif-svtenc
+    - libheif-aom
+    - libheif-dav1d
+    - libheif-jpeg
+    - libheif-openjpeg
+    - gdk-pixbuf-loader-libheif
    buildflavors:
     - name: gdk
       requires:
@@ -6463,6 +6723,27 @@ groups:
     - munge
    binaries:
     - lua-lmod
+   purposes:
+    - name: doc
+      binaries:
+       - lua-lmod-doc
+
+ - name: "@HDF5"
+   sourceproject: HPC
+   requires:
+    - "@Core"
+   packages:
+    - hdf5:serial
+    - netcdf:serial
+    - python-netCDF4
+   binaries:
+    - netcdf
+   buildflavors:
+    - name: python
+      requires:
+       - "@SystemCython"
+      binaries: 
+       - python${systemPythonVersion}-netCDF4
 
  - name: "@HPC"
    sourceproject: HPC
@@ -6479,6 +6760,7 @@ groups:
     - "@Boost"
     - "@FFTW3"
     - "@PlusLibraries"
+    - "@HDF5"
    packages:
     # you're in a maze of twisty little alleys, with packages that
     # are all named alike.
@@ -6494,6 +6776,19 @@ groups:
     - openmpi3:standard
     - openmpi4:standard
     - gsl:gnu-hpc
+    - metis:gnu-hpc
+    - hdf5:gnu-hpc
+    - hdf5:gnu-hpc
+    - hdf5:gnu-mpich-hpc
+    - hdf5:gnu-mvapich2-hpc
+    - hdf5:gnu-openmpi4-hpc
+    - hdf5:mvapich2
+    - hdf5:openmpi4
+    - netcdf:gnu-hpc
+    - netcdf:gnu-mpich-hpc
+    - netcdf:gnu-mvapich2-hpc
+    - netcdf:gnu-openmpi4-hpc
+    - netcdf:openmpi4
    binaries:
     - mvapich2*
     - mpi-selector
@@ -6507,6 +6802,11 @@ groups:
     - libboost_mpi1_82_0-devel purpose=devel
     - libboost_graph_parallel1_82_0-devel purpose=devel
     - gnu-compilers-hpc
+    - libmetis-gnu-hpc
+   purposes:
+    - name: doc
+      binaries:
+       - gsl-gnu-hpc-doc
 
  - name: "@NetworkUtils"
    sourceproject: Network
@@ -6564,7 +6864,7 @@ groups:
     - "@NetworkLibraries"
     - "@CoreAPI"
    binaries:
-#   - unbound-devel
+    - freeradius-client-devel
    buildflavors:
     - name: systemd
       requires:
@@ -6584,6 +6884,15 @@ groups:
     - libprotobuf-c1
     - libdaemon0
     - libfstrm0
+    - libldns3
+    - freeradius-client-libs
+   buildflavors:
+    - name: python
+      requires:
+       - "@CoreXMLLibraries"
+      binaries:
+       - libunbound8
+       - unbound-anchor
 
  - name: "@NetworkServices"
    sourceproject: Network
@@ -6615,24 +6924,54 @@ groups:
     - net-snmp
     - perl-SNMP
     - snmp-mibs
-#   - unbound
     - openvpn
    buildflavors:
-    - name: mysql
+    - name: database
       requires:
        - "@SystemDatabaseLibraries"
        - "@Samba"
        - "@SystemPython"
        - "@NetworkAnalysis+systemd"
+       - "@NetworkLibraries+python"
       binaries:
-       - freeradius-server
-       - freeradius-server-mysql
-       - freeradius-server-postgresql
-       - freeradius-server-sqlite
        - postfix-mysql
        - postfix-postgresql
        - bind-modules-mysql
-       - freeradius-server-python3
+    - name: python
+      requires:
+       - "@NetworkLibraries+python"
+       - "@NetworkAnalysis+systemd"
+      binaries:
+       - unbound
+       - unbound-munin
+       - python3-unbound
+       - ldns
+
+ - name: "@RADIUSServer"
+   sourceproject: Network
+   requires:
+    - "@PerlCore"
+    - "@SambaLibraries"
+    - "@CommonDatabaseLibraries"
+    - "@NetworkLibraries+python"
+    - "@NetworkAnalysis+systemd"
+   packages:
+    - freeradius-server
+   binaries:
+    - freeradius-server
+    - freeradius-server-sqlite
+    - freeradius-server-krb5
+    - freeradius-server-ldap
+    - freeradius-server-ldap-schemas
+    - freeradius-server-python3
+   buildflavors:
+    - name: database
+      requires:
+       - "@SystemDatabaseLibraries"
+       - "@NetworkLibraries+python"
+      binaries:
+       - freeradius-server-mysql
+       - freeradius-server-postgresql
 
  - name: "@IPSec"
    sourceproject: Applications
@@ -6867,6 +7206,11 @@ groups:
     - name: python
       binaries:
        - sssd-tools
+   purposes:
+    - name: doc
+      binaries:
+       - talloc-man
+       - tevent-man
 
  - name: "@SambaAPI"
    sourceproject: Samba
@@ -6912,6 +7256,9 @@ groups:
       requires:
        - "@Python"
        - "@DBusService"
+      # Note: the cert enrollment stuff has been placed here because samba is
+      # currently the only user of it, but we might want to give it
+      # a separate label at some point
       binaries:
        - samba-libs-python3
        - libsamba-policy0-python3
@@ -6920,6 +7267,8 @@ groups:
        - samba-gpupdate
        - samba-tool
        - certmonger
+       - python3-cepces
+       - sscep
     - name: rados
       requires:
        - "@Rados"
@@ -7168,6 +7517,17 @@ groups:
       requires:
        - "@PythonModules311+desktop"
 
+ - name: "@SystemCython"
+   # we do not accept any autoflavors:
+   compatibility: none
+   sourceproject: Python
+   requires:
+    - "@Cython311"
+   buildflavors:
+    - name: desktop
+      requires:
+       - "@Cython311+desktop"
+
  - name: "@Jupyter"
    sourceproject: Python
    requires:
@@ -7218,6 +7578,48 @@ groups:
     - rubygem-*
     - ruby-common
 
+ - name: "@MicrosoftAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreAPI"
+    - "@MicrosoftLibraries"
+   binaries:
+    - hivex-devel
+   buildflavors:
+    - name: ocaml
+      requires:
+       - "@MicrosoftTools+ocaml"
+      binaries:
+       - ocaml-hivex-devel
+
+ - name: "@MicrosoftLibraries"
+   api: "@MicrosoftAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libhivex0
+
+ - name: "@MicrosoftTools"
+   sourceproject: CorePlus
+   requires:
+    - "@MicrosoftLibraries"
+    - "@PerlCore"
+    - "@FilesystemLibraries"
+    - "@X86Libraries"
+   packages:
+    - hivex
+   binaries:
+    - hivex
+    - ntfsprogs
+    - ntfs-3g
+   buildflavors:
+    - name: ocaml
+      requires:
+       - "@Ocaml"
+      binaries:
+       - ocaml-hivex
+
  # FIXME
  - name: "@Guestfs"
    sourceproject: Virtualization
@@ -7227,9 +7629,11 @@ groups:
     - "@UpdateStack"
     - "@Management"
     - "@Virtualization"
+    - "@MicrosoftLibraries"
     - "@Docbook"
    binaries:
     - rubygem-libguestfs
+    - libguestfs0
    buildflavors:
     - name: ocaml
       requires:
@@ -7392,8 +7796,14 @@ groups:
     - felix-bundlerepository
     - jline
     - truth
+    - auto
+    - auto-javadoc
+    - auto-value
+    - auto-value-parent
+    - auto-common
     - auto-service
     - auto-service-annotations
+    - auto-value-annotations
    purposes:
     - name: doc
       binaries:
@@ -7414,11 +7824,29 @@ groups:
     - httpcomponents-client
     - slf4j-jcl
     - bcel
+    - jing
+    - jtidy
+    - jtidy-scripts
+    - snakeyaml
+    - saxon10-scripts
+    - wsdl4j
+    - xmlunit
+    - xom
+    - xom-demo
+    - isorelax
+    - trang
+    - xalan-j2-xsltc
+    - testng
+
+ - name: "@Tomcat"
+   sourceproject: Java
+   requires:
+    - "@ApacheCommons"
+    - "@ApacheLibraries"
+   binaries:
     - tomcat-*
-   purposes:
-#   - name: devel
-#     binaries:
-#      - xml-commons-apis-bootstrap
+    - tomcat10*
+    - xalan-j2-demo
 
  - name: "@ApacheAnt"
    sourceproject: Java
@@ -7445,6 +7873,13 @@ groups:
     - maven-shared
     - maven-parent
     - maven-dependency-tree
+    - maven-invoker
+    - maven-script-interpreter
+    # these are placed in Maven as maven is currently the sole consumer
+    - sonatype-*
+    - trilead-ssh2
+    - google-gson
+    - auto-service-aggregator
 
  - name: "@Plexus"
    sourceproject: Java
@@ -7606,8 +8041,8 @@ groups:
     - "@CoreLibraries"
     - "@FontLibraries+x11"
     - "@Glib2NoDBus"
+    - "@CommonDatabaseLibraries"
    binaries:
-    - libdbi3
     - librrd8
 
  - name: "@Stuff"
@@ -7643,6 +8078,23 @@ groups:
       binaries:
        - ocaml-augeas
 
+ - name: "@Nagios"
+   sourceproject: Management
+   requires:
+    - "@Core0"
+    - "@SystemdLibraries"
+    - "@Core+systemd"
+    - "@PerlCore"
+    - "@SystemDatabaseLibraries"
+    - "@KernelNetworkUtils"
+    - "@NetworkServices"
+    - "@Kernel"
+    - "@Busybox"
+    - "@PrintingLibraries"
+   binaries:
+    - monitoring-plugins-*
+    - nagios-rpm-macros purpose=devel
+
  - name: "@Salt"
    sourceproject: Management
    requires:
@@ -7654,7 +8106,7 @@ groups:
     - "@Fish"
    binaries:
     - salt
-    - python31?-salt priority=0
+    - python${systemPythonVersion}-salt priority=0
 
  - name: "@Texlive"
    api: "@TexAPI"
@@ -7689,6 +8141,7 @@ groups:
     - perl-Text-BibTeX
     - perl-Text-BibTeX-devel priority=0
     - transfig
+    - latex2html
 
  - name: "@TexAPI"
    sourceproject: DocumentFormats
@@ -7765,9 +8218,7 @@ groups:
     - product-builder-plugin-SLE_15
     - SLE-EULAs
     - instsource-susedata
-#   - patterns-alp-bootloader
-#   - patterns-alp-ima-evm
-#   - patterns-alp-*
+    - mksusecd
 
 templates:
  - name: PythonGroups

@@ -340,6 +340,42 @@ class IndexFormatter(IndexFormatterBase):
 		print(f"    - {message}")
 
 ##################################################################
+# Expand "foo${variable}bar" strings
+##################################################################
+class VariableExpander(object):
+	def __init__(self, defines):
+		import re
+
+		self.defines = defines or {}
+		self.regex = re.compile('([^$]*)\${([^}]*)}(.*)')
+
+	def expand(self, s):
+		if '$' not in s:
+			return s
+
+		orig = s
+		result = ''
+		while True:
+			m = self.regex.match(s)
+			if not m:
+				result += s
+				break
+
+			before, name, after = m.groups()
+			replace = self.defines.get(name)
+			if replace is None:
+				warnmsg(f"{name} expands to nothing while performinc variable expansion of \"{orig}\"")
+				replace = ''
+
+			result += before + str(replace)
+			s = after
+
+
+		debugmsg(f"variable expansion \"{orig}\" -> \"{result}\"")
+		return result
+
+
+##################################################################
 #
 # Interfacing with python's logging class
 #
@@ -424,7 +460,7 @@ class LoggingFacade:
 			logger = self.getLogger(name)
 
 		logger.setLevel(levelName)
-		logger.debug(f"Enabled {name} debugging messages")
+		logger.debug(f"Enabled {name} {levelName} messages")
 
 	def isDebugEnabled(self, name):
 		level = self.getLogger(name).getEffectiveLevel()

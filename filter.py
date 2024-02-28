@@ -4,6 +4,7 @@ import fnmatch
 from util import ExecTimer
 from util import filterHighestRanking
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from util import VariableExpander
 from ordered import PartialOrder
 from functools import reduce
 from stree import SolvingTreeBuilder
@@ -1607,6 +1608,7 @@ class PackageFilter:
 	def __init__(self, filename = 'filter.yaml', scheme = None):
 		self.classificationScheme = scheme or Classification.Scheme()
 		self._templates = {}
+		self.expander = None
 
 		self.stringMatcher = PackageLabelling()
 
@@ -1620,6 +1622,10 @@ class PackageFilter:
 
 		for gd in data.get('templates') or []:
 			self.parseTemplate(gd)
+
+		defines = data.get('defines')
+		if defines is not None:
+			self.expander = VariableExpander(defines)
 
 		# Parse autoflavors *before* everything else so that we can populate
 		# newly created flavors from default settings.
@@ -2133,10 +2139,28 @@ class PackageFilter:
 
 		groupLabel.compatibility = getString(gd, 'compatibility')
 
+	def variableExpansion(self, data):
+		if not self.expander or data is None:
+			return data
+
+		dataType = type(data)
+		if dataType in (int, bool, float):
+			return data
+		if dataType is str:
+			return self.expander.expand(data)
+		if dataType is dict:
+			return dict((self.expander.expand(key), self.variableExpansion(value)) for (key, value) in data.items())
+		if dataType is list:
+			return list(map(self.variableExpansion, data))
+
+		raise Exception(f"Unexpected YAML data {dataType} in variableExpansion")
+
 	def expandYamlObjectList(self, data, name):
 		objectList = data.get(name)
 		if objectList is None:
 			return
+
+		objectList = self.variableExpansion(objectList)
 
 		for gd in objectList:
 			templateRef = gd.get('instantiate')

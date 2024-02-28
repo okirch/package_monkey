@@ -451,7 +451,9 @@ class ResolverContext:
 			elif xfrm.action == xfrm.IGNORE:
 				self.suppressedDependencies.append((pkg, target))
 				if xfrm.warning:
-					warnmsg(f"Dependency {pkg} -> {target}: {xfrm.warning}")
+					warnmsg(f"Ignoring dependency {pkg} -> {target}: {xfrm.warning}")
+				else:
+					infomsg(f"Ignoring dependency {pkg} -> {target}")
 				continue
 			elif xfrm.action == xfrm.REWRITE:
 				assert(xfrm.rewriteTo)

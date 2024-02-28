@@ -289,7 +289,7 @@ class ProductFamily:
 					self.resolverHints.addIgnoredDependency(name, ignore)
 				else:
 					for targetName in ignore:
-						self.resolverHints.addIgnoredDependency(name, targetName)
+						self.resolverHints.addIgnoredDependency(name, targetName, warning = warning)
 
 	def expandDisambiguationRules(self, ruleSetData):
 		for pos in range(len(ruleSetData)):

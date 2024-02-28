@@ -10,6 +10,8 @@ def main():
 	application.addArgument('--what-requires', action = 'append', default = [])
 	application.addArgument('--imports', action = 'store_true', default = False)
 	application.addArgument('--terse', action = 'store_true', default = False)
+	application.addArgument('--unclassified', action = 'store_true', default = False)
+	application.addArgument('--max-alternatives')
 	application.parseArguments()
 
 	classificationScheme = Classification.Scheme()
@@ -50,11 +52,21 @@ def main():
 				if topic.parent is None:
 					query.visit(topic, renderer)
 
+			# FIXME: inspect the component's build configs and check what they import
+
 			renderer.renderTrailer(component, query)
+
+		if application.opts.unclassified:
+			renderer = UnclassifiedRenderer(maxAlternatives = application.opts.max_alternatives)
+
+			query = UnclassifiedQuery(context, component)
+			query.visit(renderer)
 
 		print()
 
 class QueryContext(object):
+	QUASI_INFINITE = 4242 
+
 	def __init__(self, classification, classificationScheme):
 		self.classification = classification
 		self.classificationScheme = classificationScheme
@@ -88,6 +100,13 @@ class QueryContext(object):
 
 	def bottomUpTraversal(self, *args, **kwargs):
 		return iter(self.labelOrder.bottomUpTraversal(*args, **kwargs))
+
+	def getUnclassifiedForComponent(self, component):
+		for rpm, candidates in self.classification.enumerateUnclassifiedPackages():
+			if candidates is None:
+				yield rpm, self.QUASI_INFINITE
+			elif component in candidates:
+				yield rpm, len(candidates) - 1
 
 def getAllAPIs(componentList = None):
 	if componentList is None:
@@ -381,5 +400,34 @@ class ImportedAPIQuery(ComponentQuery):
 		def descend(self, label):
 			return self.__class__(self.query, label, parent = self)
 
+
+class UnclassifiedQuery(ComponentQuery):
+	def __init__(self, context, component):
+		super().__init__(context, component)
+
+
+	def visit(self, renderer):
+		unsorted = list(self.context.getUnclassifiedForComponent(self.component))
+
+		for rpm, numOther in sorted(unsorted, key = (lambda pair: (pair[1], pair[0].name))):
+			renderer.renderCandidate(rpm, numOther)
+
+class UnclassifiedRenderer(object):
+	def __init__(self, maxAlternatives = None):
+		if maxAlternatives in (None, '', 'any'):
+			self.maxAlternatives = None
+		else:
+			self.maxAlternatives = int(maxAlternatives)
+
+	def renderCandidate(self, rpm, numOther):
+		if self.maxAlternatives is not None and numOther > self.maxAlternatives:
+			return
+
+		if numOther == 0:
+			print(f"  {rpm}")
+		elif numOther == QueryContext.QUASI_INFINITE:
+			print(f"  {rpm} - anywhere")
+		else:
+			print(f"  {rpm} - {numOther} alternatives")
 
 main()

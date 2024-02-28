@@ -102,10 +102,19 @@ if application.opts.labels:
 	renderer.rpm = LabellingRpmRenderer(classification)
 
 for packageName in application.opts.packages:
+	if '.' in packageName:
+		packageName, packageArch = packageName.split('.')
+	else:
+		packageArch = None
+
 	rpm = store.recoverLatestPackageByName(packageName)
 	if rpm is None:
 		print(f"{packageName}: not found")
 		continue
+
+	if packageArch and rpm.arch != packageArch:
+		print(f"{packageName}: you asked for arch {packageArch} but all I found was {rpm.arch}")
+		print(f"Take the following results with a grain of salt")
 
 	print(f"{renderer.renderRpm(rpm)}")
 

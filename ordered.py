@@ -389,6 +389,52 @@ class PartialOrder(object):
 				return self.findPathWork(sourceNode, lowerNeighbor, [lowerNeighbor.key] + path)
 		assert(False)
 
+	# subset must be a convex set in order for this to work
+	def asTreeFormatter(self, convexScope = None, topDown = False):
+		from util import ANSITreeFormatter
+
+		tf = ANSITreeFormatter()
+
+		if topDown:
+			if convexScope is None:
+				nodes = []
+				for node in self._unsorted:
+					if not node.above:
+						nodes.append(node)
+			else:
+				start = self.maxima(convexScope)
+				nodes = list(map(self.getNode, start))
+		else:
+			if convexScope is None:
+				nodes = []
+				for node in self._unsorted:
+					if not node.below:
+						nodes.append(node)
+			else:
+				start = self.minima(convexScope)
+				nodes = list(map(self.getNode, start))
+
+		seen = self._setClass()
+		for node in nodes:
+			self.treeFormatterWork(node, topDown, convexScope, tf.root, seen)
+		return tf
+
+	def treeFormatterWork(self, node, topDown, convexScope, tfParent, seen):
+		tfNode = tfParent.add(node.key)
+
+		if topDown:
+			nodes = node.below
+		else:
+			nodes = node.above
+
+		for neighbor in nodes:
+			if neighbor.key in seen or neighbor.key not in convexScope:
+				continue
+
+			seen.add(neighbor.key)
+
+			self.treeFormatterWork(neighbor, topDown, convexScope, tfNode, seen)
+
 	class CollapsedCycle:
 		def __init__(self, members):
 			self.members = set(members)

@@ -15,6 +15,7 @@ class QueryApplication(Application):
 		self.addArgument('--terse', action = 'store_true', default = False)
 		self.addArgument('--verbose', action = 'store_true', default = False)
 		self.addArgument('--list', action = 'store_true', default = False)
+		self.addArgument('--requires', action = 'store_true', default = False)
 		self.addArgument('--what-requires', action = 'append', default = [])
 		self.addArgument('--unclassified', action = 'store_true', default = False)
 		self.addArgument('--inversions', action = 'store_true', default = False)
@@ -34,6 +35,8 @@ class QueryApplication(Application):
 		actions = []
 		if self.opts.list:
 			actions.append(ListQuery(context))
+		if self.opts.requires:
+			actions.append(RequiresQuery(context))
 		if self.opts.what_requires:
 			actions.append(WhatRequiresQuery(context, self.opts.what_requires))
 		if self.opts.imports:
@@ -549,5 +552,45 @@ class ListQuery(GenericQuery):
 			classification = self.context.classification
 			for rpm in sorted(classification.getPackagesForLabel(label), key = str):
 				print(f"          {rpm}")
+
+class RequiresQuery(GenericQuery):
+	def __init__(self, context, onlyBaseLabels = None):
+		super().__init__(context, None)
+
+		classification = context.classification
+		membershipSizes = CountingDict()
+
+		self._membershipSizes = membershipSizes
+
+	def __call__(self, queryTargetLabel):
+		if queryTargetLabel.type is Classification.TYPE_BINARY:
+			not_implemented
+			return
+
+		topicOrder = self.context.labelOrder
+		classificationScheme = self.context.classificationScheme
+
+		if self.context.verbosityLevel <= 1:
+			binaryLabels = classificationScheme.getReferencingLabels(queryTargetLabel)
+
+			reqs = Classification.createLabelSet()
+			for topic in binaryLabels:
+				reqs.update(topicOrder.lowerNeighbors(topic))
+			binaryLabels.update(reqs)
+
+			tf = topicOrder.asTreeFormatter(binaryLabels, topDown = True)
+		else:
+			binaryLabels = classificationScheme.getReferencingLabels(queryTargetLabel)
+			binaryLabels = topicOrder.downwardClosureForSet(binaryLabels)
+			tf = topicOrder.asTreeFormatter(binaryLabels, topDown = True)
+
+		print(f"  {queryTargetLabel}")
+		for prefix, label in tf.render():
+			if label.sourceProject is not queryTargetLabel:
+				print(f" {prefix}{label} [{label.sourceProject}]")
+			else:
+				print(f" {prefix}{label}")
+		print()
+		return
 
 main()

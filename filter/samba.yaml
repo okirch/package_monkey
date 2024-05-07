@@ -1,0 +1,215 @@
+# vi: ai et
+# Definition of Samba component
+
+components:
+ - name: Samba
+   globals:
+    devel: SambaDevel
+   requires:
+    - Network
+    - KernelPlus
+    - HardwareAccess
+
+build_configs:
+ - name: Samba/standard
+   buildrequires:
+    - "@SNMPAPI"
+    - "@DirectoryAPI"
+    - "@SystemdAPI"
+    - "@SystemdOnlyForOBS"
+
+groups:
+ - name: "@DirectoryAPI"
+   sourceproject: Samba
+   requires:
+    - "@DirectoryIntegration"
+    - "@CoreAPI"
+   binaries:
+    - libtalloc-devel
+    - libtevent-devel
+    - libtdb-devel
+    - python3-talloc-devel
+
+ - name: "@DirectoryIntegration"
+   api: "@DirectoryAPI"
+   sourceproject: Samba
+   requires:
+    - "@Core"
+    - "@Core+systemd"
+    - "@DefaultPython"
+   binaries:
+    - sssd
+    - python3-sss*
+    - libsss_simpleifp0
+    - libipa_hbac0
+    # catch-all for all other sssd packages
+    - sssd-*
+    # These are really Samba libraries, but we put them here because all of the sssd
+    # stuff uses them, too
+    - libtalloc2
+    - libtevent0
+    - libtdb1
+    - libldb2
+   buildflavors:
+    - name: nfs
+      requires:
+       - "@NetworkStorage"
+      binaries:
+       - libnfsidmap-sss
+    - name: samba
+      requires:
+       - "@SambaLibraries"
+      binaries:
+       - sssd-ad
+       - sssd-ipa
+    - name: python
+      autoselect: no
+      binaries:
+       - sssd-tools
+   purposes:
+    - name: doc
+      binaries:
+       - talloc-man
+       - tevent-man
+
+ - name: "@DirectoryServerAPI"
+   sourceproject: Samba
+   requires:
+    - "@DirectoryServerIntegration"
+    - "@CoreAPI"
+   binaries:
+
+ - name: "@DirectoryServerIntegration"
+   api: "@DirectoryServerAPI"
+   sourceproject: Samba
+   requires:
+    - "@Core"
+    - "@Core+systemd"
+    - "@DefaultPythonStandard"
+    - "@KernelNetworkUtils"
+   binaries:
+    - 389-ds
+
+ - name: "@SambaAPI"
+   sourceproject: Samba
+   requires:
+    - "@SambaLibraries"
+    - "@DirectoryAPI"
+    - "@CoreAPI"
+    - "@KerberosAPI"
+   binaries:
+    - samba-devel
+
+ - name: "@SambaLibraries"
+   api: "@SambaAPI"
+   sourceproject: Samba
+   requires:
+    - "@NetworkCore"
+    - "@Core"
+    - "@PGPLibraries"
+    - "@SystemdLibraries"
+#   - "@PrintingLibraries"
+    - "@AvahiLibraries"
+    - "@DirectoryIntegration"
+   binaries:
+    - samba-client-libs
+    - samba-libs
+    - samba-winbind-libs
+    - samba-ad-dc-libs
+
+ - name: "@Samba"
+   sourceproject: Samba
+   requires:
+    - "@NetworkServices"
+    - "@Core"
+    - "@PrintingLibraries"
+    - "@SambaLibraries"
+   binaries:
+    - samba
+    - samba-client
+    - samba-winbind
+    - cifs-utils
+    - pam_cifscreds
+   buildflavors:
+    - name: python
+      requires:
+       - "@Python"
+       - "@DBusService"
+      # Note: the cert enrollment stuff has been placed here because samba is
+      # currently the only user of it, but we might want to give it
+      # a separate label at some point
+      binaries:
+       - samba-libs-python3
+       - libsamba-policy0-python3
+       - samba-python3
+       - samba-ad-dc
+       - samba-gpupdate
+       - samba-tool
+       - certmonger
+       - python3-cepces
+       - sscep
+    - name: rados
+      requires:
+       - "@Rados"
+      binaries:
+       - samba-ceph
+    - name: pcp
+      requires:
+       - "@PCP"
+      binaries:
+       - ctdb-pcp-pmda
+    - name: test
+      requires:
+       - "@Samba+python"
+      binaries:
+       - samba-test
+
+ - name: "@MicrosoftAPI"
+   sourceproject: Samba
+   requires:
+    - "@CoreAPI"
+    - "@MicrosoftLibraries"
+   binaries:
+    - hivex-devel
+   buildflavors:
+    - name: ocaml
+      is_api: True
+      requires:
+       - "@MicrosoftTools+ocaml"
+      binaries:
+       - ocaml-hivex-devel
+
+ - name: "@MicrosoftLibraries"
+   api: "@MicrosoftAPI"
+   sourceproject: Samba
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libhivex0
+
+ - name: "@MicrosoftTools"
+   sourceproject: Samba
+   requires:
+    - "@MicrosoftLibraries"
+    - "@PerlCore"
+    - "@FilesystemLibraries"
+    - "@X86Libraries"
+   packages:
+    - hivex
+   binaries:
+    - hivex
+    - ntfsprogs
+    - ntfs-3g
+   buildflavors:
+    - name: ocaml
+      is_api: True
+      requires:
+       - "@Ocaml"
+      binaries:
+       - ocaml-hivex
+    - name: python
+      requires:
+       - "@DefaultPython"
+      binaries:
+       - python3-hivex
+

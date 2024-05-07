@@ -1,0 +1,48 @@
+# vi: ai et
+# Definition of Perl component
+
+components:
+ - name: Perl
+   globals:
+    devel: PerlDevel
+   requires:
+    - Core
+   imports:
+    - "@UdevLibraries"
+   exports:
+    - "@Perl"
+
+build_configs:
+ - name: Perl/standard
+   buildrequires:
+    - "@DevelopmentEssentials"
+
+groups:
+ - name: "@PerlAPI"
+   sourceproject: Perl
+   requires:
+    - "@Perl"
+    - "@MinimalCDevelopment"
+   binaries:
+    - libtidyp-devel
+
+ - name: "@Perl"
+   sourceproject: Perl
+   requires:
+    - "@PerlCore"
+    - "@CoreXMLTools"
+   binaries:
+    - perl-libwww-perl
+    - strip-nondeterminism
+    - perl-XML-Twig
+    - perl-HTML-Tidy
+    - libtidyp-1*
+    - tidyp
+   buildflavors:
+    - name: glib
+      requires:
+       - "@Glib2Core"
+       - "@PkgConfig"
+      binaries:
+       - perl-Glib
+

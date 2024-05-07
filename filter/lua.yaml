@@ -1,0 +1,84 @@
+# vi: ai et
+# Definition of LUA component
+
+components:
+ - name: LUA
+   globals:
+    devel: LuaDevel
+   requires: 
+    - Core
+   imports:
+    - "@DevelopmentRuntime"
+   exports:
+    - "@LUARuntime"
+    - "@SystemLUARuntime"
+
+build_configs:
+
+templates:
+ - name: LUAVersion
+   substitute:
+    - VERSION
+    - MAJOR
+    - MINOR
+   document:
+    - name: "@LUARuntimeVERSION"
+      sourceproject: LUA
+      api: "@LUAAPI"
+      requires:
+       - "@Glibc"
+       - "@GccRuntime"
+      binaries:
+       - libluaMAJOR_MINOR*
+       - libluajit-MAJOR_MINOR*
+
+    - name: "@LUAVERSION"
+      sourceproject: LUA
+      api: "@LUAAPI"
+      requires:
+       - "@Core0"
+       - "@Archivers"
+       - "@LUARuntimeVERSION"
+      binaries:
+       - luaVERSION
+       - luaVERSION-luafilesystem
+       - luaVERSION-luaposix
+       - luaVERSION-luaterm
+       - luaVERSION-luarocks
+
+groups:
+ - instantiate: LUAVersion:51:5:1
+ - instantiate: LUAVersion:53:5:3
+ - instantiate: LUAVersion:54:5:4
+
+ - name: "@SystemLUARuntime"
+   sourceproject: LUA
+   inherit_all_flavors: yes
+   requires:
+    - "@LUARuntime${systemLUAVersion}"
+
+ - name: "@LUARuntime"
+   sourceproject: LUA
+   requires:
+    - "@LUARuntime51"
+    - "@LUARuntime53"
+    - "@LUARuntime54"
+
+ - name: "@LUA"
+   sourceproject: LUA
+   requires:
+    - "@LUA51"
+    - "@LUA53"
+    - "@LUA54"
+   binaries:
+    - lua-macros
+
+ - name: "@LUAAPI"
+   sourceproject: LUA
+   is_api: true
+   requires:
+    - "@LUA"
+   binaries:
+    - luaVERSION-devel priority=0
+    - luajit
+    - luajit-devel

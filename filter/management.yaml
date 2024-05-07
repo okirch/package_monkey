@@ -1,0 +1,444 @@
+# vi: ai et
+# Definition of Management component
+
+components:
+ - name: Management
+   globals:
+    devel: ManagementDevel
+   requires:
+    - Core
+    - CorePlus
+    - Network
+    - Host
+    - Multimedia
+    - Python
+    - KernelPlus
+    - Security
+    - Gnome
+    - Qt
+    - UpdateStack
+    - Ruby
+    - Container
+    - Go
+   exports:
+    - "@ManagementLibraries"
+    - "@RRDSupportLibraries"
+
+build_configs:
+ - name: Management/standard
+   buildrequires:
+    - "@Agama"
+ - name: Management/qtplus
+   buildrequires:
+    - "@GraphvizAPI"
+
+groups:
+ - name: "@RRDAPI"
+   sourceproject: Management
+   requires:
+    - "@RRDSupportLibraries"
+
+ - name: "@RRDSupportLibraries"
+   api: "@RRDAPI"
+   sourceproject: Management
+   requires:
+    - "@CoreLibraries"
+    - "@FontLibraries+x11"
+    - "@Glib2NoDBus"
+    - "@CommonDatabaseLibraries"
+   binaries:
+    - librrd8
+
+ - name: "@RRD"
+   sourceproject: Management
+   requires:
+    - "@Core"
+    - "@TclCore"
+    - "@RRDSupportLibraries"
+   binaries:
+    - rrdtool
+
+ - name: "@PCPAPI"
+   sourceproject: Management
+   requires:
+    - "@PCP"
+    - "@CoreAPI"
+   binaries:
+   buildflavors:
+    - name: test
+      requires:
+       - "@EssentialQtLibraries"
+      binaries:
+       - pcp-testsuite
+
+ - name: "@PCP"
+   api: "@PCPAPI"
+   sourceproject: Management
+   requires:
+    - "@Core0"
+    - "@Perl"
+    - "@KernelLibraries"
+    - "@DefaultPythonStandard"
+    - "@AvahiLibraries"
+    - "@GCC"
+   binaries:
+    - pcp
+    - pcp-conf
+    - libpcp3*
+    - libpcp_*
+    # for some silly reason, pcp-zeroconf depends on pcp-doc, so we need it here
+    - pcp-doc
+    - sysstat
+   buildflavors:
+    - name: infiniband
+      requires:
+       - "@Infiniband"
+      binaries:
+       - pcp-pmda-infiniband
+    - name: mailserver
+      requires:
+       - "@NetworkServices"
+       - "@NetworkServices-doc" # why does pcp-pmda-postfix require postfix-doc?!
+      binaries:
+       - pcp-pmda-postfix
+    - name: database
+      requires:
+       - "@Databases"
+      binaries:
+       - pcp-pmda-mysql
+       - pcp-pmda-oracle
+    - name: qt
+      requires:
+       - "@Qt5ExtendedLibraries"
+      binaries:
+       - pcp-gui
+    - name: network
+      requires:
+       - "@NetworkCore"
+       - "@KernelNetworkUtils"
+      binaries:
+       - pcp-pmda-sockets
+    - name: storage
+      requires:
+       - "@HostStorage+syspython"
+      binaries:
+       - pcp-pmda-lio
+    - name: tk
+      requires:
+       - "@TclCore+x11"
+       - "@Gnuplot"
+      binaries:
+       - sysstat-isag
+
+ - name: "@FirmwareUpdateService"
+   sourceproject: Management
+   requires:
+    - "@PGPLibraries"
+    - "@KernelCore"
+    - "@Glib2NoDBus"
+    - "@NetworkManager"
+    - "@ArchivingLibraries"
+    - "@USBLibraries+glib"
+    - "@StorageServices"
+    - "@PlatformCryptoLibraries"
+   binaries:
+    - fwupd
+    - fwupd-efi
+    - libjcat1
+   buildflavors:
+    - name: fish
+      requires:
+       - "@Fish"
+      binaries:
+       - fwupd-fish-completion
+
+ - name: "@ManagementAPI"
+   sourceproject: Management
+   requires:
+    - "@ManagementLibraries"
+    - "@CoreAPI"
+
+ - name: "@ManagementLibraries"
+   api: "@ManagementAPI"
+   sourceproject: Management
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libaugeas0
+    - libfa1
+
+ - name: "@MinimalManagement"
+   sourceproject: Management
+   requires:
+    - "@ManagementLibraries"
+   binaries:
+    - augeas
+
+ - name: "@YastCommonAPI"
+   sourceproject: Management
+   requires:
+    - "@YastCommon"
+    - "@CoreAPI"
+    - "@Ruby"
+    - "@PkgConfig"
+    - "@Perl"
+   binaries:
+    - yast2-core-devel
+
+ - name: "@YastCommon"
+   api: "@YastCommonAPI"
+   sourceproject: Management
+   requires:
+    - "@Core"
+    - "@StorageServices"
+    - "@SystemPythonModules"
+    - "@UpdateStack"
+    - "@PolicyKit"
+    - "@Container"
+    - "@RubyStandard"
+    - "@Management"
+    - "@TransactionalServer+systemd"
+    - "@PkgConfig"
+    - "@HostSecurity"
+    - "@HardwareAccessUtilities"
+    - "@Perl"
+    - "@Qt5ExtendedLibraries"
+    - "@Archivers"
+   binaries:
+    - yast2
+    - yast2-ruby-bindings
+    - yast2-perl-bindings
+    - yast2-ycp-ui-bindings
+    - yast2-core
+    - yast2-network
+    - yast2-country
+    - yast2-bootloader
+    - yast2-users
+    - yast2-hardware-detection
+    - yast2-iscsi-client
+    - yast2-installation
+    - yast2-proxy
+    - yast2-packager
+    - yast2-storage-ng
+    - libyui-ncurses-pkg16
+    - libyui-ncurses16
+    - libyui-qt-pkg16
+    - libyui-qt16
+    - libyui16
+    - libstorage-ng1
+    - libstorage-ng-ruby
+    - yast2-transfer
+    - yast2-country-data
+    - yast2-pkg-bindings
+    - yast2-xml
+    - yast2-security
+    - yast2-logs
+    - libstorage-ng1
+    - yast2-trans-stats
+    - yast2-ldap
+    - yast2-pam
+    - yast2-services-manager
+    - distribution-logos-SLE
+    - initviocons
+
+ - name: "@Agama"
+   sourceproject: Management
+   requires:
+    - "@YastCommon"
+    - "@StorageServices"
+    - "@NetworkStorage"
+    - "@SystemPythonModules"
+    - "@UpdateStack"
+    - "@PolicyKit"
+    - "@Container"
+    - "@SUSEConnect"
+    - "@HardwareAccessUtilities"
+    - "@Kernel+xen"
+    - "@SELinux+gtk"
+    - "@MicrosoftTools"
+    - "@NetworkManager"
+    - "@GoExtras"
+   binaries:
+    - ruby3.2-rubygem-agama
+    - agama
+    - agama-cli
+    - agama-dbus-server
+    - cockpit*
+    - lshw
+    - agama-products-*
+   buildflavors:
+    - name: pcp
+      requires:
+       - "@PCP"
+      binaries:
+       - cockpit-pcp
+    - name: virt
+      requires:
+       - "@Virtualization"
+      binaries:
+       - cockpit-machines
+
+ - name: "@Yast2API"
+   sourceproject: Management
+   requires:
+    - "@YastCommonAPI"
+    - "@Yast2"
+    - "@BoostAPI"
+    - "@FontLibsAPI"
+    - "@SystemdAPI"
+    - "@UpdateStackAPI"
+    - "@PlusAPI"
+   binaries:
+    - libyui*-devel priority=0
+    - yast2-ycp-ui-bindings-devel
+   buildflavors:
+    - name: qt
+      requires:
+       - "@Yast2+qt"
+      binaries:
+       - libyui-qt-graph-devel
+
+ - name: "@Yast2"
+   api: "@Yast2API"
+   sourceproject: Management
+   api: "@Yast2API"
+   requires:
+    - "@YastCommon"
+    - "@Core"
+    - "@StorageServices"
+    - "@SystemPythonModules"
+    - "@UpdateStack"
+    - "@PolicyKit"
+    - "@Container"
+    - "@RubyStandard"
+    - "@Management"
+    - "@Virtualization+gui"
+    - "@TransactionalServer+systemd"
+    - "@HostSecurity"
+    - "@NetworkManager"
+    - "@Snapper"
+    - "@Glib2Networking"
+    - "@NetworkAnalysis+systemd"
+    - "@Qt5ExtendedLibraries"
+    - "@HardwareAccessUtilities"
+    - "@SUSEConnect"
+   binaries:
+    - autoyast2
+    - autoyast2-installation
+    - yast2*
+    - libyui*
+    - ruby3.2-rubygem-agama
+    - ruby-yui
+    - libstorage-ng-*
+    - yast2-ruby-bindings
+    - perl-yui
+    - python3-yui
+   buildflavors:
+    - name: test
+      is_api: True
+      requires:
+       - "@DevelopmentUnitTests"
+      binaries:
+       - yast2-testsuite
+    - name: ncurses
+      requires:
+       - "@Console"
+      binaries:
+       - libyui-ncurses-tools
+    - name: qt
+      requires:
+       - "@EssentialQtLibraries"
+       - "@GnomeApplications" # for graphviz
+      binaries:
+       - libyui-qt
+       - libyui-qt-graph16
+
+ - name: "@SystemZTools"
+   sourceproject: Management
+   requires:
+    - "@CoreServices+systemd"
+    - "@Glib2NoDBus"
+    - "@PerlCore"
+    - "@NetworkUtils"
+   binaries:
+    - s390-tools
+
+ - name: "@IPMIAPI"
+   sourceproject: Management
+   requires:
+    - "@IPMI"
+   binaries:
+    - freeipmi-devel
+
+ - name: "@IPMI"
+   api: "@IPMIAPI"
+   sourceproject: Management
+   requires:
+    - "@Core"
+    - "@Python"
+    - "@MinimalManagement"
+    - "@UpdateStack"
+   binaries:
+    - freeipmi
+    - ipmitool
+
+ - name: "@Management"
+   sourceproject: Management
+   requires:
+    - "@Core"
+    - "@Python"
+    - "@MinimalManagement"
+    - "@UpdateStack"
+    - "@IPMI"
+   binaries:
+    - cmpi-provider-register
+    - cim-schema
+    - sca-*
+    - sblim-*
+    - augeas*
+    - ruby*-rubygem-cfa*
+    - ruby*-rubygem-ruby-augeas
+    - health-checker
+   buildflavors:
+    - name: ocaml
+      is_api: True
+      requires:
+       - "@Ocaml"
+      binaries:
+       - ocaml-augeas
+
+ - name: "@Nagios"
+   sourceproject: Management
+   requires:
+    - "@Core0"
+    - "@SystemdLibraries"
+    - "@CoreCrypto+systemd"
+    - "@Perl"
+    - "@SystemDatabaseLibraries"
+    - "@KernelNetworkUtils"
+    - "@SNMPLibraries"
+    - "@Kernel"
+    - "@Busybox"
+    - "@PrintingLibraries"
+   binaries:
+    - monitoring-plugins-*
+    - nagios-rpm-macros purpose=devel
+
+ - name: "@Salt"
+   sourceproject: Management
+   requires:
+    - "@Core0+syspython"
+    - "@Management"
+    - "@DefaultPythonOS"
+    - "@DefaultPythonJaraco"
+    - "@DefaultPythonWebApplication"
+    - "@StorageServices"
+    - "@Kernel"
+    - "@Fish"
+   binaries:
+    - salt
+    - python${defaultPythonVersion}-salt priority=0
+
+
+
+

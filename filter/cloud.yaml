@@ -1,0 +1,61 @@
+# vi: ai et
+# Definition of PublicCloud component
+
+components:
+ - name: PublicCloud
+   globals:
+    devel: PublicCloudDevel
+   requires:
+    - Python
+    - UpdateStack
+    - Network
+    - Host
+    - Systemd
+
+build_configs:
+ - name: PublicCloud/standard
+   buildrequires:
+    - "@DevelopmentEssentials"
+
+groups:
+ - name: "@PublicCloud"
+   sourceproject: PublicCloud
+   requires:
+    - "@SystemPythonModules"
+    - "@SystemPythonDocProcessing"
+    - "@HostNetworking"
+    - "@Core+systemd"
+    - "@ManDoc"
+    # most of the following are pulled in by cloud-init
+    - "@HostStorage"
+    - "@Glib2Networking"
+    - "@NetworkUtils"
+    - "@Kernel"
+    # python-azure-agent wants sysvinit-tools
+    - "@LegacyServices"
+    # regionsrv-client needs these:
+    - "@UpdateStack"
+    - "@SUSEConnect"
+   binaries:
+    - cloud-init
+    - python3-ec2*
+    - python3-azure*
+    - python-azure-agent
+    - azure-cli*
+    - aws-cli*
+    - cloud-netconfig-*
+    - terraform-provider-aws
+    - amazon-ssm-agent
+    - google-guest-*
+    - google-osconfig-*
+    - google-cloud*
+    - cloud-regionsrv-*
+    - afterburn
+
+ - name: "@Alibaba"
+   sourceproject: PublicCloud
+   requires:
+    - "@PublicCloud"
+   binaries:
+    - python-aliyun-*
+

@@ -1,0 +1,33 @@
+# vi: ai et
+# Definition of Systemd component
+
+components:
+ - name: Rust
+   globals:
+    devel: RustDevel
+   requires:
+    - Core
+    - GCC
+
+build_configs:
+ - name: Rust/standard
+   buildrequires:
+    - "@Rust"
+
+groups:
+ - name: "@Rust"
+   sourceproject: Rust
+   requires:
+    - "@Core1"
+    - "@GCC"
+   binaries:
+    - rust
+    - rust-bindgen
+    - rust-cbindgen
+    - rust1.*
+    - cargo
+    - cargo1.*
+    - cargo-c
+
+
+

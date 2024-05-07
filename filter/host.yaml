@@ -1,0 +1,255 @@
+# vi: ai et
+# Definition of Host component
+
+components:
+ - name: Host
+   globals:
+    devel: HostDevel
+   requires:
+    - CorePlus
+    - Network
+    - HardwareAccess
+    - KernelPlus
+    - Security
+    - GCC
+
+build_configs:
+ - name: Host/standard
+   buildrequires:
+    - "@FilesystemAPI"
+    - "@CoreAPI+kernellibs"
+    - "@PlusAPI"
+    - "@Valgrind"
+    - "@SystemdOnlyForOBS"
+    # ceph and glusterfs require fuse-doc for building
+    - "@Kernel-doc"
+ - name: Host/infiniband
+   buildrequires:
+    - "@InfinibandAPI"
+
+groups:
+ - name: "@Busybox"
+   sourceproject: Host
+   requires:
+    - "@Core"
+    - "@PerlCore"
+   binaries:
+    - busybox
+    - busybox-*
+   sources:
+    # all packages built from busybox-links (like busybox-{attr,coreutils,...}) go here by default, except
+    # for the busybox-links binary rpm itself, which requires all the others.
+    - busybox-links
+   purposes:
+    - name: man
+      binaries:
+       - busybox-man
+   buildflavors:
+    - name: all
+      requires:
+       - "@Busybox-man"
+      binaries:
+       - busybox-links
+
+ - name: "@HostCore"
+   sourceproject: Host
+   requires:
+    - "@Core"
+    - "@PerlCore"
+   binaries:
+#   - rpm-ndb
+
+ - name: "@StorageAPI"
+   sourceproject: Host
+   requires:
+    - "@CoreAPI"
+    - "@SystemdAPI"
+    - "@HostStorage"
+    - "@NetworkStorage"
+    - "@KernelAPI+udev"
+    - "@NetworkAPI"
+   binaries:
+    - parted-devel
+
+ - name: "@HostStorage"
+   api: "@StorageAPI"
+   sourceproject: Host
+   requires:
+    - "@Core"
+    - "@Core+glib"
+    - "@SystemdServices"
+    - "@KernelCore"
+    - "@Filesystems"
+    - "@ArchivingLibraries"
+    # inversion
+    - "@SystemdLibraries"
+   binaries:
+    - autofs
+    - bcache-tools
+    - dump
+    - duperemove
+    - hdparm
+    - mdadm
+    - multipath-tools
+    - parted
+    - smartmontools
+    # filesystems?
+    - ecryptfs-utils
+    - squashfs
+    - sysfsutils
+    - pam_mount
+    - kpartx
+    - dmraid
+    - growpart
+    - growpart-generator
+    - growpart-rootgrow
+    - lsscsi
+    - gptfdisk
+    # shouldn't growpart live here, too?
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@UdevLibraries+syspython"
+      binaries:
+       - python${systemPythonVersion}-rtslib-fb
+       - python-rtslib-fb-common
+
+ - name: "@HostWorkloadsAPI"
+   sourceproject: Host
+   requires:
+    - "@HostWorkloads"
+    - "@Glib2API"
+   binaries:
+    - libslirp-devel
+
+ - name: "@HostWorkloads"
+   api: "@HostWorkloadsAPI"
+   sourceproject: Host
+   requires:
+    - "@Core"
+    - "@Glib2" # required by slirp
+   binaries:
+    - libslirp0
+    - slirp4netns
+
+ - name: "@NetworkStorage"
+   api: "@StorageAPI"
+   sourceproject: Host
+   requires:
+    - "@HostStorage"
+    - "@NetworkServices"
+    - "@KernelNetworkUtils"
+   packages:
+    - pmdk
+   binaries:
+    - cachefilesd
+    - fcoe-utils
+    - nfs4-acl-tools
+    - libnfs14
+    - nfsidmap
+    - libnfsidmap1
+    - nfs-utils
+    - open-iscsi
+    - open-isns
+    - target-isns
+    - glusterfs
+    - ntfs-3g_ntfsprogs
+    - libpmem*1
+    - pmdk-tools
+    - nbd
+    - libnbd0
+   buildflavors:
+    - name: infiniband
+      requires:
+       - "@Infiniband"
+       - "@CoreCrypto+systemd"
+      binaries:
+       - librpmem1
+       - rpmemd
+    - name: intel
+      binaries:
+       - ipmctl
+
+ - name: "@RadosAPI"
+   sourceproject: Host
+   requires:
+    - "@Rados"
+    - "@CoreAPI"
+    - "@StorageAPI"
+
+ - name: "@Rados"
+   api: "@RadosAPI"
+   sourceproject: Host
+   requires:
+    - "@Infiniband"
+    - "@HostStorage"
+    - "@HostNetworking"
+    # FIXME: System->Default
+    - "@SystemPythonModules"
+    - "@SystemPythonSecurity"
+    - "@SystemPythonWebApplication"
+    - "@Kernel"
+    - "@OATH"
+    - "@GCC"
+    - "@CoreCrypto+systemd"
+    - "@PlusLibraries"
+    - "@ELFDebugging"
+    - "@StorageDeviceLibraries"
+    - "@Filesystems"
+    - "@LUARuntime"
+   packages:
+    - ceph
+   binaries:
+    - ceph
+    - cephadm
+
+ - name: "@HostNetworking"
+   sourceproject: Host
+   requires:
+    - "@Core"
+    - "@NetworkCore"
+    - "@KernelNetworkUtils"
+    # for dnsmasq
+    - "@LUARuntime"
+    # inversion
+    - "@SystemdLibraries"
+   binaries:
+    - arptables
+    - ebtables
+    - arpwatch
+    - arpwatch-ethercodes
+    - dhcp
+    - dnsmasq
+    - ethtool
+    - susefirewall2-to-firewalld
+    - stunnel
+    - radvd
+    - tunctl
+    - wicked
+    - wol
+    - wpa_supplicant
+    - vlan
+    - tftp
+    - quagga
+    - nvme-*
+    - dhcp-tools
+    - firewalld-rpcbind-helper
+    - ipsec-tools
+    - ipvsadm
+    - netcat-openbsd
+   buildflavors:
+    - name: desktop
+      requires:
+       - "@EssentialQtLibraries"
+       - "@HostNetworking+gnomelibs"
+      binaries:
+       - wpa_supplicant-gui
+    - name: nvme
+      requires:
+       - "@KernelNetworkLibraries+python"
+       - "@UdevLibraries+python"
+       - "@MinimalSystemd+python"
+       - "@Avahi"
+      binaries:
+       - nvme-stas
+

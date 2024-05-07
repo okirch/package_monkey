@@ -1,0 +1,389 @@
+# vi: ai et
+# Definition of Gtk component
+
+components:
+ - name: Gtk
+   globals:
+    devel: GtkDevel
+   requires:
+    - X11
+    - Network
+    - Security
+    - HardwareAccess
+    - DocumentFormats
+    - Python
+   exports:
+    - "@DesktopIcons"
+    - "@Gtk2"
+    - "@Gtk2API"
+    - "@Gtk3"
+    - "@Gtk3API"
+    - "@Gtk4"
+    - "@Gtk4API"
+    - "@GtkAPI"
+
+build_configs:
+ - name: Gtk/standard
+   buildrequires:
+    - "@Vala"
+    - "@I18nTools"
+    - "@SVGAPI"
+    - "@QtAPI"
+    - "@FontLibsAPI+x11"
+
+groups:
+ - name: "@DesktopIcons"
+   sourceproject: Gtk
+   requires:
+   binaries:
+    - adwaita-icon-theme
+    - hicolor-icon-theme
+
+ - name: "@DesktopQuarks"
+   sourceproject: Gtk
+   requires:
+    - "@Glib2NoDBus"
+    - "@Core0"
+   binaries:
+    - desktop-file-utils
+    - update-desktop-files
+    - xdg-dbus-proxy
+   buildflavors:
+    - name: obs
+      requires:
+       - "@XMLLibraries"
+      binaries:
+       - brp-extract-translations
+       - brp-trim-translations
+
+ - name: "@DConf"
+   sourceproject: Gtk
+   requires:
+    - "@DBusService"
+   binaries:
+    - dconf
+    - libdconf1
+    - gsettings-backend-dconf
+
+ - name: "@GtkCommonAPI"
+   sourceproject: Gtk
+   requires:
+    - "@GtkCommon"
+    - "@AccessibilityAPI"
+    - "@CairoAPI"
+    - "@EssentialGraphicsAPI"
+    - "@FontLibsAPI"
+    - "@FontLibsAPI+x11"
+    - "@GdkPixbufAPI"
+    - "@Glib2API"
+   buildflavors:
+    - name: usb
+      requires: 
+       - "@USBAPI+glib"
+       - "@GtkCommon+usb"
+      binaries:
+       - libcolord-devel
+
+ - name: "@GtkCommon"
+   api: "@GtkCommonAPI"
+   sourceproject: Gtk
+   requires:
+    - "@Glib2"
+    - "@EssentialGraphicsLibraries"
+    - "@FontLibraries+x11"
+    - "@PlusLibraries"
+    - "@DesktopIcons"
+    - "@GdkPixbuf"
+    - "@SVGLibraries"
+    - "@Glib2Networking"
+   binaries:
+    - libcolord2
+    - colord-color-profiles
+    - typelib-1_0-Colord-*
+    - libtracker-sparql-3*
+    - typelib-*-Tracker-3*
+    - gettext-its-gtk*
+   buildflavors:
+    - name: usb
+      requires:
+       - "@USBLibraries+glib"
+      binaries:
+       - libcolorhug2
+       - typelib-1_0-Colorhug*
+
+ - name: "@Gtk2API"
+   sourceproject: Gtk
+   requires:
+    - "@Gtk2"
+    - "@GtkCommonAPI"
+   binaries:
+    - gtk2-devel
+    - gtk2-devel-tools
+    - gtkmm2-devel
+
+ - name: "@Gtk2"
+   api: "@Gtk2API"
+   sourceproject: Gtk
+   packages:
+    - gtk2
+   requires:
+    - "@Core0"
+    - "@DBus"
+    - "@X11"
+    - "@GtkCommon"
+    - "@PrintingLibraries"
+    - "@AccessibilityLibraries"
+#   - "@GStreamerLibraries"
+    - "@OpenGL"
+   binaries:
+    - libgtk-2*
+    - libgtkmm-2*
+    - gtk2-branding-upstream
+    - gtk2-schema
+    - gtk2-tools
+    - gtk2-data
+    - gtk2-immodule-*
+    - libgtkglext-x11-1*
+    - libglade-2*
+
+ - name: "@Gtk3API"
+   sourceproject: Gtk
+   requires:
+    - "@Gtk3"
+    - "@GtkCommonAPI"
+   binaries:
+    - gtk3-devel
+    - gtk3-devel-tools
+    - gtkmm3-devel
+
+ - name: "@Gtk3"
+   api: "@Gtk3API"
+   sourceproject: Gtk
+   api: "@Gtk3API"
+   requires:
+    - "@Core0"
+    - "@DBus"
+    - "@X11"
+    - "@GtkCommon"
+    - "@PrintingLibraries"
+    - "@AccessibilityLibraries"
+#   - "@GStreamerLibraries"
+    - "@OpenGL"
+   packages:
+    - gtk3
+   binaries:
+    - libgtk-3*
+    - libgtkmm-3*
+    - gtk3-schema
+    - gtk3-branding-upstream
+    - gtk3-tools
+    - gtk3-data
+    - gtk3-immodule-*
+    - typelib-1_0-ColordGtk-1_0
+   buildflavors:
+    - name: perl
+      requires:
+       - "@FontLibraries+perl"
+      binaries:
+       - perl-Gtk3
+
+ - name: "@Gtk4API"
+   sourceproject: Gtk
+   requires:
+    - "@Gtk4"
+    - "@GtkCommonAPI"
+   binaries:
+    - gtk4-devel
+    - gtk4-devel-tools
+
+ - name: "@Gtk4"
+   api: "@Gtk4API"
+   sourceproject: Gtk
+   api: "@Gtk4API"
+   requires:
+    - "@Core0"
+    - "@DBus"
+    - "@X11"
+    - "@GtkCommon"
+    - "@PrintingLibraries"
+    - "@OpenGL"
+    - "@EssentialGraphicsLibraries+typelib"
+    # Unfortunately, gtk4 links directly against gstreamer
+    - "@GStreamerLibraries"
+    - "@GStreamerPluginsBad"
+   packages:
+    - gtk4
+   binaries:
+    - libgtk-4*
+    - gtk4-branding-upstream
+    - gtk4-schema
+    - gtk4-tools
+    - gtk4-data
+
+ - name: "@GtkAllVersions"
+   api: "@GtkAPI"
+   sourceproject: Gtk
+   requires:
+    - "@Gtk2"
+    - "@Gtk3"
+    - "@Gtk4"
+   packages:
+    - libdbusmenu:gtk2
+    - libdbusmenu:gtk3
+    - libdbusmenu:gtk4
+
+ - name: "@GtkAPIs"
+   is_api: True
+   sourceproject: Gtk
+   requires:
+    - "@Gtk2API"
+    - "@Gtk3API"
+    - "@Gtk4API"
+
+ - name: "@SoupAPI"
+   sourceproject: Gtk
+   requires:
+    - "@Soup3Libraries"
+    - "@Glib2API"
+   binaries:
+    - libsoup-devel
+
+ - name: "@Soup3Libraries"
+   api: "@SoupAPI"
+   sourceproject: Gtk
+   requires:
+    - "@GtkAllVersions"
+   binaries:
+    - libsoup-3*
+
+ - name: "@GtkLeftovers"
+   api: "@GtkAPIs"
+   description: |
+     This label is used for data and tools that go with libraries
+     that GTK depends upon (such as colord profiles or the tracker
+     application)
+   sourceproject: Gtk
+   requires:
+    - "@GtkAllVersions"
+    - "@PolicyKitLibraries"
+    - "@USBLibraries+typelib"
+    - "@Soup3Libraries"
+    - "@GtkCommon+usb"
+   packages:
+    - gupnp-dlna
+   binaries:
+    - gupnp-dlna
+    - tracker
+    - colord
+    - colord-gtk
+    - argyllcms
+
+ - name: "@GtkAPI"
+   sourceproject: Gtk
+   requires:
+    - "@GtkAllVersions"
+    - "@FontLibsAPI+x11"
+    - "@Glib2API"
+    - "@CairoAPI"
+    - "@AccessibilityAPI"
+    - "@EssentialGraphicsAPI"
+    - "@GdkPixbufAPI"
+
+ - name: "@AppstreamAPI"
+   sourceproject: Gtk
+   requires:
+    - "@AppstreamLibraries"
+    - "@GdkPixbufAPI"
+    - "@CorePlusAPI"
+    # for appstream-glib-devel
+    - "@ArchivingAPI"
+   binaries:
+    - AppStream-devel
+    - AppStream-compose-devel
+
+ - name: "@AppstreamLibraries"
+   api: "@AppstreamAPI"
+   sourceproject: Gtk
+   requires:
+    - "@SystemdLibraries"
+    - "@Glib2NoDBus"
+    - "@GtkCommon"
+    - "@AudioLibraries"
+    - "@SVGLibraries"
+    - "@XMLLibraries"
+    - "@ConfigFileLibraries"
+   binaries:
+    - openSUSE-appstream-process
+    - openSUSE-appdata-extra
+    - libappstream4
+    - libappstream-compose0
+    - appstream-glib
+    - gcab
+    - pngquant
+    - AppStream
+    - AppStream-compose
+    - typelib-1_0-AppStream-*
+   buildflavors:
+    - name: zypp
+      requires: 
+       - "@UpdateStack"
+      binaries:
+       - libzypp-plugin-appdata
+
+ - name: "@GStreamerAPI"
+   sourceproject: Gtk
+   requires:
+    - "@GStreamerLibraries"
+    - "@GStreamerTools"
+    - "@Glib2API"
+    - "@CoreAPI"
+   binaries:
+    - gstreamer-devel
+   buildflavors:
+    - name: plugins
+      requires:
+       - "@X11API"
+       - "@InputDeviceAPI"
+      binaries:
+       - gstreamer-plugins-base-devel
+
+ - name: "@GStreamerTools"
+   sourceproject: Gtk
+   requires:
+    - "@GStreamerLibraries"
+   binaries:
+    - gstreamer
+    - gstreamer-utils
+
+ - name: "@GStreamerLibraries"
+   api: "@GStreamerAPI"
+   sourceproject: Gtk
+   autoselect:  no
+   requires:
+    - "@GtkCommon"
+    - "@AudioLibraries"
+    - "@OpenGL"
+    - "@InputDeviceLibraries"
+   binaries:
+    - gstreamer-plugins-base
+    - libgstallocators-1_0-0
+    - libgstfft-1_0-0
+    - libgstgl-1_0-0
+    - libgstreamer-1_0-0
+    - libgstriff-1_0-0
+    - libgstrtsp-1_0-0
+    - libgstvideo-1_0-0
+    - typelib-1_0-Gst-1_0
+    - typelib-1_0-GstAllocators-1_0
+    - typelib-1_0-GstApp-1_0
+    - typelib-1_0-GstGL-1_0
+    - typelib-1_0-GstGLEGL-1_0
+    - typelib-1_0-GstGLWayland-1_0
+    - typelib-1_0-GstGLX11-1_0
+    - typelib-1_0-GstPbutils-1_0
+    - typelib-1_0-GstRtp-1_0
+    - typelib-1_0-GstRtsp-1_0
+    - typelib-1_0-GstSdp-1_0
+    - typelib-1_0-GstTag-1_0
+    - typelib-1_0-GstVideo-1_0
+

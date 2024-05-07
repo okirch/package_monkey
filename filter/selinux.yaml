@@ -1,0 +1,76 @@
+# vi: ai et
+# Definition of SELinux component
+
+components:
+ - name: SELinux
+   globals:
+    devel: SELinuxDevel
+   requires:
+    - Core
+
+build_configs:
+ - name: SELinux/standard
+   buildrequires:
+    - "@DevelopmentEssentials"
+
+groups:
+ - name: "@SELinuxAPI"
+   sourceproject: SELinux
+   requires:
+    - "@SELinux"
+    - "@DefaultPythonEssentials"
+   binaries:
+    - selinux-policy-devel
+
+ - name: "@SELinux"
+   feature: True
+   sourceproject: SELinux
+   api: "@SELinuxAPI"
+   requires:
+    - "@Core0"
+#   - "@CoreLibraries+pythoncore"
+    - "@AuditServices+syspython"
+    # we /have/ to pull in PythonCore here, unfortunately
+    - "@SystemPython"
+   binaries:
+    - checkpolicy
+    - setools
+    - setools-console
+    - policycoreutils
+    - selinux-policy-targeted
+    - selinux-policy-minimum
+    - selinux-policy-mls
+    - selinux-policy-sandbox
+    - policycoreutils-python-utils
+    - python3-policycoreutils
+    - python${systemPythonVersion}-semanage
+    - python${systemPythonVersion}-setools
+    - python3-selinux
+   buildflavors:
+    - name: ruby
+      binaries:
+       - ruby-selinux
+    - name: glib
+      autoselect: no
+      requires:
+       - "@Glib2"
+      binaries:
+       - restorecond
+    - name: gtk
+      autoselect: no
+      requires:
+       - "@Gtk3"
+       # for audit:
+       - "@Security"
+       # we cannot avoid default python here, unfortunately
+       - "@DefaultPythonGobject"
+       # needs python311-libxml2
+       - "@CoreLibraries+python"
+       - "@Core0+syspython"
+       # lives in X11
+       - "@DesktopCore"
+       # lives in Gtk
+       - "@DesktopQuarks"
+      binaries:
+       - setroubleshoot
+       - setroubleshoot-server

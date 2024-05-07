@@ -1,0 +1,42 @@
+# vi: ai et
+# Definition of Javascript component
+
+components:
+ - name: Javascript
+   globals:
+    devel: JavascriptDevel
+   requires:
+    - CorePlus
+    - Systemd
+
+build_configs:
+ - name: Javascript/standard
+   buildrequires:
+    - "@DevelopmentEssentials"
+
+groups:
+ - name: "@JavascriptAPI"
+   sourceproject: Javascript
+   requires:
+    - "@Javascript"
+   binaries:
+    - nodejs-devel-default
+    - nodejs20-devel
+
+ - name: "@Javascript"
+   api: "@JavascriptAPI"
+   sourceproject: Javascript
+   requires:
+    - "@Core"
+    - "@PlusLibraries"
+   binaries:
+    - npm
+    - nodejs20
+    - nodejs-default
+    # would have been easier if this was named nodejs-default-devel
+    - nodejs-devel-default purpose=devel
+    - local-npm-registry
+
+
+
+

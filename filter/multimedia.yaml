@@ -1,0 +1,319 @@
+# vi: ai et
+# Definition of Multimedia component
+
+components:
+ - name: Multimedia
+   globals:
+    devel: MultimediaDevel
+   requires:
+    - CorePlus
+    - Perl
+    - Typesetting
+    - HardwareAccess
+    - Python
+    - Network
+   exports:
+    - "@GraphicsLibraries"
+#   - "@DrawingLibraries"
+
+build_configs:
+ - name: Multimedia/standard
+   buildrequires:
+    - "@Graphviz"
+    - "@EssentialVideoAPI"
+    - "@EssentialGraphicsAPI"
+
+groups:
+ - name: "@MultimediaCore"
+   sourceproject: Multimedia
+   requires:
+    - "@Core"
+    - "@SystemPython"
+   binaries:
+    - libid3tag0*
+
+ - name: "@GraphicsAPI"
+   sourceproject: Multimedia
+   requires:
+    - "@GraphicsLibraries"
+    - "@EssentialGraphicsAPI"
+    - "@PlusAPI"
+   binaries:
+   buildflavors:
+    - name: gtest
+      requires:
+       - "@PlusAPI+gtest"
+      binaries:
+       - libjxl-devel
+
+ - name: "@GraphicsLibraries"
+   api: "@GraphicsAPI"
+   sourceproject: Multimedia
+   requires:
+    - "@MultimediaCore"
+    - "@EssentialGraphicsLibraries"
+    - "@ArchivingLibraries"
+    - "@SIMDLibraries"
+   packages:
+    - libcaca
+    - openexr
+   binaries:
+    - libpaper2
+    - libjasper7
+    - libdjvulibre2*
+    - libraw23
+    - libexif12
+    - libpotrace0
+    - libcaca0
+    - python3-caca
+    - libjxl0*
+    - libOpenEXR-3*
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11Libraries"
+       - "@FontLibraries"
+       - "@X11Libraries+multimedia"
+       - "@EssentialGraphicsLibraries+x11"
+      binaries:
+       - caca-utils
+    - name: opengpl
+      requires:
+       - "@OpenGL"
+      binaries:
+       - libcaca0-plugins
+
+ - name: "@AudioAPI"
+   sourceproject: Multimedia
+   requires:
+    - "@AudioLibraries"
+    - "@CoreAPI"
+    - "@HardwareAccessAPI"
+
+ - name: "@AudioLibraries"
+   api: "@AudioAPI"
+   sourceproject: Multimedia
+   requires:
+    - "@MultimediaCore"
+    - "@Sound"
+   packages:
+    - codec2
+   binaries:
+    - libspeex1
+    - libspeexdsp1
+    - libvorbisfile3
+    - libsndfile1
+    - libtheora0
+    - libtheoraenc1
+    - libtheoradec1
+    - libFLAC12
+    - libFLAC++10
+    - libopus0
+    - libogg0
+    - libvorbis0
+    - libvorbisenc2
+    - liblilv-0*
+    - libmysofa1
+    - libjack0
+    - libjacknet0
+    - libjackserver0
+    - libopenmpt0
+    - libmpg123-0
+    - libmp3lame0
+    - libportaudio2
+    - libreplaygain1
+    - lv2
+    - musepack-r*
+    - libout123-0
+    - libsyn123-0
+    - libcelt0*
+    - ladspa
+    # codec2-examples requires codec2-devel so place it in devel, too
+    - codec2-examples purpose=devel
+    # These aren't really audio libraries, but it's an OK place to put them
+    - libSDL2*
+    - libSDL-1*
+   buildflavors:
+    - name: desktop
+      requires:
+       - "@DesktopLibraries"
+      binaries:
+       - lv2-examples
+
+ - name: "@AVAPI"
+   sourceproject: Multimedia
+   requires:
+    - "@AVLibraries"
+    - "@CoreAPI"
+    - "@CoreHardwareAPI"
+    - "@EssentialGraphicsAPI"
+    - "@AudioAPI"
+    - "@SystemdAPI"
+    - "@FontLibsAPI+x11"
+   binaries:
+    - libvamp-sdk2
+    - rubberband-vamp
+    - libass-devel
+
+ - name: "@AVLibraries"
+   api: "@AVAPI"
+   sourceproject: Multimedia
+   requires:
+    - "@GraphicsLibraries"
+    - "@GdkPixbuf"
+    - "@AudioLibraries"
+    - "@FontLibraries"
+    - "@EssentialVideoLibraries"
+    - "@CoreHardware"
+    - "@NetworkLibraries"
+    - "@X11Libraries"
+    - "@SystemdLibraries"
+    - "@GPU"
+    - "@OpenGL"
+    - "@NumericLibraries"
+   packages:
+   binaries:
+    - libass9
+    - libavcodec5*
+    - libavformat5*
+    - libavfilter7*
+    - libavcodec5*
+    - libva2
+    - libavif15
+    - libspandsp3
+    - libva-x11-2
+    - libva-wayland2
+    - libbluray2
+    - libinstpatch-1*
+    - mjpegtools
+    - libschroedinger-1*
+    - librubberband2
+    - libheif1
+    - libheif-rav1e
+    - libheif-svtenc
+    - libheif-aom
+    - libheif-dav1d
+    - libheif-jpeg
+    - libheif-openjpeg
+    - gdk-pixbuf-loader-libheif
+    - libmfx1
+    - libraw1394*
+    - libiec61883*
+    - libavc1394-0
+    - libavc1394-tools
+    - intel-media-driver
+   buildflavors:
+    - name: gdk
+      requires:
+       - "@GdkPixbuf"
+      binaries:
+       - gdk-pixbuf-loader-libavif
+    - name: pulseaudio
+      autoselect: no
+      requires:
+       - "@PulseAudioLibraries"
+       - "@AvahiLibraries"
+       - "@BluetoothLibraries"
+       - "@Camera"
+       - "@OpticalMedia"
+      binaries:
+       - libavdevice5*
+
+ - name: "@Recording"
+   sourceproject: Multimedia
+   requires:
+    - "@GraphicsLibraries"
+    - "@AudioLibraries"
+    - "@AVLibraries"
+   binaries:
+#   - libcdr
+#   - libcdda
+#   - libcddb2
+
+ - name: "@Camera"
+   sourceproject: Multimedia
+   requires:
+    - "@GraphicsLibraries"
+    - "@ConfigFileLibraries"
+   packages:
+    - libcamera
+   binaries:
+    - libcamera0*
+    - libcamera-base0*
+   buildflavors:
+    - name: gnome
+      requires:
+      - "@PulseAudio"
+      binaries:
+       - gstreamer-plugins-libcamera
+
+ - name: "@Multimedia"
+   sourceproject: Multimedia
+   requires:
+    - "@GraphicsLibraries"
+    - "@AudioLibraries"
+    - "@AVLibraries"
+    - "@AvahiLibraries"
+    - "@PulseAudioLibraries"
+    - "@BluetoothLibraries"
+    - "@Camera"
+   binaries:
+    - lame
+    - mpg123
+    - djvulibre*
+    - dcraw
+    - jack
+    # libjack0 itself needs to be in AudioLibraries, while libjacknet and libjackserver can go here:
+    - libjack*0
+   buildflavors:
+    - name: pulseaudio
+      requires:
+       - "@PulseAudioLibraries+x11"
+      binaries:
+       - openmpt123
+       - mpg123-openal
+       - mpg123-pulse
+
+ - name: MultimediaDevel
+   requires:
+    - "@EssentialGraphicsAPI"
+    - "@AVAPI"
+
+ - name: "@ImageMagickAPI"
+   sourceproject: Multimedia
+   requires:
+    - "@ImageMagick"
+    - "@CoreAPI"
+
+ - name: "@ImageMagick"
+   sourceproject: Multimedia
+   api: "@ImageMagickAPI"
+   requires:
+    - "@GraphicsLibraries"
+    - "@AudioLibraries"
+    - "@AVLibraries"
+    - "@DesktopLibraries"
+   binaries:
+    - ImageMagick
+    - libMagickCore-7*
+    - libMagickWand-7*
+#   - libMagick++-7_Q16HDRI5
+    - ImageMagick-extra
+    - perl-PerlMagick
+
+ - name: "@MultimediaMiscAPI"
+   sourceproject: Multimedia
+   requires:
+    - "@ImageMagick"
+    - "@CoreAPI"
+
+ - name: "@MultimediaMisc"
+   sourceproject: Multimedia
+   api: "@MultimediaMiscAPI"
+   requires:
+    - "@CoreLibraries"
+    - "@CoreHardware"
+   packages:
+    - libmtp
+   binaries:
+    - libmtp9

@@ -1,0 +1,47 @@
+# vi: ai et
+# Definition of AppArmor component
+
+components:
+ - name: AppArmor
+   globals:
+    devel: AppArmorDevel
+   requires:
+    - Core
+
+build_configs:
+ - name: AppArmor/standard
+   buildrequires:
+    - "@ApacheAPI"
+    - "@RubyAPI"
+
+groups:
+ - name: "@AppArmor"
+   sourceproject: AppArmor
+   requires:
+    - "@Core0"
+   binaries:
+    - apparmor*
+    - libapparmor1
+    - pam_apparmor
+   buildflavors:
+    - name: utils
+      requires:
+       - "@DefaultPythonGobject"
+       - "@DefaultPythonOS"
+       - "@PerlCore"
+       - "@CoreServices"
+      binaries:
+       - python3-apparmor
+       - perl-apparmor
+       - apparmor-utils
+       - apparmor-utils-lang
+    - name: ruby
+      requires:
+       - "@Ruby"
+      binaries:
+       - ruby-apparmor
+    - name: apache
+      disposition: ignore
+      binaries:
+       - apache2-mod_apparmor
+

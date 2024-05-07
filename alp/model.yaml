@@ -1,0 +1,328 @@
+# vi: ai et
+
+name:                   Testing
+type:                   "component-centric"
+source_repository:      "SUSE:ALP:Source:Standard:1.0/standard"
+target_project_base:    "home:okir:CM"
+target_architectures:
+        - "x86_64"
+always_build_requires:
+        - "SUSE:ALP:Source:Standard:Core:1.0:Build/ports order=first"
+        - "Development"
+        - "GCC"
+        # we should inject kernel-obs-build into our workbench
+        # and drop KernelPlus
+        - "KernelPlus"
+        - Workbench
+exportsSubProjectName:  'exports'
+use_fallback:           False
+ignore_packages:
+        - "binutils:xtensa"
+        - "binutils:ppc"
+        - "binutils:ppc64"
+#       - "binutils:ppc64le"
+        - "binutils:pru"
+        - "binutils:spu"
+        - "gcc13:cross-epiphany-gcc13-bootstrap"
+        - "gcc13:cross-hppa-gcc13-bootstrap"
+        - "dwz:testsuite"
+
+defaults:
+        generation:             "2024.1"
+        bootstrap:              yes
+        bootstrap_strategy:     "multi-aggregate"
+        bootstrap_repository:   "SUSE:ALP:Source:Standard:Core:1.0:Build/standard"
+        # we can no longer use the old Workbench repository because it doesn't have gcc:build yet
+        #bootstrap_repository:  "SUSE:ALP:Workbench:1.0/standard"
+
+workbench:
+  include:
+   - "@Graphviz"
+   - "@MinimalCDevelopment"
+   - "@ArchivingLibraries"
+   - "@DevelopmentCore"
+   - "@DevelopmentEssentials"
+   - "@DevelopmentRuntime"
+   - "@DevelopmentUnitTests"
+   - "@DevelopmentMisc"
+   - "@Meson"
+   - "@GCC"
+   - "@GettextTools"
+   - "@Vala"
+   - "@GtkDoc"
+   - "@ManDoc+ruby"
+   - "@RpmBuild+lint"
+   - "@Valgrind"
+   - "@ManDoc"
+   - "@Docbook"
+   - "@I18nTools"
+   - "@SystemdOnlyForOBS"
+  exclude:
+   - Core
+
+components:
+  Core:
+   bootstrap: self
+   exports:
+     api: "@CoreAPI"
+  SELinux:
+   bootstrap: self
+   exports:
+     runtime:
+      - "@SELinux"
+     api:
+      - "@SELinuxAPI"
+  CorePlus:
+   bootstrap: self
+   exports:
+     runtime:
+      - "@Spelling+perl"
+      - "@Glib2+python"
+      - "@Console"
+     api:
+      - "@CorePlusAPI"
+      - "@XMLAPI"
+      - "@HTMLAPI"
+      - "@BoostAPI"
+      - "@EssentialGraphicsAPI"
+      - "@GdkPixbuf"
+      - "@Glib2API"
+     systemd:
+      - "@Console+systemd"
+     # not nice
+     extra_api:
+      - "@Glib2API+notify"
+     extras:
+      - "@Glib2Networking+webkit"
+  KernelPlus:
+   exports:
+     api: "@KernelAPI"
+  GCC:
+   bootstrap: yes
+   bootstrap_repository: "SUSE:ALP:Source:Standard:Core:1.0:Build/standard"
+  Development:
+   bootstrap: yes
+   bootstrap_repository: "SUSE:ALP:Source:Standard:Core:1.0:Build/standard"
+  Systemd:
+   bootstrap: self
+   exports:
+     runtime:
+      - "@SystemdServices"
+     api:
+      - "@SystemdAPI"
+      - "@PolicyKitAPI"
+     firewall_api:
+      - "@FirewallAPI"
+     nm_api:
+      - "@NetworkManagerAPI"
+     polkit:
+      # some packages seem to need policykit itself for building,
+      # not just the API
+      - "@PolicyKit"
+     obs:
+      - "@SystemdOnlyForOBS"
+      # strace needs sysvinit-tools for building?
+      - "@LegacyServices"
+  HardwareAccess:
+   bootstrap: yes
+   exports:
+     api: 
+      - "@HardwareAccessAPI"
+      - "@InputDeviceAPI"
+      - "@InfinibandAPI"
+      - "@USBAPI"
+     runtime:
+      - "@RemoteControlLibraries"
+  Multimedia:
+   bootstrap: yes
+   exports:
+     api: 
+       - "@DrawingAPI"
+     gnome:
+       - "@Multimedia+pulseaudio"
+     avapi: "@AVAPI"
+     audio:
+      - "@AudioLibraries+desktop"
+     misc:
+      - "@Camera+typelib"
+      - "@Camera+gnome"
+  X11:
+   bootstrap: yes
+   exports:
+     api:
+       - "@X11API"
+       - "@X11LegacyAPI"
+     accessibility_api:
+       - "@AccessibilityAPI"
+  DocumentFormats:
+   bootstrap: yes
+   exports:
+     tex:
+      - "@Texlive"
+      - "@Docbook+tex"
+     docbook:
+      - "@Docbook"
+  Typesetting:
+   bootstrap: yes
+   exports:
+     api:
+      - "@SVGAPI"
+     x11api:
+      - "@FontLibsAPI+x11"
+  Databases:
+   bootstrap: yes
+   exports:
+     api: "@SystemDatabaseAPI"
+     service: "@SystemDatabaseServices"
+     runtime:
+      - "@Databases"
+      - "@SystemDatabaseLibraries"
+  Qt:
+   bootstrap: yes
+   exports:
+     api: "@QtAPI"
+     extapi: "@Qt5ExtendedAPI"
+  Gtk:
+   bootstrap: yes
+   exports:
+     runtime:
+      - "@DConf"
+      - "@Soup3Libraries"
+     api:
+      - "@GtkAPIs"
+      - "@DesktopQuarks"
+     gstreamer_api:
+      - "@GStreamerAPI"
+     obs:
+      - "@DesktopQuarks+obs"
+     av:
+      - "@GStreamerLibraries"
+      - "@AVAPI"
+  Ruby:
+   bootstrap: yes
+   exports:
+     api:
+      - "@RubyAPI"
+  Go:
+   bootstrap: yes
+   exports:
+     compiler: "@Go"
+     extras: "@GoExtras"
+  UpdateStack:
+   bootstrap: yes
+   exports:
+     api:
+      - "@UpdateStackAPI"
+  Webserver:
+   bootstrap: yes
+   exports:
+     api:
+      - "@ApacheAPI"
+  Java:
+   bootstrap: yes
+   exports:
+     api: "@Java"
+     minimal: "@JavaTimezoneTools"
+     commons: "@ApacheCommons"
+  Javascript:
+   bootstrap: yes
+   exports:
+     api: "@Javascript"
+  Rust:
+   bootstrap: yes
+   exports:
+     api: "@Rust"
+     python: "@Rust+python"
+  HPC:
+   bootstrap: yes
+   prjconf: |
+     Substitute: openmpi-macros-devel openmpi4-macros-devel
+   exports:
+     api:
+      - "@HPCAPI"
+  Editors:
+   bootstrap: yes
+   exports:
+     vim: "@Vim"
+  Applications:
+   bootstrap: yes
+   exports:
+     flatpak_api: "@FlatpakAPI"
+     systemtap_api: "@SystemtapAPI"
+     graphviz_api: "@GraphvizAPI"
+  Gnome:
+   bootstrap: yes
+   exports:
+     webkit_api: "@WebkitAPI"
+     pulse_api: "@PulseAudioAPI"
+     speech_runtime: "@SpeechSynthesis"
+     speech_api: "@PulseAudioAPI"
+  Network:
+   bootstrap: yes
+   exports:
+     api:
+      - "@NetworkAPI+systemd"
+      - "@NetworkLibraries+python"
+      - "@NetworkLibraries+java"
+     browsers: "@BrowsersConsole+ruby"
+     printing:
+      - "@PrintServer"
+     printing_api:
+      - "@PrintingAPI"
+     gui:
+      - "@AvahiLibraries+gtk"
+  AppArmor:
+   bootstrap: yes
+   exports:
+     runtime: "@AppArmor"
+  Security:
+   bootstrap: yes
+   exports:
+     selinux_runtime:
+      - "@SELinux"
+     runtime:
+      - "@SmartcardLibraries"
+     api:
+      - "@SmartcardAPI"
+      - "@HostSecurityAPI"
+  Host:
+   bootstrap: yes
+   exports:
+     networking: "@HostNetworking"
+  LLVM:
+   bootstrap: yes
+   exports:
+     runtime: "@LLVM+python"
+  Python:
+   bootstrap: yes
+   exports:
+     core:
+      - "@PythonCore"
+     standard:
+      - "@DefaultPythonStandard"
+      - "@SystemPythonBuildSupport"
+     database:
+      - "@PythonStandard311+database"
+     desktop:
+      - "@PythonDesktop311"
+     tex:
+      - "@PythonStandard311"
+      - "@Texlive"
+  Management:
+   bootstrap: yes
+   exports:
+     runtime:
+      - "@ManagementLibraries"
+  Container:
+   bootstrap: yes
+   exports:
+     runtime:
+      - "@Bubblewrap"
+  Samba:
+   bootstrap: yes
+   exports:
+     runtime:
+      - "@SambaLibraries"
+      - "@DirectoryIntegration+samba"
+     api:
+      - "@SambaAPI"

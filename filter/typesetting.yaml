@@ -1,0 +1,219 @@
+# vi: ai et
+# Definition of Typesetting component
+
+components:
+ - name: Typesetting
+   globals:
+    devel: TypesettingDevel
+   requires:
+    - Core
+    - CorePlus
+   exports:
+    - "@FontSupportLibraries"
+    - "@FontLibraries"
+    - "@Fonts"
+
+build_configs:
+ - name: Typesetting/standard
+   buildrequires:
+    - "@Vala"
+    - "@FontLibsAPI+x11"
+    - "@SystemPythonBuildSupport"
+    - "@GdkPixbufAPI"
+
+groups:
+ - name: "@FontSupportAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@FontSupportLibraries"
+    - "@CoreFontAPI"
+   binaries:
+
+ - name: "@FontSupportLibraries"
+   api: "@FontSupportAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@CoreFontLibraries"
+   binaries:
+    # required by a bunch of other typesetting libraries
+    - libdatrie1
+
+ - name: "@FontSupportUtils"
+   api: "@FontSupportAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@FontSupportLibraries"
+    - "@FontLibraries+x11"
+    - "@SVGLibraries"
+   packages:
+    - freetype2:ft2demos
+   binaries:
+    - ftdiff
+    - ftgamma
+    - ftmulti
+    - ftbench
+    - ftlint
+    - ftvalid
+   buildflavors:
+    - name: qt
+      requires:
+       - "@EssentialQtLibraries"
+      binaries:
+       - ftinspect
+
+ - name: "@FontLibraries"
+   api: "@FontLibsAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@FontSupportLibraries"
+    - "@CoreFontLibraries"
+    - "@CoreXMLLibraries"
+    - "@Core0"
+    - "@PlusLibraries"
+    # harfbuzz requires glib2
+    - "@Glib2NoDBus"
+   packages:
+    - m17n-lib
+    - libotf
+    - m17n-db
+   binaries:
+    - libspiro1
+    - libgraphite2*
+    - libharfbuzz0
+    - libharfbuzz-icu0
+    - libharfbuzz-subset0
+    - woff2
+    - t1utils
+    - libotf1
+   buildflavors:
+    - name: x11
+      requires:
+       - "@CoreX11Libraries+fonts"
+       - "@EssentialGraphicsLibraries+x11"
+       - "@DrawingLibraries+x11"
+      binaries:
+       - libcairomm-1*
+       - libcairo2
+       - libcairo-gobject2
+       - cairo-tools
+       - libcairo-script-interpreter2
+       - libharfbuzz-cairo0
+       - libpango-1*
+       - libpangomm-1*
+       - libthai0
+       - libm17n0
+       - libotf
+       - harfbuzz-tools
+       - libharfbuzz-gobject0
+       # we have to force the priority here to avoid having
+       # typelib-1_0-HarfBuzz placed through the normal mechanism
+       # (which fails in this case).
+       - typelib-1_0-HarfBuzz* priority=0
+    - name: perl
+      requires:
+       - "@FontLibraries+x11"
+       - "@Perl+glib"
+      binaries:
+       - perl-Cairo-GObject
+       - perl-Cairo
+
+ - name: "@FontEditing"
+   sourceproject: Typesetting
+   requires:
+    - "@FontLibraries+x11"
+    - "@SystemPython"
+    - "@EssentialGraphicsLibraries"
+    - "@Gtk3"
+   binaries:
+    - ttf-converter
+    - fontforge
+
+ - name: "@SVGAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@SVGLibraries"
+    - "@GdkPixbufAPI"
+    - "@Glib2API"
+    - "@CairoAPI"
+   binaries:
+    - librsvg-devel
+
+ - name: "@SVGUtils"
+   sourceproject: Typesetting
+   requires:
+    - "@SVGLibraries"
+   binaries:
+    - rsvg-convert
+    - rsvg-thumbnailer
+
+ - name: "@SVGLibraries"
+   api: "@SVGAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@FontLibraries+x11"
+    - "@GdkPixbuf"
+   binaries:
+    - librsvg-2*
+
+ - name: "@TypesettingUnusedAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@MinimalCDevelopment"
+   binaries:
+    - wordcut-devel
+
+ - name: "@Fonts"
+   sourceproject: Typesetting
+   requires:
+    - "@FontLibraries"
+    - "@PerlCore"
+   binaries:
+    - "*-fonts"
+    - xorg-x11-fonts*
+    - font-util
+    - bdftopcf
+
+ - name: "@FontLibsAPI"
+   sourceproject: Typesetting
+   requires:
+    - "@CoreAPI"
+    - "@I18nAPI"
+    - "@FontLibraries"
+    - "@FontSupportAPI"
+    - "@CoreXMLAPI"
+   binaries:
+    - fontpackages-devel
+   buildflavors:
+    - name: x11
+      requires:
+       - "@CoreX11API+fonts"
+       - "@CoreFontAPI"
+       - "@FontLibraries+x11"
+       - "@X11API"
+       - "@Glib2API"
+       - "@CairoAPI"
+      binaries:
+       - pango-devel
+       - pangomm*-devel priority=0
+       - harfbuzz-devel
+       - graphite2-devel
+       - libthai-devel
+
+ - name: "@CairoAPI"
+   is_api: True
+   sourceproject: Typesetting
+   requires:
+    - "@FontLibsAPI"
+    - "@X11API"
+    - "@FontLibraries+x11"
+    - "@CorePlusAPI"
+   binaries:
+    - cairo-devel
+    - cairomm*-devel priority=0
+
+ - name: TypesettingDevel
+   requires:
+    - "@X11API"
+    - "@CairoAPI"
+   binaries:
+

@@ -1,0 +1,794 @@
+# vi: ai et
+# Definition of CorePlus component
+
+components:
+ - name: CorePlus
+   globals:
+    devel: CorePlusDevel
+   requires:
+    - Core
+#   - Perl
+   exports:
+    - "@Glib2NoDBus"
+    - "@Glib2API"
+    - "@Glib2"
+    - "@Archivers"
+    - "@EssentialGraphicsLibraries"
+   imports:
+    - "@Fonts"
+
+build_configs:
+ - name: CorePlus/standard
+   buildrequires:
+    - "@Go"
+    - "@XMLAPI"
+    - "@DevelopmentGoogleTest"
+ - name: CorePlus/hpc
+   buildrequires:
+    - "@HPCAPI"
+    - "@InfinibandAPI"
+ - name: CorePlus/webkit
+   inheritable: False
+   buildrequires:
+    - "@WebkitAPI"
+ - name: CorePlus/network
+   inheritable: False
+   buildrequires:
+    - "@NetworkUtils"
+ - name: CorePlus/boostplusgraphviz
+   inheritable: False
+   buildrequires:
+    - "@BoostAPI"
+    - "@Graphviz"
+ - name: CorePlus/build:strace
+   inheritable: False
+   packages:
+    - strace
+   buildrequires:
+    - "@LegacyServices"
+
+groups:
+ - name: CorePlusDevel
+   requires:
+    - "@CorePlusAPI"
+
+ - name: "@CorePlusAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@Glib2API"
+    - "@I18nAPI"
+    - "@NumericAPI"
+    - "@PlusAPI"
+   binaries:
+    - libpixman-*-devel priority=0
+
+ - name: "@Glib2API"
+   sourceproject: CorePlus
+   requires:
+    - "@Glib2"
+    - "@Glib2+notify"
+    - "@CoreAPI"
+    - "@GCC"
+    # glib2-devel ships with a python script
+    - "@SystemPythonCore"
+   binaries:
+#   - glib2-devel
+   buildflavors:
+    - name: notify
+      requires:
+       - "@GdkPixbufAPI"
+      binaries:
+       - libnotify-devel
+
+ - name: "@Glib2NoDBus"
+   api: "@Glib2API"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreLibraries"
+    - "@Glib2Core"
+   binaries:
+    - libglibmm-2*
+    # these do not really belong here
+    - libxml++-3*
+    - libxml++-5*
+    - libmowgli-2*
+   buildflavors:
+    - name: notify
+      requires:
+       - "@GdkPixbuf"
+      binaries:
+       - libnotify4
+       - libnotify-tools
+
+ - name: "@Glib2Notify"
+   api: "@Glib2API"
+   sourceproject: CorePlus
+   requires:
+    - "@Glib2NoDBus"
+    - "@GdkPixbuf"
+   binaries:
+    - libnotify4
+    - libnotify-tools
+
+ - name: "@Glib2Networking"
+   api: "@Glib2API"
+   sourceproject: CorePlus
+   requires:
+    - "@Glib2NoDBus"
+    - "@GdkPixbuf"
+    - "@PerlCore"
+   packages:
+    - libproxy
+    - libproxy:plugins
+   binaries:
+    - gsettings-desktop-schemas
+    - glib-networking
+    - libproxy1
+    - libproxy1-config-gnome3
+    - perl-Net-Libproxy
+   buildflavors:
+    - name: python
+      binaries:
+       - python3-libproxy
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+       - "@Core1"
+      binaries:
+       - libproxy1-config-pacrunner
+       - libproxy1-pacrunner-duktape
+       - libproxy1-networkmanager
+    - name: webkit
+      requires:
+       - "@Webkit"
+      binaries:
+       - libproxy1-pacrunner-webkit
+
+ - name: "@Glib2"
+   sourceproject: CorePlus
+   autoselect: no
+   requires:
+    - "@Glib2NoDBus"
+    - "@DBusService"
+    - "@Glib2Networking"
+    - "@Glib2Core+syspython"
+
+ - name: "@ConsoleAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@ConsoleLibraries"
+    - "@CoreAPI"
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPythonAPI"
+      binaries:
+       - newt-devel
+       # misnamed package (should have been static-devel)
+       - newt-static
+
+ - name: "@ConsoleLibraries"
+   api: "@ConsoleAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreLibraries"
+    - "@Permissions"
+   binaries:
+    - libgpm2
+    - libnewt0*
+    - libslang2
+    - libutempter0
+
+ - name: "@Console"
+   sourceproject: CorePlus
+   requires:
+    - "@Core"
+    - "@ConsoleLibraries"
+   sources:
+    - newt
+   binaries:
+    - console-setup
+    - screen
+    - utempter
+    - slang-slsh
+    - wdiff
+    - newt
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - tmux
+   purposes:
+    - name: doc
+      binaries:
+       - newt-doc
+
+ - name: "@XMLAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreAPI"
+    - "@CoreXMLAPI"
+    - "@XMLLibraries"
+   binaries:
+    - libxslt-devel
+
+ - name: "@XMLLibraries"
+   api: "@XMLAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreLibraries"
+    - "@CoreXMLLibraries"
+    - "@Glib2NoDBus"
+   packages:
+    - libxmlb
+    - snowball
+   binaries:
+    - libxml++
+    - libxmlsec1*
+    - libxslt1
+    - libexslt0
+    - libxmlb2
+    - libxslt-tools
+
+ - name: "@XMLPlus"
+   sourceproject: CorePlus
+   requires:
+    - "@Core0"
+    - "@XMLLibraries"
+#   - "@Perl"
+   packages:
+    - opensp
+   binaries:
+    - xmlcharent
+    - iso_ent
+    - opensp
+    - openjade
+    - sgml-skel
+   buildflavors:
+    - name: perl
+      requires:
+       - "@Perl"
+      binaries:
+       - xmltoman
+   purposes:
+    - name: doc
+      binaries:
+       - opensp-doc
+
+ - name: "@HTMLAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreAPI"
+    - "@HTMLLibraries"
+   binaries:
+   buildflavors:
+    - name: obsonly
+      binaries:
+       - netsurf-buildsystem
+
+ - name: "@HTMLLibraries"
+   api: "@HTMLAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@XMLLibraries"
+   packages:
+    - libcss
+    - libhubbub
+    - libsass
+   binaries:
+    - libdom0
+    - libcss0
+    - libhubbub0
+    - libsass-3*
+
+ - name: "@HTML"
+   sourceproject: CorePlus
+   requires:
+    - "@Core0"
+    - "@HTMLLibraries"
+   packages:
+    - sassc
+   binaries:
+    - sassc
+
+ - name: "@Guile"
+   sourceproject: CorePlus
+   requires:
+    - "@Core0"
+   binaries:
+    - guile
+
+ - name: "@ELFDebugging"
+   sourceproject: CorePlus
+   requires:
+    - "@GlibcDevel"
+    - "@MinimalCRuntime"
+    - "@Core0"
+    - "@Glib2NoDBus"
+    - "@SystemPython"
+    - "@CoreXMLLibraries"
+   packages:
+    - source-highlight
+   binaries:
+    - gdb
+    - libsource-highlight4
+    - source-highlight
+    - babeltrace
+    - strace
+    - ltrace
+    # all the other pieces of gperftools go into @PlusLibraries:
+    - gperftools
+    - pprof
+    - patchelf
+   purposes: 
+    - name: doc
+      binaries:
+       - gdb-testresults
+
+ - name: "@ELFDebugInfoD"
+   sourceproject: CorePlus
+   requires:
+    - "@ELFDebugging"
+    - "@ArchivingLibraries"
+    - "@PlusLibraries"
+   binaries:
+    - libdebuginfod1
+    - elfutils-debuginfod
+    - debuginfod-client
+
+ - name: "@PlusUtilities"
+   sourceproject: CorePlus
+   requires:
+    - "@Core0"
+    - "@PlusLibraries"
+   binaries:
+    - agrep
+    - lsof
+    - pkc11-helper
+    - uriparser
+    - sharutils
+
+ - name: "@Spelling"
+   feature: True
+   sourceproject: CorePlus
+   requires:
+    - "@Core0"
+    - "@Glib2NoDBus"
+    - "@PlusLibraries"
+   packages:
+    - aspell
+   binaries:
+    - myspell-dictionaries
+    - enchant
+    - enchant-2-backend-*
+    - enchant-data
+    - enchant-tools
+    - hunspell
+    - hyphen
+    - libvoikko1
+    - libhunspell-1*
+    - libaspell15
+    - aspell
+    - aspell-spell
+    - aspell-ispell
+    - voikkospell
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPython"
+      binaries:
+       - python3-libvoikko
+
+ - name: "@NumericAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@NumericLibraries"
+    - "@CoreAPI"
+   binaries:
+    - fftw3-devel
+    - libopenblas_pthreads-devel
+    - lapack-devel
+    - blas-devel
+    - openblas-common-devel
+    - cblas-devel
+   buildflavors:
+    - name: kernel
+      requires:
+       - "@PlusAPI+kernel"
+      binaries:
+       - suitesparse-devel
+       - suitesparse-devel-static
+
+ - name: "@NumericLibraries"
+   api: "@NumericAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@Core0"
+   packages:
+    - openblas:serial
+    - openblas:pthreads
+    - libcerf
+    - lapack
+    - suitesparse
+    - metis
+    - metis:serial
+    - superlu:serial
+    - fftw3:standard
+    - qhull
+   binaries:
+    - libColPack0
+    - libadolc2
+    - liblapack3
+    - liblapacke3
+    - libcerf2
+    - libopenblas_pthreads0
+    - libopenblas_serial0
+    - libopenblas_openmp0
+    - libmetis5
+    - libfftw3-3
+    - libqhull_r8*
+   purposes:
+    - name: doc
+      binaries:
+       - lapack-man
+
+ - name: "@EssentialGraphicsLibraries"
+   sourceproject: CorePlus
+   api: "@EssentialGraphicsAPI"
+   requires:
+    - "@CoreFontLibraries"
+    - "@ConsoleLibraries"
+   packages:
+    - pixman
+    - libjpeg-turbo
+    - libjpeg-turbo:libjpeg62-turbo
+    - libwebp
+    - libmng
+   binaries:
+    - libjpeg8
+    - libturbojpeg0
+    - libtiff6
+    - libgif7
+    - libopenjp2-*
+    - liblcms2-2
+    - libwebp7
+    - libimagequant0
+    - libmng2
+   buildflavors:
+    - name: x11
+      requires:
+       - "@CoreX11Libraries"
+       - "@CoreXMLLibraries"
+      binaries:
+       - libwmf-0*
+       - libnetpbm11
+       - netpbm
+    - name: glib
+      requires:
+       - "@Glib2NoDBus"
+      binaries:
+       - libgraphene-1*
+       - typelib-1_0-Graphene-1_0
+    - name: opengl
+      requires:
+       - "@OpenGL"
+      binaries:
+       - libwebp-tools
+
+ - name: "@EssentialGraphicsAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@EssentialGraphicsLibraries"
+    - "@Glib2API"
+    - "@CoreAPI"
+   binaries:
+    - libjpeg8-devel
+    - libgraphene-devel
+
+ # We need to put some low-level AVIF libraries into a small bucket of their own, otherwise
+ # X11 and the AV Libraries become one huge messy tangle
+ - name: "@EssentialVideoLibraries"
+   api: "@EssentialVideoAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreLibraries"
+    - "@EssentialGraphicsLibraries"
+   binaries:
+    - librav1e0
+    - libdav1d7
+    - libSvtAv1Enc1
+
+ - name: "@EssentialVideoAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@EssentialVideoLibraries"
+    - "@EssentialGraphicsAPI"
+    - "@CoreAPI"
+
+ - name: "@GdkPixbufAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@GdkPixbuf"
+    - "@Glib2API"
+    - "@CoreAPI"
+    - "@EssentialGraphicsAPI"
+   buildflavors:
+    - name: useless
+      requires:
+       - "@GdkPixbuf+useless"
+       - "@CoreX11API"
+       - "@CoreFontAPI"
+      binaries:
+       - libwmf-devel
+
+ - name: "@GdkPixbuf"
+   api: "@GdkPixbufAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreX11Libraries"
+    - "@EssentialGraphicsLibraries"
+    - "@EssentialVideoLibraries"
+    - "@Glib2NoDBus"
+   binaries:
+    - libgdk_pixbuf-2*
+    - libgdk_pixbuf_xlib-2*
+    - liblqr-1*
+    - gdk-pixbuf-query-loaders
+   buildflavors:
+    - name: useless
+      binaries:
+       - libwmf-gnome
+
+ - name: "@I18nAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreAPI"
+    - "@I18nLibraries"
+#   - "@I18nTools"
+
+ - name: "@I18nLibraries"
+   sourceproject: CorePlus
+   api: "@I18nAPI"
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - icu
+    - librcc
+   binaries:
+    - libicu72
+    - libicu72-ledata
+   buildflavors:
+    - name: russian
+      autoselect: no
+      requires:
+       - "@Spelling"
+      binaries:
+       - librcc0
+       - librcd0
+
+ - name: "@I18nTools"
+   sourceproject: CorePlus
+   requires:
+    - "@Core0"
+    - "@Perl"
+    - "@CoreLibraries+python"
+    - "@MinimalCDevelopment"
+   binaries:
+    - intltool
+    - itstool
+    - po4a
+    - yelp-tools
+    - yelp-xsl
+
+ - name: "@PlusAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@PlusLibraries"
+    - "@CoreAPI"
+   binaries:
+    - libmicrohttpd-devel
+   buildflavors:
+    # highway-devel wants gtest
+    - name: gtest
+      requires:
+       - "@DevelopmentGoogleTest"
+      binaries:
+       - highway-devel
+    - name: kernel
+      requires:
+       - "@PlusLibraries+kernel"
+      binaries:
+       - tbb-devel
+
+ - name: "@SIMDLibraries"
+   api: "@PlusAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libhwy1
+    - liborc-0*
+    - libcrc32c1
+
+ - name: "@ArchivingAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@ArchivingLibraries"
+    - "@CoreAPI"
+   binaries:
+    - snappy-devel
+
+ - name: "@ArchivingLibraries"
+   api: "@ArchivingAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - snappy
+    - blosc
+    - blosc2
+    - libarchive
+   binaries:
+    - libsnappy1
+    - libblosc1
+    - libblosc2
+    - libarchive13
+    - libdeflate0
+    - libzopfli1
+    - libzopflipng1
+
+ - name: "@Archivers"
+   api: "@CorePlusAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@ArchivingLibraries"
+   binaries:
+    - unzip
+    - unzip-rcc
+    - bsdtar
+    - lzop
+    - 7zip
+    - libdeflate-tools
+    - lzip
+
+ - name: "@PlusLibraries"
+   api: "@CorePlusAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@CoreLibraries"
+    - "@I18nLibraries"
+    - "@SIMDLibraries"
+    - "@ArchivingLibraries"
+    - "@XMLLibraries"
+   packages:
+    - re2
+    - tre
+    - gperftools
+    - libmemcached
+#   - jsoncpp
+    - libssh2_org
+    - abseil-cpp
+    - fmt
+    # used by python-numba only
+    - tbb
+   binaries:
+    - libjemalloc2
+    - libkyotocabinet16
+    - libpkcs11-helper1
+    - libabsl23*
+    - libfmt9
+    - libssh2-1
+    # used by python-numba only
+    - libtbb12
+    - liburiparser1
+    # used by debuginfod:
+    - libmicrohttpd12
+   buildflavors:
+    - name: kernel
+      requires:
+       - "@KernelLibraries"
+      binaries:
+       - libtbbbind_2*
+
+ - name: "@BoostAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@Boost"
+    - "@CoreAPI"
+    - "@I18nAPI"
+   packages:
+    - boost-defaults
+   binaries:
+    - boost-devel
+    - libboost_headers-devel
+    - libboost_headers1*-devel priority=0
+    - libboost_atomic-devel
+    - libboost_chrono-devel
+    - libboost_container-devel
+    - libboost_context-devel
+    - libboost_contract-devel
+    - libboost_coroutine-devel
+    - libboost_date_time-devel
+    - libboost_fiber-devel
+    - libboost_filesystem-devel
+    - libboost_graph-devel
+    - libboost_iostreams-devel
+    - libboost_locale-devel
+    - libboost_log-devel
+    - libboost_math-devel
+    - libboost_nowide-devel
+    - libboost_program_options-devel
+    - libboost_random-devel
+    - libboost_regex-devel
+    - libboost_serialization-devel
+    - libboost_stacktrace-devel
+    - libboost_system-devel
+    - libboost_test-devel
+    - libboost_thread-devel
+    - libboost_timer-devel
+    - libboost_type_erasure-devel
+    - libboost_wave-devel
+    - boost-jam
+   buildflavors:
+    - name: python
+      binaries:
+#      - python3-boost_parallel_mpi
+
+ - name: "@Boost"
+   api: "@BoostAPI"
+   sourceproject: CorePlus
+   description: |
+     Standard build of boost. 
+     Currently, this has to live in Core because it's required by snapper.
+     However, if we move snapper to CorePlus, we could probably move Boost
+     as well
+   requires:
+    - "@PlusLibraries"
+   packages:
+    - boost:base
+    - boost-defaults
+   binaries:
+    # place one libboost rpm here explicitly. There's still something wrong with the
+    # label hierarchy, because if I don't do this, the libboost_* packages from
+    # boost:base will not be placed at all.
+    # This seems to be an issue with boost-license1 being required by something that
+    # doesn't have @Boost in its list of requirements
+    - libboost_thread1_82_0
+
+ - name: "@DrawingAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@DrawingLibraries"
+    - "@EssentialGraphicsAPI"
+   binaries:
+   buildflavors:
+    - name: x11
+      requires:
+       - "@DrawingLibraries+x11"
+       - "@CoreFontAPI"
+       - "@CoreX11API"
+      binaries:
+       - gd-devel
+
+ - name: "@DrawingLibraries"
+   api: "@DrawingAPI"
+   sourceproject: CorePlus
+   requires:
+    - "@FontLibraries"
+    - "@Fonts"
+   packages:
+    - plotutils
+   binaries:
+    - libEMF1
+    - libxmi0
+   buildflavors:
+    - name: x11
+      requires:
+       - "@EssentialGraphicsLibraries"
+       - "@CoreX11Libraries"
+      binaries:
+       - libgd3
+       - plotutils
+       - libplotter2
+

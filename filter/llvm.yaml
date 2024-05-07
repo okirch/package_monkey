@@ -1,0 +1,62 @@
+# vi: ai et
+# Definition of LLVM component
+
+components:
+ - name: LLVM
+   globals:
+    devel: LlvmDevel
+   requires:
+    - Core
+   exports:
+    - "@LLVMRuntime"
+
+build_configs:
+ - name: LLVM/standard
+   buildrequires:
+    - "@DevelopmentEssentials"
+
+groups:
+ - name: "@LLVMAPI"
+   sourceproject: LLVM
+   requires:
+    - "@CoreAPI"
+    - "@LLVM"
+   binaries:
+    - lldb*-devel priority=0
+    - llvm-devel
+    - llvm-polly-devel
+    - clang-devel
+
+ - name: "@LLVMRuntime"
+   api: "@LLVMAPI"
+   sourceproject: LLVM
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libLLVM1?
+    - libLTO1?
+    - libomp1?
+    - libclang1?
+    - libc++1
+    - libc++abi1
+
+ - name: "@LLVM"
+   sourceproject: LLVM
+   requires:
+    - "@MinimalCRuntime"
+    - "@Core0"
+    - "@SystemPython"
+    - "@LLVMRuntime"
+   binaries:
+    - llvm
+    - clang
+    - clang1?
+    - llvm1?
+    - llvm1?-polly
+    - lldb
+    - liblldb1?
+    - libclang-cpp14
+    - libclang1?-cpp*
+    - llvm1?-libclang13
+    - llvm1?-libc++abi1
+

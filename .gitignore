@@ -1,0 +1,13 @@
+cache
+__pycache__
+LOG
+*.csv
+.*.swp
+*.db
+*.o
+*.so
+*.log
+model.xml
+packages.xml
+hierarchy.xml
+functions

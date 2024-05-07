@@ -1,0 +1,109 @@
+#!/usr/bin/python3
+
+from options import Application
+from writers import XmlReader
+from filter import Classification
+
+LEFT_BRACE = '{'
+
+class DotfileWriter:
+	class Graph:
+		def __init__(self, writer, name, indent = ""):
+			self.writer = writer
+			self.name = name
+			self.origIndent = indent
+			self.indent = indent + "    "
+
+		def begin(self):
+			self.writer.write(f"{self.origIndent}digraph {self.name} {LEFT_BRACE}")
+			self.writer.write(f"{self.indent}splines=true;")
+
+		def addNode(self, label):
+			labelID = self.writer.makeNodeID(label)
+			self.writer.write(f"{self.indent}{labelID} [label=\"{label}\"];")
+			return labelID
+
+		def getNode(self, label):
+			id = self.writer.getNode(label)
+			if id is None:
+				id = self.addNode(label)
+			return id
+
+		def addEdge(self, label0, label1):
+			id0 = self.getNode(label0)
+			id1 = self.getNode(label1)
+			self.writer.write(f"{self.indent}{id0} -> {id1};")
+
+		def end(self):
+			self.writer.write(self.origIndent + "}")
+
+	def __init__(self, name, filename = None):
+		self.name = name
+		self.filename = filename or f"{name}.gv"
+		self.fp = open(self.filename, "w")
+
+		self.live = set()
+		self.nodeIds = {}
+		self.nextFreeID = 0
+		self.indent = ""
+
+	def write(self, *args, **kwargs):
+		print(self.indent, file = self.fp, end = '')
+		print(*args, file = self.fp, **kwargs)
+
+	def graph(self, name = None):
+		if name is None:
+			name = self.name
+		return self.Graph(self, name)
+
+	def makeNodeID(self, label):
+		labelID = f"topic{self.nextFreeID}"
+		self.nodeIds[label] = labelID
+		self.nextFreeID += 1
+		return labelID
+
+	def getNode(self, label):
+		return self.nodeIds.get(label)
+
+
+# Not yet ready for production...
+def writeLabelGraph(output, labels, order):
+	graph = output.graph()
+	graph.begin()
+
+	for label in labels:
+		edges = set()
+		secondLevelClosure = set()
+		for req in label.runtimeRequires:
+			edges.add(req)
+
+			closure = order.downwardClosureFor(req)
+			closure.discard(req)
+
+			secondLevelClosure.update(closure)
+
+		# do not draw arrows A -> C when there's an indirent connection A -> B -> C
+		edges.difference_update(secondLevelClosure)
+
+		for req in edges:
+			graph.addEdge(label, req)
+
+	graph.end()
+
+
+application = Application('make-label-graph')
+application.parseArguments()
+
+classificationScheme = Classification.Scheme()
+
+# load packages.xml and dump the result. We're only interested in
+# the side effects of populating classificationScheme
+application.loadClassification(classificationScheme)
+
+order = classificationScheme.componentOrder()
+labels = list(order.bottomUpTraversal())
+
+output = DotfileWriter("components")
+writeLabelGraph(output, labels, order)
+
+print(f"Please process output file using something like this: dot -Tpdf {output.filename}")

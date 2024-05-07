@@ -1,0 +1,160 @@
+# vi: ai et
+# Definition of the UpdateStack components
+
+components:
+ - name: UpdateStack
+   globals:
+    devel: UpdateStackDevel
+   requires:
+    - Core
+    - Multimedia
+    - Python
+    - Systemd
+    - Ruby
+   exports:
+    - "@UpdateStackLibraries"
+
+build_configs:
+ - name: UpdateStack/standard
+   buildrequires:
+    - "@UpdateStackAPI"
+    - "@NetworkAPI"
+ - name: UpdateStack/graphviz
+   buildrequires:
+    - "@Graphviz"
+
+groups:
+ - name: "@UpdateStackAPI"
+   sourceproject: UpdateStack
+   requires:
+    - "@UpdateStackLibraries"
+    - "@SystemdAPI"
+    - "@BoostAPI"
+    - "@RpmAPI"
+   binaries:
+    - libzypp-devel
+
+ - name: "@SUSEConnect"
+   api: "@UpdateStackAPI"
+   sourceproject: UpdateStack
+   requires:
+    - "@DefaultPython"
+    - "@Glib2NoDBus"
+    - "@Core1"
+    - "@Kernel"
+    - "@UpdateStack"
+   packages:
+    - suseconnect-ng
+   binaries:
+    - libsuseconnect
+    - suseconnect-ng
+    - suseconnect-ruby-bindings
+
+ - name: "@UpdateStackLibraries"
+   api: "@UpdateStackAPI"
+   sourceproject: UpdateStack
+   requires:
+    - "@PGPLibraries"
+    - "@Boost"
+#   - "@DefaultPython"
+    - "@Glib2NoDBus"
+    - "@Core1"
+    - "@DefaultPythonStandard"
+    - "@Glib2Networking"
+    - "@NetworkLibraries"
+    - "@UdevLibraries"
+    - "@ConfigFileLibraries"
+   packages:
+    - zypp-plugin
+   binaries:
+    - libzypp
+    - libsolv
+    - libmodulemd2
+    - libcreaterepo_c0
+    - libcreaterepo_c1
+
+ - name: "@Zypper"
+   api: "@UpdateStackAPI"
+   sourceproject: UpdateStack
+   requires:
+    - "@UpdateStackLibraries"
+    - "@ManagementLibraries"
+    - "@CoreServices"
+   binaries:
+    - zypper
+    - zypper-needs-restarting
+
+ - name: "@UpdateStack"
+   sourceproject: UpdateStack
+   requires:
+    - "@Core"
+    - "@Core+systemdlibs"
+    - "@Core+udevlibs"
+    - "@NetworkCore"
+    - "@DefaultPython"
+    - "@Ruby"
+    - "@MinimalSystemd"
+    - "@Glib2"
+    - "@UpdateStackLibraries"
+    - "@DefaultPythonStandard"
+    - "@Zypper"
+   binaries:
+    - deltarpm
+    - SUSEConnect
+    - zypp-*
+    - zypper
+    - zypper-*
+    - perl-solv
+    - ruby-solv
+    - createrepo_c
+    - librepo0
+
+ - name: "@SnapperAPI"
+   sourceproject: UpdateStack
+   requires:
+    - "@Snapper"
+    - "@CoreAPI"
+    - "@BoostAPI"
+
+ - name: "@Snapper"
+   api: "@SnapperAPI"
+   sourceproject: UpdateStack
+   requires:
+    - "@Core1"
+    - "@SystemdLibraries"
+    - "@CoreHardware"
+    - "@Boost"
+    - "@UpdateStack"
+    - "@FilesystemLibraries"
+   packages:
+    - snapper
+   binaries:
+    - pam_snapper
+
+ - name: "@TransactionalServer"
+   description: |
+     This package contains all the tools and services needed for transactional updates.
+     Currently part of UpdateStack, but could also be a standalone project.
+   sourceproject: UpdateStack
+   requires:
+    - "@Core1"
+    - "@Boot"
+    - "@NetworkUtils"
+    - "@Snapper"
+    - "@UpdateStack"
+    - "@PlusUtilities"
+    - "@Filesystems"
+    - "@ManDoc"
+   binaries:
+    - libtukit4
+    - tukit
+    - dracut-transactional-update
+    - transactional-update-zypp-config
+    - microos-tools
+    - read-only-root-fs
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@MinimalSystemd"
+      binaries:
+       - tukitd

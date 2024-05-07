@@ -1,0 +1,405 @@
+# vi: ai et
+# Definition of HardwareAccess component
+
+components:
+ - name: HardwareAccess
+   globals:
+    devel: HardwareAccessDevel
+   requires:
+    - Core
+    - KernelPlus
+   imports:
+    # for ibutils-ui
+    - "@EssentialGraphicsLibraries"
+    - "@DrawingLibraries+x11"
+   exports:
+    - "@PlatformCryptoLibraries"
+
+build_configs:
+ - name: HardwareAccess/standard
+   buildrequires:
+    - "@USBAPI"
+    - "@GPUAPI"
+ - name: HardwareAccess/multimedia
+   buildrequires:
+    - "@AudioAPI"
+
+groups:
+ - name: "@InputDeviceAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreAPI"
+    - "@InputDeviceLibraries"
+    # temporarily?
+    - "@CoreHardwareAPI+systemd"
+   binaries:
+    - libinput-devel
+    - libwacom-devel
+    - libevdev-devel
+    - libgudev-1_0-devel
+
+ - name: "@InputDeviceLibraries"
+   api: "@InputDeviceAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreHardware"
+    - "@Glib2Core"
+    - "@SystemPython"
+   packages:
+    - libevdev
+    - python-libevdev
+   binaries:
+    - libinput10
+    - libinput-udev
+    - libinput-tools
+    - libwacom-data
+    - libgudev-1_0*
+    - typelib-1_0-GUdev-1_0
+    - libmanette-0*
+    - typelib-1_0-Manette-0*
+    - libevdev2
+    - libevdev-tools
+    - python311-libevdev
+   buildflavors:
+    - name: udev
+      requires:
+       - "@UdevLibraries+syspython"
+      binaries:
+       - libwacom-tools
+
+ - name: "@StorageDeviceAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreAPI"
+    - "@StorageDeviceLibraries"
+#   - "@Glib2API"
+   binaries:
+    - libstoragemgmt-devel
+
+ - name: "@StorageDeviceLibraries"
+   api: "@StorageDeviceAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreHardware"
+    - "@Glib2Core"
+    - "@SystemPython"
+   packages:
+   binaries:
+    - libstoragemgmt1
+    - libstoragemgmt
+    - libstoragemgmt-*-plugin
+   buildflavors:
+    - name: wbem
+      # This is very problematic. libstoragemgmt uses SystemPython, but the smis
+      # plugin requires python311-pywbem -> python311-PyYAML which we currently
+      # do not provide as SystemPython modules but only with the "user" python stack.
+      # Therefore, we will not publish the smis plugin for now
+      disposition: ignore
+      requires:
+       - "@DefaultPythonEssentials"
+      binaries:
+       - libstoragemgmt-smis-plugin
+
+ - name: "@GPUAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreAPI"
+    - "@GPU"
+   binaries:
+    - gmmlib-devel
+
+ - name: "@GPU"
+   api: "@GPUAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - gmmlib
+   binaries:
+    - libvulkan1
+    - libigdgmm12
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11Libraries"
+    - name: kernel
+      requires:
+       - "@Core0"
+       - "@KernelCore"
+      binaries:
+       - suse-prime
+
+ - name: "@USBAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreAPI"
+    - "@CoreHardwareAPI"
+#   - "@Glib2API"
+    - "@KernelAPI"
+    - "@USBLibraries"
+   binaries:
+    - libftdi1-devel
+    - flashrom-devel
+   buildflavors:
+    - name: glib
+      requires: 
+       - "@USBLibraries+glib"
+       - "@CoreHardwareAPI"
+      binaries:
+       - libgusb-devel
+    - name: obsonly
+      requires: 
+       - "@CoreAPI"
+      binaries:
+       - libjaylink0
+       - libjaylink-devel
+
+ - name: "@USBLibraries"
+   api: "@USBAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreHardware"
+    - "@Glib2Core"
+    - "@KernelCore"
+   packages:
+    - libftdi1
+    - libconfuse
+    - libflashrom1
+    - flashrom
+   binaries:
+    - libftdi1*
+    - usbutils
+   buildflavors:
+    - name: syspython
+      autoselect: no
+      requires:
+       - "@SystemPythonCore"
+      binaries:
+       - python3-libftdi1
+    - name: glib
+      autoselect: no
+      requires:
+       - "@Glib2"
+      binaries:
+       - libgusb2
+       - typelib.*Gusb*
+
+ - name: "@OpticalMedia"
+   api: "@HardwareAccessAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreLibraries"
+    - "@Permissions"
+   binaries:
+    - libburn4
+    - libisofs6
+    - libisoburn1
+    - libiso9660*
+    - libcdio19
+    - libcdio_cdda2
+    - libcdio_paranoia2
+    - cdio-utils
+    - cd-paranoia
+    - libcuefile*
+    # Not sure if all of the schily stuff needs to go here:
+    - mkisofs
+    - cdrecord
+    - cdda2wav
+    - bosh
+    - schily-*
+    - readcd
+   buildflavors:
+    - name: tcl
+      requires:
+       - "@TclCore+x11"
+      binaries:
+       - xorriso
+
+ - name: "@MiscHardware"
+   api: "@HardwareAccessAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreLibraries"
+    - "@ArchivingLibraries"
+   binaries:
+    - libvpd-2*
+    - libqatzip3
+   buildflavors:
+    - name: xeon
+      description: |
+       Support for Intel Xeon accelerators
+      requires:
+       - "@Kernel"
+      binaries:
+       - libaccel-config1
+       - accel-config
+
+ - name: HardwareAccessDevel
+   requires:
+    - "@HardwareAccessAPI"
+
+ - name: "@HardwareAccessAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@X11API"
+#   - "@Glib2API"
+    - "@GPU"
+    - "@InputDeviceLibraries"
+    - "@OpticalMedia"
+    - "@MiscHardware"
+    - "@Sound"
+    - "@X86Libraries"
+   binaries:
+    - libmanette-devel
+    # shouldn't the vulkan stuff be in GPUAPI?
+    - vulkan-headers
+    - vulkan-devel
+   buildflavors:
+    - name: perl
+      requires:
+       - "@Perl"
+      binaries:
+       - hwinfo-devel
+
+ - name: "@X86Libraries"
+   api: "@HardwareAccessAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libx86emu3
+
+ - name: "@Sound"
+   api: "@HardwareAccessAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@KernelCore"
+   binaries:
+    - alsa
+    - alsa-plugins
+    - alsa-utils
+    - libasound2
+    # this should be somewhere in Kernel, but unfortunately, it requires alsa-utils to be applied
+    - alsa-firmware
+
+ - name: "@Infiniband"
+   sourceproject: HardwareAccess
+   api: "@InfinibandAPI"
+   requires:
+    - "@CoreNetworkLibraries"
+    - "@CoreXMLLibraries"
+    - "@Glib2"
+    - "@SystemdServices"
+    - "@UdevLibraries"
+    - "@KernelCore"
+    - "@TclCore"
+    - "@SNMPLibraries"
+    - "@CoreServices"
+   packages:
+    - openucx
+    - libqb
+   binaries:
+    - dapl
+    - dapl-*
+    - eth-basic-tools
+    - ibutils*
+    - infinipath*
+    - qperf
+    - rdma-core
+    - rds-tools
+    - infiniband-diags
+    - libfabric1
+    - libiscsi9
+    - libinfinipath4
+    - libpsm_infinipath1
+    - libvma9
+    - opa-*
+    - smc-tools
+   buildflavors:
+    - name: test
+      requires:
+       - "@DevelopmentCore"
+    - name: gui
+      requires:
+       - "@Graphviz+tcl"
+      binaries:
+       - ibutils-ui
+    - name: snmp
+      # SNMP stuff has moved to component Network
+      requires:
+       - "@SNMPLibraries"
+      binaries:
+       - eth-fastfabric
+    - name: ignore
+      disposition: ignore
+      requires:
+       - "@JDK"
+       - "@AppArmor"
+      binaries:
+       - opa-fmgui
+       - mlocate
+       - mlocate-lang
+
+ - name: "@InfinibandAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@Infiniband"
+    - "@CoreAPI"
+   binaries:
+    - openucx-tools
+    - libucs-devel
+
+ - name: "@HardwareAccessUtilities"
+   sourceproject: HardwareAccess
+   api: "@HardwareAccessAPI"
+   requires:
+    - "@CoreLibraries"
+    - "@X86Libraries"
+   binaries:
+    - hwinfo
+
+ - name: "@PlatformCryptoAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@PlatformCryptoTools"
+    - "@CoreAPI"
+   binaries:
+    - tpm2-0-tss-devel
+    - tpm2.0-abrmd-devel
+ 
+ # The TPM stuff lives in HardwareAccess for two reasons:
+ #  - putting it into Core is wrong; it is not *that* essential
+ #  - it needs to be part of the certification target, so
+ #    Security or Systemd is probably too high
+ - name: "@PlatformCryptoLibraries"
+   api: "@PlatformCryptoAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@Core0"
+    - "@Glib2Core"
+    - "@ConfigFileLibraries"
+    - "@Permissions"
+   binaries:
+    - libtss2-*
+    - libtss2-fapi1
+    - libtss2-tcti-tabrmd0
+    - libibmtss2
+
+ - name: "@PlatformCryptoTools"
+   api: "@PlatformCryptoAPI"
+   sourceproject: HardwareAccess
+   requires:
+    - "@PlatformCryptoLibraries"
+   binaries:
+    - tpm2.0-abrmd
+    - tpm2.0-tools
+    - tpm2-tss-engine
+    - tpm2-tss-engine-bash-completion
+
+ # Should this live in Security?
+ - name: "@SoftwareTPM"
+   sourceproject: HardwareAccess
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - ibmswtpm2

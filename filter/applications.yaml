@@ -1,0 +1,418 @@
+# vi: ai et
+# Definition of Applications component
+
+components:
+ - name: Applications
+   globals:
+    devel: ApplicationsDevel
+   requires:
+    - CorePlus
+    - Network
+    - Systemd
+    - Gtk
+    - Gnome
+    - Qt
+    - Development
+   exports:
+    - "@Graphviz"
+    - "@Flatpak"
+    - "@OpenVSwitch"
+
+build_configs:
+ - name: Applications/jupyter
+   buildrequires:
+    - "@Jupyter"
+    - "@PythonQt"
+ - name: "Applications/build:strongswan"
+   inheritable: False
+   buildrequires:
+    - "@SmartcardAPI"
+    - "@NetworkManagerAPI"
+    - "@MariaDB10API"
+   packages:
+    - strongswan
+ - name: Applications/llvm
+   buildrequires:
+    - "@LLVMAPI"
+ - name: Applications/appstream
+   buildrequires:
+    - "@AppstreamAPI"
+ - name: Applications/virt
+   buildrequires:
+    - "@VirtAPI"
+
+groups:
+ - name: "@GraphvizLibraries"
+   api: "@GraphvizAPI"
+   sourceproject: Applications
+   requires:
+    - "@Core0"
+    - "@Glib2NoDBus"
+    - "@CoreXMLLibraries"
+   binaries:
+    - libcgraph6
+    - libgvc6
+    - libgvpr2
+    - libgts-0*
+
+ - name: "@GraphvizAPI"
+   sourceproject: Applications
+   requires:
+    # it would be nice if this would just depend on GraphvizLibraries, but
+    # the devel package wants the full graphviz.
+    - "@Graphviz"
+    - "@Glib2API"
+    - "@EssentialGraphicsLibraries+x11"
+   binaries:
+    - graphviz-devel
+    - gts-devel
+
+ - name: "@Graphviz"
+   sourceproject: Applications
+   requires:
+    - "@GraphvizLibraries"
+    - "@FontLibraries+x11"
+    - "@Glib2NoDBus"
+    - "@PerlCore"
+    - "@Ruby"
+    - "@TclCore+x11"
+   binaries:
+    - graphviz
+    - graphviz-perl
+    - graphviz-gd
+    - graphviz-x11
+    - graphviz-tcl
+    - graphviz-ruby
+    - graphviz-doc purpose=doc
+   buildflavors:
+    - name: php
+      requires:
+       - "@PHP"
+      binaries:
+       - graphviz-php
+    - name: gtk
+      requires:
+       - "@Gtk2"
+       - "@Postscript"
+      binaries:
+       - graphviz-gnome
+       - graphviz-smyrna
+       - graphviz-webp
+    - name: python
+      binaries:
+       - python3-gv
+
+ - name: "@Vala"
+   sourceproject: Applications
+   requires:
+    - "@Glib2"
+    - "@GraphvizLibraries"
+   binaries:
+    - vala
+    - valadoc
+    - valadoc-doclet-*
+
+ - name: "@FlatpakAPI"
+   sourceproject: Applications
+   requires:
+    - "@Flatpak"
+    - "@CoreAPI"
+    - "@Glib2API"
+   binaries:
+    - flatpak-devel
+   buildflavors:
+    - name: gtk3
+      requires:
+       - "@Gtk3API"
+       - "@Flatpak+gtk3"
+      binaries:
+       - libportal-gtk3-devel
+    - name: gtk4
+      requires:
+       - "@Flatpak+gtk4"
+       - "@Gtk4API"
+      binaries:
+       - libportal-gtk4-devel
+    - name: qt5
+      requires:
+       - "@Flatpak+qt5"
+       - "@Qt5ExtendedAPI"
+      binaries:
+       - libportal-qt5-devel
+
+ - name: "@Flatpak"
+   api: "@FlatpakAPI"
+   sourceproject: Applications
+   requires:
+    - "@Core"
+    - "@PGPLibraries"
+    - "@GtkCommon"
+    - "@PolicyKit"
+    - "@Bubblewrap"
+    - "@FilesystemLibraries"
+    - "@DesktopQuarks"
+    - "@AppstreamLibraries"
+    - "@DConf"
+    - "@AvahiLibraries"
+    - "@BluetoothLibraries"
+   packages:
+    - flatpak
+    - libostree
+   binaries:
+    - system-user-flatpak
+    - libostree-1*
+    - libostree
+    - libflatpak0
+    - flatpak
+    - xdg-desktop-portal
+    - libportal-1*
+   buildflavors:
+    - name: gtk3
+      requires:
+       - "@Gtk3"
+      binaries:
+       - typelib-1_0-XdpGtk3
+       - libportal-gtk3-1*
+    - name: gtk4
+      requires:
+       - "@Gtk4"
+      binaries:
+       - typelib-1_0-XdpGtk4
+       - libportal-gtk4-1*
+    - name: qt5
+      requires:
+       - "@Qt5ExtendedLibraries"
+      binaries:
+       - libportal-qt5-1*
+    - name: boot
+      requires:
+       - "@Boot"
+      binaries:
+       - libostree-grub2
+
+ - name: "@RADIUSServer"
+   sourceproject: Applications
+   requires:
+    - "@PerlCore"
+    - "@SambaLibraries"
+    - "@CommonDatabaseLibraries"
+    - "@NetworkLibraries+python"
+    - "@NetworkAnalysis+systemd"
+   packages:
+    - freeradius-server
+   binaries:
+    - freeradius-server
+    - freeradius-server-sqlite
+    - freeradius-server-krb5
+    - freeradius-server-ldap
+    - freeradius-server-ldap-schemas
+    - freeradius-server-python3
+   buildflavors:
+    - name: database
+      requires:
+       - "@SystemDatabaseLibraries"
+       - "@NetworkLibraries+python"
+      binaries:
+       - freeradius-server-mysql
+       - freeradius-server-postgresql
+
+ - name: "@IPSec"
+   sourceproject: Applications
+   requires:
+    - "@NetworkCore"
+    - "@CoreServices"
+    - "@MinimalSystemd"
+    - "@Perl"
+    # strongswan-libs0 pulls in everything under the sun :-(
+#   - "@DesktopLibraries"
+    - "@Smartcards"
+    # Really just libnm0 but I haven't yet pried that apart
+    - "@NetworkManager"
+   packages:
+    - strongswan
+   buildflavors:
+    - name: database
+      requires:
+       - "@Databases"
+      binaries:
+       - strongswan-mysql
+
+ # Maybe we should call this PacketSwitching or something along those lines
+ - name: "@OpenVSwitchAPI"
+   sourceproject: Applications
+   requires:
+    - "@OpenVSwitch"
+    - "@NetworkAPI"
+    - "@InfinibandAPI"
+    - "@SystemdAPI"
+    - "@DefaultPythonAPI"
+   binaries:
+    - dpdk-devel
+
+ - name: "@OpenVSwitch"
+   api: "@OpenVSwitchAPI"
+   sourceproject: Applications
+   requires:
+    - "@NetworkCore"
+    - "@CoreServices"
+    - "@MinimalSystemd"
+    - "@Kernel"
+    - "@IPSec"
+    - "@NetworkAnalysis"
+    - "@Infiniband"
+    - "@DefaultPythonStandard"
+    - "@NetworkLibraries+python"
+   packages:
+    - openvswitch
+   binaries:
+    - openvswitch
+
+ - name: "@SystemtapAPI"
+   sourceproject: Applications
+   requires:
+    - "@Systemtap"
+    - "@CoreAPI"
+
+ - name: "@Systemtap"
+   api: "@SystemtapAPI"
+   sourceproject: Applications
+   requires:
+    - "@CoreLibraries"
+    - "@Avahi"
+    - "@Archivers"
+   binaries:
+    - systemtap
+    - systemtap-dtrace
+    - systemtap-docs purpose=doc
+    - systemtap-server
+
+ - name: "@TuneD"
+   sourceproject: Applications
+   requires:
+    - "@DefaultPythonStandard"
+    - "@HostStorage"
+    - "@PolicyKit"
+    - "@Kernel"
+    - "@HostNetworking"
+    - "@UdevLibraries+syspython"
+    - "@PythonStandard${systemPythonVersion}+dbus"
+   packages:
+    - tuned
+   binaries:
+    - tuned
+    - tuned-utils
+    - tuned-profiles-*
+   buildflavors:
+    - name: systemtap
+      requires:
+       - "@Systemtap"
+      binaries:
+       - tuned-systemtap
+
+ - name: "@SUSESupport"
+   sourceproject: Applications
+   requires:
+    - "@Core0"
+    - "@KernelNetworkUtils"
+   binaries:
+    - supportutils
+
+ - name: "@Gnuplot"
+   sourceproject: Applications
+   requires:
+    - "@NumericLibraries"
+    - "@GraphicsLibraries"
+    - "@FontLibraries+x11"
+    - "@Qt5ExtendedLibraries"
+    - "@WxWidgets"
+    - "@Gtk3"
+   binaries:
+    - gnuplot
+
+ - name: "@Redis"
+   sourceproject: Applications
+   requires:
+    - "@SystemdLibraries"
+   binaries:
+    - redis
+
+ - name: "@FirefoxAPI"
+   sourceproject: Applications
+   requires:
+    - "@Firefox"
+    - "@Perl"
+
+ - name: "@Firefox"
+   api: "@FirefoxAPI"
+   sourceproject: Applications
+   requires:
+    - "@DesktopLibraries"
+   binaries:
+    - MozillaFirefox
+    - MozillaFirefox-branding-*
+    - MozillaFirefox-translations-*
+    - MozillaFirefox-devel purpose=devel
+    - firefox-esr-branding-openSUSE
+
+ - name: "@Jupyter"
+   sourceproject: Applications
+   requires:
+    - "@PythonStandard+desktop"
+    # should be @DefaultPython* instead:
+    - "@DefaultPythonDocProcessing"
+    - "@DefaultPythonHTML"
+    - "@DefaultPythonPublishing"
+    - "@DefaultPythonDesktop"
+    - "@DefaultPythonOS"
+    - "@Javascript"
+    - "@Git"
+   binaries:
+    - python-nbdime
+    - jupyter-*
+    - python31?-jupyter
+    - python31?-jupyter-core
+    - python31?-jupyter-server
+    - python31?-jupyter-client*
+    - python31?-ipykernel
+   buildflavors:
+    - name: tex
+      requires:
+       - "@Texlive"
+      binaries:
+       - jupyter-nbconvert-latex
+       - jupyter-notebook-latex
+    - name: mercurial
+      requires:
+       - "@Mercurial"
+      binaries:
+       - python31?-nbdime-hg
+
+ - name: "@WiresharkAPI"
+   sourceproject: Applications
+   requires:
+    - "@Wireshark"
+    - "@Glib2API"
+   binaries:
+    - wireshark-devel
+
+ - name: "@Wireshark"
+   api: "@WiresharkAPI"
+   sourceproject: Applications
+   requires:
+    - "@NetworkAnalysis+systemd"
+    - "@BluetoothLibraries"
+    - "@PlusLibraries"
+    - "@EssentialQtLibraries"
+    - "@Multimedia"
+    - "@Qt5ExtendedLibraries"
+    - "@DesktopCore"
+   packages:
+    - wireshark
+    - wireshark-ui-qt
+   binaries:
+    - wireshark
+    - libpcap1
+    - libwireshark1?
+    - libwiretap1?
+    - libwsutil1?
+

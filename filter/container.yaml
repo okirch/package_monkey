@@ -1,0 +1,151 @@
+# vi: ai et
+# Definition of Container component
+
+components:
+ - name: Container
+   globals:
+    devel: ContainerDevel
+   requires:
+    - CorePlus
+    - Network
+    - Host
+    - KernelPlus
+    - Security
+    - Systemd
+   exports:
+    - "@Bubblewrap"
+
+build_configs:
+ - name: Container/standard
+   buildrequires:
+    - "@Fish"
+    - "@Go"
+    - "@GoExtras"
+    - "@Rust"
+    - "@FilesystemAPI"
+    - "@FlatpakAPI"
+    - "@NetworkAPI"
+    - "@UpdateStackAPI"
+    - "@StorageAPI"
+
+groups:
+ # No idea for a better name. This is the single piece of container stuff
+ # that gets sucked into a lot of different desktop-ish packages. And emacs
+ # Maybe DesktopUtilities would be a good place.
+ - name: "@Bubblewrap"
+   sourceproject: Container
+   requires:
+    - "@Core"
+   binaries:
+    - bubblewrap
+
+ - name: "@ContainerAPI"
+   sourceproject: Container
+   requires:
+    - "@Container"
+    - "@CorePlusAPI"
+   binaries:
+    - criu-devel
+
+ - name: "@Container"
+   api: "@ContainerAPI"
+   sourceproject: Container
+   requires:
+    - "@Core"
+    - "@PGPLibraries"
+    - "@NetworkCore"
+    - "@HostNetworking"
+    - "@StorageServices"
+    - "@SELinux"
+    - "@ManDoc"
+    - "@HostWorkloads"
+    - "@NetworkUtils"
+    - "@NetworkLibraries"
+    - "@NetworkLibraries+python"
+    # for criu:
+    - "@DefaultPythonStandard"
+   binaries:
+    - skopeo
+    - podman
+    - criu
+    - conmon
+    - runc
+    - containerd
+    - cni
+    - cni-*
+    - helm-*
+    - kubernetes*
+    - docker
+    - docker-compose
+    - docker-compose-switch
+    - udica
+    - buildah
+    - libcontainers-common
+    - containerized-data-importer
+    - containerized-data-importer-*
+    - kubevirt
+    - container-selinux
+    - umoci
+    - docker-*-completion
+    - skopeo-*-completion
+    - docker-rootless-extras
+    - buildkit
+    - nerdctl
+    - flannel
+    - k3s-install
+    - k3s-selinux
+    - containerized-data-importer-manifests
+    - libspdlog1*
+    - wasmedge
+   buildflavors:
+    - name: obs
+      binaries:
+       - container-build-checks
+       - obs-service-cdi_containers_meta
+    - name: zypp
+      requires:
+       - "@UpdateStackLibraries"
+      binaries:
+       - container-suseconnect
+    - name: nbd
+      requires:
+       - "@NetworkStorage"
+      binaries:
+       - containerized-data-importer-importer
+       - containerized-data-importer-uploadserver
+    - name: gpu
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - criu-plugin-amdgpu
+
+ - name: "@Elemental"
+   sourceproject: Container
+   requires:
+    - "@Container"
+    - "@OpticalMedia+tcl"
+    - "@NetworkManager"
+   binaries:
+    - elemental
+    - elemental-*
+
+ - name: "@Fish"
+   sourceproject: Container
+   requires:
+    - "@Core"
+    - "@ManDoc"
+    - "@Container"
+   packages:
+    - fish
+   buildflavors:
+    - name: docker
+      requires:
+       - "@Container"
+      binaries:
+       - docker-fish-completion
+    - name: skopeo
+      requires:
+       - "@Container"
+      binaries:
+       - skopeo-fish-completion
+

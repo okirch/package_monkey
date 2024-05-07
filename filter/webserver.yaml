@@ -1,0 +1,174 @@
+# vi: ai et
+# Definition of Webserver component
+
+components:
+ - name: Webserver
+   globals:
+    devel: WebserverDevel
+   requires:
+    - CorePlus
+    - Security
+    - Perl
+    - Python
+    - Network
+    - Databases
+    - Java
+    - Editors
+    # why?
+    - Systemd
+
+build_configs:
+ - name: Webserver/standard
+   buildrequires:
+    - "@ApacheAPI"
+    - "@CommonDatabaseAPI"
+    - "@FirewallAPI"
+ - name: Webserver/nginx
+   buildrequires:
+    - "@NginxAPI"
+    - "@Vim"
+ - name: Webserver/php
+   buildrequires:
+    - "@PHP"
+    - "@SNMPAPI"
+    - "@SystemDatabaseAPI"
+
+groups:
+ - name: "@NginxAPI"
+   sourceproject: Webserver
+   requires:
+    - "@Nginx"
+    - "@Vim"
+    - "@XMLAPI"
+    - "@EssentialGraphicsAPI"
+    - "@FontLibsAPI"
+    - "@DrawingAPI"
+    - "@X11API"
+   binaries:
+    - nginx-source
+    - nginx-macros
+
+ - name: "@Nginx"
+   api: "@NginxAPI"
+   sourceproject: Webserver
+   requires:
+    - "@NetworkServices"
+    - "@DrawingLibraries+x11"
+   binaries:
+    - nginx
+
+ - name: "@ApacheLibraries"
+   api: "@ApacheAPI"
+   sourceproject: Webserver
+   requires:
+    - "@Core0"
+    - "@CoreXMLLibraries"
+   packages:
+    - libapr
+    - libapr-util
+   binaries:
+    - apache-rpm-macros
+    - apache-rpm-macros-control
+    - libapr-util1
+    - libapr-util1*-dbd-sqlite*
+    - libapr1-*
+   buildflavors:
+    - name: database
+      requires:
+       - "@SystemDatabaseLibraries"
+      binaries:
+       - libapr-util1*-dbd-mysql
+       - libapr-util1*-dbd-mgsql
+
+ - name: "@Apache"
+   api: "@ApacheAPI"
+   sourceproject: Webserver
+   requires:
+    - "@NetworkServices"
+    - "@ApacheLibraries"
+    - "@LUARuntime"
+   binaries:
+    - apache2*
+    - apache2-manual purpose=doc
+
+ - name: "@ApacheAPI"
+   sourceproject: Webserver
+   requires:
+    - "@Apache"
+    - "@CoreAPI"
+    - "@CoreXMLAPI"
+    - "@GCC"
+    - "@PlusUtilities"
+   binaries:
+    - apache2-devel
+    - apr-devel
+    - apr-util-devel
+    - apache-rex purpose=doc
+
+ - name: "@TomcatAPI"
+   sourceproject: Webserver
+   requires:
+    - "@Tomcat"
+
+ - name: "@Tomcat"
+   api: "@TomcatAPI"
+   sourceproject: Webserver
+   requires:
+    - "@ApacheCommons"
+    - "@ApacheLibraries"
+   binaries:
+    - tomcat
+    - tomcat-*
+    - tomcat10*
+
+ - name: "@PHPAPI"
+   sourceproject: Webserver
+   requires:
+    - "@PHP"
+#   - "@PHP+PECL"
+    - "@CoreAPI"
+   binaries:
+    - php8-devel
+    - php8-pecl
+
+ - name: "@PHP"
+   api: "@PHPAPI"
+   sourceproject: Webserver
+   requires:
+    - "@Core"
+    - "@DrawingLibraries"
+    # does it make sense to ship php without datatbase support?
+    - "@Databases"
+    - "@Spelling"
+    - "@Apache"
+    - "@SNMPLibraries"
+   binaries:
+    - php*
+    - apache2-mod_php8
+   buildflavors:
+    - name: PECL
+      requires:
+       - "@GCC"
+       - "@MinimalCDevelopment"
+      binaries:
+
+ - name: "@CGIAPI"
+   sourceproject: Webserver
+   requires:
+    - "@CGI"
+    - "@CoreAPI"
+   binaries:
+    - FastCGI-devel
+
+ - name: "@CGI"
+   api: "@CGIAPI"
+   sourceproject: Webserver
+   requires:
+    - "@Core"
+   binaries:
+    - FastCGI
+   buildflavors:
+    - name: perl
+      binaries:
+       - perl-FastCGI
+

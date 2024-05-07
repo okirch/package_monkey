@@ -1,0 +1,94 @@
+# vi: ai et
+# Definition of GCC component
+
+components:
+ - name: GCC
+   globals:
+    devel: GccDevel
+   requires:
+    - Core
+   exports:
+    - "@GccRuntime"
+    - "@GCC"
+
+build_configs:
+ - name: GCC/standard
+   buildrequires:
+    - "@DevelopmentUnitTests"
+    - "@KernelHeaders"
+
+groups:
+ - name: "@GccRuntime"
+   sourceproject: GCC
+   requires:
+    - "@Glibc"
+   binaries:
+    - libgcc_s1
+    - libstdc++6
+    - libgomp1
+    - libgfortran5
+    - libatomic1
+    - libquadmath0
+    - libubsan1
+    - libgmp10
+    - libgmpxx4
+
+ - name: "@GCC"
+   sourceproject: GCC
+   requires:
+    - "@GlibcDevel"
+    - "@MinimalCRuntime"
+    - "@Core0"
+   binaries:
+    - gcc
+    - cpp
+    - gcc13
+    - cpp13
+    - binutils
+    - ccache
+    - debugedit
+    - gmp
+    - dwz
+    - isl
+    - gmp-devel
+    - libstdc++-devel
+    - libstdc++-build-devel
+    - libstdc++6-devel-gcc13
+   buildflavors:
+    - name: test
+      binaries:
+       - dwz-testsuite
+
+ - name: "@GCCDevel"
+   is_api: True
+   sourceproject: GCC
+   requires:
+    - "@GCC"
+    - "@CoreAPI"
+   binaries:
+    - binutils-devel
+
+ - name: "@GccCross"
+   sourceproject: GCC
+   requires:
+    - "@GCC"
+   binaries:
+    - cross-*
+    - cross-*-newlib13-devel
+   buildflavors:
+    - name: llvm
+      requires:
+       - "@LLVM"
+      binaries:
+       - cross-amdgcn-gcc13
+
+ - name: GccDevel
+   sourceproject: GCC
+   requires:
+    - "@GCC"
+   binaries:
+    - gcc13-devel
+    # Not sure of this is the right place for this NVPTX stuff:
+    - cross-nvptx-gcc13
+    - nvptx-tools
+

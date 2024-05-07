@@ -1,0 +1,1359 @@
+# vi: ai et
+# Definition of Core component
+
+components:
+ - name: Core
+   globals:
+    devel: CoreDevel
+   imports:
+    - "@GccRuntime"
+    # for rpm and librpmbuild:
+    - "@SystemLUARuntime"
+    # for libltdl and gettext-runtime:
+    - "@DevelopmentRuntime"
+   exports:
+    - "@CoreLibraries"
+
+build_configs:
+ - name: Core/standard
+   buildrequires:
+    - "@GCC"
+    - "@GettextTools"
+    - "@RpmLint"
+    - "@DevelopmentRuntime"
+    - "@CoreCrypto"
+    - CoreDevel
+    # OBS wants to install screen and libutempter
+    - "@Console"
+    - "@KerberosAPI"
+#   - "@SystemdOnlyForOBS"
+    - "@DevelopmentEssentials"
+    - "@DevelopmentCore"
+    - "@DevelopmentUnitTests"
+    - "@SystemPython"
+    - "@GtkDoc"
+    - "@ManDoc+ruby"
+    - "@Valgrind"
+ - name: Core/java
+   buildrequires:
+    - "@JavaTimezoneTools"
+    - "@Java"
+    - "@ApacheCommons"
+    - "@DesktopQuarks"
+ - name: Core/cross
+   buildrequires:
+    - "@GccCross"
+    - "@KernelHeaders"
+ - name: Core/systemd
+   buildrequires:
+    - "@SystemdAPI"
+    - "@SystemdOnlyForOBS"
+    - "@PolicyKitAPI"
+    - "@PolicyKit"
+    - "@NetworkUtils"
+ - name: Core/qt
+   buildrequires:
+    - "@QtAPI"
+    - "@SVGAPI"
+ - name: Core/qtplus
+   buildrequires:
+    - "@QtAPI"
+    - "@SVGAPI"
+    - "@Qt5ExtendedAPI"
+ - name: Core/x11
+   buildrequires:
+    - "@X11API"
+ - name: Core/gtk
+   buildrequires:
+    - "@GtkAPIs"
+    - "@GdkPixbufAPI"
+    - "@DesktopQuarks"
+    # for gi-docgen
+    - "@SystemPythonBuildSupport"
+ - name: Core/database
+   buildrequires:
+    - "@SystemDatabaseAPI"
+    - "@SystemdOnlyForOBS"
+#   - "DatabasesDevel"
+ - name: Core/boost
+   buildrequires:
+    - "@BoostAPI"
+ - name: Core/debian
+   buildrequires:
+    - "@DebianCompat"
+ - name: Core/tcl
+   buildrequires:
+    - "@TclAPI"
+ - name: Core/tk
+   buildrequires:
+    - "@TclAPI+x11"
+ - name: "Core/build:tk"
+   inheritable: False
+   buildrequires:
+    - "@TclAPI+x11"
+    - "@X11LegacyAPI"
+   packages:
+    - tk
+ - name: "Core/build:glibc"
+   inheritable: False
+   buildrequires:
+    - "@KernelHeaders"
+    - "@DrawingAPI"
+   packages:
+    - glibc:utils
+ - name: "Core/build:pam"
+   inheritable: False
+   buildrequires:
+    - "@ApacheCommonsMinimal"
+    - "@BrowsersConsole+ruby"
+    - "@SystemdAPI"
+   packages:
+    - pam:full
+ - name: "Core/build:permissions"
+   inheritable: False
+   buildrequires:
+    - "@DevelopmentMisc"
+   packages:
+    - permissions
+ - name: "Core/build:psmisc"
+   inheritable: False
+   buildrequires:
+    - "@HostNetworking"
+   packages:
+    - psmisc
+ - name: "Core/build:pkcs11"
+   inheritable: False
+   buildrequires:
+    - "@HostSecurityAPI"
+    - "@SystemdAPI"
+    - "@SystemdOnlyForOBS"
+   packages:
+    - p11-kit
+    - openssl-pkcs11-sign-provider
+ - name: Core/rust
+   buildrequires:
+    - "@Rust"
+ - name: Core/ruby
+   buildrequires:
+    - "@RubyAPI"
+ - name: Core/docbuild
+   buildrequires:
+    - "@Texinfo+tex"
+    - "@Docbook+tex"
+    - "@HTMLLibraries"
+ - name: Core/graphviz
+   buildrequires:
+    - "@Graphviz"
+ - name: Core/nghttp
+   inheritable: False
+   buildrequires:
+    - "@SystemdAPI"
+    - "@BoostAPI"
+
+groups:
+ - name: CoreDevel
+   requires:
+    - "@GlibcDevel"
+    - "@Glib2API"
+    - "@CoreAPI"
+   binaries:
+
+ # Can we kill this?
+ - name: "@CoreConfig"
+   sourceproject: Core
+
+ - name: "@Glibc"
+#  api: "@GlibcDevel"
+   sourceproject: Core
+   gravity: 100
+   binaries:
+    - glibc
+    - glibc-locale
+    - libcrypt1
+    - filesystem
+    - compat-usrmerge-tools
+    - system-user-root
+    - glibc-i18ndata purpose=i18n
+    - glibc-html purpose=doc
+    - glibc-info purpose=doc
+   purposes:
+    - name: 32bit
+      binaries:
+       - glibc-32bit
+
+ # This label exists because we need to hide the fact that somewhat oddly,
+ # Glibc sits below gcc runtime
+ - name: "@MinimalCRuntime"
+   sourceproject: Core
+   autoselect: no
+   requires:
+    - "@Glibc"
+    - "@GccRuntime"
+
+ - name: "@PkgConfig"
+   description: |
+    Mostly, pkgconf is used by -devel packages, but there's the odd
+    runtime package (like libstorage-ng1) that pulls in pkgconf.
+    So we create a label separate from GlibcDevel
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - python-pkgconfig
+   binaries:
+    - libpkgconf3
+    - pkgconf
+    - pkgconf-m4
+    - pkgconf-pkg-config
+   buildflavors:
+    - name: python
+      binaries:
+       - python${systemPythonVersion}-pkgconfig
+
+ - name: "@GlibcDevel"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+    - "@PkgConfig"
+   binaries:
+    - glibc-devel
+    - libxcrypt-devel
+    - glibc-devel-static
+    - libxcrypt-devel-static
+    - linux-glibc-devel
+    - cross-*-glibc-devel priority=3
+
+ - name: "@RpmAPI"
+   is_api: True
+   sourceproject: Core
+   requires:
+    - "@CoreAPI"
+   binaries:
+    - rpm-build
+    - rpm-devel
+   buildflavors:
+    - name: lua
+      requires:
+       - "@LUA"
+      binaries:
+       - compat-usrmerge-build
+
+ - name: "@Glib2Core"
+   api: "@CoreAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+   packages:
+    - glib2
+    - gobject-introspection
+   binaries:
+    - libglib-2_0*
+    - libgmodule-2*
+    - libgobject-2*
+    - libgthread-2*
+    - libgio-2*
+    - glib2-tools
+    - shared-mime-info
+    - libgirepository-1*
+    - girepository-1*
+    - libjson-glib-1*
+    - gio-branding-*
+    - typelib-1_0-Json-*
+   buildflavors:
+    - name: syspython
+      requires:
+       # gobject-introspection ships with a python script
+       - "@SystemPython"
+      binaries:
+       - gobject-introspection
+   purposes:
+    - name: doc
+      binaries:
+       - glib2-doc
+
+ - name: "@CoreAPI"
+   sourceproject: Core
+   autoselect: no
+   description: |
+     This label exists to maintain a cycle-free dependency graph for
+     devel packages. Some packages in CoreDevel depend on glib2-devel,
+     which lives in @Glib2API. glib2-devel in turn requires some packages
+     from CoreDevel - so we move these into @CoreAPI to straighten
+     things out.
+   requires:
+    - "@MinimalCDevelopment"
+    - "@GlibcDevel"
+    - "@GCC"
+    - "@CoreNetworkLibraries"
+    - "@ConfigFileLibraries"
+    - "@Core1"
+    - "@Glib2Core"
+   binaries:
+    # flex lives in Core because libfl needs to be in Core
+    - flex
+    - gdbm-devel
+    - libatomic_ops-devel
+    - libblkid-devel
+    - libbrotli-devel
+    - libbsd-devel
+    - libbz2-devel
+    - libcurl-devel
+    - libelf-devel
+    - libffi-devel
+    - libidn2-devel
+    - libjson-c-devel
+    - libmount-devel
+    - libopenssl-devel
+    - libpwquality-devel
+    - libselinux-devel
+    - libsepol-devel
+    - libuuid-devel
+    - ncurses-devel
+    - openldap2-devel
+    - patch
+    - patchutils
+    - pcre2-devel
+    - qrencode-devel
+    - zlib-devel
+    - cyrus-sasl-bdb-devel
+    - libopenssl-fips-provider
+    - psl-make-dafsa
+    - glib2-devel
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@CoreServices+systemd"
+      binaries:
+       - procps-devel
+    - name: syspython
+      requires:
+       - "@Glib2Core+syspython"
+      binaries:
+       - gobject-introspection-devel
+    - name: kernellibs
+      requires:
+       - "@Core0+kernellibs"
+       - "@KernelAPI+udev"
+      binaries:
+       - libcryptsetup-devel
+   purposes:
+    - name: x86_64_v3
+      requires:
+       - "@CoreLibraries-x86_64_v3"
+      binaries:
+       - libpng16-devel-x86-64-v3
+       - libpng16-compat-devel-x86-64-v3
+       - libgcrypt-devel-x86-64-v3
+
+ # NOTE: This currently includes a lot of LLVM bits, which should probably be separated
+ # the way GCC is
+ - name: "@CoreLibraries"
+   api: "@CoreAPI"
+   # when deciding where to place -devel packages for a set of packages spread across
+   # several labels (eg libbz2 here, bzip2 in Core0), we want this label to win
+   gravity: 90
+   sourceproject: Core
+   api: "@CoreAPI"
+   requires:
+    - "@CoreConfig"
+    - "@MinimalCRuntime"
+    - "@DevelopmentRuntime"
+    - "@LibComErr"
+   packages:
+    - zlib
+    # In theory, we *could* move lz4 into CorePlus:@ArchivingLibraries
+    # But then, quite a few labels in HardwareAccess would suddenly depend on
+    # CorePlus, which we do not want.
+    - lz4
+   binaries:
+    - environment_with_systemd
+    - environment_with_udev
+    - mozilla-nss
+    - p11-kit-nss-trust
+    - p11-kit-tools
+    - libp11-kit0
+    - crypto-policies
+    - libacl1
+    - libtasn1
+    - libtasn1-6
+    - libgcrypt20
+    - libgcrypt20-hmac
+    - libgpg-error0
+    - libgnutls30
+    - libksba8
+    - libargon2*
+    - librhash0
+    - openssl
+    - openssl-3
+    - openssl-1_1
+    - libhogweed6
+    - libnettle8
+    - libmd0
+    - libsoftokn3
+    - mozilla-nss-certs
+    - libefivar1
+    - cracklib
+    - cracklib-dict-full
+    - cracklib-dict-small
+    - libaio1
+    - libalternatives1
+    - libaudit1
+    - libauparse0
+    - libblkid1
+    - libbpf1
+    - libbrotlicommon1
+    - libbrotlidec1
+    - libbrotlienc1
+    - libbsd0
+    - libbz2-1
+    - libcap2
+    - libcap-ng0
+    - libcrack2
+    - libdb-4_8
+    - libdouble-conversion3
+    - libeconf0
+    - libedit0
+    - libelf1
+    - libdw1
+    - libasm1
+    - libevent-2*
+    - libfdisk1
+    - libffi8
+    - libfl2
+    - libfreebl3
+    - libfribidi0
+    # libpng is required by libfreetype6
+    - libpng16-16
+    - libgdbm6
+    - libgdbm_compat4
+    - libldap-data
+    - libldap2
+    - libldapcpp0
+    - liblmdb-0*
+    - liblz4*
+    - liblzma5
+    - liblzo2*
+    - libminizip1
+    - libmount1
+    - libmpc3
+    - libmpdec3
+    - libmpfr6
+    - libmspack0
+    - libncurses6
+    - libnl3-200
+    - libnl-config
+    - libnpth0
+    - libntlm0
+    - libnss_usrfiles2
+    - libonig5
+    - libopenssl1_1
+    - libopenssl3
+    - libpcre2*
+    - libpipeline1
+    - libpopt0
+    - libpsx2
+    - libpwquality1
+    - libqrencode4
+    - libreadline8
+    - libreiserfscore0
+    - libsasl2-*
+    - libseccomp*
+    - libselinux1
+    - libsemanage2
+    - libsemanage-conf
+    - libsepol2
+    - libsha1detectcoll1
+    - libsigc-2*
+    - libsigc-3*
+    - libsmartcols1
+    - libsqlite3*
+    - libssh-config
+    - libunistring5
+    - libunwind8
+    - liburcu8
+    - liburing2
+    - libuuid1
+    - libuv1
+    - libwtmpdb0
+    - libxml2-2
+    - libxml2-tools
+    - libxxhash0
+    - libz1
+    - libzio1
+    - libzip5
+    - libzstd1
+    - ncurses
+    - terminfo-base
+    - update-alternatives
+    - sqlite3-tcl
+    - timezone
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPython"
+      binaries:
+       - python${systemPythonVersion}-libxml2
+       - python${systemPythonVersion}-libeconf
+       - python${systemPythonVersion}-libmount
+       - python3-pwquality
+
+ - name: "@ConfigFileLibraries"
+   api: "@CoreAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libyaml-0*
+    - libiniparser1
+    - libjansson4
+    - libjson-c5
+    - libjsoncpp25*
+
+ - name: "@CoreLegacy"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libnsl1
+
+ - name: "@CoreXMLLibraries"
+   api: "@CoreXMLAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libexpat1
+    - libyajl2
+
+ - name: "@CoreXMLAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreXMLLibraries"
+    - "@CoreAPI"
+   binaries:
+    - libexpat-devel
+
+ - name: "@CoreXMLTools"
+   sourceproject: Core
+   requires:
+    - "@CoreXMLLibraries"
+   binaries:
+    - expat
+
+ - name: "@CoreInstUtils"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - fillup
+
+ - name: "@Core0"
+   api: "@CoreAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+    - "@CoreConfig"
+    - "@KerberosLibraries"
+    - "@Permissions"
+    - "@ConfigFileLibraries"
+    # for rpm and librpmbuild
+    - "@SystemLUARuntime"
+   packages:
+    - rpm:python-rpm
+    - libpwquality
+    - bzip2
+   binaries:
+    - rpm
+    # this is placed in Core because suse-module-tools requires it
+    - systemd-rpm-macros
+    - ALP-dummy-release
+    - lsb-release
+    - aaa_base
+    - acl
+    - adjtimex
+    - alts
+    - at
+    - attr
+    - bash
+    - bash-*
+    - bc
+    - bridge-utils
+    - brotli
+    - bzip2
+    - ca-certificates
+    - ca-certificates-mozilla
+    - ca-certificates-mozilla-prebuilt
+    - chrpath
+    - coreutils
+    - coreutils-single
+    - cpio
+    - cyrus-sasl
+    - cyrus-sasl-scram
+    - cyrus-sasl-plain
+    - cyrus-sasl-digestmd5
+    - delayacct-utils
+    - dialog
+    - diffutils
+    - dosfstools
+    - dos2unix
+    - dwarves
+    - ed
+    - elfutils
+    - fdupes
+    - file
+    - findutils
+    - gawk
+    - gc
+    - gnutls
+    - gpart
+    - grep
+    - gzip
+    - hardlink
+    - hostname
+    - info
+    - info-lang # unfortunately, info requires info-lang
+    - jq
+    - lastlog2
+    - less
+    - libcap-progs
+    - libcurl4
+    - libnghttp2-*
+    - libgsasl7
+    - libssh4
+    - libpwquality-tools
+    # should libpcre go to CoreLibraries?
+    - libpcreposix0
+    - libpcrecpp0
+    - libpcre1
+    - libpcre16-0
+    - libpsl5
+    - libidn12
+    - libidn2
+    - libsepol-utils
+    - libslp1
+    - lmdb
+    - lndir
+    - logrotate
+    - m4
+    - mozilla-nss-tools
+    - mtools
+    - pam
+    - pam-*
+    - pam_*
+    - prctl
+    - psmisc
+    - rpm-config-SUSE
+    - sed
+    - selinux-tools
+    - shadow
+    - sle-*-release
+    - sqlite3
+    - sudo
+    - system-role-*
+    - sysuser-tools
+    - tar
+    - tcsh
+    - time
+    - util-linux*
+    - which
+    - wtmpdb
+    - xz
+    - zip
+    - zsh
+    - zstd
+    - system-users
+    - librpmbuild9
+    - libdebuginfod1-dummy
+    - debuginfod-dummy-client
+    - openssl-pkcs11-sign-provider
+    - libpamtest0 purpose=devel
+   buildflavors:
+    - name: kernellibs
+      requires:
+       - "@KernelLibraries"
+       - "@KernelLibraries+udev"
+      binaries:
+       - libcryptsetup12
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - pam-extra
+       - coreutils-systemd
+    - name: syspython
+      requires:
+       - "@SystemPython"
+      binaries:
+#      - python${systemPythonVersion}-magic
+       - python${systemPythonVersion}-rpm
+    - name: test
+      binaries:
+       - coreutils-testsuite
+   purposes:
+    - name: doc
+      binaries:
+       - bash-completion-doc
+
+ - name: "@OpenLDAP"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+    - "@PerlCore"
+   packages:
+    - openldap2
+   binaries:
+    - openldap2
+    - openldap2-back-*
+    - openldap2-client
+   buildflavors:
+    - name: database
+      requires:
+       - "@CommonDatabaseLibraries"
+      binaries:
+       - openldap2-back-sql
+
+ - name: "@PythonBuildConfig"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+   binaries:
+    - python-rpm-macros
+    - python-pyqt-rpm-macros
+
+ - name: "@PythonCore311"
+   sourceproject: Core
+   requires:
+    - "@PythonBuildConfig"
+    - "@CoreXMLLibraries"
+   binaries:
+    - python-rpm-generators
+    - python311
+    - python311-base
+    - python311-future
+    - python311-extras
+    - python311-setuptools
+    - python311-setuptools-wheel
+    - python311-six
+    - python311-curses
+    - python311-dbm
+    - python311-tools
+    - python311-packaging
+    - libpython311
+   purposes:
+    - name: doc
+      binaries:
+       - python311-doc
+       - python-six-doc
+   buildflavors:
+    - name: tcl
+      requires:
+       - "@TclCore+x11"
+      binaries:
+       - python311-tk
+       - python311-idle
+       - python311-testsuite
+
+ - name: "@PythonAPI311"
+   sourceproject: Core
+   requires:
+    - "@PythonCore311"
+   binaries:
+    - python311-devel
+
+ - name: "@PythonCore310"
+   sourceproject: Core
+   requires:
+    - "@PythonBuildConfig"
+   binaries:
+    - python310
+    - python310-base
+    - python310-future
+    - python310-extras
+    - python310-setuptools
+    - python310-setuptools-wheel
+    - python310-six
+    - python310-curses
+    - python310-dbm
+    - python310-tools
+    - python311-packaging
+# unfortunately, the following does not work yet, because by the time we parse this purpose statement, we have
+# not yet populated all -$purpose children
+#   - python310-doc purpose=doc
+    - libpython310
+   purposes:
+    - name: doc
+      binaries:
+       - python310-doc
+   buildflavors:
+    - name: tcl
+      requires:
+       - "@TclCore+x11"
+      binaries:
+       - python310-tk
+       - python310-idle
+       - python310-testsuite
+
+ - name: "@PythonAPI310"
+   sourceproject: Core
+   requires:
+    - "@PythonCore310"
+   binaries:
+    - python310-devel
+
+ - name: "@SystemPython"
+   sourceproject: Core
+   requires:
+    - "@PythonCore${systemPythonVersion}"
+
+ - name: "@SystemPythonCore"
+   sourceproject: Core
+   requires:
+    - "@PythonCore${systemPythonVersion}"
+
+ - name: "@DefaultPython"
+   sourceproject: Core
+   requires:
+    - "@PythonCore${defaultPythonVersion}"
+   binaries:
+    - python3
+
+ - name: "@RubyCore"
+   sourceproject: Core
+
+ - name: "@Core1"
+   api: "@CoreAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+    - "@Core0"
+    - "@PerlCore"
+    - "@CoreNetworkLibraries"
+    - "@CoreXMLLibraries"
+    - "@SystemPython"
+    - "@OpenLDAP"
+   packages:
+    - libqb
+   binaries:
+    - libldapcpp0
+    - openslp
+    - suse-build-key
+    - libtidy5*
+    - glibc-extra
+    - glibc-profile
+    - libqb100*
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - openslp-server
+    - name: fancy
+      requires:
+       - "@DrawingLibraries+x11"
+      binaries:
+       - glibc-utils
+
+ - name: "@CoreCryptoAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreCrypto"
+    - "@CoreAPI"
+   binaries:
+    - libfido2-devel
+
+ - name: "@CoreCrypto"
+   api: "@CoreCryptoAPI"
+   sourceproject: Core
+   requires:
+    - "@Core1"
+    - "@CoreHardware"
+   binaries:
+    - gpg2
+    - openssh-common
+    - openssh-clients
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@Core+systemdlibs"
+       - "@Core+udevlibs"
+       - "@SystemdServices"
+      binaries:
+       - openssh-server
+       - openssh
+    - name: tpm
+      requires:
+       - "@PlatformCryptoLibraries"
+      binaries:
+       - gpm2-tpm
+    - name: gtk
+      requires:
+       - "@Gtk3"
+      binaries:
+       - openssh-askpass-gnome
+
+ - name: "@CoreHardware"
+   sourceproject: Core
+   api: "@CoreHardwareAPI"
+   requires:
+    - "@CoreLibraries"
+    - "@UdevLibraries"
+   packages:
+    - pps-tools
+   binaries:
+    # these don't actually need systemd, they only depend on udev
+    # one way or other
+    - libhidapi-hidraw0
+    - libhidapi-libusb0
+    - libusb-*
+    - libfido2-1
+    - libconfig11
+    - libmtdev1
+    - pps-udev
+
+ - name: "@CoreHardwareAPI"
+   sourceproject: Core
+   requires:
+    - "@GlibcDevel"
+    - "@CoreHardware"
+   binaries:
+    - mtdev-devel
+    - libusb-*-devel priority=0
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@SystemdAPI"
+      binaries:
+       - libhidapi-devel
+
+ - name: "@CoreFontAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreFontLibraries"
+    - "@CoreXMLAPI"
+    - "@CoreAPI"
+   binaries:
+    - freetype2-devel
+    - freetype2-profile-tti35
+    - fontconfig-devel
+
+ - name: "@CoreFontLibraries"
+   api: "@CoreFontAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+    - "@CoreXMLLibraries"
+   packages:
+    - fontconfig
+   binaries:
+    - libfreetype6
+    - libfontconfig1
+    - fontconfig
+
+ - name: "@CoreX11API"
+   sourceproject: Core
+   requires:
+    - "@CoreX11Libraries"
+    - "@CoreAPI"
+   binaries:
+    - libICE-devel
+    - libSM-devel
+    - libX11-devel
+    - libXau-devel
+    - libxcb-devel
+    - libXcomposite-devel
+    - libXext-devel
+    - libXfixes-devel
+    - libXi-devel
+    - libXpm-devel
+    - libXrender-devel
+    - libXt-devel
+    - xorgproto-devel
+   buildflavors:
+    - name: fonts
+      requires:
+       - "@CoreX11Libraries+fonts"
+       - "@FontLibsAPI"
+      binaries:
+       - libXft-devel
+
+ - name: "@CoreX11Libraries"
+   sourceproject: Core
+   api: "@CoreX11API"
+   requires:
+    - "@Core0"
+   binaries:
+    - libXpm-tools
+    - xbitmaps
+    - libICE6
+    - libSM6
+    - libX11-6
+    - libX11-data
+    - libX11-xcb1
+    - libXau6
+    - libXaw6
+    - libXaw7
+    - libXaw8
+    - libxcb1
+    - libxcb-composite0
+    - libxcb-cursor0
+    - libxcb-damage0
+    - libxcb-dpms0
+    - libxcb-dri2-0
+    - libxcb-dri3-0
+    - libxcb-ewmh2
+    - libxcb-glx0
+    - libxcb-icccm4
+    - libxcb-image0
+    - libxcb-keysyms1
+    - libxcb-present0
+    - libxcb-randr0
+    - libxcb-record0
+    - libxcb-render0
+    - libxcb-render-util0
+    - libxcb-res0
+    - libxcb-screensaver0
+    - libxcb-shape0
+    - libxcb-shm0
+    - libxcb-sync1
+    - libxcb-xf86dri0
+    - libxcb-xfixes0
+    - libxcb-xinerama0
+    - libxcb-xinput0
+    - libxcb-xkb1
+    - libxcb-xtest0
+    - libxcb-xv0
+    - libxcb-xvmc0
+    - libXcomposite1
+    - libXext6
+    - libXfixes3
+    - libXi6
+    - libXmu6
+    - libXmuu1
+    - libXpm4
+    - libXrender1
+    - libXss1
+    - libXt6
+    - xorgproto
+    - xorgproto-doc purpose=doc
+
+   buildflavors:
+    - name: fonts
+      requires:
+       - "@CoreFontLibraries"
+      binaries:
+       - libXft2
+
+ - name: "@CoreX11Utils"
+   sourceproject: Core
+   api: "@CoreX11API"
+   requires:
+    - "@CoreX11Libraries"
+   binaries:
+    - xhost
+
+ - name: "@CoreServices"
+   sourceproject: Core
+   api: "@CoreAPI"
+   requires:
+    - "@CoreHardware"
+    - "@KerberosLibraries"
+   binaries:
+    - nscd
+    # this is here because the sasl libraries are currently in Core
+    - cyrus-sasl-saslauthd
+    # it's not a service but it links against libsystemd
+    - cronie
+    - lmv2
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - procps
+       - libprocps*
+       - util-linux-systemd
+       - p11-kit-server
+
+ - name: "@AuditServices"
+   sourceproject: Core
+   api: "@CoreAPI"
+   requires:
+    - "@Core0"
+    - "@CoreNetworkLibraries"
+   binaries:
+    - audit
+    - system-group-audit
+    - audit-audispd-plugins
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPythonCore"
+      binaries:
+       - python3-audit
+
+ - name: "@Permissions"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+    - "@CoreInstUtils"
+   binaries:
+    - permissions
+    - chkstat
+    - sysuser-shadow
+    - polkit-default-privs
+    - system-group-hardware
+    - system-user-tss
+   buildflavors:
+    - name: zypp
+      requires:
+       - "@UpdateStackLibraries"
+      binaries:
+       - permissions-zypp-plugin
+
+ - name: "@Core"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+    - "@CoreHardware"
+    - "@CoreServices"
+    - "@Core0"
+    - "@Core1"
+    - "@SystemPython"
+   binaries:
+   buildflavors:
+    - name: systemdlibs
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - util-linux-tty-tools
+       - nghttp2
+    - name: systemd
+      requires:
+       - "@Core+systemdlibs"
+       - "@Core+udevlibs"
+       - "@SystemdServices"
+      binaries:
+       - cyrus-sasl-*
+       - uuidd
+       # all other krb5 packages are probably network services and go here:
+       - krb5-*
+    - name: database
+      requires:
+       - "@SystemDatabaseLibraries"
+       - "@Core+systemd"
+      binaries:
+       - cyrus-sasl-sqlauxprop*
+       - cyrus-sasl-sqlauthd*
+       - cyrus-sasl-ldap-auxprop
+       - cyrus-sasl-ldap-auxprop-bdb
+    - name: syspython
+      requires:
+       - "@SystemPython"
+       - "@Core+systemdlibs"
+       - "@Core+udevlibs"
+      binaries:
+       - sudo-plugin-python
+    - name: kernellibs
+      requires:
+       - "@KernelLibraries"
+       - "@KernelLibraries+udev"
+       - "@Core0+kernellibs"
+      binaries:
+       - cryptsetup
+       - efivar
+    - name: test
+      binaries:
+       - uid_wrapper
+       - nss_wrapper
+
+ - name: "@KerberosLibraries"
+   sourceproject: Core
+   api: "@KerberosAPI"
+   requires:
+    - "@CoreLibraries"
+    - "@KernelCrypto"
+    - "@CoreInstUtils"
+   binaries:
+    - krb5
+    - krb5-mini
+    - libverto1
+    - libverto-libev1
+   buildflavors:
+    - name: glib
+      requires:
+       - "@Glib2NoDBus"
+      binaries:
+       - libverto-glib1
+
+ - name: "@KerberosAPI"
+   sourceproject: Core
+   requires:
+    - "@KerberosLibraries"
+    # for keyutils-devel
+    - "@KernelAPI"
+    - "@CoreAPI"
+    - "@LibComErrAPI"
+   binaries:
+    - krb5-devel
+    - krb5-mini-devel
+    - libgsasl-devel
+    - libverto-devel
+   buildflavors:
+    - name: glib
+      requires:
+       - "@KerberosLibraries+glib"
+      binaries:
+       - libverto-glib-devel
+
+
+ - name: "@Texinfo"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+    - "@Perl"
+    - "@GettextTools"
+   binaries:
+    - texi2info
+    - texi2html
+    - makeinfo
+    - perl-libintl-perl
+   buildflavors:
+    - name: tex
+      requires:
+       - "@Texlive"
+
+ - name: "@TclAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreAPI"
+    - "@TclCore"
+   binaries:
+    - tcl-devel
+   buildflavors:
+    - name: x11
+      requires: 
+       - "@TclCore+x11"
+       - "@CoreX11API"
+      binaries:
+       - tk-devel
+
+ - name: "@TclCore"
+   api: "@TclAPI"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+   binaries:
+    - tcl
+    - expect
+   buildflavors:
+    - name: x11
+      requires:
+       - "@CoreX11Libraries+fonts"
+       # tk wants to use xhost
+       - "@CoreX11Utils"
+      binaries:
+       - tk
+       - tix
+
+ - name: "@CoreNetworkLibraries"
+   api: "@CoreAPI"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+    # for snmp
+   packages:
+    - libsmi
+    - python-NaCl
+    - c-ares
+   binaries:
+    - netcfg
+    - libwrap0
+    - libpgm-5*
+    - libmaxminddb0
+
+ - name: "@CoreNetworkUtils"
+   api: "@CoreAPI"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+   binaries:
+    - net-tools
+    - net-tools-deprecated
+
+ # Really?!
+ # FIXME: move this to Network
+ - name: "@NetworkCore"
+   sourceproject: Core
+   requires:
+    - "@CoreNetworkLibraries"
+    - "@KernelLibraries"
+
+ - name: "@HPCCoreLibraries"
+   sourceproject: Core
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libgsl27
+
+ - name: "@PerlCoreAPI"
+   sourceproject: Core
+   requires:
+    - "@PerlCore"
+
+ - name: "@PerlCore"
+   api: "@PerlCoreAPI"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+    - "@CoreXMLLibraries"
+   binaries:
+    - perl
+    - perl-base
+    - perl-doc
+    - perl-Bootloader
+    - perl-IPC-Run3
+    - perl-Date-Calc
+    - perl-DBI
+    - perl-Carp-Clan
+    - perl-Bit-Vector
+    - perl-Text-Unidecode
+    - perl-Term-ReadKey
+    - perl-Unicode-EastAsianWidth
+    - perl-JSON
+    - perl-File-HomeDir
+    - perl-File-Path
+    - perl-File-Which
+#   - perl-libintl-perl
+    - perl-gettext
+   purposes:
+    - name: 32bit
+      binaries:
+       - perl-32bit
+
+ # Really Core?!
+ - name: "@Documentation"
+   sourceproject: Core
+   binaries:
+    - release-notes-*
+
+ # Really Core?!
+ - name: "@Patterns"
+   description: |
+     patterns packages should live outside the component framework.
+   disposition: ignore
+   sourceproject: Core
+   binaries:
+    - patterns-*
+
+ # Really Core?!
+ - name: "@ProductBuilder"
+   sourceproject: Core
+   disposition: ignore
+   binaries:
+    - product-composer
+    - product-builder
+    - product-builder-plugin-ALP
+    - product-builder-plugin-SLE_15
+    - SLE-EULAs
+    - instsource-susedata
+    - mksusecd

@@ -1,0 +1,67 @@
+#!/usr/bin/python3
+
+from options import Application
+from filter import Classification, PackageFilter
+
+class CountingDict(object):
+	def __init__(self):
+		self._count = {}
+
+	def increment(self, key, count):
+		try:
+			self._count[key] += count
+		except:
+			self._count[key] = count
+
+	def __getitem__(self, key):
+		return self._count.get(key, 0)
+
+def main():
+	application = Application('list-component')
+	application.addArgument('--terse', action = 'store_true', default = False)
+	application.addArgument(dest = 'components', metavar = 'COMPONENTS', nargs = '*', help = 'list of components to query')
+	application.parseArguments()
+
+	classificationScheme = Classification.Scheme()
+	classification = application.loadClassification(classificationScheme)
+
+	membershipSize = CountingDict()
+	for label, members in classification.enumeratePackages():
+		membershipSize.increment(label.baseLabel, len(members))
+
+	for label, build in classification.enumerateBuilds():
+		membershipSize.increment(label, 1)
+
+	if application.opts.components:
+		componentSubset = Classification.createLabelSet()
+		for name in application.opts.components:
+			component = classificationScheme.getLabel(name)
+			if component is None:
+				raise Exception(f"Unknown component {name}")
+			assert(component.type == Classification.TYPE_SOURCE)
+			componentSubset.add(component)
+	else:
+		componentSubset = None
+
+	binaryOrder = classificationScheme.defaultOrder()
+	componentOrder = classificationScheme.componentOrder()
+	for component in componentOrder.bottomUpTraversal(componentSubset):
+
+		size = membershipSize[component]
+		print(f"  {component} ({size} OBS packages)")
+
+		if not application.opts.terse:
+			binaryLabels = classificationScheme.getReferencingLabels(component)
+			for label in binaryOrder.bottomUpTraversal(binaryLabels):
+				if label.flavorName or label.purposeName:
+					continue
+
+				size = membershipSize[label]
+				if not size:
+					continue
+
+				print(f"      - {label} ({size} rpms)")
+
+			print()
+
+main()

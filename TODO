@@ -1,0 +1,6 @@
+
+- need to improve the placement algorithm. Example
+	libmicrohttpd is placed into the max base label MinimalSystemd
+	elfutils-debuginfod is placed into Core0 but requires libmicrohttpd
+
+- make Package.fullname() method a @property, like @shortname

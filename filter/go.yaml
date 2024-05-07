@@ -1,0 +1,42 @@
+# vi: ai et
+# Definition of Go component
+
+components:
+ - name: Go
+   globals:
+    devel: GoDevel
+   requires:
+    - Core
+    - GCC
+
+build_configs:
+ - name: Go/standard
+   buildrequires:
+    - "@Go"
+ - name: Go/extras
+   buildrequires:
+    - "@GoExtras"
+
+groups:
+ - name: "@Go"
+   is_api: True
+   sourceproject: Go
+   requires:
+    - "@Core"
+    - "@GCC"
+    - "@CoreAPI"
+   binaries:
+    - go1.*
+    - go
+    - go-race
+    - golang-packaging
+
+ - name: "@GoExtras"
+   # we do not mark this as an API label as Yast
+   # uses golang-github-google-jsonnet
+   sourceproject: Go
+   requires:
+    - "@Core0"
+   binaries:
+    - golang-*
+

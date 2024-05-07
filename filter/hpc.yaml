@@ -1,0 +1,156 @@
+# vi: ai et
+# Definition of HPC component
+
+components:
+ - name: HPC
+   globals:
+    devel: HPCDevel
+   requires:
+    - Core
+    - Systemd
+    - KernelPlus
+    - HardwareAccess
+    - LUA
+
+build_configs:
+ - name: HPC/standard
+   buildrequires:
+    - "@Valgrind"
+ - name: "HPC/build:lua_lmod"
+   inheritable: False
+   buildrequires:
+    - "@PythonStandard311+tex"
+    - "@NetworkUtils"
+    - "@LUAAPI"
+   packages:
+    - lua-lmod:doc-pdf
+    - lua-lmod
+
+groups:
+ - name: HPCDevel
+   binaries:
+
+ - name: "@HPCAPI"
+   sourceproject: HPC
+   requires:
+    - "@InfinibandAPI"
+    - "@BoostAPI"
+    - "@HPC"
+   binaries:
+    - fftw3-*-hpc-devel priority=0
+    - fftw3-*-hpc-devel-static priority=0
+    - openmpi*-hpc-devel priority=0
+    - openmpi*-hpc-devel-static priority=0
+    - libopenblas-gnu-hpc-devel
+    - gnu-compilers-hpc-devel
+   buildflavors:
+    - name: kernel
+      requires:
+       - "@KernelAPI"
+      binaries:
+       - pmix-devel
+    - name: python
+      requires:
+       - "@DefaultPythonAPI"
+       - "@HPC+python"
+      binaries:
+       - python${defaultPythonVersion}-mpi4py-devel
+       - python-mpi4py-common-devel
+
+ - name: "@HDF5"
+   sourceproject: HPC
+   api: "@HPCAPI"
+   requires:
+    - "@Core"
+   packages:
+    - hdf5:serial
+    - netcdf:serial
+    - python-netCDF4
+    - python-h5py
+   binaries:
+    - netcdf
+   buildflavors:
+    - name: python
+      requires:
+       - "@SystemCython"
+      binaries: 
+       - python${systemPythonVersion}-netCDF4
+       - python${systemPythonVersion}-h5py
+
+ - name: "@HPC"
+   sourceproject: HPC
+   api: "@HPCAPI"
+   # try to get -devel packages to be placed here rather than
+   # in @HPCCoreLibraries
+   gravity: 4
+   requires:
+    - "@Core"
+    - "@CoreCrypto+systemd"
+    - "@HostNetworking"
+    - "@Infiniband"
+    - "@TclCore"
+    - "@Boost"
+    - "@PlusLibraries"
+    - "@HDF5"
+    - "@LUA"
+   packages:
+    # you're in a maze of twisty little alleys, with packages that
+    # are all named alike.
+    - openblas:*-hpc
+    - fftw3:*-hpc
+    - boost:*-hpc
+    - boost:extra
+    - openmpi1:gnu-hpc
+    - openmpi2:gnu-hpc
+    - openmpi3:gnu-hpc
+    - openmpi4:gnu-hpc
+    - openmpi1:standard
+    - openmpi2:standard
+    - openmpi3:standard
+    - openmpi4:standard
+    - gsl:gnu-hpc
+    - metis:gnu-hpc
+    - hdf5:gnu-hpc
+    - hdf5:gnu-hpc
+    - hdf5:gnu-mpich-hpc
+    - hdf5:gnu-mvapich2-hpc
+    - hdf5:gnu-openmpi4-hpc
+    - hdf5:mvapich2
+    - hdf5:openmpi4
+    - netcdf:gnu-hpc
+    - netcdf:gnu-mpich-hpc
+    - netcdf:gnu-mvapich2-hpc
+    - netcdf:gnu-openmpi4-hpc
+    - netcdf:openmpi4
+    - superlu:gnu-hpc
+    - python-mpi4py
+    - munge
+   binaries:
+    - mvapich2*
+    - mpi-selector
+    - mpich
+    - mpich-gnu-hpc
+    - mpitests*
+    - suse-hpc
+    - openmpi3
+    - openmpi4
+    - pmix
+    - libboost_mpi1_82_0-devel purpose=devel
+    - libboost_graph_parallel1_82_0-devel purpose=devel
+    - gnu-compilers-hpc
+    - libmetis-gnu-hpc
+    - lua-lmod
+   buildflavors:
+    - name: python
+      binaries:
+       - python${systemPythonVersion}-numpy-gnu-hpc
+       - python${systemPythonVersion}-mpi4py
+   purposes:
+    - name: doc
+      binaries:
+       - gsl-gnu-hpc-doc
+       - lua-lmod-doc
+
+
+
+

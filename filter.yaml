@@ -1,0 +1,225 @@
+# vi: ai et
+defines:
+ systemPythonVersion: 311
+ defaultPythonVersion: 311
+ systemLUAVersion: 54
+
+options:
+ # Sometimes, we need to split multibuilds between 2 components. Mostly, this happens
+ # for HPC where we have things like openmpi4:standard and openmpi4:gnu_hpc
+ # However, there are also two non-HPC examples where this is an issue:
+ #  - elfutils, where we have a debuginfod build which has been made optional.
+ #  - systemtap, where we have a separate systemtap-headers build (which was
+ #    presumably created in order to avoid a long build dependency cycle)
+ split_multibuilds:
+   - boost
+   - dpkg
+   - elfutils
+   - file
+   - fftw3
+   - freetype2
+   - gsl
+   - hdf5
+   - libcap-ng
+   - libseccomp
+   - libselinux
+   - metis
+   - openblas
+   - openblas
+   - python-numpy
+   - python-scipy
+   - superlu
+   - systemtap
+   - timezone
+   - libdb-4_8
+
+autoflavors:
+ - name: perl
+   # If Foo requires @PerlCore, then merge all packages that would be
+   # labelled Foo+perl into Foo itself. Otherwise, behave like
+   # disposition "separate"
+   disposition: maybe_merge
+   # A perl package that does not have special dependencies goes to @Perl
+   defaultlabel: "@Perl"
+   requires:
+    - "@PerlCore"
+   binaries:
+    - perl-*
+ - name: python
+   disposition: maybe_merge
+   autoselect: no
+   compatibility: python311
+   # placing packages through this autoflavor can be overridden by
+   # explicit placement in some @Topic (which has a default priority of 5)
+   priority: 10
+   defaultlabels:
+    - "@PythonStandard311"
+    - "@PythonModules311"
+   requires:
+    - "@PythonStandard311"
+   binaries:
+    - python311-*
+ - name: python310
+   disposition: maybe_merge
+   compatibility: python310
+   # placing packages through this autoflavor can be overridden by
+   # explicit placement in some @Topic (which has a default priority of 5)
+   priority: 10
+   # place python packages in @PythonModules by default, unless they
+   # are constrained in some other way
+   defaultlabels:
+    - "@PythonStandard310"
+    - "@PythonModules310"
+   requires:
+    - "@PythonStandard310"
+   binaries:
+    - python310-*
+ - name: ruby
+   requires:
+    - "@Ruby"
+   binaries:
+    - ruby-*
+ - name: typelib
+   # we want typelib packages to be merged into the package group of
+   # the library they apply to, rather than into a new +typelib flavor
+   disposition: maybe_merge
+   # typelibs usually depend on the package they refer to, plus girepository
+   # which currently lives in Glib2
+   requires:
+    - "@Glib2NoDBus"
+   binaries:
+    - typelib-*
+ - name: accounts
+   defaultlabel: "@Permissions"
+   disposition: maybe_merge
+   priority: 9
+   autoselect: no
+   # these shouldn't really end up in a different multibuild flavor
+   binaries:
+    - system-user-*
+    # prevent system-user-man from being mis-classified as a man package.
+    # Took me some time to figure out why the algorithm couldn't place it at all
+    - system-user-man priority=0
+
+purposes:
+ - name: devel
+   description: |
+    This matches all -devel packages, inluding static libraries.
+    For the time being, we also include architecture variants because
+    we have devel packages that happily mix 64bit and 32bit packages
+    (python-pycairo-common-devel for instance).
+   disposition: component_wide
+   # make sure that packages that end with *-devel are
+   # recognized by this filter with a higher priority than
+   # any prefix match.
+   priority: 4
+   packagesuffixes:
+    - devel
+    - devel-static
+    - devel-extra
+    - devel-doc
+    - devel-32bit
+    - devel-static-32bit
+    - devel-x86-64-v3
+    - devel-static-x86-64-v3
+ - name: doc
+   priority: 4
+   autoselect: no
+   packagesuffixes:
+    - doc
+    - doc-html
+    - doc-pdf
+    - docs
+    - docs-html
+    - docs-pdf
+    - docs-common
+    - javadoc
+    - manual
+    - examples
+ - name: i18n
+   priority: 4
+   autoselect: no
+   packagesuffixes:
+    - lang
+ - name: man
+   priority: 4
+   autoselect: no
+   augments:
+    - "@ManDoc"
+   binaries:
+    - "*-man"
+    - "*-manpages"
+ - name: x86_64_v3
+   priority: 4
+   autoselect: no
+   packagesuffixes:
+    - x86-64-v3
+ - name: 32bit
+   priority: 0
+   autoselect: no
+   packagesuffixes:
+    - 32bit
+   # catch other 32bit stuff, but do not use this infix in placement decisions (yet)
+   binaries:
+    - "*-32bit-*"
+
+include:
+ - filter/development.yaml
+ - filter/llvm.yaml
+ - filter/gcc.yaml
+ - filter/lua.yaml
+ - filter/core.yaml
+ - filter/selinux.yaml
+ - filter/perl.yaml
+ - filter/ruby.yaml
+ - filter/rust.yaml
+ - filter/python.yaml
+ - filter/go.yaml
+ - filter/java.yaml
+ - filter/javascript.yaml
+ - filter/kernel.yaml
+ - filter/hardware.yaml
+ - filter/security.yaml
+ - filter/apparmor.yaml
+ - filter/host.yaml
+ - filter/systemd.yaml
+ - filter/coreplus.yaml
+ - filter/editors.yaml
+ - filter/network.yaml
+ - filter/database.yaml
+ - filter/samba.yaml
+ - filter/webserver.yaml
+ - filter/updatestack.yaml
+ - filter/management.yaml
+ - filter/hpc.yaml
+ - filter/ha.yaml
+ - filter/typesetting.yaml
+ - filter/docfmts.yaml
+ - filter/multimedia.yaml
+ - filter/x11.yaml
+ - filter/gtk.yaml
+ - filter/desktopcommon.yaml
+ - filter/qt.yaml
+ - filter/gnome.yaml
+ - filter/kiwi.yaml
+ - filter/container.yaml
+ - filter/virtualization.yaml
+ - filter/cloud.yaml
+ - filter/applications.yaml
+
+build_configs:
+
+buildconfig_flavors:
+ - name: systemdlibs
+   requires:
+    - "@SystemdLibraries"
+ - name: gnomelibs
+   requires:
+    - "@GnomeLibraries"
+ - name: gnome
+   requires:
+    - "@Gnome"
+
+components:
+
+groups:

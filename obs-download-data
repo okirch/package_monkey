@@ -1,0 +1,72 @@
+#!/usr/bin/python3
+#
+# To download the OBS data for Dolomite, invoke like this:
+#  ./obs-download-data --family dolomite --db dolomite.db
+#
+
+forceRefresh = True
+
+from options import OBSClientApplication
+from obsclnt import OBSClient, OBSProject
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from util import NameMatcher
+
+application = OBSClientApplication('obs-download-data')
+application.addArgument('--action', help = 'Restrict what this tool will do (download, postproc)')
+application.addArgument(dest = 'packages', metavar = 'PACKAGES', nargs = '*',
+			help = 'List of package names to refresh')
+
+store = application.loadBackingStore(readonly = False,
+		dependencyTreeLookups = False,
+		sourceLookups = True)
+assert(store)
+
+# Make sure we have all the products that we use recorded in the database
+application.catalog.updateBackingStore(store)
+
+# store the arch we're asked to look at, so that we don't
+# have to play guessing games later on
+store.putProperty("arch", application.architecture)
+
+obs = application.obsClient
+
+for release in application.enumerateProducts():
+
+	product = release.createEmptyProduct()
+
+	infomsg(f"Downloading OBS information for release {release}")
+
+	projects = []
+	for bp in release.buildProjects:
+		infomsg(f"  {bp}")
+
+		project = OBSProject(bp, product)
+
+		cachePath = application.getCachePath(f"obs/{obs.hostname}")
+		project.setCachePath(cachePath)
+		projects.append(project)
+
+nameMatcher = None
+if application.opts.packages:
+	nameMatcher = NameMatcher(application.opts.packages)
+
+action = application.opts.action
+
+if action in (None, 'download'):
+	application.beginChapter(f"Updating package data for all {application.productFamily} projects")
+	for project in projects:
+		project.updateEverything(obs, store,
+				onlyPackages = nameMatcher)
+
+if action in (None, 'postproc'):
+	# Close the DB and reopen it. This ensures that the DB object starts out with no
+	# incorrect cached data
+	store = application.reloadBackingStore(readonly = False,
+			dependencyTreeLookups = False,
+			sourceLookups = True)
+
+	application.beginChapter(f"Postprocessing package data for all {application.productFamily} projects")
+	for project in projects:
+		project.processDependencies(store,
+			onlyPackages = nameMatcher)
+		project.purgeStale(store)

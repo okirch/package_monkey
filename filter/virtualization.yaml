@@ -1,0 +1,210 @@
+# vi: ai et
+# Definition of Virtualization component
+
+components:
+ - name: Virtualization
+   globals:
+    devel: VirtualizationDevel
+   requires:
+    - KernelPlus
+    - Host
+    - Network
+    - Editors
+    - Gnome
+    - X11
+    - Ruby
+    - Python
+    - UpdateStack
+
+build_configs:
+ - name: Virtualization/standard
+   buildrequires:
+    - "@Virtualization"
+    - "@SystemtapAPI"
+    - "@InfinibandAPI"
+    - "@KernelAPI"
+    - "@NetworkAPI+systemd"
+    - KernelDevel
+    - "@Vala"
+ - name: Virtualization/rados
+   buildrequires:
+    - "@RadosAPI"
+    - "@Kernel-doc"
+
+groups:
+ - name: "@VirtAPI"
+   sourceproject: Virtualization
+   requires:
+    - "@Virtualization"
+    - "@CorePlusAPI"
+   binaries:
+    # open-vm-tools wants libdnet-devel for building, but it doesn't
+    # seem to link against libdnet1...
+    - libdnet-devel
+   buildflavors:
+    - name: obsonly
+      binaries:
+       - opencensus-proto-source
+
+ - name: VirtualizationDevel
+   requires:
+    - "@Virtualization"
+    - "@CorePlusAPI"
+    - "@VirtAPI"
+
+ - name: "@KubeVirt"
+   sourceproject: Virtualization
+   requires:
+    - "@Virtualization"
+   binaries:
+    - kubevirt-virt-*
+    - kubevirt-container-disk
+    - kubevirt-manifests
+    - kubevirt-pr-helper-conf
+   buildflavors:
+    - name: obs
+      binaries:
+       - obs-service-kubevirt_containers_meta
+
+ - name: "@LibVirt"
+   api: "@VirtAPI"
+   sourceproject: Virtualization
+   requires:
+    - "@Core"
+    - "@Glib2"
+    - "@DBus"
+    - "@SystemdLibraries"
+    - "@KernelLibraries"
+    - "@PlusLibraries"
+    - "@NetworkLibraries"
+   binaries:
+    - libvirt-dbus
+    - system-user-libvirt-dbus
+
+ # Need to sort out the mess around qemu. Too much seems to depend on desktop stuff...
+ - name: "@Virtualization"
+   api: "@VirtAPI"
+   sourceproject: Virtualization
+   requires:
+    - "@CoreLibraries+python"
+    - "@LibVirt"
+    - "@AudioLibraries"
+    - "@Gnome"
+    - "@DefaultPythonOS"
+    - "@DefaultPythonDesktop"
+    - "@Infiniband"
+    - "@BrailleLibraries"
+    - "@HostNetworking"
+    - "@HostStorage"
+    - "@NetworkStorage"
+    - "@ManagementLibraries"
+    - "@Rados"
+    - "@Kernel"
+    - "@Boot+xen"
+    - "@Console"
+    - "@OpenGL"
+    - "@Vim"
+    - "@NetworkUtils+gnomelibs"
+    - "@HostWorkloads"
+    - "@PlusLibraries"
+    - "@Glib2Networking"
+    - "@NetworkAnalysis+systemd"
+    - "@USBLibraries+glib"
+    # for the wireshark plugin
+    - "@Wireshark"
+    - "@GnomeVTE"
+    - "@PlusLibraries"
+    - "@OpticalMedia+tcl"
+    - "@GtkAllVersions"
+    # for virt-scenario-gtk
+    - "@UdevLibraries+python"
+   binaries:
+    - xen
+    - kvm_state
+    - libvirt
+    - virt-*
+    - vm-install
+    - vhostmd
+    - qemu
+    - ovmf
+    - hyper-v
+    - libvmtools
+    - virt-install
+    - virt-manager
+    - virt-manager-common
+    - open-vm-tools-desktop
+    - libdnet1
+    - vte
+    - libspice-server1
+    - qemu-chardev-spice
+    - qemu-hw-display-qxl
+    - qemu-headless
+    - qemu-ui-gtk
+    - libvirt-daemon-driver-qemu
+    - libvirglrenderer1
+    - virtiofsd
+    - spice-vdagent
+    - python31?-libvirt-python
+    - libgrpc1*
+    - libgrpc3*
+    - libgrpc++*
+    - qemu-*
+    - osinfo-db-tools
+   buildflavors:
+    - name: audio
+      requires:
+       - "@PulseAudioLibraries"
+      binaries:
+       - qemu-audio-pa
+       - qemu-audio-pipewire
+    - name: smartcard
+      requires:
+       - "@Smartcards"
+      binaries:
+       - qemu-hw-usb-smartcard
+    - name: ocaml
+      is_api: True
+      requires:
+       - "@Ocaml"
+      binaries:
+       - ocaml-libvirt
+
+
+ # FIXME
+ - name: "@Guestfs"
+   sourceproject: Virtualization
+   requires:
+    - "@Ruby"
+    - "@Boot"
+    - "@PGPLibraries"
+    - "@UpdateStack"
+    - "@Management"
+    - "@Virtualization"
+    - "@MicrosoftLibraries"
+    - "@Docbook"
+   binaries:
+    - rubygem-libguestfs
+    - libguestfs0
+    - guestfs-tools
+    - guestfs-tools-bash-completion
+    - libguestfsd
+    - libguestfs-gobject-1_0
+    - libguestfs-man-pages* purpose=man priority=0
+    - libguestfs-rsync
+    - libguestfs-xfs
+    - libguestfs-winsupport
+    - libguestfs-bash-completion
+    - libguestfs-rescue
+    - libguestfs-inspect-icons
+   buildflavors:
+    - name: ocaml
+      is_api: True
+      requires:
+       - "@Ocaml"
+      binaries:
+       - ocaml-libguestfs
+    - name: lua
+      requires:
+       - "@LUA"
+      binaries:
+       - lua-libguestfs

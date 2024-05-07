@@ -1,0 +1,213 @@
+#!/usr/bin/python3
+#
+# This application can be used to inspect what buildconfig the component model
+# would use for a given OBS package.
+#
+# The main purpose is to check what is missing from a component's buildconfig to
+# be able to build the package successfully.
+#
+# suggest-buildconfig AppStream
+
+# the profile module needs to be imported before anything else
+from profile import profiling
+
+from filter import Classification
+from options import Application
+from util import TimedExecutionBlock
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from util import FrequencyCounter, IndexFormatter
+from buildspec import BuildSpecFactory
+
+application = Application('suggest-buildconfig')
+application.addArgument('--full', action = 'store_true', help = 'Show unabridged list of missing build requires')
+application.addArgument('--unlabelled', action = 'store_true', help = 'List unlabelled build dependencies')
+application.addArgument(dest = 'packages', metavar = 'PACKAGES', nargs = '*', help = 'list of OBS packages to inspect')
+application.parseArguments()
+
+classificationScheme = application.loadClassificationScheme()
+classification = application.loadClassification(classificationScheme)
+
+class Match(object):
+	def __init__(self, obsPackage, buildRequires, buildConfig, buildProvides):
+		self.obsPackage = obsPackage
+		self.buildRequires = buildRequires
+		self.buildConfig = buildConfig
+		self.buildProvides = buildProvides
+
+		self.excess = buildProvides.difference(buildRequires)
+		self.missing = buildRequires.difference(buildProvides)
+
+		if self.missing:
+			self.rating = -len(self.missing)
+		elif self.excess:
+			self.rating = 100/len(self.excess)
+		else:
+			self.rating = 100
+
+class BuildIterator(object):
+	def __init__(self, classification):
+		self.classification = classification
+
+	def __iter__(self):
+		pass
+
+class BuildIteratorNames(BuildIterator):
+	def __init__(self, classification, names):
+		super().__init__(classification)
+		self.names = names
+
+	def __iter__(self):
+		for name in self.names:
+			buildInfo = classification.getBuildSpec(name)
+			if buildInfo is None:
+				errormsg(f"No OBS package named {name}")
+				continue
+
+			component = buildInfo.label
+			if component is None:
+				print(f"{name}: no component assigned yet, cannot determine buildconfig")
+				continue
+
+			print(f"{name} requires {len(buildInfo.buildRequires)} packages for building")
+
+			buildSpec = buildSpecFactory.createBuildSpec(name, component,
+				list((rpm.label, [rpm]) for rpm in buildInfo.buildRequires))
+
+			yield buildSpec, buildInfo.buildConfig
+
+class BuildIteratorUnlabelled(BuildIterator):
+	def __init__(self, classification):
+		super().__init__(classification)
+
+	def __iter__(self):
+		for component, buildInfo in classification.enumerateBuilds():
+			buildSpec = buildSpecFactory.createBuildSpec(buildInfo.name, component,
+				list((rpm.label, [rpm]) for rpm in buildInfo.buildRequires))
+
+			if buildSpec.unlabelledBuildRequires:
+				yield buildSpec, buildInfo.buildConfig
+
+class AllMatchesQuery(object):
+	def __init__(self):
+		pass
+
+	def __call__(self, buildSpec, selectedConfig):
+		if False:
+			buildInfo = classification.getBuildSpec(name)
+			if buildInfo is None:
+				errormsg(f"No OBS package named {name}")
+				continue
+
+			component = buildInfo.label
+			if component is None:
+				print(f"{name}: no component assigned yet, cannot determine buildconfig")
+				continue
+
+			buildSpec = buildSpecFactory.createBuildSpec(name, component,
+				list((rpm.label, [rpm]) for rpm in buildInfo.buildRequires))
+
+		name = buildSpec.name
+		component = buildSpec.component
+
+		print(f"{name} requires {len(buildSpec.buildRequires)} packages for building")
+		if buildSpec.unlabelledBuildRequires:
+			print(f"   building requires packages that have not been labelled yet")
+			for rpm in buildSpec.unlabelledBuildRequires:
+				print(f"    - {rpm}")
+
+		matches = []
+		for buildConfig, requiredLabels in classification.enumerateBuildConfigs(component):
+			buildProvides = set()
+
+			visibleLabels = topicOrder.downwardClosureForSet(requiredLabels)
+			for req in visibleLabels:
+				packages = classification.packageMembership(req).packages
+				buildProvides.update(packages)
+
+			match = Match(buildSpec, buildSpec.requiredPackages, buildConfig, buildProvides)
+			match.visibleLabels = visibleLabels
+			matches.append(match)
+
+			for rpm in match.missing:
+				if rpm.label is not None and rpm.label in match.visibleLabels:
+					raise Exception(f"{buildConfig} covers {rpm.label} but the membership info seems to miss {rpm}")
+
+		previous = None
+		for match in sorted(matches, key = lambda m: m.rating, reverse = True):
+			flag = ' '
+			if match.buildConfig is selectedConfig:
+				flag = '*'
+
+			if not match.missing:
+				print(f" {flag} {match.buildConfig}: no missing packages")
+				continue
+
+			if previous is not None and previous.missing == match.missing:
+				print(f" {flag} {match.buildConfig}: same problems as with {previous.buildConfig}")
+				continue
+
+			previous = match
+
+			print(f" {flag} {match.buildConfig}: {len(match.missing)} missing packages")
+			if len(match.missing) < 20 or application.opts.full:
+				for rpm in match.missing:
+					print(f"      - {rpm} ({rpm.label})")
+
+			missingLabels = set(rpm.label for rpm in match.missing)
+
+			# in the case of unlabelled buildreqs
+			missingLabels.discard(None)
+
+			if missingLabels:
+				suggestEnhancement = topicOrder.maxima(missingLabels)
+				print(f"   In order to build with this buildconfig, you would have to add these label(s)")
+				for requiredLabel in suggestEnhancement:
+					print(f"    - {requiredLabel}")
+
+	def complete(self):
+		pass
+
+class UnlabelledQuery(object):
+	def __init__(self, classificationScheme):
+		self.classificationScheme = classificationScheme
+		self.components = {}
+
+	def __call__(self, buildSpec, selectedConfig):
+		if not buildSpec.unlabelledBuildRequires:
+			return
+
+		component = buildSpec.component
+		frequencyCounter = self.components.get(component)
+		if frequencyCounter is None:
+			frequencyCounter = FrequencyCounter(str)
+			self.components[component] = frequencyCounter
+
+		frequencyCounter.addEvent(buildSpec.unlabelledBuildRequires)
+
+	def complete(self):
+		print("The following unlabelled packages were required by one or more builds:")
+
+		formatter = IndexFormatter()
+		for component in self.classificationScheme.componentOrder().bottomUpTraversal():
+			frequencyCounter = self.components.get(component)
+			if frequencyCounter is None:
+				continue
+
+			for package, count in frequencyCounter:
+				formatter.next(component.name, f"{count:3} {package}")
+
+topicOrder = classificationScheme.defaultOrder()
+buildSpecFactory = BuildSpecFactory.create(classificationScheme, classificationScheme.defaultOrder())
+
+query = None
+if application.opts.unlabelled:
+	iterator = BuildIteratorUnlabelled(classification)
+	query = UnlabelledQuery(classificationScheme)
+else:
+	iterator = BuildIteratorNames(classification, application.opts.packages)
+	query = AllMatchesQuery()
+
+for buildSpec, selectedConfig in iterator:
+	query(buildSpec, selectedConfig)
+
+query.complete()

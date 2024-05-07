@@ -1,0 +1,204 @@
+# vi: ai et
+# Definition of DocumentFormats component
+
+components:
+ - name: DocumentFormats
+   globals:
+    devel: DocumentFormatsDevel
+   requires:
+    - CorePlus
+    - Typesetting
+    - Multimedia
+    - Java
+    # for printing:
+    - Network
+   exports:
+    - "@ManDoc"
+    - "@Docbook"
+
+build_configs:
+ - name: DocumentFormats/standard
+   buildrequires:
+    - "@TexAPI"
+    - "@GraphicsAPI"
+    - "@OpenGLAPI"
+
+groups:
+ - name: "@ManDoc"
+   sourceproject: DocumentFormats
+   requires:
+    - "@Core0"
+    - "@PerlCore"
+   binaries:
+    - mandoc
+    - mandoc-bin
+    - man
+    - groff
+    - help2man
+    - man-pages
+   buildflavors:
+    - name: render
+      requires:
+       - "@FontLibraries"
+       - "@Postscript"
+       - "@X11Libraries"
+       - "@GraphicsLibraries+x11"
+      binaries:
+       - groff-full
+       - gxditview
+    - name: ruby
+      description: Maybe this exists only because OBS needs asciidoctor
+      requires:
+       - "@Ruby"
+      binaries:
+       - ruby3.2-rubygem-asciidoctor
+
+ - name: "@Postscript"
+   sourceproject: DocumentFormats
+   requires:
+    - "@Core"
+    - "@Fonts"
+    - "@GraphicsLibraries"
+    - "@PrintingLibraries"
+   binaries:
+    - psutils
+    - ghostscript
+    - ghostscript-mini
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - ghostscript-x11
+
+ - name: "@PDFAPI"
+   sourceproject: DocumentFormats
+   requires:
+    - "@PDF"
+    - "@MinimalCDevelopment"
+    - "@BoostAPI"
+   binaries:
+    - libpoppler-devel
+
+ - name: "@PDF"
+   api: "@PDFAPI"
+   sourceproject: DocumentFormats
+   requires:
+    - "@Core"
+    - "@Fonts"
+    - "@EssentialGraphicsLibraries"
+    - "@GraphicsLibraries"
+    - "@PrintingLibraries"
+    - "@PGPLibraries"
+   binaries:
+    - poppler
+    - poppler-data
+    - libpoppler1*
+   buildflavors:
+    - name: x11
+      requires:
+       - "@FontLibraries+x11"
+       - "@GraphicsLibraries+x11"
+       - "@Glib2NoDBus"
+      binaries:
+       - poppler-tools
+       - libpoppler-glib8
+       - typelib-1_0-Poppler* priority=0
+
+ - name: "@Docbook"
+   sourceproject: DocumentFormats
+   requires:
+    - "@XMLPlus"
+    - "@DefaultPython"
+    - "@Perl"
+    - "@Fonts"
+   binaries:
+    - docbook_3
+    - docbook_4
+    - docbook_5
+    - docbook5-xsl-stylesheets
+    - docbook-xsl-*
+    - asciidoc
+    - xmlstarlet
+    - xmlto
+    - suse-xsl-stylesheets
+    # We can't add daps here because it pulls in everything under the sun
+    # ImageMagick, apache commons, inkscape, poppler, ruby...
+    # It should probably live in Applications
+#   - daps
+   buildflavors:
+    - name: tex
+      requires:
+       - "@Texlive"
+      binaries:
+       - asciidoc-latex-backend
+       - docbook-toys
+       - dblatex
+    - name: pdf
+      requires:
+       - "@ImageMagick"
+      binaries:
+       - docbook-xsl-pdf2index
+
+ - name: "@GtkDoc"
+   is_api: True
+   sourceproject: DocumentFormats
+   requires:
+    - "@Docbook"
+    - "@Glib2API"
+    - "@DefaultPythonDocProcessing"
+   binaries:
+    - gtk-doc
+    - gtk-doc-manual purpose=doc
+   buildflavors:
+    - name: tex
+      requires:
+       - "@Texlive"
+       - "@Docbook+tex"
+      binaries:
+       - gtk-doc-mkpdf
+
+ - name: "@Texlive"
+   api: "@TexAPI"
+   sourceproject: DocumentFormats
+   priority: 3
+   requires:
+    - "@Core"
+    - "@Perl"
+    - "@Fonts"
+    - "@FontLibraries"
+    - "@DrawingLibraries"
+    - "@FontLibraries+x11"
+    - "@GraphicsLibraries+x11"
+    # actually, only a handful of tex packages actually require postscript
+    # but since texlive has this huge cycle that results in this hairball
+    # of packages, it's virtually impossible to split these into packages
+    # that do require Postscript and the ones that dont.
+    - "@Postscript"
+    # similarly, quite a few require openjdk. Not sure why, but hey.
+    - "@Java"
+    - "@OpenGL"
+    - "@DefaultPythonStandard"
+    # texlive-asymptote
+    - "@TclCore+x11"
+    - "@HPCCoreLibraries"
+    # some packages use libicu
+    - "@PlusLibraries"
+   binaries:
+    - texlive-*
+    - perl-biber
+    - perl-Text-BibTeX
+    - perl-Text-BibTeX-devel priority=0
+    - transfig
+    - latex2html
+
+ - name: "@TexAPI"
+   sourceproject: DocumentFormats
+   requires:
+    - CoreDevel
+    - "@Texlive"
+   binaries:
+    - texlive-synctex-devel
+    - texlive-devel
+    - texlive-*-devel priority=0
+

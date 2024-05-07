@@ -1,0 +1,2530 @@
+#!/usr/bin/python3
+
+from packages import Product, Resolver, ResolverWorker, PackageCollection
+from filter import PackageFilter, Classification
+from solver import PotentialClassification
+from options import OBSClientApplication
+from util import ExecTimer, ThatsProgress
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from writers import XmlReader
+from obsclnt import OBSError, OBSProject, OBSProjectMeta, OBSAggregate
+from model import Model
+from ordered import Cone, ConvexSet, PartiallyOrderedSet
+
+projectLogger = loggingFacade.getLogger('project')
+projectDebug = projectLogger.debug
+
+application = OBSClientApplication('obs-create-model')
+application.addArgument('--initialize', action = 'store_true', default = True)
+application.addArgument('--no-initialize', dest = 'initialize', action = 'store_false')
+application.addArgument('--dry-run', action = 'store_true', default = False)
+application.addArgument(dest = 'action', metavar = 'ACTION', nargs = 1, help = 'one of initialize, populate, prune')
+application.addArgument(dest = 'components', metavar = 'COMPONENTS', nargs = '*', help = 'list of components to publish')
+application.parseArguments()
+
+##################################################################
+# The labels that are in scope of a project, and their
+# external dependencies (aka their support).
+# Note, the scope is usually not a convex set! All flavors that
+# introduce an inversion are non-convex.
+# For instance, we have this runtime dependency chain:
+#  @Java -> @CoreLibraries+java -> @JDK
+# @Java and @JDK are in the the Java component, but @CoreLibraries+java
+# is in Core.
+##################################################################
+class LabelScope(PartiallyOrderedSet):
+	def __init__(self, order, members, support = None):
+		super().__init__(order, members)
+		self._closure = None
+		self._support = support
+
+	@property
+	def closure(self):
+		if self._closure is None:
+			self._closure = self.order.downwardClosureForSet(self.members)
+		return self._closure
+
+	@property
+	def support(self):
+		if self._support is None:
+			support = Classification.createLabelSet()
+			for topic in self.members:
+				unsatisfied = topic.runtimeRequires.difference(self.members)
+				support.update(unsatisfied)
+			self._support = support
+		return self._support
+
+class AbstractModel(object):
+	def __init__(self, application):
+		self.obs = application.obsClient
+
+		# self.classificationScheme = application.loadClassificationScheme()
+		self.classificationScheme = Classification.Scheme()
+		self.classification = application.loadClassification(self.classificationScheme)
+
+		self.componentOrder = self.classificationScheme.componentOrder()
+		self.topicOrder = self.classificationScheme.defaultOrder()
+
+		self._rpmToPackage = {}
+		self._abstractComponents = {}
+		self._abstractTopics = {}
+		self._abstractPackages = {}
+		self._repositories = {}
+
+		# Turn off caching
+		self.obs.setCacheStrategy('none')
+
+		for componentLabel in self.componentOrder.bottomUpTraversal():
+			self.createAbstractComponent(componentLabel)
+
+		for componentLabel, obsBuild in self.classification.enumerateBuilds():
+			# ignore builds that haven't been labelled at all
+			if componentLabel is None:
+				continue
+
+			if self.packageIsSynthetic(obsBuild):
+				# infomsg(f"Ignoring synthetic package {obsBuild}")
+				continue
+
+			abstractComponent = self.createAbstractComponent(componentLabel)
+
+			abstractPackage = None
+			for rpm in obsBuild.binaries:
+				if rpm.isSynthetic:
+					continue
+
+				if abstractPackage is None:
+					abstractPackage = self.createAbstractPackage(obsBuild, abstractComponent)
+				self._rpmToPackage[rpm] = abstractPackage
+
+	@property
+	def components(self):
+		all = set(self._abstractComponents.keys())
+		for componentLabel in self.componentOrder.bottomUpTraversal():
+			yield self._abstractComponents[componentLabel]
+			all.discard(componentLabel)
+		assert(not all)
+
+	def getComponentByName(self, componentName):
+		componentLabel = self.getLabel(componentName, Classification.TYPE_SOURCE)
+		return self.createAbstractComponent(componentLabel)
+
+	def getComponentByLabel(self, componentLabel):
+		return self._abstractComponents.get(componentLabel)
+
+	def createAbstractComponent(self, componentLabel):
+		abstractComponent = self._abstractComponents.get(componentLabel)
+		if abstractComponent is None:
+			abstractComponent = AbstractComponent(componentLabel)
+			self._abstractComponents[componentLabel] = abstractComponent
+
+			# Get the list of topic labels that belong to this component
+			for topicLabel in self.classificationScheme.getReferencingLabels(componentLabel):
+				abstractComponent.addTopic(self.createAbstractTopic(topicLabel))
+
+			for label in self.componentOrder.downwardClosureFor(componentLabel):
+				if label is componentLabel:
+					continue
+				abstractComponent.addRequiredProject(self.createAbstractComponent(label))
+
+			for buildConfigLabel in componentLabel.flavors:
+				self.createAbstractBuildConfig(buildConfigLabel, abstractComponent)
+
+		return abstractComponent
+
+	def createAbstractTopic(self, topicLabel):
+		abstractTopic = self._abstractTopics.get(topicLabel)
+		if abstractTopic is None:
+			abstractTopic = AbstractTopic(topicLabel)
+			self._abstractTopics[topicLabel] = abstractTopic
+		return abstractTopic
+
+	def createAbstractBuildConfig(self, buildConfigLabel, abstractComponent):
+		abstractBuildConfig = self._repositories.get(buildConfigLabel)
+		if abstractBuildConfig is None:
+			m = self.classification.buildConfigMembership(buildConfigLabel)
+			if not m.builds:
+				errormsg(f"No builds for {buildConfigLabel}?!")
+
+			abstractPackages = set()
+			for buildSpec in m.builds:
+				if self.packageIsSynthetic(buildSpec):
+					infomsg(f"Ignoring synthetic package {buildSpec}")
+					continue
+
+				abstractPackages.add(self.createAbstractPackage(buildSpec, abstractComponent))
+
+			abstractBuildConfig = AbstractBuildConfig(buildConfigLabel, abstractPackages, abstractComponent)
+			self._repositories[buildConfigLabel] = abstractBuildConfig
+
+			for label in buildConfigLabel.buildRequires:
+				abstractBuildConfig.addBuildRequires(self.createAbstractTopic(label))
+
+		return abstractBuildConfig
+
+	def packageIsSynthetic(self, buildSpec):
+		return all(rpm.isSynthetic for rpm in buildSpec.binaries)
+
+	def createAbstractPackage(self, buildSpec, abstractComponent):
+		assert(not buildSpec.name.startswith('environment_'))
+
+		abstractPackage = self._abstractPackages.get(buildSpec)
+		if abstractPackage is None:
+			abstractPackage = AbstractPackage(buildSpec, abstractComponent)
+			self._abstractPackages[buildSpec] = abstractPackage
+		else:
+			assert(abstractPackage.abstractComponent is abstractComponent)
+		return abstractPackage
+
+	def getAbstractPackageForRpm(self, rpm):
+		return self._rpmToPackage.get(rpm)
+
+	def createAbstractArtefacts(self, abstractPackage, artefacts):
+		return set(AbstractArtefact(abstractPackage, rpm) for rpm in artefacts)
+
+	def getLabel(self, name, expectedType = None):
+		label = self.classificationScheme.getLabel(name)
+		if not label:
+			raise Exception(f"Unknown label {name}")
+
+		if expectedType is not None and label.type is not expectedType:
+			raise Exception(f"Bad label {label}: expected type {expectedType} but found {label.type}")
+		return label
+
+	def getComponentTopics(self, componentLabel, generator = None):
+		topicLabels = self.classificationScheme.getReferencingLabels(componentLabel)
+		if generator is None:
+			return LabelScope(self.topicOrder, topicLabels)
+
+		# do NOT just use .intersection_update because topicLabels may be a
+		# reference to a member of componentLabel
+		topicClosure = self.topicOrder.downwardClosureForSet(generator)
+		topicLabels = topicLabels.intersection(topicClosure)
+
+		supportLabels = topicClosure.difference(topicLabels)
+
+		return LabelScope(self.topicOrder, topicLabels, support = supportLabels)
+
+	def getTopicClosure(self, label):
+		if label.type == Classification.TYPE_SOURCE:
+			result = Classification.createLabelSet()
+			for componentLabel in self.componentOrder.downwardClosureFor(label):
+				topicLabels = self.getComponentTopics(componentLabel)
+				result.update(topicLabels.members)
+				result.add(componentLabel)
+			return result
+
+		if label.type == Classification.TYPE_BINARY:
+			return self.topicOrder.downwardClosureFor(label)
+
+		raise Exception(f"Cannot handle {label.type} label {label} in this context")
+
+	def filterLabelsByComponent(self, labelSet, componentLabel):
+		return labelSet.intersection(self.classificationScheme.getReferencingLabels(componentLabel))
+
+	# Maybe this method would be better off in the Mediator class
+	def identifyWorkbenchPackages(self, includeNames, excludeNames):
+		workbenchPackages = set()
+		workbenchRPMs = set()
+
+		includeLabels = Classification.createLabelSet()
+		for name in includeNames:
+			label = self.getLabel(name)
+			includeLabels.update(self.getTopicClosure(label))
+
+		excludeLabels = Classification.createLabelSet()
+		for name in excludeNames:
+			label = self.getLabel(name)
+			excludeLabels.update(self.getTopicClosure(label))
+
+		workbenchTopics = includeLabels.difference(excludeLabels)
+		for topic in workbenchTopics:
+			m = self.classification.packageMembership(topic)
+			workbenchRPMs.update(m.packages)
+
+		# workbenchTopics is the difference of two cones (closure of includeTopics
+		# minus closure of excludeTopics)
+		labelScope = LabelScope(self.topicOrder, workbenchTopics)
+
+		# This is where it gets tricky. We have a list of RPMs now, and we need to
+		# find the corresponding OBS builds
+		abstractExport = AbstractArtefactCollection(labelScope = labelScope)
+		for componentLabel, buildSpec in self.classification.enumerateBuilds():
+			artefacts = set(buildSpec.binaries).intersection(workbenchRPMs)
+			if not artefacts:
+				continue
+			# infomsg(f"  {componentLabel} {buildSpec} {' '.join(map(str, artefacts))}")
+
+			abstractComponent = self.createAbstractComponent(componentLabel)
+			abstractPackage = self.createAbstractPackage(buildSpec, abstractComponent)
+			abstractArtefacts = self.createAbstractArtefacts(abstractPackage, artefacts)
+
+			abstractExport.add(abstractPackage, abstractArtefacts)
+		return abstractExport
+
+class AbstractComponent(object):
+	def __init__(self, componentLabel):
+		self.name = componentLabel.name
+		self.componentLabel = componentLabel
+		self.required = set()
+
+		self._topics = set()
+		self._exportedTopics = set()
+
+		self.buildConfigs = set()
+		self.standard = None
+
+		self.concreteProject = None
+
+	def __str__(self):
+		return self.name
+
+	@property
+	def targetProject(self):
+		return f"{targetProjectPrefix}:{self.name}"
+
+	def addRequiredProject(self, other):
+		self.required.add(other)
+
+	@property
+	def requiredProjects(self):
+		return iter(self.required)
+
+	def addTopic(self, abstractTopic):
+		assert(isinstance(abstractTopic, AbstractTopic))
+		self._topics.add(abstractTopic)
+
+		if abstractTopic.topicLabel in self.componentLabel.exports:
+			self._exportedTopics.add(abstractTopic)
+
+	@property
+	def exportedTopics(self):
+		return iter(self._exportedTopics)
+
+	def addBuildConfig(self, abstractBuildConfig):
+		self.buildConfigs.add(abstractBuildConfig)
+		if abstractBuildConfig.relativeName == 'standard':
+			self.standard = abstractBuildConfig
+
+class AbstractTopic(object):
+	def __init__(self, topicLabel):
+		self.name = topicLabel.name
+		self.topicLabel = topicLabel
+
+		self.concretePublishingLocation = None
+
+	def __str__(self):
+		return self.name
+
+class AbstractBuildConfig(object):
+	def __init__(self, configLabel, packages, abstractComponent):
+		self.name = configLabel.name
+		self.componentLabel = configLabel.parent
+		self.configLabel = configLabel
+		self.relativeName = self.configLabel.flavorName.replace(':', '_')
+		self.buildRequires = set()
+		self.packages = packages
+
+		abstractComponent.addBuildConfig(self)
+
+		self.concreteRepository = None
+
+	def __str__(self):
+		return self.name
+
+	def addBuildRequires(self, abstractTopic):
+		self.buildRequires.add(abstractTopic)
+
+class AbstractArtefactCollection(object):
+	def __init__(self, labelScope = None):
+		if labelScope is not None:
+			assert(isinstance(labelScope, LabelScope))
+
+		self.labelScope = labelScope
+		self._packages = {}
+
+	def add(self, abstractPackage, abstractArtefacts):
+		if abstractPackage not in self._packages:
+			self._packages[abstractPackage] = set()
+		self._packages[abstractPackage].update(abstractArtefacts)
+
+	def enumerate(self):
+		for abstractPackage, abstractArtefacts in self._packages.items():
+			yield abstractPackage, abstractArtefacts
+
+class FallbackRepository(object):
+	def __init__(self, projectName, repoName):
+		self.name = f"{projectName}/{repoName}"
+		self.obsProjectName = projectName
+		self.relativeName = repoName
+
+class AbstractPackage(object):
+	def __init__(self, obsBuild, abstractComponent):
+		self.name = obsBuild.name
+
+		self.obsBuild = obsBuild
+		self.abstractComponent = abstractComponent
+		self.configLabel = obsBuild.buildConfig
+
+		if self.configLabel is not None:
+			assert(self.configLabel.baseLabel is self.abstractComponent.componentLabel)
+
+	def __str__(self):
+		return self.name
+
+	@property
+	def basePackageName(self):
+		packageName = self.name
+		if ':' in packageName:
+			packageName = packageName[:packageName.index(':')]
+		return packageName
+
+	def existsInOBS(self):
+		return self.abstractComponent.packageExists(self)
+
+class AbstractArtefact(object):
+	def __init__(self, abstractBuild, rpm):
+		self.name = rpm.name
+		self.abstractBuild = abstractBuild
+		self.rpm = rpm
+
+	def __str__(self):
+		return self.name
+
+class OBSClientWrapper(object):
+	def __init__(self, client):
+		self.client = client
+		self.dryRun = False
+		self._cachedProjects = None
+
+	def setCacheStrategy(self, *args, **kwargs):
+		self.client.setCacheStrategy(*args, **kwargs)
+
+	def queryAllProjects(self, *args, useCache = False, **kwargs):
+		if not useCache:
+			return self.client.queryAllProjects(*args, **kwargs)
+
+		if self._cachedProjects is None:
+			self._cachedProjects = self.client.queryAllProjects(*args, **kwargs)
+		return self._cachedProjects
+
+	def deleteProject(self, *args, **kwargs):
+		return self.client.deleteProject(*args, **kwargs)
+
+	def buildInitialProjectMeta(self, *args, **kwargs):
+		return self.client.buildInitialProjectMeta(*args, **kwargs)
+
+	def queryProjectMeta(self, obsProject, *args, **kwargs):
+		return obsProject.queryProjectMeta(self.client, *args, **kwargs)
+
+	def querySourcePackages(self, obsProject, *args, **kwargs):
+		return obsProject.querySourcePackages(self.client, *args, **kwargs)
+
+	def updateProjectMeta(self, obsProject, *args, **kwargs):
+		return obsProject.updateProjectMeta(self.client, *args, dryRun = self.dryRun, **kwargs)
+
+	def queryProjectConfig(self, obsProject, *args, **kwargs):
+		return obsProject.queryProjectConfig(self.client, *args, **kwargs)
+
+	def updateProjectConfig(self, obsProject, *args, **kwargs):
+		return obsProject.updateProjectConfig(self.client, *args, dryRun = self.dryRun, **kwargs)
+
+	def linkpac(self, *args, **kwargs):
+		return self.client.linkpac(*args, dryRun = self.dryRun, **kwargs)
+
+	def createAggregate(self, *args, **kwargs):
+		return self.client.createAggregate(*args, dryRun = self.dryRun, **kwargs)
+
+	def aggregatepac(self, *args, **kwargs):
+		return self.client.aggregatepac(*args, dryRun = self.dryRun, **kwargs)
+
+	def updatePackage(self, *args, **kwargs):
+		return self.client.updatePackage(*args, dryRun = self.dryRun, **kwargs)
+
+	def deletepac(self, *args, **kwargs):
+		return self.client.deletepac(*args, dryRun = self.dryRun, **kwargs)
+
+class ConcreteOBSObject(object):
+	def __init__(self, obs):
+		self.obs = obs
+
+class ConcreteProjectFactory(ConcreteOBSObject):
+	def __init__(self, obs, modelPrefix, fallbackRepository = None):
+		super().__init__(obs)
+
+		if not modelPrefix.endswith(':'):
+			modelPrefix += ":"
+		self.modelPrefix = modelPrefix
+		self.fallbackRepository = fallbackRepository
+
+		self._concreteProjects = {}
+
+	def createProject(self, obsProjectName, **kwargs):
+		concreteProject = self._concreteProjects.get(obsProjectName)
+		if concreteProject is None:
+			if obsProjectName.startswith(self.modelPrefix):
+				concreteProject = ConcreteProject(self, obsProjectName,
+						fallbackRepository = self.fallbackRepository,
+						allowedToModify = True,
+						**kwargs)
+			else:
+				concreteProject = ConcreteProject(self, obsProjectName,
+						allowedToModify = False,
+						**kwargs)
+			self._concreteProjects[obsProjectName] = concreteProject
+		return concreteProject
+
+	def getProject(self, obsProjectName):
+		return self._concreteProjects.get(obsProjectName)
+
+	@property
+	def projects(self):
+		return iter(sorted(self._concreteProjects.values(), key = lambda p: p.index))
+
+	def resolveRepositoryReference(self, reference):
+		if '/' not in reference:
+			raise Exception(f"Not a valid repository reference: {reference}")
+
+		obsProjectName, repositoryName = reference.split('/')
+		referencedProject = self.createProject(obsProjectName)
+		referencedRepository = referencedProject.createRepository(repositoryName)
+		return referencedRepository
+
+##################################################################
+# ConcreteModel - this is what the component model actually
+# looks like in OBS
+##################################################################
+class ConcreteModel(ConcreteOBSObject):
+	class Problem(object):
+		def __init__(self, msg):
+			self.msg = msg
+
+		def __str__(self):
+			return msg
+
+	def __init__(self, obs, settings):
+		super().__init__(obs)
+
+		self.settings = settings
+
+		if settings.sourceRepository is None:
+			raise Exception("No source repository configured")
+
+		self._projectFactory = ConcreteProjectFactory(obs, settings.targetProjectBase)
+
+		self.obs.setCacheStrategy('none')
+		self.projectsToPublish = set()
+
+		self.sourceProject = None
+		self.bootstrapRepository = None
+
+		self.sourceRepository = self.resolveRepositoryReference(settings.sourceRepository)
+		self.sourceProject = self.sourceRepository.parent
+		if settings.bootstrapRepository is not None:
+			self.bootstrapRepository = self.resolveRepositoryReference(settings.bootstrapRepository)
+
+		if settings.useFallback:
+			self._projectFactory.fallbackRepository = self.sourceRepository
+
+		self.problems = []
+
+	def createProject(self, obsProjectName, **kwargs):
+		return self._projectFactory.createProject(obsProjectName, **kwargs)
+
+	def getProject(self, obsProjectName):
+		return self._projectFactory.getProject(obsProjectName)
+
+	@property
+	def projects(self):
+		return self._projectFactory.projects
+
+	def enumerateProjects(self):
+		for concreteProject in self.projects:
+			yield concreteProject
+			for subProject in concreteProject.subProjects:
+				yield subProject
+
+	@property
+	def knownOBSProjectNames(self):
+		prefix = f"{self.settings.targetProjectBase}:"
+		return set(filter(lambda s: s.startswith(prefix), self.obs.queryAllProjects(useCache = True)))
+
+	def resolveRepositoryReference(self, *args, **kwargs):
+		return self._projectFactory.resolveRepositoryReference(*args, **kwargs)
+
+	@staticmethod
+	def subProjectClosure(setOfProjects):
+		result = set()
+		for concreteProject in setOfProjects:
+			result.add(concreteProject)
+			result.update(concreteProject.subProjects)
+			if concreteProject.bootstrapRepository:
+				result.add(concreteProject.bootstrapRepository.parent)
+
+		# Return only those projects that we actually own
+		result = set(filter(lambda p: p.allowedToModify, result))
+
+		return result
+
+	def publish(self, init = True, dryRun = False):
+		if not self.projectsToPublish:
+			raise Exception(f"No projects that need to be published")
+
+		# Control what gets executed
+		self.obs.dryRun = dryRun
+
+		projectsToPublish = self.subProjectClosure(self.projectsToPublish)
+
+		if init:
+			# self.initializeProjects(projectsToPublish)
+			pass
+
+		self.publishPackages(projectsToPublish, dryRun = dryRun)
+
+		if self.problems:
+			errormsg(f"The following problems were encountered while trying to publish:")
+			for problem in self.problems:
+				errormsg(f"   {problem}")
+			return False
+
+		return True
+
+	def initializeProjects(self, dryRun = False):
+		if not self.projectsToPublish:
+			raise Exception(f"No projects that need to be published")
+
+		# Control what gets executed
+		self.obs.dryRun = dryRun
+
+		projectsToPublish = self.subProjectClosure(self.projectsToPublish)
+		projectsToInitialize = projectsToPublish.copy()
+
+		for concreteProject in projectsToPublish:
+			for concreteRepository in concreteProject.repositories:
+				for requiredRepository in concreteRepository.repositoriesUsedForBuild:
+					projectsToInitialize.add(requiredRepository.parent)
+
+		projectsToInitialize = self.subProjectClosure(projectsToInitialize)
+
+		knownProjects = self.knownOBSProjectNames
+		remainingProjects = set()
+		for concreteProject in projectsToInitialize:
+			if concreteProject.obsProjectName in knownProjects:
+				projectDebug(f"{concreteProject}: already exists")
+				continue
+			remainingProjects.add(concreteProject)
+		projectsToInitialize = remainingProjects
+
+		if projectsToInitialize:
+			infomsg(f"Need to initialize {' '.join(map(str, projectsToInitialize))}")
+
+			# If a project does not exist yet, create it with a minimal _meta file
+			for concreteProject in projectsToInitialize:
+				infomsg(f"Initializing {concreteProject.obsProjectName}")
+				if not concreteProject.initializeProjectMeta():
+					infomsg(f"{concreteProject}: failed to initialize")
+					return False
+		else:
+			infomsg(f"All required projects exist")
+
+		alreadyPublished = set()
+		for concreteProject in projectsToPublish:
+			if concreteProject in alreadyPublished:
+				continue
+
+			for shadowProject in concreteProject._shadowProjects:
+				infomsg(f"Publishing {shadowProject.obsProjectName}")
+				if not shadowProject.updateProjectMeta():
+					infomsg(f"{shadowProject}: failed to update _meta")
+					return False
+
+			infomsg(f"Publishing {concreteProject.obsProjectName}")
+			if not concreteProject.updateProjectMeta():
+				infomsg(f"{concreteProject}: failed to update _meta")
+				return False
+
+			if concreteProject.config is not None and \
+			   not concreteProject.updateProjectConfig():
+				infomsg(f"{concreteProject}: failed to update _config")
+				return False
+
+			concreteProject.updateComponentInfo()
+
+			alreadyPublished.add(concreteProject)
+		return True
+
+	def pruneProjects(self, dryRun = False):
+		self.obs.dryRun = dryRun
+
+		knownProjects = self.knownOBSProjectNames
+
+		modelProjects = set(map(lambda p: p.obsProjectName, self.projects))
+		projectsToRemove = sorted(knownProjects.difference(modelProjects))
+		if not projectsToRemove:
+			return True
+
+		infomsg("The following projects would have to be removed")
+		for name in projectsToRemove:
+			infomsg(f"   - {name}")
+
+		notyet
+
+		# First, remove all repositories from the projects we want to kill.
+		# They may be referring to each other, which would prevent us from deleting them
+		for name in projectsToRemove:
+			meta = self.obs.buildInitialProjectMeta(name)
+			project = OBSProject(name)
+			if not self.obs.updateProjectMeta(project, meta):
+				raise Exception(f"Something is wrong, I cannot update {name}/_meta")
+
+		# Now delete them for real
+		for name in projectsToRemove:
+			if not self.obs.deleteProject(name):
+				raise Exception(f"Something is wrong, I cannot remove {name}")
+
+		return True
+
+	def publishPackages(self, projectsToPublish, dryRun = False):
+		for concreteProject in sorted(projectsToPublish, key = str):
+			concreteProject.publishPackages()
+			concreteProject.cleanupPackages()
+			continue
+
+			# FIXME nuke
+			allPackages = []
+			for concreteRepository in concreteProject.repositories:
+				allPackages += concreteRepository.packages
+
+			if allPackages:
+				infomsg(f"{concreteProject}: linking all packages from {self.settings.sourceRepository}")
+				with loggingFacade.temporaryIndent():
+					missing = concreteProject.filterMissingPackages(allPackages)
+					for concretePackage in missing:
+						self.linkOnePackage(concreteProject, concretePackage)
+
+			for concreteRepository in concreteProject.repositories:
+				missing = concreteProject.filterMissingPackages(concreteRepository.aggregatePackages)
+				if not missing:
+					continue
+
+				infomsg(f"{concreteRepository}: aggregating packages")
+				for concretePackage in missing:
+					self.aggregateOnePackage(concreteRepository, concretePackage)
+
+
+			obsolete = concreteProject.obsoletePackageNames
+			if obsolete:
+				infomsg(f"{concreteProject}: the following packages need to be removed: {' '.join(obsolete)}")
+				for packageName in obsolete:
+					self.deleteOnePackage(concreteProject, packageName)
+
+		return True
+
+	def reportProblem(self, msg):
+		self.problems.append(msg)
+
+	# FIXME dead
+	def linkOnePackage(self, concreteProject, concretePackage):
+		sourceProject = self.settings.sourceRepository.parent
+		packageName = concretePackage.baseName
+
+		if concreteProject.packageExists(packageName):
+			if concretePackage.name == packageName:
+				# do not spew this message for multibuilds - there may be
+				# lots and lots of them, eg for binutils or gcc.
+				infomsg(f"{concretePackage} already exists in {concreteProject}")
+			concreteProject.recordPackageCreationResult(packageName, True)
+			return True
+
+		infomsg(f"{packageName}: linking from {sourceProject}")
+		with loggingFacade.temporaryIndent():
+			# link the package into the CM project. For the time being, we freeze the
+			# revision to avoid lots of rebuilds
+			if not concreteProject.linkpac(sourceProject, packageName, freezeRevision = True):
+				self.reportProblem(f"{concreteProject}: unable to link package {packageName}")
+
+	# FIXME dead
+	def aggregateOnePackage(self, concreteRepository, concretePackage):
+		packageName = concretePackage.baseName
+
+		concreteProject = concreteRepository.parent
+		if concreteProject.packageExists(packageName):
+			if concretePackage.name == packageName:
+				# do not spew this message for multibuilds - there may be
+				# lots and lots of them, eg for binutils or gcc.
+				infomsg(f"{concretePackage} already exists in {concreteProject}")
+			concreteProject.recordPackageCreationResult(packageName, True)
+			return True
+
+		infomsg(f"{packageName}: aggregating from {concretePackage.parent}")
+		with loggingFacade.temporaryIndent():
+			# aggregate the package into another project/repository
+			if not concreteRepository.aggregatepac(concretePackage):
+				self.reportProblem(f"{concreteRepository}: unable to aggregate package {concretePackage}")
+
+
+	# FIXME dead
+	def deleteOnePackage(self, concreteProject, packageName):
+		infomsg(f"Deleting {concreteProject}/{packageName}")
+		with loggingFacade.temporaryIndent():
+			if not concreteProject.deletepac(packageName):
+				self.reportProblem(f"{concreteProject}: unable to aggregate package {packageName}")
+
+class ConcreteProject(ConcreteOBSObject):
+	AUTO_INDEX = 1000
+
+	FLAG_PROJECT_MUST_EXIST		= 0x0001
+	FLAG_REPOSITORIES_MUST_EXIST	= 0x0002
+	FLAG_REPOSITORIES_MUST_BE_VALID	= 0x0004
+
+	@classmethod
+	def autoIndex(klass):
+		klass.AUTO_INDEX += 1
+		return klass.AUTO_INDEX
+
+	def __init__(self, projectFactory, obsProjectName, fallbackRepository = None,
+				componentName = None, generation = None,
+				publishingStrategy = None,
+				title = None, description = None,
+				labelScope = None,
+				allowedToModify = True):
+		super().__init__(projectFactory.obs)
+
+		self.projectFactory = projectFactory
+		self.obsProjectName = obsProjectName
+		self.obsProject = None
+		self.fallbackRepository = fallbackRepository
+		self.generation = generation
+		self.allowedToModify = allowedToModify
+
+		if labelScope is not None:
+			assert(isinstance(labelScope, LabelScope))
+		self.labelScope = labelScope
+
+		if publishingStrategy is None:
+			publishingStrategy = NoPublicationStrategy()
+		self._packagePublicationStrategy = publishingStrategy
+
+		if componentName is None:
+			componentName = obsProjectName.split(':')[-1]
+		self.componentName = componentName
+
+		self.title = title or f"CM component {self.componentName}"
+		self.description = description or f"Lazy programmer forgot to provide a description"
+
+		# The prjconf if there is one
+		self.config = None
+
+		self._subprojects = {}
+
+		# shadow projects like *:PrjConf
+		# For each buildconfig of the main project, the shadow project has
+		# a matching buildconfig.
+		self._shadowProjects = []
+
+		self.standard = None
+		self._repositories = {}
+
+		# This is a ConcreteBuildRequirements instance
+		self.buildRequirements = None
+		self.repositoriesUsedForBuild = []
+
+		self.bootstrapRepository = None
+
+		# This is a dict of generated packages (usually 000component)
+		self._generatedPackages = {}
+
+		# This is the list of package names that OBS knows about
+		self._existingPackageNames = None
+
+		# This is the list of package names that the component model
+		# knows about
+		self._knownPackageNames = set()
+
+		self.index = self.autoIndex()
+
+	def __str__(self):
+		return self.obsProjectName
+
+	@property
+	def labels(self):
+		if self.labelScope is None:
+			return None
+		return self.labelScope.members
+
+	@property
+	def repositories(self):
+		if self.standard:
+			yield self.standard
+		for repo in sorted(self._repositories.values(), key = str):
+			if repo is not self.standard:
+				yield repo
+
+	def createRepository(self, name, **kwargs):
+		concreteRepository = self._repositories.get(name)
+		if concreteRepository is None:
+			concreteRepository = ConcreteRepository(self, name, **kwargs)
+			self._repositories[name] = concreteRepository
+
+			if name == 'standard':
+				self.standard = concreteRepository
+		return concreteRepository
+
+	def getRepository(self, name):
+		return self._repositories[name]
+
+	@property
+	def subProjects(self):
+		return iter(self._subprojects.values())
+
+	def createSubProject(self, name, **kwargs):
+		subProject = self._subprojects.get(name)
+		if subProject is None:
+			subProjectName = f"{self.obsProjectName}:{name}"
+
+			subProject = self.projectFactory.createProject(subProjectName, componentName = f"{self.componentName}:{name}", **kwargs)
+			self._subprojects[name] = subProject
+			if name.endswith(':all'):
+				infomsg(f" *** {name}")
+
+		return subProject
+
+	def getSubProject(self, name):
+		return self._subprojects.get(name)
+
+	def findPackage(self, abstractPackage):
+		for concreteRepository in self.repositories:
+			concretePackage = concreteRepository.findPackage(abstractPackage)
+			if concretePackage is not None:
+				return concretePackage
+
+	@property
+	def generatedPackages(self):
+		return self._generatedPackages.values()
+
+	def getGeneratedPackage(self, name):
+		return self._generatedPackages.get(name)
+
+	def addGeneratedPackage(self, packageGenerator):
+		name = packageGenerator.name
+		if name in self._generatedPackages:
+			raise Exception(f"{self}: duplicate definition of generated package {name}")
+		self._generatedPackages[name] = packageGenerator
+
+	def connect(self):
+		if self.obsProject is None:
+			self.obsProject = OBSProject(self.obsProjectName)
+
+		return self.obsProject
+
+	# When we're creating one or more fresh component projects, we need to provide an
+	# initial _meta document. This should define all repositories, but without referencing
+	# all required repos (OBS rejects _meta documents that reference a repo that doesn't
+	# exist yet).
+	def initializeProjectMeta(self):
+		obsProject = self.connect()
+
+		projectMeta = self.obs.queryProjectMeta(obsProject)
+		if projectMeta is not None:
+			return True
+
+		infomsg(f"Project {self.obsProjectName} does not exist in OBS yet, need to create it")
+		projectMeta = self.obs.buildInitialProjectMeta(self.obsProjectName, title = self.title, description = self.description)
+
+		for concreteRepository in self.repositories:
+			self.projectMetaAddRepository(projectMeta, concreteRepository, includeDependencies = False)
+
+		return self.obs.updateProjectMeta(obsProject, projectMeta)
+
+	def updateProjectMeta(self, projectMeta = None):
+		obsProject = self.connect()
+
+		projectMeta = self.obs.queryProjectMeta(obsProject)
+		if projectMeta is None:
+			raise Exception(f"You should have initialized {self.obsProjectName}/_meta first")
+
+		projectMeta.beginUpdate()
+
+		if True:
+			projectMeta.updateTitle(self.title)
+			projectMeta.updateDescription(self.description)
+
+		existingRepos = set(projectMeta.repositories)
+
+		for concreteRepository in self.repositories:
+			obsRepoDef = self.projectMetaAddRepository(projectMeta, concreteRepository)
+			existingRepos.discard(obsRepoDef)
+
+		# For the time being, we just disable these repositories.
+		# Trying to delete them blindly fails if other projects depend on them.
+		for obsRepoDef in existingRepos:
+			# Zap this repository
+			projectMeta.addBuildState(obsRepoDef.name).disableAll()
+			obsRepoDef.setArchitectures([])
+			obsRepoDef.setPaths([])
+
+		if not projectMeta.isModified:
+			infomsg(f"{self}: project meta has not changed")
+			return True
+
+		return self.obs.updateProjectMeta(obsProject, projectMeta)
+
+	def projectMetaAddRepository(self, projectMeta, concreteRepository, includeDependencies = True):
+		repo = projectMeta.addRepository(concreteRepository.relativeName)
+
+		buildRequires = []
+
+		if includeDependencies:
+			# FIXME: Silence this warning for PrjConf subprojects
+			if False and not concreteRepository.repositoriesUsedForBuild:
+				errormsg(f"{self}: not configured to use any repos for building")
+
+			for usedRepository in concreteRepository.repositoriesUsedForBuild:
+				if usedRepository is not concreteRepository:
+					buildRequires.append(usedRepository)
+
+		fallbackRepo = self.fallbackRepository
+		if self.fallbackRepository is not None:
+			buildRequires.append(self.fallbackRepository)
+
+		repo.setPaths(list((req.obsProjectName, req.relativeName) for req in buildRequires))
+		repo.setArchitectures(["x86_64",])
+
+		return repo
+
+	def updateProjectConfig(self):
+		if self.config is None:
+			return False
+
+		obsProject = self.connect()
+
+		currentConfig = self.obs.queryProjectConfig(obsProject)
+		if currentConfig == str(self.config):
+			infomsg(f"{self}: project config has not changed")
+			return True
+
+		# this is something for later
+		if False:
+			with open("/tmp/_config.a", "w") as f:
+				f.write(currentConfig)
+
+			with open("/tmp/_config.b", "w") as f:
+				f.write(str(self.config))
+			import os
+			os.system("diff -u /tmp/_config.a /tmp/_config.b")
+
+		return self.obs.updateProjectConfig(obsProject, self.config)
+
+	def updateComponentInfo(self):
+		pass
+
+	def fetchExistingPackages(self):
+		if self._existingPackageNames is None:
+			obsProject = self.connect()
+			self._existingPackageNames = set(self.obs.querySourcePackages(obsProject))
+
+		return self._existingPackageNames
+
+	def packageExists(self, packageName):
+		assert(self._existingPackageNames is not None)
+		return packageName in self._existingPackageNames
+
+	def getObsoletePackages(self, expectedState):
+		return self._existingPackageNames.difference(expectedState)
+
+	def filterMissingPackages(self, concretePackages):
+		result = set()
+		for package in concretePackages:
+			if package.isMultiBuild:
+				continue
+			if package.baseName not in self._existingPackageNames:
+				result.add(package)
+			self._knownPackageNames.add(package.baseName)
+
+		return result
+
+	@property
+	def obsoletePackageNames(self):
+		return self._existingPackageNames.difference(self._knownPackageNames)
+
+	def recordPackageCreationResult(self, packageName, success):
+		if success:
+			self.obsProject.addPackage(packageName)
+			if self._existingPackageNames is not None:
+				self._existingPackageNames.add(packageName)
+
+		self._knownPackageNames.add(packageName)
+
+	def publishPackages(self):
+		if not self._packagePublicationStrategy:
+			raise Exception(f"{self}: cannot publish packages; no strategy defined")
+
+		self.fetchExistingPackages()
+		self._packagePublicationStrategy.publish(self)
+
+	def cleanupPackages(self):
+		if not self._packagePublicationStrategy:
+			return
+
+		self._packagePublicationStrategy.cleanup(self)
+
+	def linkpac(self, sourceProject, packageName, **kwargs):
+		targetProject = self.obsProjectName
+
+		infomsg(f"linkpac {sourceProject} {packageName} {targetProject} {packageName}")
+		success = self.obs.linkpac(sourceProject, packageName, targetProject, **kwargs)
+
+		self.recordPackageCreationResult(packageName, success)
+		return success
+
+	def createAggregate(self, obsAggregate, **kwargs):
+		infomsg(f"create aggregate {self.obsProjectName} {obsAggregate.targetPackageName}")
+		success = self.obs.createAggregate(self.obsProjectName, obsAggregate)
+
+		self.recordPackageCreationResult(obsAggregate.targetPackageName, success)
+		return success
+
+	def aggregatepac(self, sourceProject, packageName, **kwargs):
+		sourceProjectName = sourceProject.obsProjectName
+		targetProjectName = self.obsProjectName
+
+		infomsg(f"aggregatepac {sourceProjectName} {packageName} {targetProjectName} {packageName}")
+		success = self.obs.aggregatepac(sourceProjectName, packageName, targetProjectName, **kwargs)
+
+		self.recordPackageCreationResult(packageName, success)
+		return success
+
+	def updatePackage(self, packageName, files, **kwargs):
+		targetProjectName = self.obsProjectName
+		return self.obs.updatePackage(targetProjectName, packageName, files, **kwargs)
+
+	def deletepac(self, packageName, **kwargs):
+		return self.obs.deletepac(self.obsProjectName, packageName, **kwargs)
+
+class ConcreteRepository(ConcreteOBSObject):
+	def __init__(self, concreteProject, name):
+		super().__init__(concreteProject.obs)
+
+		# The following creates a circular ref but I don't care.
+		self.parent = concreteProject
+		self.obsProjectName = concreteProject.obsProjectName
+		self.relativeName = name
+
+		self.obsRepositoryName = f"{self.obsProjectName}/{self.relativeName}"
+
+		self._packagePublicationStrategy = concreteProject._packagePublicationStrategy
+		self.repositoriesUsedForBuild = []
+		self.packages = []
+
+	def __str__(self):
+		return self.obsRepositoryName
+
+	def addPackage(self, concretePackage):
+		self.packages.append(concretePackage)
+
+	def addPackages(self, packages):
+		self.packages += list(packages)
+
+	def usePackage(self, concretePackage, artefacts = None):
+		localPackage = ConcretePackage(self, concretePackage.name)
+		self.addPackage(localPackage)
+
+		link = self._packagePublicationStrategy.addPackage(localPackage,
+				targetRepository = self,
+				sourceRepository = concretePackage.parent)
+
+		link.addPackage(concretePackage)
+		if artefacts is not None:
+			for name in artefacts:
+				link.addArtefact(name)
+
+		return link
+
+	def findPackage(self, abstractPackage):
+		for concretePackage in self.packages:
+			if concretePackage.name == abstractPackage.name:
+				return concretePackage
+
+	def aggregatepac(self, sourcePackage, **kwargs):
+		packageName = sourcePackage.baseName
+		sourceRepository = sourcePackage.parent
+		sourceProject = sourceRepository.parent
+		targetProject = self.parent
+
+		mapping = None
+		if self.relativeName != sourceRepository.relativeName:
+			mapping = [(sourceRepository.relativeName, self.relativeName)]
+
+		return targetProject.aggregatepac(sourceRepository, packageName, mapping = mapping)
+
+	def createAggregate(self, obsAggregate, **kwargs):
+		targetProject = self.parent
+		return targetProject.createAggregate(obsAggregate)
+
+class ConcretePackage(ConcreteOBSObject):
+	def __init__(self, concreteRepository, name, artefactNames = None):
+		super().__init__(concreteRepository.obs)
+
+		self.parent = concreteRepository
+		self.name = name
+
+		# For multibuilds like frobnicator:test, baseName is 'frobnicator'
+		if ':' in name:
+			self.baseName = name.split(':')[0]
+			self.isMultiBuild = True
+		else:
+			self.baseName = name
+			self.isMultiBuild = False
+
+		self.artefactNames = artefactNames
+
+		concreteRepository.addPackage(self)
+
+	def __str__(self):
+		return self.name
+
+	def addArtefactName(self, name):
+		if self.artefactNames is None:
+			self.artefactNames = set()
+		self.artefactNames.add(name)
+
+class ConcreteBuildRequirements(object):
+	def __init__(self, parent = None):
+		self.parent = parent
+		self._labels = Classification.createLabelSet()
+		self.prepend = []
+		self.append = []
+
+	def addLabel(self, label):
+		self._labels.add(label)
+
+	def addLabelSet(self, labelSet):
+		if labelSet is not None:
+			self._labels.update(labelSet)
+
+	def labelIsCovered(self, label):
+		if label in self._labels:
+			return True
+		if self.parent and self.parent.labelIsCovered(label):
+			return True
+
+		# slow verify
+		if True:
+			for repository in self.repositories:
+				if repository.parent.labelScope is None:
+					continue
+				if label in repository.parent.labelScope:
+					errormsg(f"we missed {label}, it's present in {repository}")
+					return True
+
+		return False
+
+	def getCoveringRepository(self, label):
+		for repository in self.repositories:
+			if repository.parent.labelScope is None:
+				continue
+			if label in repository.parent.labelScope:
+				return repository
+		return None
+
+	def prependRepository(self, concreteRepository):
+		self.prepend.append(concreteRepository)
+		self.addLabelSet(concreteRepository.parent.labels)
+
+	def appendRepository(self, concreteRepository):
+		self.append.append(concreteRepository)
+		self.addLabelSet(concreteRepository.parent.labels)
+
+	@property
+	def repositories(self):
+		result = []
+
+		rover = self
+		while rover is not None:
+			result = rover.prepend + result + rover.append
+			rover = rover.parent
+		return result
+
+##################################################################
+# This wraps the capabilities of OBS _aggregate
+##################################################################
+class ConcreteAggregate(ConcreteOBSObject):
+	class BasePackage(object):
+		def __init__(self, name):
+			self.name = name
+			self.artefacts = None
+
+		def addArtefactName(self, name):
+			if self.artefacts is None:
+				self.artefacts = set()
+			self.artefacts.add(name)
+
+	def __init__(self, obs):
+		super().__init__(obs)
+		self._packages = {}
+
+	def addPackage(self, concretePackage, artefactNames = None):
+		name = concretePackage.name
+
+		packageInfo = self._packages.get(name)
+		if packageInfo is None:
+			packageInfo = self.BasePackage(name)
+			self._packages[name] = packageInfo
+
+		if artefactNames is not None:
+			if packageInfo.artefacts is None:
+				packageInfo.artefacts = set()
+			packageInfo.artefacts.update(set(artefactNames))
+
+		return packageInfo
+
+##################################################################
+##################################################################
+class ConcreteExport(ConcreteOBSObject):
+	def __init__(self, name, topicLabels):
+		self.name = name
+		self.topicLabels = topicLabels
+		self.repository = None
+		self.inversions = None
+
+		assert(isinstance(topicLabels, LabelScope))
+	
+	def __str__(self):
+		return self.name
+
+	@property
+	def support(self):
+		return self.topicLabels.support
+
+##################################################################
+##################################################################
+class PackagePublicationStrategy(object):
+	class PackagePub(object):
+		def __init__(self, name):
+			self.name = name
+			self.sourcePackages = set()
+
+		def __str__(self):
+			return self.name
+
+		def addPackage(self, concretePackage):
+			assert(isinstance(concretePackage, ConcretePackage))
+			self.sourcePackages.add(concretePackage)
+
+	def __init__(self, clientWrapper, sourceProject, linkClass, problemLog = None):
+		assert(sourceProject is None or isinstance(sourceProject, ConcreteProject))
+
+		self.obs = clientWrapper
+		self.sourceProject = sourceProject
+		self.linkClass = linkClass
+		self.alwaysUpdate = False
+
+		self._packages = {}
+
+		self.expectedState = set()
+
+		if problemLog is None:
+			problemLog = []
+		self.problems = problemLog
+
+	def __str__(self):
+		return f"{self.__class__.__name__} for {self.sourceProject}"
+
+	def getPackagesFromProject(self, targetProject):
+		allPackages = []
+		for targetRepository in targetProject.repositories:
+			allPackages += targetRepository.packages
+		return allPackages
+
+	def reportProblem(self, msg):
+		self.problems.append(msg)
+
+	def addPackage(self, concretePackage, sourceRepository, targetRepository):
+		raise Exception(f"{self} method addPackage() not implemented")
+
+	def createLink(self, concretePackage, sourceRepository):
+		if sourceRepository.parent != self.sourceProject:
+			errormsg(f"{self}: cannot add {concretePackage} from source repo {sourceRepository}")
+			raise Exception(f"incompatible package {concretePackage}")
+
+		link = self._packages.get(concretePackage.baseName)
+		if link is None:
+			link = self.linkClass(concretePackage.baseName)
+			self._packages[concretePackage.baseName] = link
+		return link
+
+	def publish(self, targetProject):
+		allLinks = sorted(self._packages.values(), key = lambda l: l.name)
+		if self.alwaysUpdate:
+			updates = allLinks
+		else:
+			updates = []
+			for link in allLinks:
+				if not targetProject.packageExists(link.name):
+					updates.append(link)
+
+		self.expectedState.update(set(link.name for link in allLinks))
+
+		for packageGenerator in targetProject.generatedPackages:
+			self.expectedState.add(packageGenerator.name)
+			updates.append(packageGenerator)
+
+		if not updates:
+			return
+
+		progressMeter = ThatsProgress(len(updates), withETA = True)
+
+		infomsg(f"{targetProject}: publishing packages")
+		with loggingFacade.temporaryIndent():
+			for link in updates:
+				if isinstance(link, PackageGenerator):
+					infomsg(f"[{progressMeter} {progressMeter.eta}] {link}: generate package")
+					self.publishGeneratedPackage(link, targetProject)
+				else:
+					infomsg(f"[{progressMeter} {progressMeter.eta}] {link}: {self.VERB} from {self.sourceProject}")
+					self.publishOne(link, targetProject)
+				progressMeter.tick()
+
+	def cleanup(self, targetProject):
+		obsoletePackages = targetProject.getObsoletePackages(self.expectedState)
+		if obsoletePackages:
+			infomsg(f"{targetProject}: have to delete these package(s): {' '.join(obsoletePackages)}")
+			for packageName in obsoletePackages:
+				self.deleteOnePackage(targetProject, packageName)
+
+	def publishGeneratedPackage(self, packageGenerator, targetProject):
+		packageName = packageGenerator.name
+
+		with loggingFacade.temporaryIndent():
+			files = dict(packageGenerator.generateFiles())
+			if not targetProject.updatePackage(packageName, files, title = packageGenerator.title):
+				raise Exception(f"Failed to update {targetProject}/{packageName}")
+
+	def deleteOnePackage(self, targetProject, packageName):
+		infomsg(f"Deleting {targetProject}/{packageName}")
+		with loggingFacade.temporaryIndent():
+			if not targetProject.deletepac(packageName):
+				self.reportProblem(f"{targetProject}: unable to aggregate package {packageName}")
+
+class NoPublicationStrategy(PackagePublicationStrategy):
+	def __init__(self):
+		super().__init__(None, None, None)
+
+	def publish(self, targetProject):
+		allPackages = self.getPackagesFromProject(targetProject)
+		if allPackages:
+			raise Exception(f"{targetProject} has packages but no publication strategy")
+
+	def cleanup(self, targetProject):
+		obsolete = targetProject.obsoletePackageNames
+		if obsolete:
+			raise Exception(f"{targetProject} has obsolete packages but no publication strategy")
+
+class PackageLinkStrategy(PackagePublicationStrategy):
+	VERB = 'linking'
+
+	class PackageLink(PackagePublicationStrategy.PackagePub):
+		pass
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, self.PackageLink, **kwargs)
+
+	def addPackage(self, concretePackage, sourceRepository, targetRepository):
+		link = self.createLink(concretePackage, sourceRepository)
+		link.addPackage(concretePackage)
+		return link
+
+	def publishOne(self, link, targetProject):
+		sourceProjectName = self.sourceProject.obsProjectName
+		packageName = link.name
+
+		with loggingFacade.temporaryIndent():
+			# link the package into the CM project. For the time being, we freeze the
+			# revision to avoid lots of rebuilds
+			if not targetProject.linkpac(sourceProjectName, packageName, freezeRevision = True):
+				self.reportProblem(f"{targetProject}: unable to link package {packageName}")
+
+class PackageAggregateStrategy(PackagePublicationStrategy):
+	VERB = 'aggregating'
+
+	class PackageAggregate(PackagePublicationStrategy.PackagePub):
+		def __init__(self, name):
+			super().__init__(name)
+			self.artefactNames = None
+			self.mapping = set()
+
+		def addArtefact(self, name):
+			if self.artefactNames is None:
+				self.artefactNames = set()
+			self.artefactNames.add(name)
+
+	def __init__(self, *args, alwaysUpdate = False, **kwargs):
+		super().__init__(*args, self.PackageAggregate, **kwargs)
+		self.targetRepositoryName = 'standard' # for now
+		self.alwaysUpdate = alwaysUpdate
+
+	def addPackage(self, concretePackage, sourceRepository, targetRepository):
+		assert(concretePackage.name != '000aggregate')
+		link = self.createLink(concretePackage, sourceRepository)
+		link.mapping.add((sourceRepository.relativeName, targetRepository.relativeName))
+		return link
+
+	def getTargetRepository(self, targetProject):
+		targetRepository = targetProject.getRepository(self.targetRepositoryName)
+		if targetRepository is None:
+			raise Exception(f"Cannot aggregate packages to {targetProject}/{self.targetRepositoryName}: repository not defined")
+		return targetRepository
+
+	def publishOne(self, link, targetProject):
+		sourceProjectName = self.sourceProject.obsProjectName
+
+		obsAggregate = OBSAggregate(link.name)
+
+		if False:
+			defaultEntry = None
+			for concretePackage in sorted(link.sourcePackages, key = str):
+				sourceRepository = concretePackage.parent
+				sourceProjectName = self.sourceProject.obsProjectName
+				if not link.artefactNames:
+					if defaultEntry is None:
+						defaultEntry = obsAggregate.createEntry(sourceProjectName)
+					entry = defaultEntry
+				else:
+					entry = obsAggregate.createEntry(sourceProjectName)
+				entry.update(concretePackage.name, link.mapping, link.artefactNames)
+		else:
+			entry = obsAggregate.createEntry(sourceProjectName)
+			entry.sourcePackageNames = sorted(map(str, link.sourcePackages))
+			entry.artefactNames = link.artefactNames or []
+			entry.mapping = link.mapping
+
+		# somewhat icky
+		targetRepository = self.getTargetRepository(targetProject)
+
+		with loggingFacade.temporaryIndent():
+			success = targetRepository.createAggregate(obsAggregate)
+			if not success:
+				self.reportProblem(f"{aggregate.targetRepository}: unable to aggregate package {aggregate.name}")
+
+		return success
+
+class PackageBootstrapStrategy(PackageAggregateStrategy):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, alwaysUpdate = True, **kwargs)
+
+		self.aggregateName = "000aggregate"
+		self.targetRepository = None
+		self.targetPackage = None
+		self.targetLink = None
+
+	def addPackage(self, concretePackage, sourceRepository, targetRepository):
+		if self.targetLink is None:
+			self.targetRepository = targetRepository
+			self.targetPackage = ConcretePackage(targetRepository, self.aggregateName)
+			self.targetLink = self.createLink(self.targetPackage, sourceRepository)
+		else:
+			assert(self.targetRepository == targetRepository)
+
+		link = self.targetLink
+		link.mapping.add((sourceRepository.relativeName, targetRepository.relativeName))
+		link.addPackage(concretePackage)
+		return link
+
+class AggregateAllStrategy(PackageAggregateStrategy):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, alwaysUpdate = True, **kwargs)
+
+		self.aggregateName = "000aggregate"
+		self.targetRepository = None
+		self.targetPackage = None
+		self.targetLink = None
+
+	def createCatchAllPackage(self, sourceRepository, targetRepository):
+		if self.targetLink is not None:
+			return
+
+		assert(self.targetLink is None)
+
+		self.targetRepository = targetRepository
+		self.targetPackage = ConcretePackage(targetRepository, self.aggregateName)
+
+		link = self.linkClass(self.aggregateName)
+		self._packages[self.aggregateName] = link
+		self.targetLink = link
+
+		projectDebug(f"createCatchAllPackage {targetRepository}")
+		for sourceRepository in self.sourceProject.repositories:
+			projectDebug(f"   {sourceRepository} feeds into {targetRepository}")
+			link.mapping.add((sourceRepository.relativeName, targetRepository.relativeName))
+
+	def addPackage(self, concretePackage, sourceRepository, targetRepository):
+		return
+
+##################################################################
+# Generated packages and files
+##################################################################
+class PackageGenerator(object):
+	def __init__(self, name):
+		self.name = name
+		self.title = None
+		self.files = {}
+
+	def __str__(self):
+		return self.name
+		# return f"{self.__class__.__name__}({self.name})"
+
+	def addFile(self, fileGenerator):
+		self.files[fileGenerator.name] = fileGenerator
+		return fileGenerator
+
+	def generateFiles(self):
+		for name, fileGenerator in self.files.items():
+			content = fileGenerator.generateContent()
+			yield name, content
+
+class ComponentInfoPackageGenerator(PackageGenerator):
+	def __init__(self, name, classification):
+		super().__init__(name)
+
+		self.title = f"Component meta data package"
+		self.modelXML = self.addFile(ComponentXmlGenerator("model.xml", classification))
+
+	def addComponent(self, componentLabel):
+		self.modelXML.addComponentLabel(componentLabel)
+
+class FileGenerator(object):
+	def __init__(self, name):
+		self.name = name
+
+	def generateContent(self):
+		raise Exception(f"{self.__class__.__name__}.generateContent() not implemented")
+
+class ComponentXmlGenerator(FileGenerator):
+	def __init__(self, name, classification):
+		super().__init__(name)
+		self.classification = classification
+		self.componentLabels = Classification.createLabelSet()
+
+	def addComponentLabel(self, componentLabel):
+		self.componentLabels.add(componentLabel)
+
+	# FIXME: something is still amiss with the ClassificationResult reading from XML.
+	# result.enumerateBuilds() does not seem to produce any useful labels, so we
+	# fail to write back any <build> elements here
+	def generateContent(self):
+		from writers import XmlWriter
+		import io
+
+		bio = io.BytesIO()
+		writer = XmlWriter(io = bio)
+
+		writer.writeComponents(self.classification, self.componentLabels)
+
+		buf = bio.getbuffer().tobytes()
+		return buf.decode('utf-8')
+
+##################################################################
+# A "Mediator" class takes a given abstract component model
+# and maps it to a set of OBS projects, repositories and packages.
+# In order to publish the model to OBS, you need to call
+# model.publish() on the resulting ConcreteModel.
+##################################################################
+class Mediator(object):
+	def __init__(self, application, settings):
+		self.obs = OBSClientWrapper(application.obsClient)
+		self.settings = settings
+
+		self.allInversionsName = 'all'
+		self.componentInfoPackageName = "000component"
+
+		self.model = ConcreteModel(self.obs, self.settings)
+
+		# The following dict maps topic labels to repositories
+		self._exportsTable = {}
+
+	def createProject(self, obsProjectName, **kwargs):
+		return self.model.createProject(obsProjectName, **kwargs)
+
+	def defineExportProject(self, label, concreteProject):
+		if label in self._exportsTable:
+			projectDebug(f"Not redefining {label} {self._exportsTable[label]} -> {concreteProject}")
+			return
+		self._exportsTable[label] = concreteProject
+
+	def getExportProject(self, label):
+		return self._exportsTable.get(label)
+
+	def createComponentInfoPackage(self, abstractModel, concreteProject):
+		packageName = self.componentInfoPackageName
+
+		infoGenerator = concreteProject.getGeneratedPackage(packageName)
+		if infoGenerator is None:
+			infoGenerator = ComponentInfoPackageGenerator(packageName, abstractModel.classification)
+			concreteProject.addGeneratedPackage(infoGenerator)
+		return infoGenerator
+
+##################################################################
+# This is the only mediator implemented so far. It maps each
+# component to an OBS project, with an optional set of sub-projects
+# for purposes like modeling inversions, or aggregating all
+# packages in one place.
+##################################################################
+class ComponentCentricMediator(Mediator):
+	def __init__(self, application, settings):
+		super().__init__(application, settings)
+
+		self.workbenchProject = None
+		self.workbenchRepository = None
+
+		self._specialProjects = {}
+
+	def markProjectToPublish(self, concreteProject):
+		self.model.projectsToPublish.add(concreteProject)
+
+	def build(self, abstractModel, targetComponents):
+		self._abstractModel = abstractModel
+
+		workbenchProject = self.buildWorkbench(abstractModel)
+
+		for abstractComponent in abstractModel.components:
+			componentSettings = self.settings.getComponent(abstractComponent.name)
+			self.mapComponent(abstractComponent, componentSettings)
+
+		for name in targetComponents:
+			if name == 'Workbench':
+				concreteProject = workbenchProject
+			else:
+				abstractComponent = abstractModel.getComponentByName(name)
+				concreteProject = abstractComponent.concreteProject
+			if concreteProject is None:
+				raise Exception(f"Don't know how to publish unknown project {name}")
+
+			self.markProjectToPublish(concreteProject)
+
+		for abstractComponent in abstractModel.components:
+			concreteProject = abstractComponent.concreteProject
+
+			infoPackage = self.createComponentInfoPackage(abstractModel, concreteProject)
+			infoPackage.addComponent(abstractComponent.componentLabel)
+
+			if concreteProject.generation == 'bootstrap':
+				continue
+
+			fredProject = self.createPrjConfSubProject(abstractComponent)
+			fredProject.config = self.createPackageProjectConfig(concreteProject)
+
+			repositories = []
+			for abstractBuildConfig in abstractComponent.buildConfigs:
+				concreteRepository = self.mapBuildConfig(abstractComponent, abstractBuildConfig)
+				repositories.append(concreteRepository)
+
+		alwaysBuildRequires = self.mapCommonRequirements()
+		for abstractComponent in abstractModel.components:
+			concreteProject = abstractComponent.concreteProject
+			if concreteProject.generation == 'bootstrap':
+				continue
+
+			componentRequires = self.mapComponentRequirements(abstractComponent, alwaysBuildRequires)
+
+			infomsg(f"Creating buildconfigs for {abstractComponent}")
+			if loggingFacade.isDebugEnabled('project'):
+				projectDebug(f"   Common setup:")
+				for concreteRepository in componentRequires.repositories:
+					projectDebug(f"    - {concreteRepository}")
+
+			for abstractBuildConfig in abstractComponent.buildConfigs:
+				concreteRepository = abstractBuildConfig.concreteRepository
+				if concreteRepository is None:
+					raise Exception(f"{abstractBuildConfig} has not been mapped to a repository")
+
+				with loggingFacade.temporaryIndent():
+					projectDebug(f"Resolving requirements for {abstractBuildConfig}")
+					self.mapBuildConfigRequirements(abstractBuildConfig, concreteRepository, componentRequires)
+
+		for abstractComponent in abstractModel.components:
+			if abstractComponent.name in targetComponents:
+				self.populateSubProjects(abstractComponent)
+
+		return self.model
+
+	def buildWorkbench(self, abstractModel):
+		workbenchDefinition = self.settings.workbench
+		if workbenchDefinition is None:
+			raise Exception(f"Cannot build workbench because the model doesn't define one")
+
+		abstractExport = abstractModel.identifyWorkbenchPackages(workbenchDefinition.includeNames, workbenchDefinition.excludeNames)
+
+		workbenchProject = self.createWorkbenchProject(workbenchDefinition, labelScope = abstractExport.labelScope)
+		workbenchRepository = workbenchProject.createRepository('standard')
+
+		for abstractPackage, abstractArtefacts in abstractExport.enumerate():
+			concretePackage = ConcretePackage(self.model.bootstrapRepository, abstractPackage.name)
+			workbenchRepository.usePackage(concretePackage, artefacts = set(rpm.name for rpm in abstractArtefacts))
+
+		self.workbenchRepository = workbenchRepository
+		self.workbenchProject = workbenchProject
+
+		return workbenchProject
+
+	def createSubProjects(self, abstractComponent):
+		pass
+
+	def populateSubProjects(self, abstractComponent):
+		concreteProject = abstractComponent.concreteProject
+
+		if concreteProject.generation == 'bootstrap':
+			return
+
+		allInversions = self.createAllInversionsRepository(concreteProject)
+		for concreteRepository in concreteProject.repositories:
+			allInversions.addPackages(concreteRepository.packages)
+
+	# We need to control the repositories against which a specific package is being built.
+	# This could be controlled in the prjconf via BuildFlags. However, whenever we build
+	# a package against Foo/standard, Foo/_prjconf is preprocessed not just for repo "standard",
+	# but against all repos referenced in _meta.
+	#
+	# So what we do here, per Frederic's idea: create a PrjConf subproject that has
+	# a _prjconf that contains
+	#  %if %_repository = "standard"
+	#  BuildFlags: onlybuild:packageA
+	#  %endif
+	#  %if %_repository = "gtk"
+	#  BuildFlags: onlybuild:packageB
+	#  &endif
+	#
+	# When we "build" against Foo:PrjConf/standard, OBS will see the BuildFlags for packageA,
+	# and when building against Foo:PrjConf/gtk, it will see the BuildFlags for packageB
+	def createPrjConfSubProject(self, abstractComponent):
+		concreteProject = abstractComponent.concreteProject
+		fredProject = concreteProject.createSubProject("PrjConf",
+					title = f"Dummy project for matching {abstractComponent.name} packages to repositories",
+					description = f"This project provides a project config file that connects packages to the repositories with which they should be built.",
+					publishingStrategy = NoPublicationStrategy())
+
+		self.addShadowProject(fredProject, abstractComponent)
+		return fredProject
+
+	def addShadowProject(self, shadowProject, abstractComponent):
+		for abstractBuildConfig in abstractComponent.buildConfigs:
+			concreteRepository = shadowProject.createRepository(abstractBuildConfig.relativeName)
+			# infomsg(f"Created {concreteRepository}")
+			# FIXME: do we need to define at least one empty project against which
+			# this repo "builds" (it doesn't build anything because it's empty)?
+
+		abstractComponent.concreteProject._shadowProjects.append(shadowProject)
+
+	def mapComponent(self, abstractComponent, componentSettings, **kwargs):
+		concreteProject = abstractComponent.concreteProject
+		if concreteProject is None:
+			if componentSettings.generation == "bootstrap":
+				concreteProject = self.createBootstrapComponent(abstractComponent, componentSettings, **kwargs)
+			else:
+				concreteProject = self.createVersionedComponent(abstractComponent, componentSettings, **kwargs)
+				if componentSettings.bootstrapSelf:
+					bootstrapProject = self.createBootstrapComponent(abstractComponent, componentSettings)
+					concreteProject.bootstrapRepository = bootstrapProject.standard
+
+			concreteProject.config = self.createMainProjectConfig(concreteProject, componentSettings.projectConfigSnippet)
+
+			abstractComponent.concreteProject = concreteProject
+		return concreteProject
+
+	def createBootstrapComponent(self, abstractComponent, componentSettings, **kwargs):
+		if False:
+			# FIXME nuke
+			if componentSettings.bootstrapRepository is not None:
+				bootstrapRepository = self.model.resolveRepositoryReference(componentSettings.bootstrapRepository)
+			else:
+				bootstrapRepository = self.model.bootstrapRepository
+			if bootstrapRepository is None:
+				raise Exception(f"Cannot bootstrap component {abstractComponent}: no bootstrap repository defined")
+
+			#strategy = PackageBootstrapStrategy(self.obs, bootstrapRepository.parent)
+			strategy = PackageAggregateStrategy(self.obs, bootstrapRepository.parent)
+			description = f"Bootstrapped with packages from {bootstrapRepository}"
+			actualTopics = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
+
+			obsProjectName = f"{self.settings.targetProjectBase}:bootstrap:{abstractComponent.name}"
+			concreteProject = self.createProject(obsProjectName,
+						publishingStrategy = strategy,
+						componentName = abstractComponent.name,
+						generation = 'bootstrap',
+						title = f"Bootstrap component {abstractComponent.name}",
+						description = description,
+						labelScope = actualTopics)
+
+			# Create a minimal prjconf that makes sure the project builds
+			concreteProject.config = self.createMainProjectConfig(concreteProject)
+		else:
+			actualTopics = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
+			concreteProject = self.createBootstrapProject(abstractComponent.name, componentSettings,
+							bootstrapComponent = abstractComponent,
+							labelScope = actualTopics, **kwargs)
+
+		# Create all $Component:bootstrap:exports:* projects
+		# /unless/ this is just for building $Component
+		if not componentSettings.bootstrapSelf:
+			self.createExportsRepository(abstractComponent, concreteProject, componentSettings)
+
+		return concreteProject
+
+	def createVersionedComponent(self, abstractComponent, componentSettings, **kwargs):
+		generation = componentSettings.generation
+		strategy = PackageLinkStrategy(self.obs, self.model.sourceProject)
+		description = f"Rebuilding packages from {self.model.sourceProject}"
+		actualTopics = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
+
+		obsProjectName = f"{self.settings.targetProjectBase}:{generation}:{abstractComponent.name}"
+		concreteProject = self.createProject(obsProjectName,
+					publishingStrategy = strategy,
+					componentName = abstractComponent.name,
+					generation = generation,
+					description = description,
+					labelScope = actualTopics)
+		abstractComponent.concreteProject = concreteProject
+
+		self.createSubProjects(abstractComponent)
+
+		if False:
+			for abstractTopic in abstractComponent.exportedTopics:
+				self.mapExportedTopic(abstractComponent, abstractTopic)
+
+		for abstractBuildConfig in abstractComponent.buildConfigs:
+			self.mapBuildConfig(abstractComponent, abstractBuildConfig)
+
+		self.linkPackages(abstractComponent, concreteProject, self.model.sourceRepository)
+
+		self.createExportsRepository(abstractComponent, concreteProject, componentSettings)
+
+		return concreteProject
+
+	def createWorkbenchProject(self, componentSettings, **kwargs):
+		return self.createBootstrapProject('Workbench', componentSettings, **kwargs)
+
+		# FIXME nuke
+		if componentSettings.bootstrapRepository is not None:
+			bootstrapRepository = self.model.resolveRepositoryReference(componentSettings.bootstrapRepository)
+		else:
+			bootstrapRepository = self.model.bootstrapRepository
+		if bootstrapRepository is None:
+			raise Exception(f"Cannot bootstrap Workbench: no bootstrap repository defined")
+
+		# This would create a single 000aggregate package
+		strategy = PackageBootstrapStrategy(self.obs, bootstrapRepository.parent)
+		# This creates individual packages with an _aggregate file
+		#strategy = PackageAggregateStrategy(self.obs, bootstrapRepository.parent)
+		description = f"Bootstrapped with packages from {bootstrapRepository}"
+
+		obsProjectName = f"{self.settings.targetProjectBase}:bootstrap:Workbench"
+		concreteProject = self.createProject(obsProjectName,
+					publishingStrategy = strategy,
+					componentName = 'Workbench',
+					generation = 'bootstrap',
+					title = f"Bootstrap component Workbench",
+					description = description,
+					**kwargs)
+
+		# Create a minimal prjconf that makes sure the project builds
+		concreteProject.config = self.createMainProjectConfig(concreteProject)
+
+		return concreteProject
+
+	def createBootstrapProject(self, projectBaseName, componentSettings, bootstrapComponent = None, **kwargs):
+		if componentSettings.bootstrapRepository is not None:
+			bootstrapRepository = self.model.resolveRepositoryReference(componentSettings.bootstrapRepository)
+		else:
+			bootstrapRepository = self.model.bootstrapRepository
+		if bootstrapRepository is None:
+			raise Exception(f"Cannot bootstrap {projectBaseName}: no bootstrap repository defined")
+
+		if componentSettings.bootstrapStrategy == Model.BOOTSTRAP_STRATEGY_MULTI:
+			# This creates individual packages with an _aggregate file
+			strategy = PackageAggregateStrategy(self.obs, bootstrapRepository.parent)
+		elif componentSettings.bootstrapStrategy == Model.BOOTSTRAP_STRATEGY_SINGLE:
+			# This creates a single 000aggregate package
+			strategy = PackageBootstrapStrategy(self.obs, bootstrapRepository.parent)
+		else:
+			raise Exception(f"Cannot bootstrap {projectBaseName}: unsupported strategy {componentSettings.bootstrapStrategy}")
+
+		description = f"Bootstrapped with packages from {bootstrapRepository}"
+
+		obsProjectName = f"{self.settings.targetProjectBase}:bootstrap:{projectBaseName}"
+		concreteProject = self.createProject(obsProjectName,
+					publishingStrategy = strategy,
+					componentName = projectBaseName,
+					generation = 'bootstrap',
+					title = f"Bootstrap component {projectBaseName}",
+					description = description,
+					**kwargs)
+
+		# Create a minimal prjconf that makes sure the project builds
+		concreteProject.config = self.createMainProjectConfig(concreteProject)
+
+		# If bootstrapComponent is given, it's an AbstractComponent that provides the
+		# list of packages we're supposed to populate this new project with
+		if bootstrapComponent:
+			assert(isinstance(bootstrapComponent, AbstractComponent))
+			self.bootstrapPackages(bootstrapComponent, concreteProject, bootstrapRepository)
+
+		return concreteProject
+
+	def mapExportedTopic(self, abstractComponent, abstractTopic, repoName = 'standard'):
+		publishedRepository = abstractTopic.concretePublishingLocation
+		if publishedRepository is None:
+			concreteProject = abstractComponent.concreteProject
+			subProject = concreteProject.createSubProject(self.settings.exportsSubProjectName,
+					title = f"All exported packages of {abstractComponent}",
+					description = f"This project is currently empty.")
+			publishedRepository = subProject.createRepository(repoName)
+			abstractTopic.concretePublishingLocation = publishedRepository
+		return publishedRepository
+
+	def mapBuildConfig(self, abstractComponent, abstractBuildConfig):
+		concreteRepository = abstractBuildConfig.concreteRepository
+		if concreteRepository is None:
+			assert(abstractComponent.concreteProject)
+			concreteProject = abstractComponent.concreteProject
+
+			concreteRepository = concreteProject.createRepository(abstractBuildConfig.relativeName)
+
+			debugmsg(f"  {abstractBuildConfig.name} -> {concreteRepository.obsRepositoryName}")
+			abstractBuildConfig.concreteRepository = concreteRepository
+
+		return concreteRepository
+
+	def mapCommonRequirements(self):
+		result = ConcreteBuildRequirements()
+
+		for componentName in self.settings.alwaysBuildRequires:
+			order = 'last'
+			if ' ' in componentName:
+				words = componentName.split()
+				componentName = words.pop(0)
+				for modifier in words:
+					if modifier == 'order=first':
+						order = 'first'
+					# else ignore silently
+
+			if '/' in componentName:
+				# This is a fully qualified project/repo like
+				# SUSE:ALP:Source:Standard:Core:1.0:Build/ports
+				# Use it directly
+				referencedRepository = self.model.resolveRepositoryReference(componentName)
+			elif componentName == 'Workbench':
+				referencedRepository = self.workbenchRepository
+			else:
+				# This is a component name
+				# infomsg(f"Always required for build: {componentName}")
+				abstractComponent = abstractModel.getComponentByName(componentName)
+
+				result.addLabel(abstractComponent.componentLabel)
+
+				labelScope = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
+				result.addLabelSet(labelScope.members)
+
+				referencedRepository = self.createAllInversionsRepository(abstractComponent.concreteProject)
+
+			infomsg(f"  always reference {referencedRepository}")
+			if order == 'first':
+				result.prependRepository(referencedRepository)
+			else:
+				result.appendRepository(referencedRepository)
+
+		return result
+
+	def mapComponentRequirements(self, abstractComponent, alwaysBuildRequires):
+		concreteProject = abstractComponent.concreteProject
+		assert(concreteProject and concreteProject.buildRequirements is None)
+
+		result = ConcreteBuildRequirements(alwaysBuildRequires)
+
+		if False:
+			# When we're building Core, append all Core/something repos
+			for concreteRepository in concreteProject.repositories:
+				result.prependRepository(concreteRepository)
+
+		# Simplification: rather than depending on Core/standard and Core/blah Core/etc, 
+		# depend on Core:all/standard
+		for requiredComponent in abstractComponent.required:
+			requiredProject = requiredComponent.concreteProject
+			requiredRepository = self.createAllInversionsRepository(requiredProject)
+
+			result.appendRepository(requiredRepository)
+
+			topicLabels = self._abstractModel.getTopicClosure(requiredComponent.componentLabel)
+			result.addLabelSet(topicLabels)
+
+		concreteProject.buildRequirements = result
+		return result
+
+	class TopicQueue:
+		def __init__(self, abstractBuildConfig):
+			self.abstractBuildConfig = abstractBuildConfig
+			self.queue = list(abstractBuildConfig.buildRequires)
+
+			self.trace = False
+
+		def append(self, abstractTopic):
+			self.queue.append(abstractTopic)
+
+		def __bool__(self):
+			return bool(self.queue)
+
+		def __iter__(self):
+			while self.queue:
+				if self.trace:
+					infomsg(f"   topic queue is {' '.join(map(str, self.queue))}")
+
+				abstractTopic = self.queue.pop(0)
+				assert(isinstance(abstractTopic, AbstractTopic))
+				yield abstractTopic
+
+	def mapBuildConfigRequirements(self, abstractBuildConfig, concreteRepository, componentBuildRequires):
+		concreteProject = concreteRepository.parent
+
+		repositoryBuildRequires = ConcreteBuildRequirements(componentBuildRequires)
+
+		# When building for Core/systemd, reference Core:PrjConf/systemd to get the
+		# list of packages to build
+		for shadowProject in concreteProject._shadowProjects:
+			shadowRepository = shadowProject.getRepository(abstractBuildConfig.relativeName)
+			assert(shadowRepository is not None)
+			repositoryBuildRequires.prependRepository(shadowRepository)
+
+		buildingForComponent = abstractBuildConfig.componentLabel
+		abstractModel = self._abstractModel
+
+		topicQueue = self.TopicQueue(abstractBuildConfig)
+
+		for abstractTopic in topicQueue:
+			topicLabel = abstractTopic.topicLabel
+			componentLabel = topicLabel.componentLabel
+
+			if repositoryBuildRequires.labelIsCovered(topicLabel):
+				projectDebug(f"{topicLabel} (already covered by {repositoryBuildRequires.getCoveringRepository(topicLabel)})")
+				continue
+
+			if componentLabel is buildingForComponent:
+				labelScope = abstractModel.getComponentTopics(componentLabel, generator = topicLabel.runtimeRequires)
+				if not topicLabel.runtimeRequires.issubset(labelScope.members.union(labelScope.support)):
+					infomsg(f"   while resolving {topicLabel}")
+					infomsg(f"     runtimeRequires={' '.join(sorted(map(str, topicLabel.runtimeRequires)))}")
+					infomsg(f"     scope={' '.join(sorted(map(str, labelScope.members)))}")
+					infomsg(f"     closure={' '.join(sorted(map(str, labelScope.closure)))}")
+					infomsg(f"     support={' '.join(sorted(map(str, labelScope.support)))}")
+					for x in topicLabel.runtimeRequires:
+						if x not in labelScope.closure.members:
+							errormsg(f"{x}")
+							fail
+				resolution = f"{componentLabel} label"
+			else:
+				exportProject = self.getExportProject(topicLabel)
+				if exportProject is None:
+					if topicLabel in componentLabel.exports:
+						if topicLabel in buildingForComponent.imports:
+							projectDebug(f"{concreteRepository} requires exported label {componentLabel}:{topicLabel}, but {buildingForComponent} does not import it")
+						else:
+							projectDebug(f"{concreteRepository} requires exported label {componentLabel}:{topicLabel}")
+					else:
+						projectDebug(f"{concreteRepository} requires {componentLabel}:{topicLabel}, but I don't know how to cover it")
+
+					raise Exception(f"Refusing to map {abstractTopic} via {componentLabel}:all while handling dependencies of {abstractBuildConfig}")
+
+				exportRepository = exportProject.standard
+				repositoryBuildRequires.appendRepository(exportRepository)
+
+				labelScope = exportProject.labelScope
+				resolution = f"{exportRepository}"
+
+			remainingTopics = labelScope.support
+			if remainingTopics:
+				projectDebug(f"   partially resolved {topicLabel} via {resolution}, which in turn requires:")
+				for topic in remainingTopics:
+					if repositoryBuildRequires.labelIsCovered(topic):
+						# infomsg(f"     {topic} (already covered by {repositoryBuildRequires.getCoveringRepository(topic)})")
+						continue
+					topicQueue.append(abstractModel.createAbstractTopic(topic))
+					projectDebug(f"     {topic}")
+			else:
+				projectDebug(f"   fully resolved {topicLabel} via {resolution}")
+
+		# assert(not topicQueue.trace)
+
+		# If we're bootstrapping ourselves from an existing code snapshot,
+		# append that bootstrap snapshot at the very end
+		if concreteProject.bootstrapRepository:
+			repositoryBuildRequires.appendRepository(concreteProject.bootstrapRepository)
+
+		# Append all required repositories to concreteRepository.repositoriesUsedForBuild.
+		# Make sure we're not duplicating any repos, because otherwise OBS will complain
+		seen = set()
+		for requiredRepository in repositoryBuildRequires.repositories:
+			if requiredRepository not in seen:
+				concreteRepository.repositoriesUsedForBuild.append(requiredRepository)
+			seen.add(requiredRepository)
+
+		assert(seen)
+		assert(concreteRepository.repositoriesUsedForBuild)
+
+		#concreteRepository.repositoriesUsedForBuild = repositoryBuildRequires.repositories
+
+	def mapInversionTopic(self, abstractTopic):
+		if abstractTopic.concretePublishingLocation is not None:
+			return abstractTopic.concretePublishingLocation
+
+		topicLabel = abstractTopic.topicLabel
+		componentLabel = topicLabel.componentLabel
+
+		abstractComponent = self._abstractModel.getComponentByLabel(componentLabel)
+		assert(abstractComponent)
+		assert(abstractComponent.concreteProject)
+
+		return self.createAllInversionsRepository(abstractComponent.concreteProject)
+
+	def linkPackages(self, abstractComponent, concreteProject, sourceRepository):
+		result = []
+		for abstractBuildConfig in abstractComponent.buildConfigs:
+			targetRepository = self.mapBuildConfig(abstractComponent, abstractBuildConfig)
+			for abstractPackage in abstractBuildConfig.packages:
+				if abstractPackage.name in self.settings.ignorePackages:
+					infomsg(f"Ignoring {abstractPackage}")
+					continue
+
+				concretePackage = ConcretePackage(sourceRepository, abstractPackage.name)
+				targetRepository.usePackage(concretePackage)
+				result.append(concretePackage)
+
+		return result
+
+	def bootstrapPackages(self, abstractComponent, concreteProject, bootstrapRepository):
+		targetRepository = concreteProject.createRepository('standard')
+
+		result = []
+		for abstractBuildConfig in abstractComponent.buildConfigs:
+			for abstractPackage in abstractBuildConfig.packages:
+				if abstractPackage.name in self.settings.ignorePackages:
+					infomsg(f"Ignoring {abstractPackage}")
+					continue
+
+				concretePackage = ConcretePackage(bootstrapRepository, abstractPackage.name)
+				targetRepository.usePackage(concretePackage)
+				result.append(concretePackage)
+
+		return result
+
+	def createMainProjectConfig(self, concreteProject, verbatimSnippet = None):
+		prjconf = ProjectConfigBuilder()
+
+		prjconf.add(f"%if \"%_project\" == \"{concreteProject}\"")
+		prjconf.add("Type: spec")
+
+		if verbatimSnippet is not None:
+			prjconf.add("")
+			prjconf.add("# Copied verbatim from component settings")
+			for line in verbatimSnippet.strip().split('\n'):
+				line = line.strip()
+				prjconf.add(line)
+
+		prjconf.add("%endif")
+		return prjconf
+
+	def createPackageProjectConfig(self, concreteProject):
+		prjconf = ProjectConfigBuilder()
+
+		# prjconf.add("Type: spec")
+
+		for concreteRepository in concreteProject.repositories:
+			nested = prjconf.beginRepositorySpecific(concreteRepository.relativeName)
+			nested.add(f" # This is the list of packages to be built for {concreteRepository}")
+
+			nested.add(f" BuildFlags: !onlybuild:dummy")
+			for concretePackage in sorted(concreteRepository.packages, key = str):
+				nested.add(f" BuildFlags: onlybuild:{concretePackage}")
+
+		return prjconf
+
+	def createExportsRepository(self, abstractComponent, concreteProject, componentSettings):
+		componentLabel = abstractComponent.componentLabel
+
+		allExports = []
+		for exportDef in componentSettings.exports:
+			# get the labels we are supposed to export
+			exportedTopics = Classification.createLabelSet(map(self._abstractModel.getLabel, exportDef.topics))
+
+			# get the downward closure, relative to the component we're dealing with
+			exportedTopics = self._abstractModel.getComponentTopics(componentLabel, generator = exportedTopics)
+
+			concreteExport = ConcreteExport(exportDef.name, exportedTopics)
+			allExports.append(concreteExport)
+
+		# Sort exports by increasing size of topicLabels.
+		# If export A is a super set of export B, then B will be before A in this list
+		allExports = sorted(allExports, key = lambda e: len(e.topicLabels))
+
+		# create exports for smaller sets of topics first, then the larger ones.
+		# This helps us ensure that a lookup of topic -> export gives us the project
+		# with the smallest footprint later
+		# TBD: create a partial order of exports by subset relation. This gives us
+		# a dependency graph that helps us keep the exports:* projects smaller
+		for concreteExport in allExports:
+			infomsg(f"Setting up {concreteProject} export {concreteExport}")
+
+			dependencies = []
+			if False: # not yet
+				for otherExport in allExports:
+					if otherExport is concreteExport:
+						break
+					if otherExport.topicLabels.issubset(concreteExport.topicLabels):
+						dependencies.append(otherExport)
+
+			with loggingFacade.temporaryIndent():
+				self.createOneExport(concreteProject, componentLabel, concreteExport, dependencies)
+
+		return
+
+	def createOneExport(self, concreteProject, componentLabel, concreteExport, requiredExports):
+		exportedTopics = concreteExport.topicLabels
+
+		if loggingFacade.isDebugEnabled('project'):
+			infomsg(f"{componentLabel}:{concreteExport} contains {len(concreteExport.topicLabels)} topic(s)")
+			for topic in sorted(concreteExport.topicLabels, key = str):
+				infomsg(f"   {topic}")
+			infomsg(f"  support:")
+			for topic in sorted(concreteExport.topicLabels.support, key = str):
+				infomsg(f"   {topic}")
+
+		# Get the list of exported topics (and their requirements), restricted to those
+		# topics that are covered by the component we're dealing with
+		actualTopics = concreteExport.topicLabels
+
+		componentClosure = self._abstractModel.getTopicClosure(componentLabel)
+		inversions = concreteExport.support.difference(componentClosure)
+		if inversions:
+			if loggingFacade.isDebugEnabled('project'):
+				self.explainInversions(componentLabel, concreteExport, inversions)
+			concreteExport.inversions = inversions
+
+		if concreteProject.bootstrapRepository:
+			sourceProject = concreteProject.bootstrapRepository.parent
+		else:
+			sourceProject = concreteProject
+
+		exportsProject = concreteProject.createSubProject(f"exports:{concreteExport}",
+					title = f"All {concreteExport} packages exported by {componentLabel}",
+					#description = f"This project is currently empty.",
+					publishingStrategy = PackageAggregateStrategy(self.obs, concreteProject),
+					labelScope = actualTopics)
+		exportsProject.config = self.createMainProjectConfig(exportsProject)
+		exportsRepository = exportsProject.createRepository('standard')
+
+		# Now add the packages to be exported
+		alreadyComplained = set()
+		for topicLabel in actualTopics:
+			for rpm in self._abstractModel.classification.getPackagesForLabel(topicLabel):
+				if rpm.isSynthetic:
+					continue
+
+				abstractPackage = self._abstractModel.getAbstractPackageForRpm(rpm)
+				if abstractPackage is None:
+					raise Exception(f"No package for {rpm}")
+
+				concretePackage = concreteProject.findPackage(abstractPackage)
+				if concretePackage is None:
+					if concretePackage in alreadyComplained:
+						continue
+					errormsg(f"Unable to find {abstractPackage} in {concreteProject} - probably hasn't been assigned a buildconfig yet")
+					alreadyComplained.add(concretePackage)
+					continue
+
+				link = exportsRepository.usePackage(concretePackage, artefacts = [rpm.name])
+
+		for topicLabel in actualTopics:
+			self.defineExportProject(topicLabel, exportsProject)
+
+		if False:
+			displaySet = self._abstractModel.filterLabelsByComponent(topicClosure, componentLabel)
+			infomsg(f"{exportsRepository} covers {len(displaySet)} topics")
+			for topicLabel in sorted(displaySet, key = str):
+				infomsg(f"   {topicLabel}")
+
+		concreteExport.repository = exportsRepository
+		return
+
+	def explainInversions(self, componentLabel, concreteExport, inversions):
+		exportedTopics = concreteExport.topicLabels
+
+		harmless = []
+		harmful = []
+
+		for label in sorted(inversions, key = str):
+			if self.workbenchProject and label in self.workbenchProject.labelScope:
+				harmless.append(label)
+			else:
+				harmful.append(label)
+
+		if not harmful:
+			projectDebug(f"{componentLabel}:{concreteExport} has {len(inversions)} inversions, but all of them are covered by Workbench")
+			return
+
+		projectDebug(f"{componentLabel}:{concreteExport} has the following inversions:")
+		for label in harmful:
+			for topicLabel in exportedTopics:
+				path = self._abstractModel.topicOrder.findPath(label, topicLabel)
+				if path:
+					break
+
+			labelComponent = label.componentLabel
+			if path:
+				projectDebug(f"  {labelComponent}:{label} via {' -> '.join(map(str, path))}")
+			else:
+				projectDebug(f"  {labelComponent}:{label} (inexplicable)")
+
+		if harmless:
+			projectDebug(f"In addition, the following topics are provided by Workbench")
+			for label in harmless:
+				projectDebug(f"  {label} covered by workbench")
+
+	def createAllInversionsRepository(self, concreteProject):
+		if concreteProject.generation == 'bootstrap':
+			return concreteProject.standard
+
+		allRepository = self.createAggregationRepository(concreteProject, self.allInversionsName,
+					strategyClass = AggregateAllStrategy,
+					description = f"Aggregate of all packages in {concreteProject.componentName}",
+					labelScope = concreteProject.labelScope)
+		allRepository._packagePublicationStrategy.createCatchAllPackage(concreteProject.standard, allRepository)
+		return allRepository
+
+	def createAggregationRepository(self, sourceProject, subProjectName, repoName = 'standard', strategyClass = None, **kwargs):
+		# aggregate from any repository $sourceProject/somerepo into
+		# $sourceProject:$subProjectName/$repoName
+		sourceRepository = sourceProject.createRepository(repoName)
+
+		if strategyClass is None:
+			strategyClass = PackageAggregateStrategy
+		strategy = strategyClass(self.obs, sourceProject)
+
+		targetProject = self.createAggregationProject(sourceProject, subProjectName,
+						publishingStrategy = strategy,
+						**kwargs)
+		targetRepository = targetProject.createRepository(repoName)
+		return targetRepository
+
+	def createAggregationProject(self, concreteProject, subProjectName, **kwargs):
+		subProject = concreteProject.createSubProject(subProjectName, **kwargs)
+
+		if subProject.config is None:
+			subProject.config = self.createAggregationProjectConfig(subProject)
+
+		return subProject
+
+
+	def createAggregationProjectConfig(self, concreteProject):
+		prjconf = ProjectConfigBuilder()
+		prjconf.add("Type: spec")
+		return prjconf
+
+	# This helper function creates the Project and Repository for a component's
+	# exports and inversions subprojects.
+	# Assume that we need @GtkAPI to build some package, which is exported by component Gtk.
+	# Gtk is being mapped to Some:Prefix:Gtk, and the repositories for inversion/export are
+	#  Some:Prefix:Gtk:exports/standard
+	#  Some:Prefix:Gtk:inversions/standard
+	def createSpecialRepository(self, componentLabel, subProjectName, repoName = 'standard', **kwargs):
+		abstractComponent = self._abstractModel.getComponentByLabel(componentLabel)
+		assert(abstractComponent)
+
+		concreteProject = abstractComponent.concreteProject
+		subProject = concreteProject.createSubProject(subProjectName)
+		return subProject.createRepository(repoName)
+
+class ProjectConfigBuilder(object):
+	def __init__(self):
+		self.lines = []
+
+	def add(self, line):
+		self.lines.append(line)
+
+	def beginRepositorySpecific(self, repositoryName):
+		self.add(f'%if "%_repository" == "{repositoryName}"')
+		nested = ProjectConfigBuilder()
+		self.add(nested)
+		self.add(f'%endif')
+		self.add('')
+
+		return nested
+
+	def __str__(self):
+		return '\n'.join(map(str, self.lines))
+
+class Action(object):
+	def __init__(self, application):
+		self.dryRun = application.opts.dry_run
+
+class ActionInitialize(Action):
+	names = ('init', 'initialize')
+
+	def perform(self, concreteModel):
+		return concreteModel.initializeProjects(dryRun = self.dryRun)
+
+class ActionPublish(Action):
+	names = ('publish', 'packages')
+
+	def perform(self, concreteModel):
+		return concreteModel.publish(dryRun = self.dryRun)
+
+class ActionPrune(Action):
+	names = ('prune', )
+
+	def perform(self, concreteModel):
+		return concreteModel.pruneProjects(dryRun = self.dryRun)
+
+actions = [ActionInitialize, ActionPublish, ActionPrune]
+
+mapping = application.loadModelMapping()
+
+if mapping.type == 'component-centric':
+	mediator = ComponentCentricMediator(application, mapping)
+else:
+	errormsg(f"Cannot map component model: unknown mapping type {mapping.type}")
+	exit(1)
+
+actionName = application.opts.action[0]
+action = None
+for actionClass in actions:
+	if actionName in actionClass.names:
+		action = actionClass(application)
+		break
+
+if action is None:
+	raise Exception(f"Unsupported action \"{actionName}\"")
+
+abstractModel = AbstractModel(application)
+
+# FIXME: select packages that need to be published
+concreteModel = mediator.build(abstractModel, application.opts.components)
+
+# translate abstract to concrete packages
+success = False
+try:
+	# success = concreteModel.publish(init = application.opts.initialize, dryRun = application.opts.dry_run)
+	success = action.perform(concreteModel)
+except OBSError as e:
+	errormsg(f"OBS returned an error while trying to publish the component model")
+	infomsg(f"OBS API {e.request}")
+	infomsg(f"Error code: {e.code}")
+	if e.summary:
+		infomsg(f"Summary:")
+		for line in e.summary.split('\n'):
+			infomsg(f"  {line}")
+	if e.document:
+		infomsg(f"Document:")
+		for line in e.document.split('\n'):
+			infomsg(f"  {line}")
+
+if not success:
+	errormsg(f"Publishing failed")
+	exit(1)
+
+exit(0)

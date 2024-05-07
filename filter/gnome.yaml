@@ -1,0 +1,672 @@
+# vi: ai et
+# Definition of Gnome component
+
+components:
+ - name: Gnome
+   globals:
+    devel: GnomeDevel
+   requires:
+    - Multimedia
+    - X11
+    - Network
+    - Security
+    - HardwareAccess
+    - DocumentFormats
+    - Container
+    - Python
+    - Samba
+    - Gtk
+    - DesktopCommon
+   exports:
+    - "@GnomeLibraries"
+    - "@PulseAudioUser"
+    - "@PulseAudioLibraries"
+
+build_configs:
+ - name: Gnome/standard
+   buildrequires:
+    - "@Vala"
+
+groups:
+ - name: "@X11WindowManager"
+   sourceproject: Gnome
+   requires:
+    - "@X11"
+    - "@FontLibraries+x11"
+    - "@GdkPixbuf"
+    - "@DesktopIcons"
+    - "@DesktopCore"
+    - "@SystemdLibraries"
+    - "@AccessibilityLibraries"
+    - "@DesktopLibraries"
+    - "@NetworkManager"
+    - "@PolicyKitLibraries"
+    - "@InputDeviceLibraries"
+   binaries:
+    - mutter
+    - icewm
+    - xdg-menu
+    # mutter require g-s-d
+    - gnome-settings-daemon
+
+ - name: GnomeDevel
+   requires:
+    - CoreDevel
+    - X11Devel
+    - "@PulseAudioAPI"
+    - "@GtkAPI"
+    - "@GtkDoc"
+    - "@CoreHardwareAPI+systemd"
+    - "@EssentialGraphicsAPI"
+    - "@EssentialVideoAPI"
+    - "@GnomeApplications"
+    - "@GnomeEverythingElse"
+    - "@NetworkManagerAPI"
+    - "@StorageServiceAPI"
+    - "@GStreamerAPI"
+    - "@WxWidgets"
+    - "@I18nTools"
+    - "@GtkAPIs"
+    - "@SoupAPI"
+   binaries:
+    - gnome-doc-utils
+    - gnome-doc-utils-lang
+    - gnome-common
+    - gnome-patch-translation
+
+ - name: "@GnomeRendering"
+   sourceproject: Gnome
+   requires:
+    - "@GraphicsLibraries+x11"
+    - "@FontLibraries+x11"
+   binaries:
+
+ - name: "@PulseAudioUser"
+   sourceproject: Gnome
+   requires:
+    - "@Permissions"
+   binaries:
+    - system-user-pulse
+
+ - name: "@PulseAudioLibraries"
+   api: "@PulseAudioAPI"
+   sourceproject: Gnome
+   requires:
+    - "@SystemdLibraries"
+    - "@AVLibraries"
+    - "@Glib2"
+    - "@RemoteControlLibraries"
+    - "@PulseAudioUser"
+   binaries:
+    - libpulse0
+    - libpulse-mainloop-glib0
+    - libpcaudio0
+    - libdc1394*
+    - libv4l*
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - libopenal1
+
+ - name: "@PulseAudioAPI"
+   sourceproject: Gnome
+   requires:
+    - "@PulseAudioLibraries"
+    - "@GStreamerAPI"
+    - "@AVAPI"
+    - "@CorePlusAPI"
+    - "@SystemdAPI"
+   binaries:
+    - libpulse-devel
+
+ - name: "@PulseAudio"
+   description: |
+      pulseaudio dependency are a huge jumble of gstreamer, pango, mesa, ... due to a
+      dependency cycle in libgstaudio
+   sourceproject: Gnome
+   requires:
+    - "@PulseAudioLibraries"
+    - "@GraphicsLibraries+x11"
+    - "@FontLibraries+x11"
+    - "@SambaLibraries"
+    - "@Bubblewrap"
+    - "@BluetoothLibraries"
+    - "@Camera"
+    - "@GStreamerLibraries"
+    - "@PolicyKit"
+   packages:
+    - pulseaudio
+   binaries:
+    - pulseaudio
+    - pulseaudio-setup
+    - pulseaudio-utils
+    - pulseaudio-lang purpose=i18n
+
+ - name: "@SpeechAPI"
+   sourceproject: Gnome
+   requires:
+    - "@SpeechSynthesis"
+    - "@Glib2API"
+   binaries:
+    - speechd-devel
+
+ - name: "@SpeechSynthesis"
+   api: "@SpeechAPI"
+   sourceproject: Gnome
+   requires:
+    - "@AudioLibraries"
+    - "@MinimalSystemd"
+    - "@PulseAudioLibraries"
+    # We have a circular dependency python3-speechd -> speech-dispatcher
+    - "@DefaultPythonStandard"
+   binaries:
+    - speech-dispatcher
+    - libspeechd2
+    - speech-dispatcher-module-espeak
+   buildflavors:
+    - name: desktop
+      requires:
+       - "@DefaultPythonEssentials+desktop"
+      binaries:
+       - speech-dispatcher-configure
+
+ - name: "@GnomeVTE"
+   sourceproject: Gnome
+   requires:
+    - "@Gtk2"
+    - "@Gtk3"
+    - "@Gtk4"
+   binaries:
+    - libvte-2*
+    - vte-tools*
+
+ - name: "@GnomeAPI"
+   sourceproject: Gnome
+   requires:
+    - "@GnomeLibraries"
+    - "@Glib2API"
+    - "@SystemdAPI"
+    - "@X11API"
+    - "@FontLibsAPI+x11"
+
+ - name: "@GnomeLibraries"
+   api: "@GnomeAPI"
+   sourceproject: Gnome
+   requires:
+    - "@Core0"
+    - "@DBus"
+    - "@Glib2"
+    - "@X11"
+    - "@AccessibilityLibraries"
+    - "@FontLibraries+x11"
+    - "@PlusLibraries"
+    - "@USBLibraries"
+    - "@DesktopIcons"
+    - "@DesktopQuarks"
+    - "@AppstreamLibraries"
+    - "@DConf"
+   binaries:
+    - libgjs0
+
+ - name: "@PipewireAPI"
+   sourceproject: Gnome
+   requires:
+    - "@PipewireLibraries"
+    - "@GStreamerAPI"
+    - "@CorePlusAPI"
+   binaries:
+    - pipewire-devel
+
+ - name: "@PipewireLibraries"
+   api: "@PipewireAPI"
+   sourceproject: Gnome
+   requires:
+    - "@GStreamerLibraries"
+    - "@PulseAudioLibraries"
+    - "@AVLibraries"
+    - "@AvahiLibraries"
+    - "@BluetoothLibraries"
+    - "@Camera"
+    - "@PolicyKit"
+    - "@LUARuntime"
+   packages:
+    - pipewire
+   binaries:
+    - libpipewire-0*
+    - pipewire-modules
+    - pipewire-alsa
+    - pipewire-*
+    - gstreamer-plugin-pipewire
+   buildflavors:
+    - name: desktop
+      requires:
+       - "@DesktopLibraries"
+      binaries:
+       - pipewire-module-x11*
+    - name: pulseaudio
+      requires:
+       - "@PulseAudio"
+      binaries:
+       - pipewire-pulseaudio
+
+ # All the gstreamer plugins definitely need to live in
+ # the Gnome desktop component.
+ - name: "@GStreamerPluginAPI"
+   sourceproject: Gnome
+   autoselect:  no
+   requires:
+    - "@GStreamerPlugins"
+    - "@GStreamerAPI+plugins"
+    - "@CairoAPI"
+    - "@AudioAPI"
+   binaries:
+    - gstreamer-plugins-*-devel priority=0
+   buildflavors:
+    - name: debug
+      requires:
+       - "@GStreamerPluginsBadAPI+debug"
+       - "@GStreamerPluginsBadAPI+gnome"
+      binaries:
+       - gstreamer-devtools-devel
+       - gstreamer-transcoder-devel
+
+ - name: "@GStreamerPlugins"
+   api: "@GStreamerPluginAPI"
+   sourceproject: Gnome
+   autoselect:  no
+   requires:
+    - "@GStreamerTools"
+    - "@AVLibraries"
+    - "@PulseAudioLibraries"
+    - "@OpticalMedia"
+    - "@Gtk3"
+    - "@Gtk4"
+    - "@GStreamerLibraries+av"
+    - "@BluetoothLibraries"
+    - "@PipewireLibraries"
+    - "@PulseAudioLibraries+x11"
+   binaries:
+    - gstreamer-*
+    - libgstvulkan-1_0-0
+    - libgstcuda-1_0-0
+    - typelib-1_0-GstCuda-1_0
+    - typelib-1_0-GstVulkan*-1_0
+
+ - name: "@GStreamerPluginsBadAPI"
+   sourceproject: Gnome
+   autoselect:  no
+   requires:
+    - "@GStreamerPluginAPI"
+    - "@GStreamerPluginsBad"
+    - "@Gtk4API"
+    - "@FontLibsAPI+x11"
+#   - "@HardwareAccessAPI"
+   binaries:
+    - gstreamer-plugins-vaapi-devel
+   buildflavors:
+    - name: debug
+      requires:
+       - "@AccessibilityLibraries"
+       - "@Gtk3"
+      binaries:
+       - gstreamer-devtools
+       - libgstvalidate-1_0-0
+       - typelib-1_0-GstValidate-1_0
+    - name: gnome
+      requires:
+       - "@GStreamerPluginsBad+gnome"
+       - "@NetworkAPI"
+       - "@SoupAPI"
+      binaries:
+       - gstreamer-plugins-rs-devel
+       - gstreamer-plugins-bad-devel
+
+ - name: "@GStreamerPluginsBad"
+   api: "@GStreamerPluginsBadAPI"
+   sourceproject: Gnome
+   autoselect:  no
+   requires:
+    - "@GStreamerLibraries"
+#   - "@DesktopLibraries"
+   # FIXME: libgstplayer-1_0-0 should probably move from gstreamer-plugins-bad to gstreamer-plugins-base
+   packages:
+    - gstreamer-plugins-bad
+   binaries:
+    - gstreamer-transcoder
+    - libgstadaptivedemux-1_0-0
+    - libgstbadaudio-1_0-0
+    - libgstbasecamerabinsrc-1_0-0
+    - libgstcodecparsers-1_0-0
+    - libgstcodecs-1_0-0
+    - libgstinsertbin-1_0-0
+    - libgstisoff-1_0-0
+    - libgstmpegts-1_0-0
+    - libgstphotography-1_0-0
+    - libgstplay-1_0-0
+    - libgstplayer-1_0-0
+    - libgstsctp-1_0-0
+    - libgsttranscoder-1_0-0
+    - libgsturidownloader-1_0-0
+    - libgstwayland-1_0-0
+    - libgstwebrtc-1_0-0
+    - typelib-1_0-GstWebRTC-1_0
+    - typelib-1_0-GstPlay-1_0
+    - typelib-1_0-GstPlayer-1_0
+    - typelib-1_0-GstTranscoder-1_0
+    - typelib-1_0-GstMpegts-1_0
+    - typelib-1_0-GstInsertBin-1_0
+    - typelib-1_0-GstTranscoder-1_0
+   buildflavors:
+    - name: "gtk"
+      requires:
+       - "@Gtk4"
+       - "@GStreamerTools"
+      binaries:
+       - gstreamer-plugins-rs
+    - name: "gnome"
+      requires:
+       - "@DesktopLibraries"
+       - "@GStreamerPluginsBad+av"
+      binaries:
+       - gstreamer-plugins-bad
+       - "libgstwebrtcnice-1_0-0"
+    - name: "av"
+      requires:
+       - "@AVLibraries"
+      binaries:
+       - libgstva-1_0-0
+       - typelib-1_0-GstVa-1_0
+       - gstreamer-plugins-vaapi
+
+ - name: "@GnomeRelatedUtilities"
+   sourceproject: Gnome
+   requires:
+    - "@GtkCommon"
+   binaries:
+
+ - name: "@DesktopLibraries"
+   sourceproject: Gnome
+   requires:
+    - "@GnomeLibraries"
+    - "@BluetoothLibraries"
+    - "@AudioLibraries"
+    - "@AVLibraries"
+    - "@AVLibraries+x11"
+    - "@PulseAudioLibraries"
+    - "@PulseAudio"
+    - "@GPU"
+    - "@OpenGL"
+    - "@PrintingLibraries"
+    - "@FontLibraries+x11"
+#   - "@GraphicsLibraries+glib2"
+#   - "@GraphicsLibraries+gnomelibs"
+    - "@GdkPixbuf"
+    - "@Spelling"
+    - "@Glib2Networking"
+    - "@Gtk2"
+    - "@Gtk3"
+    - "@Gtk4"
+    - "@GnomeRelatedUtilities"
+    - "@GStreamerLibraries"
+    - "@Soup3Libraries"
+    - "@OpticalMedia"
+    - "@GStreamerPlugins"
+   packages:
+    - libnice
+   binaries:
+    - libnice10
+    - gstreamer-libnice
+    - libcanberra0
+    - libgcr3
+    - libical3
+    - libmanette
+    - librevenge-0*
+    - libzbar0
+    - libgcr-*
+    - libgck-*
+    - libupower-glib3
+   buildflavors:
+    - name: qt
+      requires:
+       - "@Qt5ExtendedLibraries"
+       - "@OpenGL"
+      binaries:
+       - gstreamer-plugins-good-qtqml
+    - name: python
+      requires:
+       - "@Python"
+      binaries:
+       - gstreamer-plugin-python
+
+ - name: "@CJKAPI"
+   sourceproject: Gnome
+   requires:
+    - "@CoreAPI"
+    - "@CJK"
+   binaries:
+    - fcitx-devel
+
+ # could possibly be folded into @Desktop* or @Gnome*
+ - name: "@CJK"
+   api: "@CJKAPI"
+   sourceproject: Gnome
+   requires:
+    - "@DesktopLibraries"
+   binaries:
+    - libfcitx-gclient1
+    - libfcitx-core0
+    - libfcitx-config4
+    - libfcitx-utils0
+    - fcitx
+    - fcitx-table
+#   - fcitx-table-*
+#   - fcitx-pinyin*
+#   - fcitx-quwei
+   buildflavors:
+    - name: gnome
+      binaries:
+       - citx-gtk*
+
+ - name: "@WebkitAPI"
+   sourceproject: Gnome
+   requires:
+    - "@Webkit"
+    - "@GtkAPIs"
+   binaries:
+    - webkit2gtk3-soup2-devel
+
+ # FIXME: Would this work with a smaller footprint?
+ - name: "@Webkit"
+   api: "@WebkitAPI"
+   sourceproject: Gnome
+   requires:
+    - "@DesktopLibraries"
+    - "@DesktopUtilities"
+    - "@InputDeviceLibraries"
+    - "@GStreamerPluginsBad"
+   packages:
+    - webkit2gtk3:*
+   binaries:
+    - libjavascriptcoregtk-4*
+    - libwebkit2gtk-4*
+    - webkit2gtk-4_0-injected-bundles
+
+ - name: "@DesktopUtilities"
+   sourceproject: Gnome
+   requires:
+    - "@DesktopLibraries"
+    # for libfuse3
+    - "@FilesystemLibraries"
+   binaries:
+    - xml2po
+
+ - name: "@AppleAPI"
+   sourceproject: Gnome
+   requires:
+    - "@Apple"
+    - "@CoreAPI"
+
+ - name: "@Apple"
+   sourceproject: Gnome
+   api: "@AppleAPI"
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - imobiledevice-tools
+    - libplist-2*
+    - libplist++-2*
+
+ - name: "@Gnome"
+   sourceproject: Gnome
+   requires:
+    - "@DesktopLibraries"
+    - "@Webkit"
+    - "@X11Server"
+    - "@PolicyKit"
+    - "@ApplicationLibraries"
+    - "@DesktopCore"
+    - "@NetworkManager"
+    - "@BluetoothServices"
+    - "@PulseAudio"
+    - "@USBLibraries+typelib"
+    - "@Apple"
+   packages:
+   binaries:
+#   - geoclue2
+#   - system-user-srvGeoClue
+    - gsettings-*
+    - gnome-*
+    - polkit-gnome*
+    - gcr-viewer*
+    - WebKitGTK*
+    - gnome-bluetooth
+    - gspell
+    - libgsound0
+    - pulseaudio-module-bluetooth
+    - upower
+    - thermald
+   buildflavors:
+    - name: python
+      requires:
+       - "@DefaultPythonStandard+gnomelibs"
+       - "@DefaultPythonDesktop"
+      binaries:
+       - ibus
+    - name: qt
+      requires:
+       - "@Qt5ExtendedLibraries"
+       - "@ImageMagick"
+      binaries:
+       - libzbarqt0
+       - zbar
+
+ - name: "@VNCAPI"
+   sourceproject: Gnome
+   requires:
+    - "@VNC"
+    - "@X11API"
+   binaries:
+    - libXvnc-devel
+
+ - name: "@VNC"
+   sourceproject: Gnome
+   api: "@VNCAPI"
+   requires:
+    - "@DBus+x11"
+    - "@FontLibraries"
+    - "@Gnome"
+    - "@X11WindowManager"
+   packages:
+    - python-websockify
+   binaries:
+    - python${defaultPythonVersion}-websockify
+    - xorg-x11-server-Xvnc
+    - xorg-x11-Xvnc
+    - xorg-x11-Xvnc-novnc
+    - xorg-x11-Xvnc-module
+    - xorg-x11-Xvnc-java
+    - xvfb-run
+
+ - name: "@GnomeEverythingElse"
+   sourceproject: Gnome
+   requires:
+    - "@Gnome"
+    - "@HostNetworking+gnomelibs"
+    - "@SambaLibraries"
+    - "@StorageServices"
+    - "@Flatpak"
+    - "@Boost"
+    - "@GtkLeftovers"
+    - "@X11WindowManager"
+   binaries:
+    - gdm
+    - gnome-control-center
+    - gnome-control-center-*
+    - gnome-session
+    - gnome-session-wayland
+    - gnome-session-default-session
+    - gnome-shell
+    - gnome-shell-calendar
+    - pulseaudio-gdm-hooks
+    - gnome-extensions
+    - malcontent
+    - libmalcontent-0*
+
+ - name: "@GnomeApplications"
+   sourceproject: Gnome
+   requires:
+    - "@Gnome"
+    - "@PDF+x11"
+    - "@Postscript"
+    - "@HPCCoreLibraries"
+    - "@DefaultPythonStandard"
+    - "@Graphviz"
+    - "@Boost"
+   binaries:
+    - inkscape
+   buildflavors:
+    - name: tex
+      requires:
+       - "@Texlive"
+      binaries:
+       - inkscape-extensions-fig
+
+ - name: "@ApplicationLibraries"
+   sourceproject: Gnome
+   requires:
+    - "@Core0"
+    - "@Core+systemdlibs"
+    - "@Core+udevlibs"
+    - "@Core+glib"
+    - "@X11Libraries"
+    - "@GraphicsLibraries"
+    - "@AudioLibraries"
+    - "@Sound"
+   binaries:
+#   - libgspell*
+
+ - name: "@WxWidgets"
+   api: "@WxWidgetsAPI"
+   sourceproject: Gnome
+   requires:
+    - "@Webkit"
+    - "@EssentialQtLibraries"
+    - "@Bubblewrap"
+    - "@Webkit"
+    - "@CoreXMLLibraries"
+   binaries:
+    - libwx_gtk2u*
+    - libwx_gtk3u*
+    - libwx_qtu*
+
+ - name: "@WxWidgetsAPI"
+   sourceproject: Gnome
+   requires:
+    - "@WxWidgets"
+    - "@QtAPI"
+   binaries:
+    - wxQt-*-devel priority=0
+    - libwx_base-suse-devel
+

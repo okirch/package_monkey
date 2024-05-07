@@ -1,0 +1,201 @@
+#!/usr/bin/python3
+
+# the profile module needs to be implemented before anything else
+from profile import profiling
+
+from packages import Product, Resolver, ResolverWorker, PackageCollection
+from filter import PackageFilter, Classification
+from solver import PotentialClassification
+from options import Application
+from util import TimedExecutionBlock, ExecTimer
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from writers import StandardWriter, TableWriter, XmlWriter, XmlSchemeWriter, XmlReader
+from obsclnt import OBSPackage
+
+application = Application('build-dependency-tree')
+application.addArgument('--baseline', default = None, help = 'output of a previous classification run')
+application.parseArguments()
+
+store = application.loadBackingStore(readonly = True,
+		dependencyTreeLookups = True,
+		sourceLookups = True)
+
+classificationScheme = Classification.Scheme()
+packageFilter = PackageFilter(scheme = classificationScheme)
+
+infomsg(f"Fingerprint hash for classificationScheme is {classificationScheme.fingerprint:#x}")
+writer = XmlSchemeWriter(application.getOutputPath("hierarchy.xml"))
+writer.writeLabelHierarchy(classificationScheme)
+
+labelOrder = classificationScheme.createOrdering(Classification.TYPE_BINARY)
+
+haveErrors = 0
+collection = PackageCollection()
+
+baselineClassification = None
+if application.opts.baseline:
+	baselineClassification = dict()
+	with TimedExecutionBlock("load baseline classification"):
+		reader = XmlReader(application.opts.baseline, classificationScheme)
+		baseline = reader.read()
+		for label, members in baseline.enumeratePackages():
+			if not members:
+				continue
+
+			for pinfo in members:
+				baselineClassification[pinfo.shortname] = label
+
+traceMatcher = application.traceMatcher
+
+# we should probably make this part of PackageCollection
+allBuilds = []
+
+# Add all fake dependency targets like "environment_with_systemd" to the package collection
+resolverHints = application.productFamily.resolverHints
+for name in resolverHints.fakeDependencies:
+	rpm = collection.addSynthetic(name)
+
+	# now create a fake OBS build to wrap this synthetic rpm
+	build = OBSPackage(rpm.name)
+	build.addBinary(rpm)
+	allBuilds.append(build)
+
+with TimedExecutionBlock("load all packages from database"):
+	for build in store.enumerateOBSPackages():
+		allBuilds.append(build)
+
+		packages = []
+
+		# ensure that we resolve PackageInfo objects
+		src = None
+		for pinfo in build.binaries:
+			pkg = store.retrievePackage(pinfo)
+			if pkg.isSourcePackage:
+				src = pkg
+			packages.append(pkg)
+
+		if src is None:
+			errormsg(f"build {build} has no src package")
+
+		build._binaries = packages
+		build.sourcePackage = src
+
+		for pkg in packages:
+			if pkg is src:
+				continue
+
+			pkg.sourcePackage = src
+
+			if traceMatcher and traceMatcher.match(pkg.name):
+				pkg.trace = True
+
+			collection.add(pkg)
+
+# This block should probably go into a sanity check function somewhere; I just
+# don't know where... :-)
+if True:
+	binariesWithoutBuild = set()
+	for rpm in collection:
+		if rpm.resolvedRequires is None:
+			infomsg(f"{rpm}: list of required packages is None?!")
+			continue
+
+		for dep in rpm.enumerateRequiredRpms():
+			if dep.obsBuildId is None:
+				binariesWithoutBuild.add(dep)
+
+	if binariesWithoutBuild:
+		staleBuilds = set()
+		for rpm in binariesWithoutBuild:
+			obsBuild = store.fixupGuessBuildForRpm(rpm)
+			if obsBuild is None:
+				errormsg(f"{rpm.fullname()}: package without a build")
+			else:
+				infomsg(f"rpm {rpm.fullname()} -> build {obsBuild}")
+				staleBuilds.add(obsBuild)
+
+		if staleBuilds:
+			errormsg(f"Found {len(staleBuilds)} packages without a build; probably need to refresh build results for these OBS packages:")
+			for obsPackage in sorted(staleBuilds, key = lambda b: b.name):
+				infomsg(f"  {obsPackage}")
+
+		raise Exception("packages without builds detected, refusing to continue")
+
+with TimedExecutionBlock("perform initial placement of packages"):
+	for pkg in collection:
+		if not pkg.isSourcePackage:
+			packageFilter.tryToLabelPackage(pkg)
+
+	for build in allBuilds:
+		packageFilter.tryToLabelBuild(build)
+
+	if baselineClassification is not None:
+		for pkg in collection:
+			if not pkg.isSourcePackage:
+				label = baselineClassification.get(pkg.shortname)
+				if label is None:
+					continue
+
+				if pkg.label is label:
+					continue
+
+				if pkg.label is None:
+					pkg.label = label
+					continue
+
+				if pkg.label.type == Classification.TYPE_AUTOFLAVOR:
+					if label.flavorName != pkg.label.name and label.autoFlavorCanBeMerged(pkg.label):
+						warnmsg(f"Conflicting labels for {pkg}: filter says {pkg.label} but baseline says {label}")
+					pkg.label = label
+					continue
+
+				if pkg.label.type == Classification.TYPE_PURPOSE:
+					if label.purposeName != pkg.label.name:
+						warnmsg(f"Conflicting labels for {pkg}: filter says {pkg.label} but baseline says {label}")
+					pkg.label = label
+					continue
+
+				errormsg(f"Conflicting labels for {pkg}: filter says {pkg.label} but baseline says {label}")
+				haveErrors += 1
+
+if haveErrors:
+	errormsg(f"Please fix the above errors first")
+	exit(1)
+
+productFamily = application.productFamily
+
+resolver = Resolver(backingStore = store, hints = productFamily.resolverHints)
+worker = ResolverWorker(resolver, packageCollection = collection)
+problemLog = worker.problems
+
+productArchitecture = store.getProperty("arch")
+if productArchitecture is None:
+	raise Exception("database does not record architecture of original query")
+
+classificationContext = Classification.ClassificationContext(worker, productArchitecture,
+					classificationScheme, labelOrder, store)
+
+focusLabels = None
+if traceMatcher:
+	focusLabels = set(filter(lambda label: traceMatcher.match(label.name), labelOrder.bottomUpTraversal()))
+
+solvingTree = Classification.buildSolvingTree(classificationContext, allBuilds, focusLabels = focusLabels)
+
+potentialClassification = PotentialClassification(solvingTree)
+
+# we should get this from filter.yaml
+potentialClassification.definePreference("@Gnome", ["@DesktopLibraries", ])
+potentialClassification.definePreference("@MinimalCRuntime", ["@GccRuntime", "@Glibc"])
+result = potentialClassification.solve()
+
+result.enableBrokenDependencyTracking()
+writer = TableWriter(application.getOutputPath("packages.csv"))
+writer.write(result)
+
+writer = XmlWriter(application.getOutputPath("packages.xml"))
+writer.write(result)
+
+if False and problemLog:
+	writer.writeProblems(problemLog)
+
+result.reportBrokenDependencies()

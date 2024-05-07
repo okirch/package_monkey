@@ -1,0 +1,226 @@
+#!/usr/bin/python3
+
+from options import Application
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from util import NameMatcher
+from obsclnt import OBSDependency
+
+application = Application('pkginfo')
+application.addArgument('--long', action = 'store_true', default = False)
+application.addArgument('--raw', action = 'store_true', default = False)
+application.addArgument('--no-labels', action = 'store_true', default = False)
+application.addArgument('--siblings', action = 'store_true', default = False)
+application.addArgument('--obs-package', action = 'store_true', default = False)
+application.addArgument('--builddeps', action = 'store_true', default = False)
+application.addArgument(dest = 'packages', metavar = 'PACKAGES', nargs = '+', help = 'list of packages to query')
+
+store = application.loadBackingStore(readonly = False,
+                dependencyTreeLookups = False,
+                sourceLookups = True)
+
+class RpmNameRenderer(object):
+	def __init__(self):
+		pass
+
+	def render(self, rpm):
+		return rpm.shortname
+
+class LabellingRpmNameRenderer(RpmNameRenderer):
+	def __init__(self, classification):
+		super().__init__()
+
+		self.classification = classification
+
+		self._label = {}
+		for label, members in classification.enumeratePackages():
+			for rpm in members:
+				self._label[rpm.shortname] = label
+
+	def render(self, rpm):
+		rpmName = super().render(rpm)
+
+		label = self._label.get(rpm.shortname)
+		if label is not None:
+			return f"{rpmName} ({label.componentName}:{label})"
+		return rpmName
+
+class DependencyRenderer(object):
+	def __init__(self):
+		pass
+
+	def dependencyListToPackages(self, depList):
+		packages = set()
+		for dep in depList:
+			packages.update(dep.packages)
+		return packages
+
+	def render(self, depList, renderer):
+		self.renderPackageList(self.dependencyListToPackages(depList), renderer)
+
+	def renderPackageList(self, packages, renderer):
+		if not packages:
+			print(f"  {self.MSG_EMPTY}")
+			return
+
+		print(f"  {self.MSG_HEADER}:")
+		for rpm in sorted(packages, key = lambda p: p.name):
+			print(f"   - {renderer.renderRpmName(rpm)}")
+
+class RequiresRenderer(DependencyRenderer):
+	MSG_EMPTY = "does not require anything"
+	MSG_HEADER = "requires"
+
+class ProvidesRenderer(DependencyRenderer):
+	MSG_EMPTY = "not required by anything"
+	MSG_HEADER = "required by"
+
+	def render(self, depList, renderer):
+		packages = self.dependencyListToPackages(depList)
+		packages = set(filter(lambda p: not p.isSourcePackage, packages))
+		self.renderPackageList(packages, renderer)
+
+class RequiresRendererLong(RequiresRenderer):
+	def render(self, depList, renderer):
+		if not depList:
+			print(f"  {self.MSG_EMPTY}")
+			return
+
+		print(f"  requires:")
+		for dep in depList:
+			expr = dep.expression or "?"
+			print(f"    {dep.expression or '?'}")
+			for rpm in dep.packages:
+				print(f"     - {renderer.renderRpmName(rpm)}")
+
+class ProvidesRendererLong(DependencyRenderer):
+	MSG_EMPTY = "not required by anything"
+	MSG_HEADER = "required by"
+
+	def render(self, depList, renderer):
+		self.renderPackageList(self.dependencyListToPackages(depList), renderer)
+
+class OBSPackageNameRenderer(object):
+	def render(self, obsPackage, renderer, exceptRpm = None):
+		print(f"  OBS package: {obsPackage}")
+
+class OBSPackageSiblingRenderer(OBSPackageNameRenderer):
+	def render(self, obsPackage, renderer, exceptRpm = None):
+		super().render(obsPackage, renderer)
+
+		src = obsPackage.sourcePackage
+
+		headerShown = False
+		for sib in obsPackage.binaries:
+			if sib is exceptRpm or sib is src:
+				continue
+
+			if not headerShown:
+				print(f"     Sibling packages:")
+				headerShown = True
+
+			print(f"        {renderer.renderRpmName(sib)}")
+
+class Renderer(object):
+	def __init__(self):
+		self.rpm = RpmNameRenderer()
+		self.obsPackageInfo = OBSPackageNameRenderer()
+		self.requires = RequiresRenderer()
+		self.provides = ProvidesRenderer()
+
+	def renderOBSPackageInfo(self, obsPackage, **kwargs):
+		self.obsPackageInfo.render(obsPackage, self, **kwargs)
+
+	def renderRpmName(self, rpm):
+		return self.rpm.render(rpm)
+
+	def renderRequires(self, rpm):
+		return self.requires.render(rpm, self)
+
+	def renderProvides(self, rpm):
+		return self.provides.render(rpm, self)
+
+renderer = Renderer()
+
+if application.opts.long:
+	renderer.requires = RequiresRendererLong()
+	renderer.provides = ProvidesRendererLong()
+
+if not application.opts.no_labels:
+	classification = application.loadClassification()
+	renderer.rpm = LabellingRpmNameRenderer(classification)
+
+if application.opts.siblings:
+	renderer.obsPackageInfo = OBSPackageSiblingRenderer()
+
+validArchitectures = ('src', 'nosrc', 'noarch', 'i686', 'x86_64', 'aarch64', 's390x', 'ppc64le', )
+
+def renderOneRpm(rpm, obsPackage = None):
+	print(f"{renderer.renderRpmName(rpm)}")
+
+	if obsPackage is not None:
+		renderer.renderOBSPackageInfo(obsPackage, exceptRpm = rpm)
+
+	if application.opts.raw:
+		depList = store.retrieveForwardDependenciesFullTree(rpm)
+	else:
+		depList = store.retrieveForwardDependenciesTree(rpm)
+	renderer.renderRequires(depList)
+
+	if not rpm.isSourcePackage:
+		depList = store.retrieveReverseDependenciesTree(rpm)
+		renderer.renderProvides(depList)
+
+def renderRpms(nameList):
+	for packageName in nameList:
+		packageArch = None
+		if '.' in packageName:
+			baseName, arch = packageName.rsplit('.', maxsplit = 1)
+			if arch in validArchitectures:
+				packageName, packageArch = baseName, arch
+
+		matcher = NameMatcher([packageName])
+		rpmList = list(store.recoverLatestPackagesByMatch(matcher))
+		if not rpmList:
+			print(f"{packageName}: no match")
+			continue
+
+		for rpm in rpmList:
+			if packageArch and rpm.arch != packageArch:
+				print(f"{packageName}: you asked for arch {packageArch} but all I found was {rpm.arch}")
+				print(f"Take the following results with a grain of salt")
+
+			if rpm.obsBuildId is not None:
+				obsPackage = store.retrieveOBSPackageByBuildId(rpm.obsBuildId)
+			else:
+				obsPackage = None
+
+			renderOneRpm(rpm, obsPackage)
+
+def renderBuilds(nameList):
+	for buildName in nameList:
+		buildId = store.lookupBuildId(buildName)
+
+		obsPackage = store.retrieveOBSPackageByBuildId(buildId)
+		if obsPackage is None:
+			print(f"{buildName}: not found")
+			continue
+
+		src = obsPackage.sourcePackage
+		if src is None:
+			# for some strange reason, we sometimes get a fake OBS build
+			# object for an invalid name (we should really get None)
+			print(f"{buildName}: no source rpm?")
+			continue
+
+		if application.opts.builddeps:
+			renderOneRpm(src)
+		elif not obsPackage.binaries:
+			print(f"{buildName}: no rpms for this package?!")
+		else:
+			for rpm in obsPackage.binaries:
+				renderOneRpm(rpm)
+
+if application.opts.obs_package or application.opts.builddeps:
+	renderBuilds(application.opts.packages)
+else:
+	renderRpms(application.opts.packages)

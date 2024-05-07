@@ -1,0 +1,429 @@
+# vi: ai et
+# Definition of the Network component
+
+components:
+ - name: Network
+   globals:
+    devel: NetworkDevel
+   requires:
+    - CorePlus
+    - Python
+
+build_configs:
+ - name: Network/standard
+   buildrequires:
+    - "@SNMPAPI"
+ - name: Network/systemd
+   buildrequires:
+    - "@FirewallAPI"
+    - "@SystemdOnlyForOBS"
+ - name: Network/chrony
+   packages:
+    - chrony
+   inheritable: False
+   buildrequires:
+    - "@NetworkManagerAPI"
+    - "@CoreHardwareAPI"
+    - "@SystemdOnlyForOBS"
+    - "@Graphviz"
+ - name: Network/browser
+   buildrequires:
+    - "@HTMLAPI+obsonly"
+ - name: "Network/build:elinks"
+   packages:
+    - elinks
+   buildrequires:
+    - "@RubyAPI"
+    - "@HTMLAPI"
+    - "@CorePlusAPI"
+    - "@BrowserAPI"
+ - name: Network/xmlrpc
+   buildrequires:
+    - "@XMLRPCAPI"
+ - name: Network/database
+   # For some weird reasons, mailutils wants mariadb (not mariadb-devel) for building
+   buildrequires:
+    - "@SystemDatabaseServices"
+
+groups:
+ - name: "@NetworkUtils"
+   api: "@NetworkAPI"
+   sourceproject: Network
+   requires:
+    - "@CoreNetworkLibraries"
+    - "@CoreNetworkUtils"
+    - "@ArchivingLibraries"
+   binaries:
+    - hostinfo
+    - rsync
+    - tcpdump
+    - traceroute
+    - whois
+    - telnet
+    - socat
+    - iperf
+
+ - name: "@NetworkAnalysis"
+   api: "@NetworkAPI"
+   sourceproject: Network
+   requires:
+    - "@CoreNetworkLibraries"
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+       - "@PlusLibraries"
+       - "@LUARuntime"
+      binaries:
+       - libpcap1
+       - nmap
+
+ - name: "@NetworkAPI"
+   sourceproject: Network
+   requires:
+    - "@NetworkLibraries"
+    - "@NetworkUtils"
+    - "@CorePlusAPI"
+   binaries:
+    - freeradius-client-devel
+    - libprotobuf-c-devel
+    - rpcsvc-proto-devel
+    - libsodium-devel
+    - zeromq-devel
+
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@NetworkAnalysis+systemd"
+       - "@SystemdAPI"
+      binaries:
+       - libpcap-devel
+
+ - name: "@NetworkLibraries"
+   api: "@NetworkAPI"
+   sourceproject: Network
+   requires:
+    - "@NetworkCore"
+    - "@PlusLibraries"
+   packages:
+    - unbound
+    - protobuf
+    - protobuf21
+   binaries:
+    - libprotobuf-c1
+    - libprotobuf-lite23*
+    - libprotoc23_4*
+    - libprotobuf23_4*
+    - libprotoc3_21*
+    - libprotobuf3_21*
+    - libprotobuf-lite3_21*
+    - libdaemon0
+    - libfstrm0
+    - libldns3
+    - freeradius-client-libs
+    - libsrtp1
+    - libtirpc3
+    - libnscd1
+    - libzmq5
+    - libsodium*
+    - rpcgen purpose=devel
+   buildflavors:
+    - name: python
+      requires:
+       - "@CoreXMLLibraries"
+      binaries:
+       - libunbound8
+       - unbound-anchor
+       - python${systemPythonVersion}-protobuf
+    - name: java
+      requires:
+       - "@JDK"
+      binaries:
+       - protobuf-java
+
+ - name: "@XMLRPCAPI"
+   sourceproject: Network
+   autoselect: no
+   requires:
+    - "@CoreAPI"
+    - "@XMLRPC"
+   binaries:
+    - xmlrpc-c-devel
+
+ - name: "@XMLRPC"
+   api: "@XMLRPCAPI"
+   sourceproject: Network
+   requires:
+    - "@Core0"
+   packages:
+    - xmlrpc-c
+   binaries:
+    - libxmlrpc3
+    - libxmlrpc_*
+
+ - name: "@NetworkServices"
+   sourceproject: Network
+   requires:
+    - "@NetworkLibraries"
+    - "@KernelNetworkUtils"
+    - "@SNMPLibraries"
+    - "@CoreServices"
+    - "@SystemdServices"
+    - "@AvahiLibraries"
+    - "@PerlCore"
+    # postfix uses icu
+    - "@PlusLibraries"
+   packages:
+    - pps-tools
+   binaries:
+    - bind
+    - ntp
+    - pps-udev
+    - chrony
+    - squid
+    - dovecot*
+    - postfix*
+    - pam_saslauthd
+    - vsftpd
+    - rpcbind
+    - spamassassin
+    - yp-tools
+    - ypbind
+    - ypserv
+#   - tcpd
+    - freeradius-client
+    - openvpn
+    - OpenIPMI
+    - libOpenIPMI0
+   buildflavors:
+    - name: database
+      requires:
+       - "@SystemDatabaseLibraries"
+       - "@Samba"
+       - "@DefaultPython"
+       - "@NetworkAnalysis+systemd"
+       - "@NetworkLibraries+python"
+      binaries:
+       - postfix-mysql
+       - postfix-postgresql
+       - bind-modules-mysql
+    - name: python
+      requires:
+       - "@NetworkLibraries+python"
+       - "@NetworkAnalysis+systemd"
+      binaries:
+       - unbound
+       - unbound-munin
+       - python3-unbound
+       - ldns
+
+ - name: "@AvahiAPI"
+   sourceproject: Network
+   requires:
+    - "@AvahiLibraries+glib"
+    - "@CoreAPI"
+    - "@SystemdAPI"
+    - "@CoreXMLLibraries"
+    - "@CoreXMLLibraries"
+   binaries:
+    - libavahi-devel
+   buildflavors:
+    - name: gtk
+      requires:
+       - "@AvahiLibraries+gtk"
+       - "@Gtk3API"
+      binaries:
+       - libavahi-glib-devel
+       - libavahi-gobject-devel
+       - typelib-1_0-Avahi*
+    - name: gui
+      requires:
+       - "@EssentialQtLibraries"
+      binaries:
+       - libavahi-qt5-*
+
+ - name: "@AvahiLibraries"
+   api: "@AvahiAPI"
+   sourceproject: Network
+   requires:
+    - "@CoreNetworkLibraries"
+    - "@NetworkLibraries"
+    - "@SystemdLibraries"
+   binaries:
+    - libavahi-client3
+    - libavahi-common3
+    - libavahi-core7
+    - libavahi-libevent1
+    - libdns_sd
+   buildflavors:
+    - name: glib
+      requires:
+       - "@Glib2"
+      binaries:
+       - libavahi-glib1
+       - libavahi-gobject0
+    - name: gtk
+      requires:
+       - "@Gtk3"
+      binaries:
+       - libavahi-ui-gtk3-0
+
+ - name: "@Avahi"
+   sourceproject: Network
+   requires:
+    - "@AvahiLibraries"
+    - "@DefaultPythonStandard+dbus"
+    - "@NetworkCore"
+   binaries:
+    - avahi
+    - avahi-autoipd
+    - avahi-utils
+    - libhowl0
+    - python${systemPythonVersion}-avahi
+   buildflavors:
+    - name: python310
+      requires:
+       - "@PythonStandard310+dbus"
+      binaries:
+       - python310-avahi
+    - name: gtk
+      requires:
+       - "@AvahiLibraries+gtk"
+      binaries:
+       - avahi-utils-gtk
+
+ - name: "@SNMPAPI"
+   sourceproject: Network
+   requires:
+    - "@CoreAPI"
+    - "@KernelAPI"
+    - "@RpmAPI"
+    - "@SNMPLibraries"
+   binaries:
+    - net-snmp-devel
+
+ - name: "@SNMPLibraries"
+   api: "@SNMPAPI"
+   sourceproject: Network
+   requires:
+    - "@Core0"
+    - "@PerlCore"
+    - "@CoreNetworkLibraries"
+    - "@KernelLibraries"
+   binaries:
+    - net-snmp
+    - perl-SNMP
+    - libsnmp40
+    - snmp-mibs
+
+ - name: "@MailClient"
+   sourceproject: Network
+   requires:
+    - "@NetworkCore"
+   binaries:
+    - fetchmail
+    - mutt
+   buildflavors:
+    - name: krb5
+      requires:
+       - "@KerberosLibraries"
+      binaries:
+       - mailx
+    - name: cups
+      requires:
+       - "@DefaultPython"
+       - "@Guile"
+       # FIXME: mailutils requires cups. *shrug*
+       - "@PrintServer"
+      binaries:
+       - mailutils
+       - mailutils-*
+
+ - name: "@PrintingAPI"
+   sourceproject: Network
+   requires:
+    - "@PrintingLibraries+python"
+    - "@SystemdAPI"
+    - "@DefaultPython"
+    - "@AvahiAPI"
+    - "@RpmAPI"
+   binaries:
+    - cups-devel
+    - cups-rpm-helper
+   buildflavors:
+    - name: ddk
+      autoselect: no
+      requires:
+       - "@PrintServer"
+      binaries:
+       - cups-ddk
+
+ - name: "@PrintingLibraries"
+   api: "@PrintingAPI"
+   sourceproject: Network
+   requires:
+    - "@NetworkServices"
+    # for libusb:
+    - "@CoreHardware"
+   binaries:
+    - libcups2
+    - cups-config
+    - cups-client
+   buildflavors:
+    - name: python
+      binaries:
+       - python311-pycups
+
+ - name: "@PrintServer"
+   sourceproject: Network
+   requires:
+    - "@PrintingLibraries"
+    - "@NetworkServices"
+   binaries:
+    - cups
+
+
+ - name: "@BrowserAPI"
+   sourceproject: Network
+   requires:
+    - "@BrowsersConsole"
+    - "@CoreAPI"
+   binaries:
+    - mujs-devel
+
+ - name: "@BrowsersConsole"
+   api: "@BrowserAPI"
+   sourceproject: Network
+   requires:
+    - "@Core"
+    - "@Console"
+    - "@HTMLLibraries"
+   binaries:
+    - w3m
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11Libraries"
+       - "@EssentialVideoLibraries"
+       - "@GraphicsLibraries"
+       - "@X11Libraries+multimedia"
+      binaries:
+       - w3m-inline-image
+    - name: ruby
+      requires:
+       - "@Ruby"
+       - "@PlusLibraries"
+       - "@KerberosLibraries"
+       - "@CoreXMLLibraries"
+       - "@LUARuntime"
+      binaries:
+       - elinks
+       - mujs
+
+ - name: "@NetworkMisc"
+   sourceproject: Network
+   requires:
+    - "@CoreNetworkLibraries"
+   binaries:
+    - rsyslog-module-snmp
+

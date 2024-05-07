@@ -1,0 +1,10 @@
+product_families:
+ - family: SLE-15
+   repos: sle15-repos.yaml
+   database: sle@NAME@.db
+ - family: Dolomite
+   repos: dolomite.yaml
+   database: dolomite.db
+ - family: ALP
+   repos: alp.yaml
+   database: alp.db

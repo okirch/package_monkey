@@ -1,0 +1,100 @@
+#!/usr/bin/python3
+
+import sys
+from csvio import CSVReader
+from util import IndexFormatterTwoLevels
+
+class Placement:
+	class Package:
+		def __init__(self, name, component, topic):
+			self.name = name
+			self.component = component
+			self.topic = topic
+
+		def __str__(self):
+			return f"{self.name} ({self.component}/{self.topic})"
+
+		def getSortKey(self):
+			return (self.component, self.topic, self.name)
+
+		def __eq__(self, other):
+			return self.name == other.name and \
+				self.component == other.component and \
+				self.topic == other.topic
+
+	def __init__(self):
+		self.packages = {}
+
+	@staticmethod
+	def load(filename):
+		placement = Placement()
+		placement.read(filename)
+		return placement
+
+	def read(self, filename):
+		csv = CSVReader(filename)
+
+		while True:
+			e = csv.readObject()
+			if e is None:
+				break
+
+			pkg = self.Package(e.package, e.component, e.topic)
+			self.packages[pkg.name] = pkg
+
+	@property
+	def names(self):
+		return set(self.packages.keys())
+
+	def get(self, name):
+		return self.packages.get(name)
+
+	def displayNameList(self, title, names):
+		if not names:
+			return
+
+		print(f"{title}:")
+
+		packages = map(self.get, names)
+		packages = sorted(packages, key = self.Package.getSortKey)
+
+		formatter = IndexFormatterTwoLevels()
+		for pkg in packages:
+			formatter.next(pkg.component, pkg.topic, f"{pkg.name}")
+		print()
+
+def displayChangedPackages(listOfPairs):
+	print("Changed packages")
+
+	formatter = IndexFormatterTwoLevels()
+	for old, new in listOfPairs:
+		formatter.next(old.component, old.topic, f"{old.name} -> {new.component}/{new.topic}")
+	print()
+
+if len(sys.argv) != 3:
+	raise Exception('''
+usage:
+  pdiff old.csv new.csv
+''')
+
+old = Placement.load(sys.argv[1])
+new = Placement.load(sys.argv[2])
+
+oldNames = old.names
+newNames = new.names
+
+old.displayNameList("Removed packages", oldNames.difference(newNames))
+new.displayNameList("Added packages", newNames.difference(oldNames))
+
+# display changes
+same = oldNames.intersection(newNames)
+changed = []
+for name in same:
+	oldPkg = old.get(name)
+	newPkg = new.get(name)
+	if oldPkg != newPkg:
+		changed.append((oldPkg, newPkg))
+
+if changed:
+	changed = sorted(changed, key = lambda pair: pair[0].getSortKey())
+	displayChangedPackages(changed)

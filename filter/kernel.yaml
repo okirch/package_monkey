@@ -1,0 +1,520 @@
+# vi: ai et
+# Definition of KernelPlus component
+
+components:
+ - name: KernelPlus
+   globals:
+    devel: KernelDevel
+   requires:
+    - Core
+   exports:
+    - "@KernelAPI"
+    - "@LibComErr"
+    # exporting these is a bit risky
+    - "@KernelLibraries"
+    - "@KernelLibraries+udev"
+    - "@KernelCrypto"
+    - "@KernelCore"
+    - "@KernelNetworkUtils"
+   imports:
+    # needed by fde-tools. Instead, we should consider moving fde-tools
+    # to HostStorage or sth like that
+    - "@PlatformCryptoLibraries"
+
+build_configs:
+ - name: KernelPlus/standard
+   buildrequires:
+    - "@DevelopmentCore"
+    - "@KernelHeaders"
+    - "@Go"
+    - "@Rust"
+    - "@CoreAPI+kernellibs"
+ - name: KernelPlus/docbuild
+   buildrequires:
+ - name: KernelPlus/systemd
+   buildrequires:
+    - "@KernelAPI+udev"
+
+groups:
+ - name: "@LibComErrAPI"
+   sourceproject: KernelPlus
+   requires:
+    - "@LibComErr"
+    - "@GlibcDevel"
+   binaries:
+    - libcom_err-devel
+
+ - name: "@LibComErr"
+   description: |
+     This thing exists solely because libcom_err is part of e2fsprogs, and
+     is used by half of this planet.
+     It would be cleaner to split this library off e2fsprogs and stick it
+     into @CoreLibraries
+   api: "@LibComErrAPI"
+   sourceproject: KernelPlus
+   requires:
+    - "@Glibc"
+   binaries:
+    - libcom_err2
+
+ - name: "@KernelLibraries"
+   description: |
+     This provides some commonly used libraries that live in KernelPlus.
+     They are singled out like this so that other components can use
+     them without pulling in all of KernelPlus.
+   sourceproject: KernelPlus
+   api: "@KernelAPI"
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - update-bootloader-rpm-macros
+    - libkmod2
+    - libnuma1
+    - libsgutils2
+    - libpciaccess0
+    - libhwloc15
+    - libhugetlbfs
+    - libsensors4
+    - libell0
+    - libtracefs1
+    - libtraceevent1
+    - libtraceevent1-plugins
+    - libkcapi1
+    - libpci3
+    - libpfm4
+    - libsmbios_c2*
+    - hwloc-data
+    - libdrm2
+    - libdrm_*
+    - libdrm-tools
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPythonCore"
+      binaries:
+       - python${systemPythonVersion}-libpfm
+    - name: udev
+      requires:
+       - "@UdevLibraries"
+       - "@CoreXMLLibraries"
+      binaries:
+       - libdevmapper1*
+       - libdevmapper-event1*
+       - device-mapper
+       - thin-provisioning-tools
+    - name: x11
+      requires:
+       - "@DesktopQuarks"
+       - "@FontLibraries+x11"
+       - "@OpenGL"
+      binaries:
+       - hwloc
+       - hwloc-gui
+       - hwloc-gl
+    - name: kdump
+      requires:
+       - "@ArchivingLibraries"
+      binaries:
+       - libkdumpfile10
+
+ - name: "@KernelCrypto"
+   sourceproject: KernelPlus
+   api: "@KernelAPI"
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libkeyutils1
+    - keyutils
+
+ - name: "@KernelNetworkLibraries"
+   sourceproject: KernelPlus
+   api: "@KernelAPI"
+   requires:
+    - "@KernelCrypto"
+    - "@ConfigFileLibraries"
+   packages:
+    - libnvme
+   binaries:
+    - libnvme1
+    - libnftables1
+    - libxtables12
+    - libip4tc2
+    - libip6tc2
+    - libipq0
+    - libmnl0
+    - libnftnl11
+    - libiw30
+    - libipset13
+    - libatm1
+    - libnetfilter_*
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPythonCore"
+      binaries:
+       - python3-libnvme
+       # manage the kernel's nvme target
+       - nvmetcli
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - libnvme-mi1
+
+ # arptables, ebtables and friends should probably live here, too
+ - name: "@KernelNetworkUtils"
+   sourceproject: KernelPlus
+   requires:
+    - "@CoreNetworkLibraries"
+    - "@KernelNetworkLibraries"
+   packages:
+    - nftables
+   binaries:
+    - iproute2
+    - iptables
+    - iputils
+    - ipset
+    - wireless-*
+    - nftables
+    - linux-atm
+    - lksctp-tools
+    - crda
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPythonCore"
+      binaries:
+       - python3-nftables
+
+ - name: "@KernelCore"
+   description: |
+     This provides some nearly ubiquitous kernel utilities occasionally
+     used in non-kernel applications.
+   sourceproject: KernelPlus
+   requires:
+    - "@Core0"
+    - "@PerlCore"
+    - "@KernelLibraries"
+    - "@FilesystemLibraries"
+    - "@KernelNetworkLibraries"
+   binaries:
+    - suse-module-tools
+    - kmod
+    - sg3_utils
+    - hwdata
+    - pciutils
+    - fuse3
+    - arm-trusted-firmware-tools
+    - kbd
+   buildflavors:
+    # lvm2 is not really a proper Kernel package because it wants a lot
+    # of stuff that's only available at higher levels
+    # Maybe we need to have KernelPlus depend on Systemd
+    - name: systemdlibs
+      requires:
+       - "@SystemdLibraries"
+       - "@KernelLibraries+udev"
+      binaries:
+       - lvm2
+       - liblvm2cmd2_03
+    - name: ha
+      requires:
+       - "@HA"
+      binaries:
+       - lvm2-lockd
+    - name: test
+      requires:
+       - "@KernelCore+systemdlibs"
+      binaries:
+       - lvm2-testsuite
+
+ - name: "@KernelHeaders"
+   sourceproject: KernelPlus
+   binaries:
+    - systemtap-headers
+
+ - name: "@KernelBuild"
+   sourceproject: KernelPlus
+   requires:
+    - "@Core0"
+   binaries:
+    - nasm
+
+ - name: KernelDevel
+   requires:
+    - CoreDevel
+    - "@KernelAPI"
+    - "@Kernel"
+   binaries:
+    - kernel-source
+    - systemtap-headers
+    # do not ship this, ever:
+    - cpupower-rebuild
+
+ - name: "@KernelAPI"
+   sourceproject: KernelPlus
+   requires:
+    - "@CoreAPI"
+    - "@KernelLibraries"
+    - "@Kernel"
+    - "@GlibcDevel"
+    # lksctp-tools-devel buildrequires lksctp-tools
+    - "@KernelNetworkUtils"
+   binaries:
+    - libsensors4-devel
+    - libpciaccess-devel
+    - keyutils-devel
+    - lksctp-tools-devel
+    - libdrm-devel
+    - kernel-devel
+    - kernel-default-devel
+   buildflavors:
+    - name: udev
+      requires:
+       - "@CoreAPI"
+       - "@SystemdAPI"
+       - "@KernelLibraries+udev"
+       - "@KernelCore+systemdlibs"
+       - "@KernelNetworkLibraries+systemd"
+      binaries:
+       - device-mapper-devel
+       - libnvme-devel
+       - lvm2-devel
+    - name: kdump
+      requires:
+       - "@KernelLibraries+kdump"
+       - "@ArchivingAPI"
+      binaries:
+       - libkdumpfile-devel
+    - name: ksyms
+      requires:
+       - "@CoreAPI"
+       - "@Kernel"
+      binaries:
+       - kernel-syms
+       - kernel-syms-*
+       - pesign-obs-integration
+       - pesign
+
+# some pieces of Kernel require perl-Bootloader which needs perl
+ - name: "@Kernel"
+   api: "@KernelAPI"
+   sourceproject: KernelPlus
+   requires:
+    - "@Core0"
+    - "@KernelCore"
+    - "@NetworkCore"
+    - "@PerlCore"
+    - "@Boot"
+   binaries:
+    - cpupower
+    - dmidecode
+    - fipscheck
+    - "*-firmware"
+    - "raspberry-firmware-*"
+#   - nvidia-open-driver-G06-signed-*-devel
+    - nvidia-open-driver-G06-signed-*
+    - FirmwareUpdateKit
+    - fuse
+    - fwupdate
+    - kdumpid
+    - kernel-*
+    - mcelog
+    - memcached
+    - numactl
+    - numad
+    - sdparm
+    - ucode-intel
+    - sensors
+    - virt-what
+    - sevctl
+    - smbios-utils
+    - numatop
+    - ledmon
+    - mstflint
+    - conntrack-tools
+   buildflavors:
+    - name: obs
+      binaries:
+       - kernel-obs-build
+    - name: glib
+      requires:
+       - "@Glib2"
+      binaries:
+       - irqbalance
+       - irqbalance-ui
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - conntrack-tools
+       - kexec-tools
+       - kdump
+    - name: rrd
+      requires:
+       - "@RRDSupportLibraries"
+      binaries:
+       - sensord
+    - name: powerpc
+      requires:
+       - "@ConfigFileLibraries"
+      binaries:
+       - dtc
+
+   purposes:
+    - name: doc
+      binaries:
+       - kernel-docs
+       - kernel-docs-html
+
+ - name: "@KernelDebugging"
+   sourceproject: KernelPlus
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - acpica
+
+ - name: "@FilesystemAPI"
+   sourceproject: KernelPlus
+   requires:
+    - "@Filesystems"
+    - "@CoreAPI"
+   binaries:
+    - libbtrfs-devel
+    - libbtrfsutil-devel
+    - xfsprogs-devel
+
+ - name: "@FilesystemLibraries"
+   api: "@FilesystemAPI"
+   sourceproject: KernelPlus
+   requires:
+    - "@CoreLibraries"
+    - "@LibComErr"
+   binaries:
+    - libbtrfs0
+    - libbtrfsutil1
+    - libext2fs2
+    - libfuse2
+    - libfuse3*
+    - libinih0
+
+ - name: "@Filesystems"
+   sourceproject: KernelPlus
+   api: "@FilesystemAPI"
+   requires:
+    - "@FilesystemLibraries"
+    - "@UdevLibraries"
+    - "@Core0"
+   binaries:
+    - btrfsprogs
+    - btrfsprogs-udev-rules
+    - btrfsprogs-static
+    - btrfsprogs-bash-completion
+    - btrfsmaintenance
+    - e2fsprogs
+    - fuse2fs
+    - xfsdump
+    - xfsprogs
+    - xfsprogs-scrub
+    - jfsutils
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPython"
+      binaries:
+       - python-btrfsutil
+    - name: systemd
+      requires:
+       - "@KernelCore+systemdlibs"
+      binaries:
+       - e2fsprogs-scrub
+
+ - name: "@Boot"
+   sourceproject: KernelPlus
+   requires:
+    - "@Core"
+    - "@Core+udevlibs"
+    - "@Core+kernellibs"
+    - "@Core+systemdlibs"
+    - "@CoreLibraries"
+    - "@CoreServices"
+    - "@CoreHardware"
+    - "@NetworkCore"
+    - "@PerlCore"
+    - "@KernelCore"
+    - "@FilesystemLibraries"
+    - "@SystemdServices"
+    - "@CoreFontLibraries"
+    - "@PlatformCryptoLibraries"
+    - "@GettextTools"
+   binaries:
+    - dracut
+    - dracut-*
+    - efibootmgr
+    - grub2
+    - grub2-branding*
+    - mokutil
+    - shim
+    - u-boot
+    - fde-tools
+    - gfxboot
+    - ignition
+    - libply5
+    - libply-*5
+   buildflavors:
+    - name: security
+      requires:
+       - "@HostSecurity"
+       - "@KernelCrypto"
+      binaries:
+       - dracut-fips
+       - dracut-ima
+    - name: branding
+      # grub2-branding-SLE seems to require everything under the sun, including
+      # libudisks2 gtk4-tools geoclue2... not sure why.
+      # FIXME: there's no reason this package has to live in @Boot
+      binaries:
+       - grub2-branding-*
+    - name: xen
+      binaries:
+       - grub2-x86_64-xen
+       - grub2-x86_64-xen-extras
+    - name: zypper
+      requires:
+       - "@SUSEConnect"
+      binaries:
+       - rollback-helper
+    - name: splash
+      requires:
+      binaries:
+       - plymouth
+       - plymouth-*
+    - name: x11
+      requires:
+       - "@Boot+splash"
+       # only plymouth-plugin-label needs the following two, but many other plymouth plugins
+       # depend on the label plugin
+       - "@FontLibraries+x11"
+       - "@Glib2Core"
+      binaries:
+       - plymouth-plugin-label
+       - plymouth-plugin-space-flares
+       - plymouth-plugin-two-step
+       - plymouth-branding-SLE
+       - plymouth-theme-fade-in
+       - plymouth-theme-solar
+       - plymouth-theme-spinner
+       - plymouth-theme-bgrt
+
+ - name: "@JeOS"
+   sourceproject: KernelPlus
+   requires:
+    - "@NetworkCore"
+    - "@KernelNetworkUtils"
+    - "@Boot"
+   binaries:
+    - jeos-firstboot
+    - fde-firstboot
+    - live-langset-data
+
+

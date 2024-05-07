@@ -1,0 +1,89 @@
+# vi: ai et
+# Definition of Editors component
+
+components:
+ - name: Editors
+   globals:
+    devel: EditorsDevel
+   requires:
+    - CorePlus
+    - Typesetting
+    - Network
+    - GCC
+    - Multimedia
+
+build_configs:
+ - name: Editors/standard
+   buildrequires:
+    - "@Valgrind"
+    - "@PrintServer"
+    - "@SVGAPI"
+ - name: Editors/emacs
+   buildrequires:
+    - "@GtkAPIs"
+    - "@MailClient"
+    - "@WebkitAPI"
+ - name: Editors/vim
+   buildrequires:
+    - "@GtkAPIs"
+    - "@DesktopQuarks"
+    - "@RubyAPI"
+
+groups:
+ # empty API project
+ - name: "@EditorsAPI"
+   sourceproject: Editors
+   requires:
+    - "@Vim"
+    - "@Emacs"
+
+# why do all editors have to have such messy dependencies?
+ - name: "@Vim"
+   api: "@EditorsAPI"
+   sourceproject: Editors
+   requires:
+    - "@Core"
+    - "@FontLibraries"
+    - "@Fonts"
+    - "@GCC"
+   binaries:
+    - vim
+    - joe
+   buildflavors:
+    - name: gnome
+      augments:
+       - "@Gnome"
+      requires:
+#      - "@LUA-devel"
+#      - "@Ruby-devel"
+       #  gvim is gnome based but still asks for libgpm2.
+       - "@Console"
+      binaries:
+       - gvim
+
+ - name: "@Emacs"
+   api: "@EditorsAPI"
+   sourceproject: Editors
+   requires:
+    - "@Core"
+    - "@FontLibraries"
+    - "@Fonts"
+    - "@GraphicsLibraries"
+    - "@GCC"
+    - "@Console"
+    - "@MailClient+cups"
+   binaries:
+    - emacs
+    - emacs-nox
+   buildflavors:
+    - name: x11
+      requires:
+       - "@DesktopUtilities"
+       - "@Sound"
+       - "@DrawingLibraries"
+       - "@Bubblewrap"
+       - "@Webkit"
+       - "@SVGLibraries"
+      binaries:
+       - emacs-x11
+

@@ -1,0 +1,55 @@
+# vi: ai et
+# Definition of Ruby component
+
+components:
+ - name: Ruby
+   globals:
+    devel: RubyDevel
+   requires:
+    - CorePlus
+   exports:
+    - "@Ruby"
+
+build_configs:
+ - name: Ruby/standard
+   buildrequires:
+    - "@Valgrind"
+
+groups:
+ - name: "@RubyAPI"
+   sourceproject: Ruby
+   requires:
+    - "@Ruby"
+    - "@PkgConfig"
+   binaries:
+    - ruby3.2-rubygem-pkg-config
+    - ruby-bundled-gems-rpmhelper
+
+ - name: "@Ruby"
+   api: "@RubyAPI"
+   sourceproject: Ruby
+   requires:
+    - "@Core0"
+    - "@XMLLibraries"
+    - "@ConfigFileLibraries"
+   binaries:
+    - ruby
+    - ruby2.5
+    - ruby3.2-rubygem-gem2rpm
+    - libruby3_2*
+    - rubygem-*
+    - ruby-common
+
+ - name: RubyDevel
+   requires:
+    - CoreDevel
+   binaries:
+
+ - name: "@RubyStandard"
+   sourceproject: Ruby
+   requires:
+    - "@Ruby"
+    - "@XMLLibraries"
+   binaries:
+    - ruby3.2-rubygem-*
+

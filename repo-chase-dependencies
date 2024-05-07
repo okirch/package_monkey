@@ -1,0 +1,102 @@
+#!/usr/bin/python3
+
+from products import ProductCatalog, CacheLocation
+from packages import Product, Resolver, ResolverWorker, PackageCollection
+from filter import PackageFilter, Classification
+from database import BackingStoreDB
+import sys
+from options import Application
+
+application = Application('repo-chase-dependencies')
+
+store = application.backingStore
+
+# Make sure we have all the products that we use recorded in the database
+application.catalog.updateBackingStore(store)
+
+needToResolve = PackageCollection()
+numInspected = 0
+
+print("=== about to enumerate latest packages ===")
+for pinfo in store.enumerateLatestPackages():
+	numInspected += 1
+
+	if pinfo.name.endswith('-32bit'):
+		continue
+
+	pkg = store.retrievePackage(pinfo)
+
+	product = pkg.product
+	if product is None:
+		raise Exception(f"{pkg.fullname()} cannot determine product (product id {pkg.productId}")
+
+	# Due to the way we build the "latest" table in the database, we
+	# will only ever encounter binary packages
+	assert(pkg.arch not in ('src', 'nosrc'))
+
+	needToResolve.add(pkg)
+
+arch = needToResolve.uniqueArch
+
+# alternatively, we could just drop and recreate the entire tree table
+store.dependencyTreeExcise(list(_.backingStoreId for _ in needToResolve))
+
+numFound = len(needToResolve)
+print(f"Inspected {numInspected} packages, will compute dependency on {numFound} packages")
+print(f"Architecture {arch}")
+
+resolver = Resolver(backingStore = store)
+resolver.declareConditional('kernel', True)
+resolver.declareConditional('systemd', True)
+resolver.declareConditional('libyui-qt', True)
+resolver.declareConditional('python38-gobject', True)
+resolver.declareConditional('python39-gobject', True)
+
+worker = ResolverWorker(resolver)
+
+context = worker.contextForArch(arch)
+
+# Preferences handling has been removed.
+preferences = None
+alreadyResolved = set()
+
+print("=== About to resolve dependencies ===")
+counter = 0
+edges = set()
+for pkg in needToResolve:
+	if pkg in alreadyResolved:
+		continue
+
+	alreadyResolved.add(pkg)
+	queue = [pkg]
+	while queue:
+		pkg = queue.pop(0)
+
+		counter += 1
+		if counter % 10 == 0:
+			store.addEdgeSetToTree(edges)
+			edges = set()
+
+			print(f"\r{counter} packages; lookup cache: {worker.formatCacheStats()} ...", end = "")
+			sys.stdout.flush()
+
+		# resolveDownward needs to be fixed so that it works with the new ResolverHints
+		for dep, target in context.resolveDownward(preferences, pkg):
+			if target not in alreadyResolved:
+				print(f"{pkg.fullname()} -> {target.fullname()}")
+				assert(target.arch != 'src')
+				queue.append(target)
+				alreadyResolved.add(target)
+
+			edges.add((pkg.backingStoreId, target.backingStoreId, dep.backingStoreId))
+
+if edges:
+	store.addEdgeSetToTree(edges)
+	del edges
+
+print(f"\r{counter} packages; lookup cache: {worker.formatCacheStats()} ... done.")
+print("==============")
+
+if worker.problems:
+	print("The resolver flagged the following problems")
+	worker.problems.show()

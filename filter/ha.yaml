@@ -1,0 +1,71 @@
+# vi: ai et
+# Definition of HA component
+
+components:
+ - name: HA
+   globals:
+    devel: HADevel
+   requires:
+    - Systemd
+    - Core
+    - Host
+    - Network
+
+build_configs:
+ - name: HA/standard
+   buildrequires:
+    - "@SNMPAPI"
+    - "@Vim"
+
+groups:
+ - name: "@HAAPI"
+   sourceproject: HA
+   requires:
+    - "@HA"
+    - "@InfinibandAPI"
+    - "@SystemdAPI"
+    - "@CoreAPI"
+    - "@XMLAPI"
+   binaries:
+    - pacemaker-devel
+
+ - name: "@HA"
+   api: "@HAAPI"
+   sourceproject: HA
+   requires:
+    - "@HostStorage"
+    - "@HostNetworking"
+    - "@Rados"
+    - "@GnomeLibraries"
+    - "@SNMPLibraries"
+    - "@LUARuntime"
+    - "@Perl"
+   packages:
+    - resource-agents
+    - libqb
+   binaries:
+    - corosync*
+    - pacemaker*
+    - cluster-glue
+    - drbd
+    - drbd-utils
+    - sanlock
+    - libsanlock1
+    - libdlm
+    - libdlm3
+    - ldirectord
+    - resource-agents-zfs
+    - haproxy
+    - libqb100
+   buildflavors:
+    - name: nagios
+      requires:
+       - "@Nagios"
+      binaries:
+       - monitoring-plugins-metadata
+    - name: python
+      requires:
+       - "@DefaultPythonOS"
+      binaries:
+       - pacemaker-cts
+

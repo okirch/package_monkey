@@ -1,0 +1,220 @@
+# vi: ai et
+# Definition of Security component
+
+components:
+ - name: Security
+   globals:
+    devel: SecurityDevel
+   requires:
+    - CorePlus
+    - SELinux
+    # For the TPM stuff
+    - HardwareAccess
+
+build_configs:
+ - name: Security/standard
+   buildrequires:
+    - "@DevelopmentEssentials"
+ - name: Security/smartcards
+   buildrequires:
+    - "@SmartcardAPI"
+
+groups:
+ - name: "@SecurityAPI"
+   sourceproject: Security
+   requires:
+    - "@Security"
+    - "@CoreAPI"
+    - "@SELinuxAPI"
+
+ - name: "@Security"
+   api: "@SecurityAPI"
+   sourceproject: Security
+   requires:
+    - "@Core"
+    - "@SELinux"
+    - "@AuditServices"
+   binaries:
+    - hmaccalc
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPython"
+      binaries:
+       - python3-capng
+       - python3-seccomp
+
+ - name: "@OATH"
+   sourceproject: Security
+   api: "@OATHAPI"
+   requires:
+    - "@Security"
+    - "@XMLPlus"
+   binaries:
+    - oath-toolkit
+    - pam_oath
+
+ - name: "@OATHAPI"
+   sourceproject: Security
+   requires:
+    - "@OATH"
+    - "@GlibcDevel"
+
+ - name: "@SmartcardAPI"
+   sourceproject: Security
+   requires:
+    - "@CoreAPI"
+    - "@Glib2API"
+    - "@Smartcards"
+   binaries:
+    - pcsc-lite-devel
+    - libcacard-devel
+
+ - name: "@SmartcardLibraries"
+   sourceproject: Security
+   api: "@SmartcardAPI"
+   requires:
+    - "@CoreLibraries"
+    - "@Glib2NoDBus"
+   binaries:
+    - libpcsclite1
+    - libcacard0
+
+ - name: "@Smartcards"
+   sourceproject: Security
+   requires:
+    - "@Security"
+    - "@SystemdServices"
+    - "@SmartcardLibraries"
+    - "@PolicyKit"
+   binaries:
+    - pcsc
+    - pcsc-lite
+    - pcsc-ccid
+    - pam_pkcs11
+    - opensc
+   buildflavors: 
+    - name: gtk
+      requires:
+       - "@Gtk3+perl"
+      binaries:
+       - pcsc-tools
+
+ # Some of the security stuff below is more of a desktop user thing (eg yubikeys), so we should
+ # look at those
+ - name: "@HostSecurityAPI"
+   sourceproject: Security
+   requires:
+    - "@HostSecurity"
+    - "@CoreAPI"
+    - "@KernelAPI"
+
+ - name: "@HostSecurity"
+   sourceproject: Security
+   api: "@HostSecurityAPI"
+   requires:
+    - "@Core"
+    - "@Security"
+    - "@SystemPython"
+    - "@CoreNetworkLibraries"
+    - "@KernelCrypto"
+    - "@PlatformCryptoTools"
+    - "@ArchivingLibraries"
+   binaries:
+    - ima-evm-utils
+    - ima-inspect
+    - keylime-ima-policy
+    - evmctl
+    - pam_u2f
+    - tpm-*
+    - trousers
+    - ykclient
+    - ykpers
+    - yubico-*
+    - yubikey-*
+    - pam_yubico
+    - pam_krb5
+    - openCryptoki
+    - openCryptoki-64bit
+   buildflavors:
+    - name: rust
+      requires:
+       - "@Core1+glib2"
+      binaries:
+       - rust-keylime
+
+ - name: "@HeimdalAPI"
+   description: |
+     The heimdal implementation of kerberos 5 seems to exist mostly to address legacy topics
+   sourceproject: Security
+   requires:
+    - "@HeimdalLibraries"
+    - "@CoreAPI"
+    - "@LibComErrAPI"
+   binaries:
+    - libheimdal-devel
+
+ - name: "@HeimdalLibraries"
+   description: |
+     The heimdal implementation of kerberos 5 seems to exist mostly to address legacy topics
+   sourceproject: Security
+   api: "@HeimdalAPI"
+   requires:
+    - "@CoreLibraries"
+    - "@KernelCrypto"
+    - "@CoreInstUtils"
+   packages:
+    - libheimdal
+   binaries:
+    - libhx509-5
+    - libheimbase1
+    - libgssapi3
+    - libasn1-8
+    - libhcrypto4
+    - libhdb9
+    - libkadm5clnt7
+    - libkadm5srv8
+    - libkafs0
+    - libkdc2
+    - libkrb5-2
+    - libotp0
+    - libroken8
+    - libsl0
+    - libwind0
+    - libheimedit0
+    - libheimntlm0
+
+ - name: "@PGPAPI"
+   sourceproject: Security
+   requires:
+    - "@CoreCryptoAPI"
+    - "@Glib2API"
+    - "@PGPLibraries"
+   binaries:
+    - libgpgme-devel
+    - libgpgmepp-devel
+   buildflavors:
+    - name: qt
+      requires:
+       - "@PGPLibraries+qt"
+      binaries:
+       - libqgpgmeqt6-devel
+       - libqgpgmeqt6-devel
+
+ - name: "@PGPLibraries"
+   sourceproject: Security
+   api: "@PGPAPI"
+   requires:
+    - "@CoreCrypto"
+   binaries:
+    - gpgme
+    - libgpgme11
+    - libgpgme15
+    - libgpgmepp6
+   buildflavors:
+    - name: qt
+      requires:
+       - "@EssentialQtLibraries"
+      binaries:
+       - libqgpgme15
+       - libqgpgmeqt6-15

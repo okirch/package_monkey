@@ -1,0 +1,497 @@
+#!/usr/bin/python3
+
+from options import Application
+from filter import Classification, PackageFilter
+from util import IndexFormatterTwoLevels
+from queries import QueryContext, QuerySubjectComponent, QuerySubjectComponentOrTopic
+from queries import PackageRequiresLabelsPredicate, RequirementsReport
+
+class QueryApplication(Application):
+	def __init__(self, name, *args, **kwargs):
+		super().__init__(name, *args, **kwargs)
+
+		self.addArgument(dest = 'components', metavar = 'COMPONENTS', nargs = '*', help = 'list of labels to query')
+		self.addArgument('--what-requires', action = 'append', default = [])
+		self.addArgument('--imports', action = 'store_true', default = False)
+		self.addArgument('--terse', action = 'store_true', default = False)
+		self.addArgument('--verbose', action = 'store_true', default = False)
+		self.addArgument('--unclassified', action = 'store_true', default = False)
+		self.addArgument('--inversions', action = 'store_true', default = False)
+		self.addArgument('--bubble-up', action = 'store_true', default = False)
+		self.addArgument('--max-alternatives')
+		self.parseArguments()
+
+		self.verbosityLevel = 1
+		if self.opts.terse:
+			self.verbosityLevel = 0
+		if self.opts.verbose:
+			self.verbosityLevel = 2
+
+	def performQueries(self):
+		context = QueryContext(self)
+
+		actions = []
+		if self.opts.what_requires:
+			actions.append(WhatRequiresQuery(context, self.opts.what_requires))
+		if self.opts.imports:
+			actions.append(ImportedLabelsQuery(context))
+		if self.opts.unclassified:
+			actions.append(UnclassifiedQuery(context, self.opts.max_alternatives))
+		if self.opts.inversions:
+			actions.append(InversionsQuery(context))
+		if self.opts.bubble_up:
+			actions.append(BubbleUpQuery(context))
+
+		if len(actions) != 1:
+			raise Exception(f"Expected exactly one action argument")
+
+		for label in context.enumerateLabelsForQuery(self.opts.components):
+			print(f"Inspecting {label}")
+			for ac in actions:
+				ac(label)
+
+def main():
+	application = QueryApplication('query-component')
+	application.performQueries()
+
+class Renderer(object):
+	def __init__(self, context):
+		pass
+
+	@staticmethod
+	def renderLabelSet(msg, labelSet):
+		if not labelSet:
+			return
+
+		print(msg)
+		for label in sorted(labelSet, key = str):
+			print(f"     {label}")
+
+class GenericQuery(object):
+	def __init__(self, context, renderer = None):
+		self.context = context
+		self.renderer = renderer
+
+class WhatRequiresRenderer(Renderer):
+	def renderRequirementsReport(self, component, requirementsReport):
+		requiredLabel = requirementsReport.requiredLabel
+
+		if not requirementsReport:
+			print(f"   {component}: nothing requires {requiredLabel}")
+		elif not requirementsReport.verbosityLevel:
+			print(f"   {component}: the following topics require {requiredLabel}")
+			for label in requirementsReport.minimalLabels:
+				print(f"      {label}")
+		else:
+			print(f"   {component}: the following topics and packages require {requiredLabel}")
+
+			alreadyReported = Classification.createLabelSet()
+			for label in requirementsReport.allLabels:
+				packages = sorted(requirementsReport.packagesForLabel(label), key = str)
+				if packages:
+					print(f"      {label}")
+					self.renderRequirementsForLabel(requirementsReport, label)
+				elif label.parent not in alreadyReported:
+					print(f"      {label} (no packages)")
+
+				alreadyReported.add(label)
+
+			dropAdvice = requirementsReport.dropRequirementsFrom
+			if dropAdvice:
+				print()
+				print("      Consider dropping explicit requirements from the following label(s)")
+				for label in sorted(dropAdvice, key = str):
+					print(f"       - {label}")
+
+	def renderRequirementsForLabel(self, requirementsReport, label):
+		projection = set()
+
+		packages = sorted(requirementsReport.packagesForLabel(label), key = str)
+		if not packages:
+			return
+
+		for rpm in packages:
+			print(f"         {rpm}")
+
+			rpmReqs = requirementsReport.requirementsForRpm(rpm)
+			if not rpmReqs:
+				continue
+
+			tf = rpmReqs.format()
+
+			if requirementsReport.verbosityLevel < 2:
+				for prefix, node in tf.render():
+					if node.label:
+						projection.add(node)
+			else:
+				for prefix, node in tf.render():
+					if node.label is not None:
+						print(f"          {prefix}{node.rpm} ({node.label})")
+					else:
+						print(f"          {prefix}{node.rpm}")
+
+		if projection:
+			print()
+			print(f"        The following packages from {requirementsReport.requiredLabel} are needed:")
+			for node in sorted(projection, key = str):
+				print(f"         {node.rpm} ({node.label})")
+			print()
+
+	def reportImportedPackages(self, component, label, pkgs):
+		if not pkgs:
+			return
+
+		print()
+		print(f"   {component} imports the following packages from {label} (component {label.componentName})")
+		for rpm in pkgs:
+			print(f"       - {rpm}")
+
+class WhatRequiresQuery(GenericQuery):
+	def __init__(self, context, what_requires):
+		renderer = WhatRequiresRenderer(context)
+		super().__init__(context, renderer)
+		self.what_requires = what_requires
+
+	def __call__(self, queryTargetLabel):
+		renderer = self.renderer
+		context = self.context
+
+		querySubject = QuerySubjectComponentOrTopic("what-requires", context, queryTargetLabel)
+
+		for req in self.what_requires:
+			topic = context.getLabel('label', req)
+			report = self.getTopicsRequiringLabel(querySubject, topic)
+			renderer.renderRequirementsReport(queryTargetLabel, report)
+
+	def getTopicsRequiringLabel(self, querySubject, inspectLabel):
+		verbosityLevel = self.context.verbosityLevel
+		labelOrder = self.context.labelOrder
+
+		result = RequirementsReport(self.context, inspectLabel, verbosityLevel = verbosityLevel)
+		if inspectLabel.type is Classification.TYPE_BINARY:
+			inspectLabelSet = Classification.createLabelSet([inspectLabel])
+		elif inspectLabel.type is Classification.TYPE_SOURCE:
+			inspectLabelSet = self.context.getLabelsForComponent(inspectLabel)
+		else:
+			raise Exception(f"{self.__class__.__name__}.getTopicsRequiringLabel: label type {inspectLabel.type} not supported")
+
+		predicate = None
+		if verbosityLevel:
+			predicate = PackageRequiresLabelsPredicate(self.context.classification, inspectLabelSet)
+			store = self.context.connectDatabase()
+
+		inspectUpperCone = labelOrder.upwardClosureForSet(inspectLabelSet)
+		for label in self.context.topDownTraversal(querySubject.binaryLabels):
+			# hits is a convex set that includes the subtree that is limited by label above and
+			# inspectLabelSet below.
+			hits = labelOrder.downwardClosureFor(label).intersection(inspectUpperCone)
+			if hits:
+				result.add(label, hits)
+
+				if verbosityLevel:
+					for rpm in self.context.getPackagesForLabel(label):
+						# Retrieve rpm dependencies from the DB
+						rpm = store.recoverLatestPackageByName(rpm.name)
+
+						if predicate(rpm):
+							result.addPackage(label, rpm, predicate)
+
+					explicitRequirement = label.configuredRuntimeRequires.intersection(inspectLabelSet)
+					if explicitRequirement and not result.packagesForLabel(label):
+						result.adviseDropRequirements(label, explicitRequirement)
+
+		return result
+
+
+class APIRenderer(Renderer):
+	def __init__(self):
+		self.renderPurposes = False
+
+	def renderHeader(self, component, querySubject):
+		pass
+
+	def renderTrailer(self, component, querySubject):
+		pass
+
+	def renderImportedAPIs(self, importer, apis, indent):
+		pass
+
+	def renderWildImports(self, importer, apis, indent):
+		pass
+
+class APITextRenderer(APIRenderer):
+	def renderHeader(self, component, querySubject):
+		self.renderImportedAPIs(component, querySubject.alwaysImportedAPIs, 0)
+
+	def renderImportedAPIs(self, importer, apis, indent):
+		ws = indent * " "
+		self.renderLabelSet(f"{ws}{importer} imports the following APIs:", apis)
+
+	def renderWildImports(self, importer, apis, indent):
+		ws = indent * " "
+		self.renderLabelSet(f"{ws}{importer} uses the following non-APIs:", apis)
+
+class APISummarizer(APIRenderer):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self._summary = {}
+
+	def renderImportedAPIs(self, importer, apis, indent):
+		for label in apis:
+			try:
+				self._summary[label] += 1
+			except:
+				self._summary[label] = 1
+
+	def renderWildImports(self, importer, apis, indent):
+		pass
+
+	def renderTrailer(self, component, querySubject):
+		print(f"{component} imports the following APIs")
+		for label, count in sorted(self._summary.items(), key = str):
+			print(f" {count:5} {label}")
+
+class ImportedLabelsQuery(GenericQuery):
+	def __init__(self, context):
+		if context.verbosityLevel == 0:
+			renderer = APISummarizer()
+		else:
+			renderer = APITextRenderer()
+
+		super().__init__(context, renderer)
+
+	def __call__(self, queryTargetLabel):
+		context = self.context
+		renderer = self.renderer
+
+		querySubject = QuerySubjectComponent("imports", context, queryTargetLabel)
+
+		renderer.renderHeader(queryTargetLabel, querySubject)
+		for topic in context.bottomUpTraversal(querySubject.binaryLabels):
+			if topic.parent is None:
+				self.inspectTopic(querySubject, topic, renderer)
+
+		# FIXME: inspect the component's build configs and check what they import
+
+		renderer.renderTrailer(queryTargetLabel, querySubject)
+
+	# topic is a requirement of some label that's part of component
+	def inspectTopic(self, querySubject, topic, renderer):
+		visitor = self.Visitor(querySubject, topic)
+
+		visitor.render(renderer)
+
+		if renderer.renderPurposes:
+			for purpose in topic.objectPurposes:
+				purposeVisitor = visitor.descend(purpose)
+				purposeVisitor.render(renderer)
+
+		for flavor in topic.flavors:
+			flavorVisitor = visitor.descend(flavor)
+			flavorVisitor.render(renderer)
+
+			if renderer.renderPurposes:
+				for purpose in flavor.objectPurposes:
+					purposeVisitor = flavorVisitor.descend(purpose)
+					purposeVisitor.render(renderer)
+		return
+
+
+	class Visitor:
+		def __init__(self, querySubject, label, parent = None):
+			self.querySubject = querySubject
+			self.label = label
+
+			if parent:
+				subtractAPIs = parent.maskAPIs
+				self.indent = parent.indent + 1
+			else:
+				subtractAPIs = None
+				self.indent = 1
+
+			context = querySubject.context
+			labelOrder = context.labelOrder
+
+			requiredLabels = labelOrder.downwardClosureFor(label)
+
+			if label.purposeName:
+				if subtractAPIs:
+					subtractAPIs = subtractAPIs.union(self.derivePurposeAPIs(label.purposeName, subtractAPIs))
+				else:
+					subtractAPIs = self.derivePurposeAPIs(label.purposeName, querySubject.accessibleAPIs)
+
+			if subtractAPIs:
+				requiredLabels = requiredLabels.difference(subtractAPIs)
+
+			self.importedAPIs = requiredLabels.intersection(querySubject.importableAPIs)
+			self.importedAPIs.difference_update(querySubject.alwaysImportedAPIs)
+
+			wildImports = requiredLabels.difference(context._allAPIs).difference(querySubject.accessibleAPIs)
+			if label.purposeName and wildImports:
+				wildImports.difference_update(self.derivePurposeAPIs(label.purposeName, querySubject.importableAPIs))
+			if wildImports:
+				wildImports = labelOrder.maxima(wildImports)
+			self.wildImports = wildImports
+
+			self.maskAPIs = self.importedAPIs.union(wildImports)
+			if subtractAPIs:
+				self.maskAPIs.update(subtractAPIs)
+			self.maskAPIs.add(label)
+			self.maskAPIs = labelOrder.downwardClosureForSet(self.maskAPIs)
+
+		def derivePurposeAPIs(self, purposeName, labelSet):
+			# for a label like @Foo-32bit, we allow access to any @BlahAPI-32bit
+			return Classification.createLabelSet(
+					filter(bool,
+						map(lambda _: _.getObjectPurpose(purposeName), labelSet)
+						))
+
+		def render(self, renderer):
+			renderer.renderImportedAPIs(self.label, self.importedAPIs, 1)
+			if self.wildImports:
+				renderer.renderWildImports(self.label, self.wildImports, 1)
+
+		def descend(self, label):
+			return self.__class__(self.querySubject, label, parent = self)
+
+
+class UnclassifiedQuery(GenericQuery):
+	def __init__(self, context, maxAlternatives):
+		if maxAlternatives in (None, '', 'any'):
+			maxAlternatives = None
+		else:
+			maxAlternatives = int(maxAlternatives)
+
+		renderer = UnclassifiedRenderer(context, maxAlternatives)
+		super().__init__(context, renderer)
+
+	def __call__(self, queryTargetLabel):
+		unsorted = list(self.context.getUnclassifiedForComponent(queryTargetLabel))
+
+		renderer = self.renderer
+		for rpm, numOther in sorted(unsorted, key = (lambda pair: (pair[1], pair[0].name))):
+			renderer.renderCandidate(rpm, numOther)
+
+class UnclassifiedRenderer(Renderer):
+	def __init__(self, context, maxAlternatives):
+		self.maxAlternatives = maxAlternatives
+
+	def renderCandidate(self, rpm, numOther):
+		if self.maxAlternatives is not None and numOther > self.maxAlternatives:
+			return
+
+		if numOther == 0:
+			print(f"  {rpm}")
+		elif numOther == QueryContext.QUASI_INFINITE:
+			print(f"  {rpm} - anywhere")
+		else:
+			print(f"  {rpm} - {numOther} alternatives")
+
+class InversionsQuery(GenericQuery):
+	def __init__(self, context):
+		renderer = InversionRenderer(context)
+		super().__init__(context, renderer)
+
+	def __call__(self, queryTargetLabel):
+		forwardMap = self.buildForwardMap(queryTargetLabel)
+
+		renderer = self.renderer
+		for componentName, invTopic, requiredBy in forwardMap:
+			renderer.render(componentName, invTopic, requiredBy)
+
+	class PerComponent(object):
+		def __init__(self, name):
+			self.name = name
+			self.perTopic = {}
+
+		def add(self, topic, invTopic):
+			self.perTopic[invTopic] = Classification.createLabelSet((topic, ))
+
+	class ForwardMap(object):
+		def __init__(self):
+			self.perComponent = {}
+
+		def add(self, topic, inversions):
+			for invTopic in inversions:
+				component = invTopic.componentLabel
+				if component not in self.perComponent:
+					self.perComponent[component] = InversionsQuery.PerComponent(component.name)
+
+				self.perComponent[component].add(topic, invTopic)
+
+		def __iter__(self):
+			for pc in sorted(self.perComponent.values(), key = lambda pc: pc.name):
+				for invTopic, requiredBy in pc.perTopic.items():
+					yield pc.name, invTopic, requiredBy
+
+	def buildForwardMap(self, queryTargetLabel):
+		fwdMap = self.ForwardMap()
+		for topic, inversions in self.context.getInversionsForComponent(queryTargetLabel):
+			fwdMap.add(topic, inversions)
+		return fwdMap
+
+
+class InversionRenderer(Renderer):
+	def __init__(self, context):
+		self.context = context
+		self.indexFormatter = IndexFormatterTwoLevels()
+
+	def render(self, componentName, invTopic, requiredBy):
+		inversionName = f"{self.renderTopic(invTopic)} required by:"
+		for label in requiredBy:
+			packageCount = self.context.getPackageCountForLabel(label)
+			self.indexFormatter.next(componentName, inversionName, self.renderTopic(label))
+
+	def renderTopic(self, label):
+		packageCount = self.context.getPackageCountForLabel(label)
+		return f"{label} ({packageCount} packages)"
+
+class BubbleUpQuery(GenericQuery):
+	def __init__(self, context):
+		super().__init__(context, None)
+
+	def __call__(self, queryTargetLabel):
+		store = self.context.connectDatabase()
+
+		rpmToBuildMap = {}
+		for build in self.context.getBuildsForComponent(queryTargetLabel):
+			for orpm in build.binaries:
+				if orpm.isSynthetic:
+					continue
+				rpm = store.recoverLatestPackageByName(orpm.name)
+				if rpm is None:
+					raise Exception(f"build {build} references {orpm} which is not in the DB")
+				rpmToBuildMap[rpm] = build
+		print(f"{queryTargetLabel} contains {len(rpmToBuildMap)} rpms")
+
+		dominationMatrix = self.DominationMatrix()
+		for rpm, build in rpmToBuildMap.items():
+			for req in rpm.enumerateRequiredRpms():
+				dominatedBuild = rpmToBuildMap.get(req)
+				if dominatedBuild is None:
+					continue
+				if dominatedBuild is build:
+					continue
+
+				dominationMatrix.add(build, dominatedBuild)
+
+		for build in self.context.getBuildsForComponent(queryTargetLabel):
+			dominatedBy = dominationMatrix.get(build)
+			if not dominatedBy:
+				print(f"   {build}")
+
+	class DominationMatrix(object):
+		def __init__(self):
+			self.dominatedBy = {}
+
+		def add(self, dominatingBuild, dominatedBuild):
+			dset = self.dominatedBy.get(dominatedBuild)
+			if dset is None:
+				dset = set()
+				self.dominatedBy[dominatedBuild] = dset
+			dset.add(dominatingBuild)
+
+		def get(self, build):
+			return self.dominatedBy.get(build)
+
+main()

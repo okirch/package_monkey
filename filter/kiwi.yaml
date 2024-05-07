@@ -1,0 +1,57 @@
+# vi: ai et
+# Definition of Kiwi component
+
+components:
+ - name: Kiwi
+   globals:
+    devel: KiwiDevel
+   requires:
+    - Virtualization
+    - UpdateStack
+    - Container
+
+build_configs:
+ - name: Kiwi/standard
+   buildrequires:
+    - "@Graphviz"
+
+groups:
+ - name: "@KiwiAPI"
+   sourceproject: Kiwi
+   requires:
+    - "@Kiwi"
+    - "@CoreAPI"
+   binaries:
+    - libmediacheck-devel
+
+ - name: "@Kiwi"
+   api: "@KiwiAPI"
+   feature: True
+   sourceproject: Kiwi
+   requires:
+    - "@Core"
+    - "@Container"
+    - "@HostStorage"
+    - "@NetworkUtils"
+    - "@UpdateStack"
+    - "@Kernel"
+    - "@Boot"
+    - "@Filesystems"
+    - "@MinimalSystemd"
+    - "@PythonModules"
+    - "@TransactionalServer"
+    - "@Console"
+    - "@Virtualization"
+    - "@JeOS"
+    - "@PlusUtilities"
+    - "@OpticalMedia+tcl"
+    - "@OpenVSwitch"
+   binaries:
+    - kiwi
+    - python3-kiwi
+    - pv
+    - dracut-kiwi-*
+    - appx-util
+    - dracut-kiwi-oem-dump
+    - libmediacheck6
+    - checkmedia

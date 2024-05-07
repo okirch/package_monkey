@@ -1,0 +1,269 @@
+baseurl: https://download.suse.de/ibs/SUSE:/
+alternateurls:
+ - http://download.suse.de/ibs/SUSE:/
+repositories:
+ - https://download.suse.de/ibs/SUSE:/ALP:/Products:/Dolomite:/$VERSION/images/repo/ALP-Dolomite-1.0-x86_64-Media1/
+ - https://download.suse.de/ibs/SUSE:/ALP:/Products:/Dolomite:/$VERSION/images/repo/ALP-Dolomite-1.0-x86_64-Media2/
+versions:
+ - name: "1.0"
+architectures:
+ - x86_64
+buildservice:
+ source:
+  - SUSE:ALP:Source:Standard:$VERSION
+ build:
+  - SUSE:ALP:Source:Standard:Core:$VERSION:Build
+
+products:
+ - name:        Dolomite
+   nickname:    dolomite
+   obsname:     Dolomite
+
+resolverhints:
+  fake:
+   - environment_with_systemd
+   - environment_with_udev
+   - environment_with_polkit
+  ignore:
+    # we want to place these somewhere in Core, but dont want to pollute Core
+    # with any systemd dependencies.
+    # Maybe we should have a core package that specifies a systemd unit file version
+    - "nscd -> systemd systemd-mini"
+    - "gpm -> systemd systemd-mini"
+    - "pesign -> systemd systemd-mini"
+    - "snapper -> systemd systemd-mini"
+    - "cronie -> systemd systemd-mini"
+    - "man -> systemd systemd-mini"
+    - "lvm2 -> systemd systemd-mini"
+    - "live-langset-data -> systemd systemd-mini"
+    - "jeos-firstboot -> systemd systemd-mini"
+    - "util-linux-systemd -> systemd systemd-mini"
+    - "cyrus-sasl-saslauthd -> systemd systemd-mini"
+    - "pcp -> systemd systemd-mini"
+    - "strongswan -> systemd systemd-mini"
+    - "libstoragemgmt -> systemd systemd-mini"
+    - "rdma-core -> systemd systemd-mini"
+    - "rdma-core -> udev udev-mini"
+    - "mcelog -> systemd systemd-mini"
+    - "numad -> systemd systemd-mini"
+    - "xdm -> systemd systemd-mini"
+    - "udisks2-core -> systemd systemd-mini"
+    - "udisks2-core -> udev udev-mini"
+    - "e2fsprogs-scrub -> postfix"
+    - "policy-default-privs -> policy"
+    - "gio-branding-SLE -> libgio-2_0-0"
+    - "libgio-2_0-0 -> dbus-1"
+    # someone has been sprinkling polkit dependencies across the packages rather liberally
+    - "polkit-default-privs -> polkit"
+    - "libpolkit-gobject-1-0 -> polkit"
+    - "libpolkit-agent-1-0 -> polkit"
+    - "polkit-devel -> polkit"
+    # These hard dependencies on openmpi4 look wrong to me
+    - "fftw3-mpi-devel -> openmpi4-devel"
+    - "libboost_mpi1_82_0-devel -> openmpi4-devel"
+    # boost dependencies are a mess. Quite a few devel packages from boost-defaults require packages from boost:extra
+    # (and it's not clear why the python bindings are in boost:extra, for instance)
+    - "libboost_python3-devel -> libboost_python-py3-1_82_0-devel"
+    - "libboost_mpi_python3-devel -> libboost_mpi_python-py3-1_82_0-devel"
+    - "libboost_graph_parallel-devel -> libboost_graph_parallel1_82_0-devel"
+    - "libboost_mpi-devel -> libboost_mpi1_82_0-devel"
+    - "libboost_numpy3-devel -> libboost_numpy-py3-1_82_0-devel"
+    # We have a bunch of these, but they're not really relevant to our task:
+    - "fuse-devel -> fuse-doc"
+    ##################################################
+    # HACK: In order not to pull in the complete Gnome
+    # Multimedia mess into a minimal desktop library set,
+    # we assume we can build xdg-desktop-portal without
+    # multimedia support
+    ##################################################
+    - "xdg-desktop-portal -> libpipewire-0_3-0"
+  rewrite:
+   - "systemd-mini -> environment_with_systemd"
+   - "udev-mini -> environment_with_udev"
+  prefer:
+    - "order libcontainers-openSUSE-policy libcontainers-default-policy"
+    - "order libjpeg8 libjpeg*"
+    - "order libjpeg8-devel libjpeg*-devel"
+    - "order lua53 lua5?"
+    - "order lua53-devel lua5?-devel"
+    - "order ImageMagick-config-7-SUSE ImageMagick-config-7-*"
+
+    # for a variety of packages, we support installing several (major) versions in parallel.
+    # these usually have the major number somewhere in the RPM name.
+    # In addition, there can be unversioned packages that require what is the "default"
+    # version at a certain point in time.
+    # The OBS dependency resolver will usually pick up and report both; so we try to go
+    # with unversioned package name
+    - "order libopenssl-devel libopenssl-*devel"
+    - "order libpq5 libecpg6 postgresql*-devel-mini postgresql-devel postgresql*-devel"
+    - "order postgresql-server-devel postgresql*-server-devel"
+    - "order go go1.*"
+    - "order cargo cargo1.*"
+    - "order rust rust1.*"
+    - "order libgtop libgtop-2*"
+    - "order glibmm2-devel glibmm2_*-devel"
+
+    # other packages do not have such a default version
+    - "order libomp16-devel libomp15-devel"
+
+    # Packages like systemd and krb5 come with *-mini versions of their packages
+    # When chasing runtime dependencies, we should prefer these mini versions
+    # over the full-blown ones to keep the depdency tree slender
+    - "order systemd-mini systemd"
+    - "order systemd-mini-devel systemd-devel"
+    - "order systemd-mini-container systemd-container"
+    - "order libsystemd0-mini libsystemd0"
+    - "order udev-mini udev"
+    - "order krb5-mini krb5"
+    - "order krb5-mini-devel krb5-devel"
+    - "order libudev-mini1 libudev1"
+    - "order gettext-runtime-mini gettext-runtime"
+    - "order gettext-tools-mini gettext-tools"
+    - "order ghostscript-mini ghostscript"
+    - "order cmake-mini cmake cmake-full"
+
+    - "suffixorder -mini ''"
+    - "suffixorder -mini-devel -devel"
+
+    # when chasing hard requirements, we prefer the dbus version with the least
+    # baggage
+    - "order dbus-1 dbus-1-glib dbus-1-x11"
+
+    - "order mozilla-nss-certs p11-kit-nss-trust"
+    - "order chrony-pool-suse chrony-pool-*"
+
+    - "order libyui-ncurses-pkg16 libyui-qt-pkg16"
+    - "order strongswan-ipsec strongswan"
+
+    # libOpenIPMI0 vs full OpenIPMI
+    - "order libOpenIPMI0 OpenIPMI"
+
+    # prefer kernel-default over other kernel flavors
+    - "order kernel-default kernel-*"
+
+    # for some packages where there's a variant implementation of some
+    # 'original' go with the original for now
+    - "order unzip unzip-rcc"
+    - "order gzip zstd-gzip"
+
+    # pick java 1.7 over 1.8
+    - "order java-17* java-1_8_0*"
+
+    # java-1_8_0-openjdk-headless over java-1_8_0-openjdk-devel
+    - "order java-1_8_0-openjdk-headless java-1_8_0-openjdk-devel"
+
+    - "order coreutils-single coreutils"
+    - "order grub2-x86_64-efi grub2-i386-efi"
+    - "order libopenblas_pthreads0 libopenblas_serial0 libopenblas_openmp0"
+    - "order libXaw7 xaw3dd"
+
+    # debuginfod has some dummy packages
+    - "order *debuginfod* *debuginfod*-dummy*"
+    - "order libdebuginfod1 libdebuginfod1-dummy"
+    - "order debuginfod-client debuginfod-dummy-client"
+    - "order libdebuginfod-devel libdebuginfod-dummy-devel"
+
+    # Disambiguating some dependencies in HPC
+    # Not all of this makes sense, because these are actual alternatives, all of which should
+    # work when a product ships @HPC.
+    # So what we really want is to mark these as valid alternatives and allow the preferences
+    # engine to return several alternatives. Currently, that can't be done because it's considered
+    # an error.
+    - "order libpsm_infinipath1 libpsm2-compat"
+    - "order mvapich2-psm2 mpich mvapich2-psm mpich-ofi mvapich2"
+    - "order mvapich2-psm openmpi1-libs"
+    - "order libmca_common_dstore1 openmpi4-libs openmpi3-libs"
+    - "prefixorder openmpi4- openmpi3- openmpi2- openmpi1-"
+    - "order openmpi4-config openmpi3-config openmpi2-config openmpi1-config pmix-mca-params"
+
+    - "order ocaml-runtime ocaml"
+    - "order ocaml-compiler-libs ocaml-compiler-libs-devel"
+
+    - "order perl-base perl perl-ExtUtils-MakeMaker"
+    - "order perl-base perl perl-CPAN-Meta-Requirements"
+    - "order perl-base perl perl-File-Path"
+
+    # same here; these would be valid alternatives (if one wants to use BDB)
+    - "order postfix postfix-bdb"
+    - "order cyrus-sasl-devel cyrus-sasl-bdb-devel"
+
+    # prefer libfoo over llvm15-libfoo
+    - "prefixorder lib llvm15-lib"
+
+    # xml-commons-apis over xml-commons-apis-bootstrap
+    # antlr over antlr-bootstrap
+    # javacc over javacc-bootstrap
+    # scala over scala-bootstrap
+    - "suffixorder '' -bootstrap"
+
+    - "order javamail geronimo-j2ee*"
+    - "order geronimo-j2ee-1_4-apis geronimo-*-api servletapi4 servletapi5 tomcat-servlet-*-api"
+
+    # apache2-MPM can be resolved by apache2-worker apache2-prefork apache2-event
+    - "order apache2-prefork apache2-*"
+
+    # various python modules that come in different versions
+    - "order python3*-Cython3 python3*-Cython"
+    - "order python3*-SQLAlchemy python3*-SQLAlchemy1"
+    - "order python3*-sip-devel python3*-sip6-devel"
+    - "order python3*-tornado python3*-tornado6"
+    - "order python3*-jupyter-client python3*-jupyter-client7"
+
+    # Some packages do not specify the python abi when requiring other python modules;
+    # so OBS will report both the 3.10 and 3.11 version.
+    # Choose 3.11 over 3.10
+    - "prefixorder python311- python310-"
+
+    # javascript has -default versiuons of some of its packages
+    - "order npm-default npm*"
+    - "order nodejs-default nodejs*"
+    - "order nodejs-devel-default nodejs*-devel"
+
+    # not sure
+    - "order libpcp-devel pcp-devel"
+
+    # libcolord-gtk1 is an older version of this package
+    - "order colord-gtk libcolord-gtk1"
+    - "order typelib-1_0-Gtk-4* typelib-1_0-Gtk-*"
+    - "order gettext-its-gtk4 gettext-its-gtk3"
+    - "order libgnome-desktop-4* libgnome-desktop-*"
+
+    # SELinux
+    - "order selinux-policy-targeted selinux-policy-*"
+
+    - "order cracklib-dict-full cracklib-dict-*"
+
+    # not sure why this is there
+    - "order system-user-lp system-group-hardware"
+
+    - "order man mandoc"
+    - "order emacs-nox emacs-x11"
+
+    # preferred spelling engine?
+    - "order enchant-2-backend-hunspell enchant-2-backend-*"
+    # both packages seem to provide the shared library
+    - "order libgspell-1* gspell"
+
+    # libjack-devel over pipewire-libjack-devel
+    # libjack0 over pipewire-libjack0
+    - "order libjack-devel pipewire-libjack-0*-devel"
+    - "order libjack0 pipewire-libjack-0*"
+    - "order libjackserver0 pipewire-libjack-0*"
+    - "order pulseaudio pipewire-pulseaudio"
+
+    # not sure about this choice
+    - "order php8-embed apache2-mod_php8 php8-cli php8-fastcgi php8-fpm"
+
+    # I have no idea whether these are actual alternatives or whether we should
+    # actually chase both dependency edges
+    - "order texlive-hyphen-base texlive-lambda"
+    - "order qt6-location: qt6-location qt6-positioning"
+
+    - "order icewm-lite icewm-default"
+
+    - "order health-checker-plugins-MicroOS health-checker-plugins-caasp health-checker-plugins-kubic health-checker-testing"
+
+    - "suffixorder '' -32bit"
+    - "suffixorder '' -hmac"
+    - "suffixorder -ALP -SLE -SLE_15 -SLE-Micro -SUSE -openSUSE -upstream"
+

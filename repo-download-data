@@ -1,0 +1,37 @@
+#!/usr/bin/python3
+
+forceRefresh = True
+
+from options import Application
+from repos import RepoDict, UrlCacheStrategy
+from products import ProductCatalog, CacheLocation
+from packages import Product, Resolver, ResolverWorker
+from filter import PackageFilter, Classification
+from database import BackingStoreDB
+from obsclnt import OBSClient, OBSProject
+from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+
+
+application = Application('repo-download')
+store = application.backingStore
+
+# remember the arch we're asked to look at, so that we don't
+# have to play guessing games later on
+store.putProperty("arch", application.architecture)
+
+for release in application.enumerateProducts():
+	infomsg(f"Found {release}")
+
+	# FIXME: product = release.createEmptyProduct() instead
+	product = Product()
+	product.productId = release.backingStoreId
+
+	# First pass: load relevant info from all repos
+	for repo in release.getRepositories():
+		repo.load(product, refresh = repo.REFRESH_MAYBE)
+
+	# Second pass: resolve package sources
+	for repo in release.getRepositories():
+		repo.resolveSourcePackages(product)
+
+	product.updateBackingStore(application.backingStore)

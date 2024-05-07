@@ -1,0 +1,388 @@
+# vi: ai et
+# Definition of Development component
+
+components:
+ - name: Development
+   globals:
+    devel: DevelopmentDevel
+   requires:
+    - Core
+    - CorePlus
+    - GCC
+    - Python
+    - LUA
+   exports:
+    - "@DevelopmentRuntime"
+    - "@DevelopmentEssentials"
+    - "@GettextTools"
+    - "@DevelopmentCore"
+    # These are really exported for devel only
+    - "@MinimalCDevelopment"
+    - "@Meson"
+
+build_configs:
+ - name: Development/standard
+   buildrequires:
+    - "@Vala"
+ - name: Development/docbuild
+   buildrequires:
+    - "@Texlive"
+    - "@Postscript"
+    - "@Qt5ExtendedAPI"
+ - name: Development/llvm
+   buildrequires:
+    - "@LLVMAPI"
+   packages:
+    - llvmtool
+ - name: Development/swig
+   inheritable: False
+   buildrequires:
+    - "@RubyAPI"
+    - "@Boost"
+   packages:
+    - swig
+
+groups:
+ - name: DevelopmentDevel
+   requires:
+    - "@Ocaml"
+   binaries:
+
+ - name: "@Testing"
+   sourceproject: Development
+   requires:
+    - "@MinimalCRuntime"
+    - "@Core0"
+
+ - name: "@BaseDevTools"
+   sourceproject: Development
+   requires:
+    - "@DevelopmentCore"
+    - "@SystemPythonStandard"
+   binaries:
+    - bison
+    - datefudge
+    - gnu-efi
+    - gengetopt
+    # do these really belong here?
+    - cscope
+    - ctags
+    - unifdef
+    - cppunit
+    - cppunit-devel
+    - cppunit-devel-doc purpose=doc
+    - re2c
+
+ - name: "@Ocaml"
+   is_api: True
+   sourceproject: Development
+   requires:
+    - "@Core0"
+    - "@CoreAPI"
+   binaries:
+    - ocaml
+    # unfortunately, ocaml-runtime requires ocaml, so we need to lump these all together into one topic
+    - ocaml-runtime
+    - ocaml-rpm-macros
+    - ocaml-*
+    - ocaml-ocamldoc           purpose=devel
+    - ocaml-dune               purpose=devel
+    - ocaml-dune-devel         purpose=devel
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - ocaml-graphics
+
+ - name: "@DevelopmentRuntime"
+   sourceproject: Development
+   requires:
+    - "@MinimalCRuntime"
+   binaries:
+    - libltdl7
+    - gettext-runtime-mini
+
+ - name: "@GettextTools"
+   sourceproject: Development
+   requires:
+    - "@Core0"
+   binaries:
+    - gettext-runtime
+    - gettext-tools-mini
+    - gettext-tools
+
+ - name: "@DevelopmentGoogleTest"
+   sourceproject: Development
+   requires:
+    - "@Core0"
+   binaries:
+    - gtest
+    - gmock
+    - libbenchmark-devel
+
+ - name: "@DevelopmentMisc"
+   sourceproject: Development
+   requires:
+    - "@Core0"
+   binaries:
+    - benchmark-devel
+    - libbenchmark1
+    - uchardet
+    - libuchardet0
+    - tclap
+    - foma-devel
+
+ - name: "@SCons"
+   sourceproject: Development
+   requires:
+    - "@SystemPython"
+   binaries:
+    - scons
+
+ - name: "@ProfilingAPI"
+   sourceproject: Development
+   requires: 
+    - "@CoreAPI"
+    - "@Glib2API"
+    - "@ProfilingTools"
+    - "@PolicyKitAPI"
+   binaries:
+    - sysprof-devel
+    - sysprof-capture-devel-static
+
+ - name: "@ProfilingTools"
+   api: "@ProfilingAPI"
+   sourceproject: Development
+   requires: 
+    - "@Glib2NoDBus"
+    - "@PolicyKitLibraries"
+   binaries:
+    - sysprof
+
+ - name: "@MinimalCDevelopment"
+   description: |
+     This defines the set of packages that have to be present in order
+     to install the average -devel package.
+   sourceproject: Development
+   autoselect: no
+   requires:
+    - "@DevelopmentRuntime"
+    - "@GCC"
+    - "@Guile" # for autogen
+    - "@SystemPython" # for cmake-mini
+    - "@PerlCore"
+    - "@CoreXMLLibraries"
+    - "@ArchivingLibraries"
+    - "@GettextTools"
+   binaries:
+    # llvm15 requires libtool
+    - libtool
+    - autogen
+    - automake
+    - autoconf
+    - autoconf213
+    - autoconf-archive
+    - autogen
+    # libssh-devel requires cmake
+    - cmake-mini
+    - cmake
+    - make
+   buildflavors:
+    - name: qt
+      requires:
+       - "@EssentialQtLibraries"
+      binaries:
+       - cmake-gui
+
+ - name: "@DevelopmentCore"
+   description: |
+     This defines the set of packages that will be used to build
+     Core packages by default.
+   sourceproject: Development
+   requires:
+    - "@MinimalCDevelopment"
+    - "@GCC"
+    - "@Guile"
+    - "@Kernel+obs"
+    - "@Core0"
+    - "@Docbook"
+    - "@TclCore"
+    - "@ManDoc"
+    - "@Texinfo"
+    - "@SystemPython"
+   binaries:
+    - memory-constraints
+    - brp-check-suse
+    - build-compare
+    - build-mkbaselibs
+    - doxygen
+    - gperf
+    - post-build-checks
+    - swig
+    - libcunit1
+    - libcheck0
+    # OBS wants to install it everywhere
+    - rzsz
+   buildflavors:
+    - name: qt
+      requires:
+       - "@EssentialQtLibraries"
+    - name: llvm
+      requires:
+       - "@LLVMRuntime"
+      binaries:
+       - bpftool
+
+ - name: "@Valgrind"
+   sourceproject: Development
+   requires:
+    - "@DevelopmentCore"
+   binaries:
+    - valgrind
+    - valgrind-devel
+    - valgrind-client-headers
+
+ - name: "@DevelopmentUnused"
+   sourceproject: Development
+   requires:
+    - "@DevelopmentCore"
+   binaries:
+    - autoconf-el
+
+ - name: "@Meson"
+   sourceproject: Development
+   requires:
+    - "@MinimalCDevelopment"
+    - "@SystemPythonCore"
+   binaries:
+    - meson
+    - ninja
+
+ - name: "@Mercurial"
+   sourceproject: Development
+   requires:
+    - "@SystemPythonStandard"
+   binaries:
+    - mercurial
+
+ - name: "@DevelopmentEssentials"
+   is_api: True
+   description: |
+    Generic build environment for packages above the Core level
+   sourceproject: Development
+   requires:
+    - "@Core"
+    - "@Core0+syspython"
+    - "@BaseDevTools"
+    - "@SystemPythonStandard"
+    - "@GCCDevel"
+    - "@DevelopmentUnitTests"
+    - "@Git"
+   binaries:
+    - python-rpm-packaging
+    - obs-service-*
+    - uasm
+    - yasm
+
+ - name: "@DevelopmentUnitTests"
+   is_api: True
+   sourceproject: Development
+   requires:
+    - "@Core"
+    - "@SystemPythonStandard"
+    - "@BaseDevTools"
+    - "@Python"
+    - "@NetworkAnalysis+systemd"
+    - "@TclCore+x11"
+    - "@Texinfo"
+    - "@CoreAPI"
+    - "@Glib2API"
+   packages:
+    - libcmocka
+    - umockdev
+    - cunit
+    - check
+    - Catch2
+    - Catch2-2
+   binaries:
+    - libcmocka0
+    - libcmocka-devel
+    - libumockdev0
+    - typelib-1_0-UMockdev-* priority=0
+    - libumockdev-preload0
+    - umockdev
+    - umockdev-devel
+    - cunit-devel
+    - check-devel
+    - Catch2-2-devel
+    - dejagnu
+
+ - name: "@DebianCompat"
+   is_api: True
+   sourceproject: Development
+   requires:
+    - "@ArchivingLibraries"
+    - "@Core1"
+    - "@CoreAPI"
+    - "@SystemPython"
+   binaries:
+    - dpkg
+    - dpkg-devel
+    - devscripts
+    - checkbashisms
+
+ - name: "@RpmLint"
+   is_api: True
+   sourceproject: Development
+   requires:
+    - "@RpmAPI"
+    - "@LUA"
+    - "@DesktopQuarks"
+    - "@AppstreamLibraries"
+    - "@Permissions"
+    - "@Spelling"
+    - "@SystemPythonEssentials+desktop"
+    - "@SystemPythonEssentials+obs"
+    - "@Core0+syspython"
+    - "@DebianCompat"
+   binaries:
+    - python${systemPythonVersion}-pyenchant
+    - rpmlint
+    - rpmlint-mini
+    - rpmlint-strict
+    - dash
+    - dash-sh
+
+ - name: "@Git"
+   sourceproject: Development
+   requires:
+    - "@Core0"
+    - "@CoreXMLLibraries"
+   binaries:
+    - git-core
+    - git-arch
+    - git-p4
+    - git-daemon
+   buildflavors:
+    - name: perl
+      requires:
+       - "@Perl"
+      binaries:
+       - perl-Git
+       - git-email
+       - git-svn
+       - git-cvs
+       - git-web
+       - git
+    - name: tcl
+      requires:
+       - "@TclCore+x11"
+      binaries:
+       - git-gui
+       - gitk
+    - name: dbus
+      requires:
+       - "@DBus"
+      binaries:
+       - git-credential-libsecret

@@ -1,0 +1,388 @@
+# vi: ai et
+# Definition of Qt component
+
+components:
+ - name: Qt
+   globals:
+    devel: QtDevel
+   requires:
+    - Databases
+    - Python
+    - Security
+    - X11
+    - DesktopCommon
+
+build_configs:
+ - name: Qt/standard
+   buildrequires:
+    - "@DevelopmentEssentials"
+    - "@Javascript"
+
+groups:
+ - name: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@Qt"
+    - "@QtSpeechLibraries"
+    - "@Qt+meta"
+    - "@CoreAPI"
+    - "@X11API"
+    - "@HardwareAccessAPI"
+    - "@AccessibilityAPI"
+    - "@PrintingAPI"
+    - "@CoreHardwareAPI+systemd"
+    - "@InputDeviceAPI"
+   binaries:
+    - qml-autoreqprov
+    - libQt5Widgets-devel
+    - libQt5OpenGL-devel
+    - libQt5Gui-devel
+    - libQt5Core-devel
+    - libqt5-qtbase-common-devel
+    - qt6-macros
+    - qt6-*-devel priority=0
+    - qt6-base-examples
+
+ - name: QtDevel
+   requires:
+    - "@QtAPI"
+    - "@PulseAudioAPI"
+    - X11Devel
+    # This is silly:
+    - "@Meson"
+   binaries:
+
+ - name: "@EssentialQtLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@CoreLibraries"
+    - "@X11Libraries"
+    - "@OpenGL"
+#   - "@DatabaseLibraries"
+    - "@PrintServer"
+    - "@PrintingLibraries"
+    - "@Multimedia"
+    - "@PlusLibraries"
+    - "@Glib2Networking"
+    - "@SmartcardLibraries"
+    - "@InputDeviceLibraries"
+   packages:
+    - qt6-base
+    - libqt5-qtbase
+   binaries:
+    - libQt6Concurrent6
+    - libQt6Core6
+    - libQt6DBus6
+    - libQt6Gui6
+    - libQt6Network6
+    - libQt6OpenGL6
+    - libQt6OpenGLWidgets6
+    - libQt6PrintSupport6
+    - libQt6Sql6
+    - libQt6Test6
+    - libQt6Widgets6
+    - libQt6Xml6
+    - libQt6Concurrent6
+    - libQt6Core6
+    - libQt6DBus6
+    - libQt6Gui6
+    - libQt6Network6
+    - libQt6OpenGL6
+    - libQt6OpenGLWidgets6
+    - libQt6PrintSupport6
+    - libQt6Sql6
+    - libQt6Test6
+    - libQt6Widgets6
+    - libQt6Xml6
+    - qt6-network-tls
+    - qt6-networkinformation-nm
+    - qt6-networkinformation-glib
+    - libQt5Concurrent5
+    - libQt5Core5
+    - libQt5DBus5
+    - libQt5Gui5
+    - libQt5Network5
+    - libQt5OpenGL5
+    - libQt5PrintSupport5
+    - libqt5-qtbase
+#   - libqt5-qtbase-examples
+#   - libqt5-qtbase-platformtheme-gtk3
+#   - libqt5-qtbase-platformtheme-xdgdesktopportal
+    - libQt5Test5
+    - libQt5Widgets5
+    - libQt5Xml5
+
+ - name: "@CommonQtExtRequirements"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libassimp5
+
+ - name: "@Qt5ExtendedLibraries"
+   api: "@Qt5ExtendedAPI"
+   sourceproject: Qt
+   requires:
+    - "@DevelopmentCore"
+    - "@EssentialQtLibraries"
+    - "@PulseAudioLibraries+x11"
+    - "@GStreamerPluginsBad"
+    - "@CommonQtExtRequirements"
+   binaries:
+    - libQtQuick5
+    - libQt5Multimedia5
+    - libQt5X11Extras5
+    - libQt5WaylandClient5
+    - libQt5Sql5
+    - libQt5Sql5-sqlite
+    - libQt5Svg5
+    - qtdeclarative-imports-provides-qt5
+    - qmlpluginexports-qt5
+
+ - name: "@Qt5ExtendedAPI"
+   sourceproject: Qt
+   autoselect: no
+   requires:
+    - "@Qt5StickyLumpOfLibraries"
+    - "@QtAPI"
+    - "@SystemdAPI"
+    - "@PulseAudioAPI"
+    - "@EssentialGraphicsAPI"
+    - "@XMLAPI"
+    - "@InputDeviceAPI"
+   binaries:
+    - libQt5Charts5-designer
+    - libQt5Charts5-devel
+    - libQt5*-devel priority=0
+    - libQt5*-devel-static priority=0
+    - libqt5*-devel priority=0
+    - libQt5Network-devel
+    - libQt5DBus-devel
+    - libQt5PlatformHeaders-devel
+    - libQt5Xml-devel
+    - libQt5*-private-headers-devel priority=0
+
+ - name: "@Qt5StickyLumpOfLibraries"
+   api: "@Qt5ExtendedAPI"
+   sourceproject: Qt
+   requires:
+    - "@Qt5ExtendedLibraries"
+    - "@SystemDatabaseLibraries"
+    - "@Gtk3"
+    - "@PlusLibraries"
+    - "@SpeechSynthesis"
+    - "@Spelling"
+   binaries:
+    - libqt5-qtdeclarative
+    - qtdeclarative-imports-provides-qt5
+    - libQt5Sql5-mysql
+    - libQt5Sql5-postgresql
+    - libQt5Sql5-unixODBC
+    - libQt5*
+    - libqt5-*
+
+ - name: "@QtQuickLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+   binaries:
+    - qt6-declarative-imports
+    - qt6-declarative
+    - libQt6Quick*
+    - libQt6Qml*
+    - libQt6Labs*
+    - qmlpluginexports-qt6
+
+ - name: "@QtMultimediaLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@Multimedia"
+    - "@PulseAudioLibraries"
+    - "@GStreamerLibraries"
+    - "@GStreamerPluginsBad"
+    - "@QtDatabaseLibraries"
+   binaries:
+    - qt6-multimedia
+    - libQt6Multimedia6
+
+ - name: "@QtDatabaseLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@SystemDatabaseLibraries"
+   binaries:
+    - qt6-sql-*
+
+ - name: "@Qt3DLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@QtMultimediaLibraries"
+    - "@CommonQtExtRequirements"
+   binaries:
+    - qt6-shadertools
+    - libQt6ShaderTools6
+    - libQt6SpatialAudio6
+    - libQt63D*
+
+ - name: "@QtDatabaseBindings"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@QtDatabaseLibraries"
+    - "@QtQuickLibraries"
+   binaries:
+ #  - qt6-multimedia-imports
+
+ - name: "@QtMultimediaBindings"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@QtMultimediaLibraries"
+    - "@QtQuickLibraries"
+    # qt6-multimedia-imports requires spatial audio, which in turn wants the 3D stuff
+    - "@Qt3DBindings"
+   binaries:
+    - qt6-multimedia-imports
+    - libQt6MultimediaQuick6
+
+ - name: "@Qt3DBindings"
+   sourceproject: Qt
+   requires:
+    - "@Qt3DLibraries"
+    - "@QtQuickLibraries"
+   binaries:
+    - qt6-quick3d
+    - qt6-quick3d-imports
+    - libQt6Quick3D*
+    - libQt63DQuick*
+
+ - name: "@QtAllBindings"
+   sourceproject: Qt
+   requires:
+    - "@QtDatabaseBindings"
+    - "@QtMultimediaBindings"
+    - "@Qt3DBindings"
+
+ - name: "@QtSpeechLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@SpeechSynthesis"
+    - "@QtQuickLibraries"
+    - "@QtMultimediaLibraries"
+   binaries:
+    - qt6-texttospeech
+    - libQt6TextToSpeech6
+
+ - name: "@QtGtkIntegration"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@GtkAllVersions"
+   binaries:
+
+ - name: "@QtBluetoothLibraries"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@BluetoothLibraries"
+   binaries:
+    - qt6-connectivity
+    - libqt5-qtconnectivity
+    - libqt5-qtconnectivity-tools
+
+ - name: "@Qt"
+   api: "@QtAPI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@QtDatabaseLibraries"
+    - "@QtMultimediaLibraries"
+    - "@QtGtkIntegration"
+    - "@QtBluetoothLibraries"
+    - "@Qt3DLibraries"
+    - "@QtAllBindings"
+    - "@Core0"
+    - "@X11"
+    - "@DefaultPython"
+    - "@OpenGL"
+    - "@Databases"
+    - "@PrintServer"
+    - "@Multimedia"
+    - "@PlusLibraries"
+    - "@Glib2Networking"
+    - "@SmartcardLibraries"
+    - "@PlusLibraries"
+   packages:
+    - python-qt5
+    - python-qt5-*
+    - python-PyQt6
+    - python-PyQt6-*
+    - python-pytest-qt
+   binaries:
+    - libQt6*
+    - qt6-*
+   buildflavors:
+    - name: nfc
+      requires:
+       - "@Smartcards"
+      binaries:
+#      - libQt5Nfc5
+#      - libQt6Nfc6
+    - name: meta
+      requires:
+#      - "@Qt-doc"
+       - "@LLVM"
+      binaries:
+       - qt6-tools
+       - qt6-tools-qdoc
+       - qt6-tools-helpgenerators
+       - qt6-docs-common
+
+ - name: "@PythonQtAPI"
+   sourceproject: Qt
+   requires:
+    - "@PythonQt"
+    - "@DefaultPythonAPI"
+    - "@Qt5ExtendedAPI"
+    - "@DefaultPythonGobjectAPI"
+   binaries:
+    - python${defaultPythonVersion}-qt5-devel
+
+ - name: "@PythonQt"
+   api: "@PythonQtAPI"
+   sourceproject: Qt
+   requires:
+    - "@Qt"
+    - "@DefaultPythonStandard"
+    - "@DBus"
+    - "@QtSpeechLibraries"
+    - "@Qt5StickyLumpOfLibraries"
+   binaries:
+    - python${defaultPythonVersion}-qt5
+    - python${defaultPythonVersion}-qt5-*
+    - python${defaultPythonVersion}-PyQt6
+    - python${defaultPythonVersion}-PyQt6-*
+    - python${defaultPythonVersion}-qtwebengine-qt5
+    - python${defaultPythonVersion}-qt3d-qt5
+    - python${defaultPythonVersion}-qtdatavis3d-qt5
+   buildflavors:
+    - name: llvm
+      requires:
+       - "@LLVM"
+      binaries:
+       - python3-pyside2
+#      - python3-pyside2-devel purpose=devel
+       - python3-pyside2-examples purpose=doc
+

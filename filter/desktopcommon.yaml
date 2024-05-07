@@ -1,0 +1,193 @@
+# vi: ai et
+# Definition of DesktopCommon component
+
+components:
+ - name: DesktopCommon
+   globals:
+    devel: DesktopCommonDevel
+   requires:
+    - Multimedia
+    - Systemd
+    - X11
+   imports:
+
+build_configs:
+ - name: DesktopCommon/standard
+   buildrequires:
+ - name: DesktopCommon/multimedia
+   buildrequires:
+
+groups:
+ - name: "@RemoteControlAPI"
+   sourceproject: DesktopCommon
+   requires:
+    - "@CoreAPI"
+    - "@RemoteControlLibraries"
+   binaries:
+    - lirc-devel
+
+ - name: "@RemoteControlLibraries"
+   api: "@RemoteControlAPI"
+   sourceproject: DesktopCommon
+   requires:
+    - "@USBLibraries"
+   binaries:
+    - liblirc0
+    - libirrecord0
+    - libirman0
+    - liblirc_client0
+    - liblirc_server0
+    - liblirc_driver0
+
+ - name: "@RemoteControl"
+   sourceproject: DesktopCommon
+   requires:
+    - "@RemoteControlLibraries"
+    - "@UdevLibraries"
+    - "@SystemdLibraries"
+    - "@SystemdServices"
+    - "@SystemPython"
+    - "@Glib2"
+    - "@Sound"
+   packages:
+    - lirc
+   binaries:
+   buildflavors:
+    - name: desktop
+      requires:
+       - "@GnomeVTE"
+       - "@Gtk3"
+      binaries:
+       - lirc-core
+       - lirc-drv-ftdi
+       - lirc-disable-kernel-rc
+       - lirc-tools-gui
+
+ - name: "@BluetoothAPI"
+   sourceproject: DesktopCommon
+   requires:
+    - "@X11API"
+    - "@Glib2API"
+    - "@GPU"
+    - "@BluetoothLibraries"
+    - "@InputDeviceLibraries"
+    - "@RemoteControlLibraries"
+    - "@OpticalMedia"
+    - "@MiscHardware"
+    - "@Sound"
+    - "@X86Libraries"
+   binaries:
+    - bluez-devel
+
+ - name: "@BluetoothLibraries"
+   api: "@BluetoothAPI"
+   sourceproject: DesktopCommon
+   requires:
+    - "@CoreLibraries"
+   binaries:
+    - libbluetooth3
+    - libsbc1
+
+ - name: "@BluetoothServices"
+   api: "@BluetoothAPI"
+   sourceproject: DesktopCommon
+   requires:
+    - "@BluetoothLibraries"
+    - "@CoreNetworkLibraries"
+    - "@Glib2"
+    - "@SystemdServices"
+    - "@UdevLibraries"
+    - "@Sound"
+   binaries:
+    - bluez
+    - bluez-deprecated
+   buildflavors:
+    - name: printing
+      requires:
+       - "@PrintServer"
+      binaries:
+       - bluez-cups
+    - name: test
+      requires:
+       - "@DefaultPythonStandard+dbus"
+      binaries:
+       - bluez-test
+    - name: desktop
+      requires:
+       - "@BluetoothServices+systemd"
+       - "@DesktopLibraries"
+      binaries:
+       - bluez-obexd
+
+ - name: "@BrailleAPI"
+   sourceproject: DesktopCommon
+   requires:
+    - "@BrailleLibraries"
+    - "@CoreAPI"
+   binaries:
+    - brlapi-devel
+
+ - name: "@BrailleLibraries"
+   api: "@BrailleAPI"
+   sourceproject: DesktopCommon
+   requires:
+    - "@CoreLibraries"
+    - "@SystemdLibraries"
+    - "@CoreHardware"
+    - "@Core0"
+    - "@PulseAudioUser"
+   binaries:
+    - libbrlapi0*
+    - libbraille
+    - libbraille0*
+    - system-user-brltty
+
+ - name: "@Braille"
+   sourceproject: DesktopCommon
+   requires:
+    - "@BrailleLibraries"
+    - "@UdevLibraries"
+    - "@SystemdServices"
+    - "@PulseAudioLibraries"
+    - "@AccessibilityLibraries"
+    - "@PlusLibraries"
+    - "@Console"
+    - "@Glib2"
+    - "@BluetoothServices"
+    - "@PolicyKit"
+   binaries:
+    - brltty
+    - brltty-utils
+    - brltty-udev-generic
+    - brltty-driver-*
+   buildflavors:
+    - name: ocaml
+      is_api: True
+      requires:
+       - "@Ocaml"
+      binaries:
+       - ocaml-brlapi
+    - name: python
+      requires:
+       - "@SystemPython"
+      binaries:
+       - python3-brlapi
+    - name: x11
+      requires:
+       - "@X11Libraries"
+      binaries:
+       - brltty-driver-xwindow
+       - xbrlapi
+    - name: tcl
+      requires:
+       - "@TclCore"
+      binaries:
+       - tcl-brlapi
+    - name: speech
+      requires:
+       - "@PulseAudioLibraries"
+       - "@SpeechSynthesis"
+      binaries:
+       - brltty-driver-espeak
+       - brltty-driver-speech-dispatcher
+

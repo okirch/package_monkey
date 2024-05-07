@@ -1,0 +1,198 @@
+# vi: ai et
+# Definition of Databases component
+
+components:
+ - name: Databases
+   globals:
+    devel: DatabasesDevel
+   requires:
+    - Core
+    - Network
+   exports:
+    - "@MariaDB10Libraries"
+    - "@Postgres15Libraries"
+    - "@SystemDatabaseLibraries"
+    - "@CommonDatabaseLibraries"
+
+build_configs:
+ - name: Databases/standard
+   buildrequires:
+    - "@CommonDatabaseAPI"
+
+groups:
+ - name: "@CommonDatabaseAPI"
+   sourceproject: Databases
+   requires:
+    - "@CommonDatabaseLibraries"
+    - "@CoreAPI"
+   binaries:
+    - freetds-devel
+    - libdbi-devel
+    - unixODBC-devel
+
+ - name: "@CommonDatabaseLibraries"
+   api: "@CommonDatabaseAPI"
+   sourceproject: Databases
+   requires:
+    - "@Core0"
+    - "@KerberosLibraries"
+   packages:
+    - unixODBC
+   binaries:
+    - libct4
+    - libdbi3
+    - libdbi-drivers-dbd-sqlite3
+    - libdbi-drivers-dbd-freetds
+    - unixODBC
+    - libtdsodbc0
+
+ - name: "@Postgres15API"
+   sourceproject: Databases
+   requires:
+    - "@CoreAPI"
+    - "@Postgres15Libraries"
+    - "@Postgres15"
+    - "@XMLAPI"
+    - "@KerberosAPI"
+   binaries:
+    - postgresql15-server-devel
+    - postgresq-server-devel
+
+ - name: "@Postgres15Libraries"
+   api: "@Postgres15API"
+   sourceproject: Databases
+   requires:
+    - "@CommonDatabaseLibraries"
+   packages:
+    - python-asyncpg
+    - python-psycopg
+   binaries:
+    - libpq5
+    - libecpg6
+    - libdbi-drivers-dbd-pgsql
+
+ - name: "@Postgres15"
+   api: "@Postgres15API"
+   sourceproject: Databases
+   requires:
+    - "@PlusLibraries"
+    - "@Postgres15Libraries"
+    - "@SystemdServices"
+    - "@SystemdLibraries"
+    - "@DefaultPython"
+    - "@PerlCore"
+    - "@LLVMRuntime"
+   binaries:
+    - postgresql-*
+    - postgresql15-*
+    - postgresql-plpython
+    - postgresql-contrib
+    - postgresql15-plpython
+    - postgresql15-contrib
+    - postgresql-devel          purpose=devel
+    - postgresql15-devel        purpose=devel
+    - postgresql15-devel-mini   purpose=devel
+   purposes:
+    - name: doc
+      binaries:
+       - postgresql-docs
+   buildflavors:
+    - name: tcl
+      requires:
+       - "@TclCore"
+      binaries:
+       - postgresql-pltcl
+       - postgresql15-pltcl
+    - name: test
+      binaries:
+       - postgresql-test
+       - postgresql15-test
+
+ - name: "@MariaDB10API"
+   sourceproject: Databases
+   requires:
+    - "@MariaDB10Libraries"
+    - "@CoreAPI"
+   binaries:
+    - judy-devel
+    - libmariadb-devel
+   buildflavors:
+    - name: server
+      requires:
+       - "@MariaDB10"
+      binaries:
+       - libmariadbd-devel
+
+ - name: "@MariaDB10Libraries"
+   api: "@MariaDB10API"
+   sourceproject: Databases
+   requires:
+    - "@CommonDatabaseLibraries"
+   binaries:
+    - libmariadb3
+    - libdbi-drivers-dbd-mysql
+    - libJudy1
+
+ - name: "@MariaDB10"
+   sourceproject: Databases
+   requires:
+    - "@MariaDB10Libraries"
+    - "@CoreNetworkLibraries"
+    - "@Core0"
+    - "@PerlCore"
+    - "@SystemdLibraries"
+    - "@DefaultPythonStandard"
+   packages:
+    - mariadb
+    - python-mysqlclient
+   binaries:
+    - perl-DBD-mysql
+    - libJudy1
+    - mariadb
+    - mariadb-client
+    - mariadb-errormessages
+    - libmariadbd19
+    - mariadb-bench
+    - mariadb-rpm-macros
+    - mariadb-tools
+   buildflavors:
+    - name: test
+      autoselect: no
+      requires:
+       - "@CoreServices+systemd"
+      binaries:
+       - mariadb-test
+
+ - name: "@Databases"
+   feature: True
+   sourceproject: Databases
+   requires:
+    - "@Postgres15"
+    - "@MariaDB10"
+    - "@DefaultPythonStandard"
+   packages:
+    - freetds
+   binaries:
+    - unixODBC
+    - freetds-tools
+#   - libsybdb5
+
+ - name: "@SystemDatabaseLibraries"
+   sourceproject: Databases
+   requires:
+    - "@MariaDB10Libraries"
+    - "@Postgres15Libraries"
+
+ - name: "@SystemDatabaseAPI"
+   is_api: True
+   sourceproject: Databases
+   requires:
+    - "@CommonDatabaseAPI"
+    - "@MariaDB10API"
+    - "@Postgres15API"
+
+ - name: "@SystemDatabaseServices"
+   sourceproject: Databases
+   requires:
+    - "@MariaDB10"
+    - "@Postgres15"

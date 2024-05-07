@@ -1,0 +1,783 @@
+# vi: ai et
+# Definition of Python component
+
+components:
+ - name: Python
+   globals:
+    devel: PythonDevel
+   requires:
+    - CorePlus
+   exports:
+    - "@PythonStandard310"
+    - "@PythonStandard311"
+    - "@PythonModules310"
+    - "@PythonModules311"
+
+build_configs:
+ - name: Python/standard
+   buildrequires:
+    - "@Javascript"
+    - "@Rust"
+    - "@Rust+python"
+ - name: Python/docbuild
+ - name: Python/python310
+   buildrequires:
+    - "@Graphviz"
+ - name: Python/python311
+   buildrequires:
+    - "@DevelopmentEssentials"
+
+groups:
+ - instantiate: PythonGroups:310
+ - instantiate: PythonGroups:311
+
+ # define labels @SystemPythonBlah, which is essentially a wrapper around
+ # PythonBlah${systemPythonVersion}
+ - instantiate: DefineSystemPythonAPI:API
+ - instantiate: DefineSystemPythonLabel:Essentials
+ - instantiate: DefineSystemPythonLabel:Modules
+ - instantiate: DefineSystemPythonLabel:HTML
+ - instantiate: DefineSystemPythonLabel:DocProcessing
+ - instantiate: DefineSystemPythonLabel:Publishing
+ - instantiate: DefineSystemPythonLabel:Security
+ - instantiate: DefineSystemPythonLabel:WebClient
+ - instantiate: DefineSystemPythonLabel:WebApplication
+ - instantiate: DefineSystemPythonLabel:Jaraco
+ - instantiate: DefineSystemPythonLabel:Standard
+
+ # Similer to the definitions of @SystemPythonBlah above, except that
+ # we're referring to ${defaultPythonVersion}
+ - instantiate: DefineDefaultPythonAPI:API
+ - instantiate: DefineDefaultPythonLabel:Core
+ - instantiate: DefineDefaultPythonLabel:OS
+ - instantiate: DefineDefaultPythonLabel:Essentials
+ - instantiate: DefineDefaultPythonLabel:HTML
+ - instantiate: DefineDefaultPythonLabel:DocProcessing
+ - instantiate: DefineDefaultPythonLabel:Publishing
+ - instantiate: DefineDefaultPythonLabel:Security
+ - instantiate: DefineDefaultPythonLabel:WebClient
+ - instantiate: DefineDefaultPythonLabel:WebApplication
+ - instantiate: DefineDefaultPythonLabel:Jaraco
+ - instantiate: DefineDefaultPythonLabel:Gobject
+ - instantiate: DefineDefaultPythonLabel:Graphics
+ - instantiate: DefineDefaultPythonLabel:Desktop
+ - instantiate: DefineDefaultPythonLabel:Standard
+ - instantiate: DefineDefaultPythonLabel:Modules
+ - instantiate: DefineDefaultPythonAPI:GobjectAPI
+ - instantiate: DefineDefaultPythonAPI:StandardAPI
+
+ # FIXME: nuke
+ - name: "@PythonCore"
+   # we do not accept any autoflavors:
+   compatibility: none
+   description: |
+     This is where we would add future python versions
+   sourceproject: Python
+   requires:
+    - "@PythonCore310"
+    - "@PythonCore311"
+
+ # FIXME: nuke
+ - name: "@Python"
+   # we do not accept any autoflavors:
+   compatibility: none
+   sourceproject: Python
+   requires:
+    - "@PythonCore310"
+    - "@PythonCore311"
+
+ - name: "@PythonData"
+   # we do not accept any autoflavors:
+   compatibility: none
+   sourceproject: Python
+   binaries:
+    - python-langtable-data
+
+ # FIXME: nuke
+ - name: "@PythonStandard"
+   # we do not accept any autoflavors:
+   compatibility: none
+   sourceproject: Python
+   requires:
+    - "@PythonStandard310"
+    - "@PythonStandard311"
+   buildflavors:
+    - name: desktop
+      requires:
+       - "@PythonStandard310+desktop"
+       - "@PythonStandard311+desktop"
+
+ # FIXME: nuke
+ - name: "@PythonModules"
+   # we do not accept any autoflavors:
+   compatibility: none
+   sourceproject: Python
+   requires:
+    - "@PythonStandard"
+    - "@PythonModules310"
+    - "@PythonModules311"
+
+ - name: "@SystemPythonBuildSupport"
+   # we do not accept any autoflavors:
+   compatibility: none
+   sourceproject: Python
+   requires:
+    - "@PythonDocProcessing311"
+    - "@PythonStandard311"
+   binaries:
+    - python3-gi-docgen
+    - waf
+
+ - name: "@PythonGObjectCommonAPI"
+   is_api: True
+   sourceproject: Python
+   requires:
+    - "@Glib2API"
+    - "@CairoAPI"
+   binaries:
+    - python-gobject-common-devel
+    - python-pycairo-common-devel
+
+ - name: "@SystemCython"
+   # we do not accept any autoflavors:
+   compatibility: none
+   sourceproject: Python
+   requires:
+    - "@Cython311"
+   buildflavors:
+    - name: desktop
+      requires:
+       - "@Cython311+desktop"
+
+ - name: "@Cython"
+   sourceproject: Python
+   requires:
+    - "@Cython310"
+    - "@Cython311"
+
+ - name: "@PythonCommonBuildDependencies"
+   is_api: True
+   sourceproject: Python
+   requires:
+    - "@MinimalCDevelopment"
+   binaries:
+   buildflavors:
+    - name: systemd
+      requires:
+       - "@SystemdAPI"
+      binaries:
+       - python-dbus-python-common-devel
+
+ - name: PythonDevel
+   requires:
+
+
+templates:
+ - name: DefineSystemPythonLabel
+   substitute: NAME
+   document:
+    - name: "@SystemPythonNAME"
+      sourceproject: Python
+      compatibility: none
+      inherit_all_flavors: yes
+      requires:
+       - "@PythonNAME${systemPythonVersion}"
+
+ - name: DefineSystemPythonAPI
+   substitute: NAME
+   document:
+    - name: "@SystemPythonNAME"
+      sourceproject: Python
+      compatibility: none
+      inherit_all_flavors: yes
+      is_api: true
+      requires:
+       - "@PythonNAME${systemPythonVersion}"
+
+ - name: DefineDefaultPythonLabel
+   substitute: NAME
+   document:
+    - name: "@DefaultPythonNAME"
+      sourceproject: Python
+      compatibility: none
+      inherit_all_flavors: yes
+      requires:
+       - "@PythonNAME${defaultPythonVersion}"
+
+ - name: DefineDefaultPythonAPI
+   substitute: NAME
+   document:
+    - name: "@DefaultPythonNAME"
+      sourceproject: Python
+      compatibility: none
+      inherit_all_flavors: yes
+      is_api: true
+      requires:
+       - "@PythonNAME${defaultPythonVersion}"
+
+ - name: PythonGroups
+   substitute: XXX
+   document:
+    - name: "@PythonXXX"
+      # buildconfig: Python/pythonXXX
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonCoreXXX"
+
+    - name: "@PythonOSXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@Core0"
+       - "@PythonXXX"
+       - "@PythonData"
+       - "@CoreServices+systemd"
+      binaries:
+       - pythonXXX-psutil
+
+    - name: "@PythonEssentialsXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonXXX"
+       - "@Core0"
+       - "@PythonData"
+       - "@ConfigFileLibraries"
+      binaries:
+       - pythonXXX-pycparser
+       - pythonXXX-cffi
+       - pythonXXX-zstandard
+       - pythonXXX-python-dateutil
+       - pythonXXX-arrow
+       - pythonXXX-typing_extensions
+       - pythonXXX-certifi
+       - pythonXXX-cryptography
+       - pythonXXX-idna
+       - pythonXXX-pyOpenSSL
+       - pythonXXX-path
+       - pythonXXX-pytz
+       - pythonXXX-PyYAML
+       - pythonXXX-importlib-metadata
+       - pythonXXX-zipp
+       - pythonXXX-virtualenv
+       - pythonXXX-filelock
+       - pythonXXX-distlib
+       - pythonXXX-platformdirs
+       - pythonXXX-typing_extensions
+       - pythonXXX-python-magic
+       - pythonXXX-distro
+       # essential or convenience?
+       - pythonXXX-more-itertools
+       - pythonXXX-autocommand
+       - pythonXXX-toml
+       - pythonXXX-tomli
+       - pythonXXX-tomli-w
+       - pythonXXX-zc.lockfile
+      buildflavors:
+       - name: desktop
+         requires:
+          - "@DesktopIcons"
+          - "@Glib2NoDBus"
+         binaries:
+          - pythonXXX-pyxdg
+       - name: obs
+         binaries:
+          - pythonXXX-pybeam
+          - pythonXXX-construct
+
+    - name: "@PythonWebDataXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonEssentialsXXX"
+      binaries:
+       - pythonXXX-python-mimeparse
+
+    - name: "@PythonWebClientXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonEssentialsXXX"
+       - "@PythonWebDataXXX"
+      binaries:
+       - pythonXXX-charset-normalizer
+       - pythonXXX-requests
+       - pythonXXX-requests-toolbelt
+       - pythonXXX-urllib3*
+       - pythonXXX-py
+       - pythonXXX-apipkg
+       - pythonXXX-iniconfig
+
+    - name: "@PythonWebApplicationXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonEssentialsXXX"
+       - "@PythonWebDataXXX"
+       - "@PythonJaracoXXX"
+      binaries:
+       - pythonXXX-CherryPy
+       - pythonXXX-portend
+       - pythonXXX-cheroot
+       - pythonXXX-tempora
+
+    - name: "@PythonTextProcessingXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonEssentialsXXX"
+      binaries:
+       - pythonXXX-Babel
+       - pythonXXX-Jinja2
+       - pythonXXX-MarkupSafe
+       - pythonXXX-Markdown
+       - pythonXXX-Pygments
+       - pythonXXX-rich
+       - pythonXXX-markdown-it-py
+       - pythonXXX-mdurl
+       - pythonXXX-mdit-py-plugins
+
+    - name: "@PythonHTMLXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonTextProcessingXXX"
+      binaries:
+       - pythonXXX-html5lib
+       - pythonXXX-webencodings
+
+    - name: "@PythonPackageManagerXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonEssentialsXXX"
+      binaries:
+       - pythonXXX-pip
+       - pythonXXX-pip-run
+
+    - name: "@PythonPackagingXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonEssentialsXXX"
+      binaries:
+       - pythonXXX-flit-core
+       - pythonXXX-flit-scm
+       - pythonXXX-setuptools_scm
+       - pythonXXX-pbr
+       - pythonXXX-wheel
+       - pythonXXX-semantic_version
+
+    - name: "@PythonDocProcessingXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonTextProcessingXXX"
+       - "@PythonWebClientXXX"
+       - "@PythonPackagingXXX"
+      binaries:
+       - pythonXXX-alabaster
+       - pythonXXX-docutils
+       - pythonXXX-sphinx*
+       - pythonXXX-Sphinx
+       - pythonXXX-Pallets-Sphinx-Themes
+       - pythonXXX-imagesize
+       - pythonXXX-snowballstemmer
+       - pythonXXX-myst-parser
+       # extensions
+       - pythonXXX-breathe
+       - pythonXXX-releases
+       - pythonXXX-readthedocs-sphinx-ext
+       # not used by anything
+       - pythonXXX-autodocsumm
+      buildflavors:
+       - name: tex
+         requires:
+          - "@Texlive"
+         binaries:
+          - pythonXXX-Sphinx-latex
+
+    - name: "@PythonSecurityXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonEssentialsXXX"
+       # fixme inversion:
+       - "@NetworkLibraries"
+      binaries:
+       - pythonXXX-jaraco.classes
+       - pythonXXX-keyring
+       - pythonXXX-jeepney
+       - pythonXXX-SecretStorage
+       - pythonXXX-PyNaCl
+
+    - name: "@PythonPublishingXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonPackagingXXX"
+       - "@PythonDocProcessingXXX"
+       - "@PythonHTMLXXX"
+       - "@PythonSecurityXXX"
+      binaries:
+       - pythonXXX-twine
+       - pythonXXX-pkginfo
+       - pythonXXX-readme_renderer
+       # for now
+       - pythonXXX-bleach
+       - pythonXXX-pkginfo
+       - pythonXXX-rfc3986
+
+    - name: "@PythonJaracoXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonSecurityXXX"
+       - "@PythonWebClientXXX"
+      binaries:
+       - pythonXXX-jaraco.*
+       # these are required by jaraco:
+       - pythonXXX-build
+       - pythonXXX-inflect
+       - pythonXXX-pydantic
+       - pythonXXX-pyproject-hooks
+       - pythonXXX-subprocess-tee
+
+    - name: "@PythonDevelopmentXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonPublishingXXX"
+       - "@PythonSecurityXXX"
+      binaries:
+
+    - name: "@PythonTestingXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonPackagingXXX"
+       - "@PythonWebDataXXX"
+      binaries:
+       - pythonXXX-linecache2
+       - pythonXXX-traceback2
+       - pythonXXX-testtools
+       - pythonXXX-fixtures
+       - pythonXXX-testscenarios
+       - pythonXXX-testtools
+
+    - name: "@PythonGobjectAPIXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonGobjectXXX"
+       - "@PythonAPIXXX"
+       - "@PythonDesktopXXX"
+       - "@PythonGObjectCommonAPI"
+       - "@PythonCommonBuildDependencies+systemd"
+       - "@SystemdAPI"
+      binaries:
+       - pythonXXX-gobject-devel
+       - pythonXXX-dbus-python-devel
+
+    - name: "@PythonGobjectXXX"
+      api: "@PythonGobjectAPIXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonCoreXXX"
+       - "@Glib2NoDBus"
+       - "@DBus"
+      binaries:
+       - pythonXXX-gobject
+       - pythonXXX-dasbus
+       - pythonXXX-dbus-python
+       - pythonXXX-notify2
+#      - pythonXXX-slip-dbus
+
+    - name: "@PythonGrapicsAPIXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonGraphicsXXX"
+       - "@PythonGobjectAPIXXX"
+      binaries:
+       - pythonXXX-pycairo-devel
+
+    - name: "@PythonGraphicsXXX"
+      api: "@PythonGrapicsAPIXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonCoreXXX"
+       - "@Glib2+python"
+       - "@GraphicsLibraries+x11"
+       - "@FontLibraries+x11"
+       - "@PythonCoreXXX+tcl"
+       - "@TclCore+x11"
+      binaries:
+       - pythonXXX-pycairo
+       - pythonXXX-cairocffi
+       - pythonXXX-CairoSVG
+       - pythonXXX-Pillow
+       - pythonXXX-bokeh
+       - pythonXXX-xyzservices
+       - pythonXXX-Pillow-tk
+       - pythonXXX-Django
+       - pythonXXX-pytest-django
+
+    # needed?
+    - name: "@PythonDesktopAPIXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+
+    - name: "@PythonDesktopXXX"
+      api: "@PythonDesktopAPIXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonCoreXXX"
+       - "@Glib2NoDBus"
+       - "@DBus"
+       - "@Glib2+python"
+       - "@GtkAllVersions"
+       - "@PythonGraphicsXXX"
+       - "@PythonGobjectXXX"
+       - "@PythonEssentialsXXX+desktop"
+      binaries:
+       - pythonXXX-gobject-*
+       - pythonXXX-Send2Trash
+       - pythonXXX-atspi
+
+    - name: "@PythonStandardAPIXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonStandardXXX"
+       - "@PythonAPIXXX"
+       - "@CoreAPI"
+       - "@GCC"
+      binaries:
+       - pythonXXX-sip6-devel
+       - pythonXXX-sip-devel
+      buildflavors:
+       - name: numeric
+         requires:
+          - "@PythonStandardXXX+numeric"
+          - "@CorePlusAPI"
+          - "@BoostAPI"
+          - "@PythonAPIXXX"
+         binaries:
+          - pythonXXX-numpy-devel
+          - pythonXXX-pythran
+       - name: network
+         requires:
+          - "@PythonStandardXXX+network"
+          - "@NetworkAPI"
+         binaries:
+          - pythonXXX-pyzmq-devel
+
+    - name: "@PythonStandardXXX"
+      api: "@PythonStandardAPIXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      note: |
+       We need to carefully avoid polluting the dependencies of this group
+       with anything that pulls in SystemPython or anything of that sort.
+      requires:
+       - "@PythonXXX"
+       - "@PythonPackagingXXX"
+       - "@PythonEssentialsXXX"
+       - "@PythonTextProcessingXXX"
+       - "@PythonWebClientXXX"
+       - "@PythonHTMLXXX"
+       - "@PythonJaracoXXX"
+       - "@PythonDocProcessingXXX"
+       - "@PythonPublishingXXX"
+       - "@PythonGobjectXXX"
+       - "@Core0+syspython"
+       - "@Glib2NoDBus"
+       - "@PythonData"
+       - "@TclCore"
+       - "@CoreNetworkLibraries"
+       - "@NumericLibraries"
+       - "@PlusLibraries"
+       - "@LUARuntime"
+      binaries:
+       - pythonXXX-invocations
+
+       - pythonXXX-attrs
+       - pythonXXX-bcrypt
+       - pythonXXX-beniget
+       - pythonXXX-blosc
+       - pythonXXX-cssselect
+   #   - pythonXXX-curses
+       - pythonXXX-decorator
+       - pythonXXX-docopt
+       - pythonXXX-future
+       - pythonXXX-magic
+       - pythonXXX-gast
+       - pythonXXX-ipaddr
+       - pythonXXX-langtable
+       - pythonXXX-lxml
+       - pythonXXX-pandas
+       - pythonXXX-pandas-*
+       - pythonXXX-pexpect
+       - pythonXXX-ply
+       - pythonXXX-pycurl
+       - pythonXXX-pyparsing
+       - pythonXXX-slip
+       - pythonXXX-tqdm
+       - pythonXXX-numpy
+       - pythonXXX-zope
+       - pythonXXX-zope.*
+      buildflavors:
+       - name: x11
+         requires:
+          - "@X11StandardUtils"
+          - "@PythonSecurityXXX"
+          - "@Git"
+         binaries:
+          - pythonXXX-pyperclip
+          - pythonXXX-hatch
+       - name: obsonly
+         requires:
+          - "@PythonStandardXXX+dbus"
+          - "@DBus+x11"
+         binaries:
+          # this is really used internally only
+          - pythonXXX-python-dbusmock
+       - name: tcl
+         requires:
+          - "@PythonCoreXXX+tcl"
+          - "@TclCore+x11"
+         binaries:
+          - pythonXXX-Pympler
+       - name: database
+         requires:
+          - "@SystemDatabaseLibraries"
+         binaries:
+          - pythonXXX-pandas-postgresql
+       - name: numeric
+         requires:
+          - "@NumericLibraries"
+         binaries:
+       - name: kernel
+         requires:
+          - "@Kernel"
+         binaries:
+          - pythonXXX-pandas-fss
+          - pythonXXX-libkdumpfile
+          - pythonXXX-drgn
+       - name: hpc
+         requires:
+          - "@Infiniband"
+          - "@HPC"
+          - "@CythonXXX"
+         binaries:
+          - pythonXXX-pandas-hdf5
+       - name: graphviz
+         requires:
+          - "@Graphviz+gtk"
+         binaries:
+          - pythonXXX-graphviz
+          - pythonXXX-objgraph
+       - name: network
+         requires:
+          - "@NetworkLibraries"
+         binaries:
+          - pythonXXX-pyzmq
+
+    - name: "@PythonModulesXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonStandardXXX"
+      binaries:
+       - pythonXXX-numba
+       - pythonXXX-pandas-performance
+      buildflavors:
+       - name: qt
+         requires:
+          - "@PythonQt"
+         binaries:
+          - pythonXXX-pandas-clipboard
+
+    - name: "@PythonBuildSupportXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonStandardXXX"
+      binaries:
+
+    - name: "@PythonMatplotXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonOSXXX"
+       - "@PythonGraphicsXXX"
+       - "@TclCore+x11"
+      binaries:
+       - pythonXXX-matplotlib
+       - pythonXXX-matplotlib-tk
+       - pythonXXX-pandas-plot
+      buildflavors:
+       - name: qt
+         requires:
+          - "@PythonQt"
+         binaries:
+          - pythonXXX-matplotlib-qt*
+       - name: gnome
+         requires:
+          - "@Gnome"
+          - "@DefaultPythonDesktop"
+         binaries:
+          - pythonXXX-matplotlib-gtk*
+       - name: tex
+         requires:
+          - "@Texlive"
+         binaries:
+          - pythonXXX-matplotlib-latex
+       - name: wxwidgets
+         requires:
+          - "@WxWidgets"
+         binaries:
+          - pythonXXX-matplotlib-wx
+
+    - name: "@PythonDaskXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonStandardXXX+kernel"
+       - "@PythonPublishingXXX"
+       - "@PythonGraphicsXXX"
+      binaries:
+       - pythonXXX-dask*
+
+    - name: "@CythonXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonAPIXXX"
+       - "@PythonCoreXXX"
+      binaries:
+       - pythonXXX-Cython
+       - pythonXXX-Cython0
+       - pythonXXX-Cython3
+
+    - name: "@PythonWeirdXXX"
+      sourceproject: Python
+      disposition: ignore
+#     requires:
+#      - "@PythonModulesXXX"
+#      - "@PythonModulesXXX+qt"
+#      - "@PythonStandardXXX+qt"
+#      - "@PythonStandardXXX+kernel"
+#      - "@PythonStandardXXX+hpc"
+#      - "@PythonStandardXXX+database"
+#      - "@PythonQt"
+#      - "@PythonMatplotXXX"
+      binaries:
+       - pythonXXX-pandas-all
+

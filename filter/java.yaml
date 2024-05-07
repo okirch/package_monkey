@@ -1,0 +1,323 @@
+# vi: ai et
+# Definition of Java component
+
+components:
+ - name: Java
+   globals:
+    devel: JavaDevel
+   requires:
+    - CorePlus
+    - Security
+    - Systemd
+    - Perl
+    - Python
+   exports:
+    - "@JDK"
+
+build_configs:
+ - name: Java/standard
+   buildrequires:
+    - "@DevelopmentEssentials"
+ - name: Java/apachecommons
+   buildrequires:
+    - "@ApacheAnt"
+    - "@ApacheCommons"
+ - name: Java/maven
+   buildrequires:
+    - "@Maven"
+ - name: Java/openjdk
+   buildrequires:
+    - "@JDK"
+    - "@DesktopQuarks"
+    - "@PolicyKit"
+    - "@Smartcards"
+    - "@DesktopIcons"
+    - "@EssentialGraphicsAPI"
+    - "@PrintingAPI"
+    - "@FontLibsAPI+x11"
+    - "@AvahiAPI"
+    - "@SystemtapAPI"
+    - "@GtkAPIs"
+    - "@AccessibilityAPI"
+
+groups:
+ - name: "@JDK"
+   sourceproject: Java
+   requires:
+    - "@Core"
+    - "@X11Libraries"
+    - "@AudioLibraries"
+    - "@GraphicsLibraries"
+    - "@Smartcards"
+    - "@KernelNetworkUtils"
+   binaries:
+    - javapackages-tools
+    - javapackages-filesystem
+    - java-1_8_0-openjdk
+    - java-1_8_0-openjdk-demo
+    - java-1_8_0-openjdk-headless
+    - java-1_8_0-openjdk-src
+    # Explicitly make this a regular package rather than a -devel one
+    - java-1_8_0-openjdk-devel
+    - java-11-openjdk
+    - java-11-openjdk-demo
+    - java-11-openjdk-headless
+    - java-11-openjdk-src
+    - java-11-openjdk-jmods
+    - java-11-openjdk-javadoc
+    # Explicitly make this a regular package rather than a -devel one
+    - java-11-openjdk-devel priority=0
+    - java-17-openjdk
+    - java-17-openjdk-demo
+    - java-17-openjdk-headless
+    - java-17-openjdk-src
+    - java-17-openjdk-jmods
+    - java-17-openjdk-javadoc
+    # Explicitly make this a regular package rather than a -devel one
+    - java-17-openjdk-devel priority=0
+    - java-21-openjdk
+    - java-21-openjdk-demo
+    - java-21-openjdk-headless
+    - java-21-openjdk-src
+    - java-21-openjdk-jmods
+    - java-21-openjdk-javadoc
+    # Explicitly make this a regular package rather than a -devel one
+    - java-21-openjdk-devel priority=0
+    # this is from timezone:java (timezone itself lives in Core)
+    - timezone-java
+    # this is from libdb-4_8:libdb_java-4_8 (libdb-4_8 itself lives in Core)
+    - libdb_java-4_8
+   buildflavors:
+    - name: accessibility
+      requires:
+       - "@AccessibilityLibraries"
+      binaries:
+       - java-atk-wrapper
+       - java-1_8_0-openjdk-accessibility
+
+ - name: "@JavaTimezoneTools"
+   sourceproject: Java
+   requires:
+   binaries:
+    - javazic
+    - tzdb
+
+ - name: "@ApacheCommonsMinimal"
+   sourceproject: Java
+   description: |
+     This is a minimal set of java classes that we need to building other
+     packages in OBS
+   requires:
+    - "@Core0"
+    - "@JDK"
+   binaries:
+    - apache-pdfbox
+    - xml-commons-apis
+    - xmlgraphics-batik
+    - xmlgraphics-batik-css
+    - xmlgraphics-commons
+    - xmlgraphics-fop
+    - apache-commons-logging
+    - apache-commons-io
+    - qdox
+    - qdox
+    - glassfish-servlet-api
+
+ - name: "@JavaAPI"
+   sourceproject: Java
+   requires:
+    - "@Java"
+   binaries:
+    - javacc
+    - javacc-bootstrap
+    - javacc-manual purpose=doc
+    - javacc-javadoc purpose=doc
+    - javacc-demo purpose=doc
+
+ - name: "@Java"
+   api: "@JavaAPI"
+   feature: True
+   sourceproject: Java
+   requires:
+    - "@JDK"
+    - "@NetworkLibraries+java"
+    - "@DefaultPythonStandard"
+    - "@ApacheCommonsMinimal"
+   binaries:
+    - mx4j
+    - java-*
+    - javapackages-*
+    - slf4j
+    - reload4j
+    - picocli
+    - scala
+    - osgi-core
+    - osgi-compendium
+    - osgi-annotation
+    - antlr
+    - antlr-bootstrap
+    - jdepend
+    - jakarta-mail
+    - regexp
+    - servletapi4
+    - servletapi5
+    - jlex
+    - junit5
+    - ecj
+    - oro
+    - xpp3
+    - avalon-logkit
+    - mysql-connector-java
+    - jline1
+    - libreadline-java
+    - javapackages-local
+    - javapackages-ivy
+    - felix-utils
+    - relaxngDatatype
+    - jaxen
+    - jaxen-bootstrap
+    - felix-bundlerepository
+    - jline
+    - truth
+    - auto
+    - auto-javadoc
+    - auto-value
+    - auto-value-parent
+    - auto-common
+    - auto-service
+    - auto-service-annotations
+    - auto-value-annotations
+    - dom4j
+    - dom4j-bootstrap
+    - javassist
+    - javassist-manual purpose=doc
+    - javassist-javadoc purpose=doc
+    - saxpath
+    - saxpath-javadoc
+    - apiguardian
+    - apiguardian-javadoc
+    - j2objc-annotations
+    - j2objc-annotations-javadoc purpose=doc
+    - jackson-*
+    - jetbrains-*
+    - icu4j-*
+    - jzlib
+    - google-errorprone-annotations
+    - google-errorprone-annotations-javadoc purpose=doc
+    - rhino
+    - bouncycastle*
+   buildflavors:
+    - name: obsonly
+      requires:
+       - "@ManDoc"
+      binaries:
+       - byaccj
+   purposes:
+    - name: doc
+      binaries:
+       - junit5-guide
+       - jzlib-demo
+       - jzlib-javadoc
+
+ - name: "@ApacheCommons"
+   sourceproject: Java
+   requires:
+    - "@Core0"
+    - "@Java"
+    - "@ApacheCommonsMinimal"
+   binaries:
+    - apache-commons-*
+    - apache-commons-lang
+    - xmlgraphics-*
+    - xml-commons-apis-bootstrap
+    - xml-commons-resolver
+    - xml-commons-resolver-bootstrap
+    - xml-commons-which
+    - xml-commons-which-bootstrap
+    - httpcomponents-core
+    - httpcomponents-client
+    - slf4j-jcl
+    - bcel
+    - jing
+    - jtidy
+    - jtidy-scripts
+    - snakeyaml
+    - saxon10-scripts
+    - wsdl4j
+    - xmlunit
+    - xom
+    - xom-demo
+    - isorelax
+    - trang
+    - xalan-j2-xsltc
+    - testng
+
+ - name: "@ApacheAnt"
+   sourceproject: Java
+   requires:
+    - "@ApacheCommons"
+#   - "@ApacheCommons-devel"
+   binaries:
+    - ant
+    - ant-scala
+    - ivy-local
+
+ - name: "@Maven"
+   sourceproject: Java
+   requires:
+    - "@Java"
+    - "@ApacheCommons"
+    - "@ApacheAnt"
+    - "@Plexus"
+   binaries:
+    - maven
+    - maven-local
+    - maven-surefire
+    - maven-wagon*
+    - maven-shared
+    - maven-parent
+    - maven-dependency-tree
+    - maven-invoker
+    - maven-script-interpreter
+    # these are placed in Maven as maven is currently the sole consumer
+    - sonatype-*
+    - trilead-ssh2
+    - google-gson
+    - auto-service-aggregator
+    - xmvn-parent
+    - felix-parent
+
+ - name: "@Plexus"
+   sourceproject: Java
+   requires:
+    - "@Java"
+    - "@ApacheCommons"
+    - "@ApacheAnt"
+   binaries:
+    - plexus-ant-factory
+    - plexus-archiver
+    - plexus-bsh-factory
+    - plexus-build-api
+    - plexus-cipher
+    - plexus-classworlds
+    - plexus-cli
+    - plexus-compiler
+    - plexus-component-api
+    - plexus-component-metadata
+    - plexus-containers
+    - plexus-i18n
+    - plexus-interactivity
+    - plexus-interpolation
+    - plexus-io
+    - plexus-languages
+    - plexus-metadata-generator
+    - plexus-pom
+    - plexus-sec-dispatcher
+    - plexus-utils
+    - plexus-velocity
+#   - plexus-containers:plexus-component-metadata
+#   - plexus-containers:plexus-metadata-generator
+
+
+
+

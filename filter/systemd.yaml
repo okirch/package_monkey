@@ -1,0 +1,381 @@
+# vi: ai et
+# Definition of Systemd component
+
+components:
+ - name: Systemd
+   globals:
+    devel: SystemdDevel
+   requires:
+    - CorePlus
+    - Host
+    - Network
+    - KernelPlus
+    - Security
+    - HardwareAccess
+   exports:
+    - "@SystemdLibraries"
+    - "@UdevLibraries"
+    - "@DBusService"
+    - "@SystemdServices"
+    - "@PolicyKit"
+
+build_configs:
+ - name: Systemd/standard
+   buildrequires:
+    - "@I18nTools"
+    - "@Vala"
+ - name: Systemd/build:systemd
+   buildrequires:
+    - "@LLVM"
+    - "@DevelopmentCore+llvm"
+    - "@PolicyKit"
+    - "@CoreCryptoAPI"
+    - "@Meson"
+
+groups:
+ - name: "@PolicyKitAPI"
+   sourceproject: Systemd
+   requires:
+    - "@PolicyKitLibraries"
+    - "@Glib2API"
+    - "@CoreAPI"
+    # for libdultape:
+    - "@Core1"
+   binaries:
+    - polkit-devel
+
+ - name: "@PolicyKitLibraries"
+   api: "@PolicyKitAPI"
+   sourceproject: Systemd
+   requires:
+    - "@Glib2"
+    - "@SystemdLibraries"
+   binaries:
+    - libpolkit-*
+    - typelib-*-Polkit*
+
+ - name: "@PolicyKit"
+   sourceproject: Systemd
+   requires:
+    - "@Core"
+    - "@PolicyKitLibraries"
+   binaries:
+    - polkit
+    - rtkit
+
+ - name: SystemdDevel
+   requires:
+    - "@SystemdAPI"
+
+ - name: "@SystemdAPI"
+   sourceproject: Systemd
+   requires:
+    - "@CoreAPI"
+    - "@SystemdLibraries"
+    - "@CorePlusAPI"
+    # why do dbus-1-*devel require dbus-1?
+    - "@DBus"
+   binaries:
+    - systemd-mini-devel
+    - dbus-1-devel
+    - dbus-1-glib-devel
+
+ - name: "@UdevLibraries"
+   sourceproject: Systemd
+   requires:
+    - "@Core0"
+   packages:
+    - python-pyudev
+   binaries:
+    - libudev1
+    - libudev-mini1
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPythonCore"
+      binaries:
+       - python${systemPythonVersion}-pyudev
+
+ - name: "@SystemdLibraries"
+   sourceproject: Systemd
+   api: "@SystemdAPI"
+   requires:
+    - "@Core0"
+    - "@UdevLibraries"
+    - "@ArchivingLibraries"
+   packages:
+    - libbytesize
+   binaries:
+    - libsystemd0-mini
+    - libsystemd0
+    - libdbus-1-*
+    - libdbus-c++-1-*
+    - dbus-1-common
+    - libbytesize1
+    - bscalc
+    - libhavege2
+    - libblogger2
+    - libduktape2*
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPython"
+      binaries:
+       - python3-libbytesize
+    - name: glibc
+      requires:
+       - "@Glib2NoDBus"
+      binaries:
+       - libdbus-c++-glib-1*
+      purposes:
+       - name: doc
+      binaries:
+       - libdbus-c++-api-docs
+
+ - name: "@SystemdUtilities"
+   sourceproject: Systemd
+   requires:
+    - "@Core1"
+    - "@CoreServices"
+    - "@SystemdLibraries"
+    - "@SystemPython"
+
+ - name: "@DBusService"
+   sourceproject: Systemd
+   requires:
+    - "@Core0"
+    - "@SystemdLibraries"
+    - "@Glib2NoDBus"
+    - "@CoreXMLLibraries"
+   binaries:
+    - dbus-1
+
+ - name: "@DBus"
+   sourceproject: Systemd
+   api: "@SystemdAPI"
+   requires:
+    - "@Core0"
+    - "@UdevLibraries"
+    - "@SystemdLibraries"
+    - "@Glib2"
+    - "@DBusService"
+   packages:
+    - libsecret
+   binaries:
+    - dbus-1-glib
+    - libdbus-glib-1*
+    - libsecret-1*
+    - libsoup-2*
+    - typelib-1_0-Soup-2*
+   buildflavors:
+    - name: x11
+      augments:
+       - "@X11Libraries"
+      binaries:
+       - dbus-1-x11
+
+ - name: "@SystemdServices"
+   sourceproject: Systemd
+   requires:
+    - "@Core0"
+    - "@KernelCore"
+   binaries:
+
+ - name: "@SystemdOnlyForOBS"
+   sourceproject: Systemd
+   requires:
+    - "@Core0"
+    - "@KernelCore"
+   binaries:
+    - systemd-mini
+    - udev-mini
+
+ - name: "@MinimalSystemd"
+   sourceproject: Systemd
+   api: "@SystemdAPI"
+   requires:
+    - "@Core0"
+    - "@KernelLibraries"
+    - "@Core0+kernellibs"
+    - "@DBus"
+    - "@SystemdLibraries"
+    - "@UdevLibraries"
+    - "@KernelCore"
+    - "@SELinux"
+    - "@NetworkCore"
+    - "@SystemdServices"
+    - "@PlusLibraries"
+   packages:
+    - python-systemd
+   binaries:
+    - acct
+    - biosdevname
+    - blog
+    - haveged
+    - libudisks2
+    - sysconfig
+    - sysconfig-netconfig
+    - systemd
+    - systemd-*
+    - udev
+    - rebootmgr
+#   - btrfsprogs-udev-rules
+   buildflavors:
+    - name: test
+      is_api: True
+      requires:
+       - "@DevelopmentEssentials"
+       - "@CoreAPI"
+       - "@HostNetworking"
+       - "@HostStorage"
+       - "@Virtualization"
+       - "@Busybox"
+       - "@CoreCryptoAPI"
+       - "@MinimalSystemd+python"
+       - "@CoreAPI"
+       - "@PlatformCryptoAPI"
+      binaries:
+       - systemd-testsuite
+    - name: python
+      requires:
+       - "@SystemPython"
+      binaries:
+       - systemd-experimental
+    - name: zypp
+      requires:
+       - "@PlusUtilities"
+       - "@Zypper"
+      binaries:
+       - os-update
+
+ - name: "@StorageServiceAPI"
+   sourceproject: Systemd
+   requires:
+    - "@StorageServices"
+    - "@StorageAPI"
+    - "@KernelAPI+udev"
+    - "@SystemdAPI"
+    - "@PolicyKitAPI"
+
+ - name: "@StorageServices"
+   api: "@StorageServiceAPI"
+   sourceproject: Systemd
+   requires:
+    - "@MinimalSystemd"
+    - "@HostStorage"
+    - "@Glib2"
+    - "@Core+kernellibs"
+    - "@PolicyKit"
+    - "@CoreHardware"
+    - "@KernelLibraries+udev"
+    - "@KernelCore+systemdlibs"
+    - "@InputDeviceLibraries"
+    - "@StorageDeviceLibraries"
+    - "@Filesystems"
+   packages:
+    - libblockdev
+   binaries:
+    - udisks2
+    - libblockdev
+    - accountsservice
+   buildflavors:
+    - name: python
+      requires:
+       - "@CoreHardware+python"
+
+ - name: "@LegacyServices"
+   sourceproject: Systemd
+   requires:
+    - "@Core"
+    - "@MinimalSystemd"
+    - "@NetworkManager"
+   binaries:
+    - syslogd
+    - rsyslog
+    - sysvinit-tools
+
+ - name: "@FirewallAPI"
+   sourceproject: Systemd
+   requires:
+    - "@Firewall"
+   binaries:
+    - firewall-macros
+
+ - name: "@Firewall"
+   api: "@FirewallAPI"
+   sourceproject: Systemd
+   requires:
+    - "@SystemPython"
+    - "@NetworkCore"
+    - "@NetworkManager"
+    - "@KernelNetworkUtils+python"
+    - "@DefaultPythonGobject"
+   binaries:
+    - firewalld
+    - python3-firewall
+   buildflavors:
+    - name: systemdlibs
+      requires:
+       - "@Core+systemdlibs"
+      binaries:
+    - name: gui
+      requires:
+       - "@Gnome"
+       - "@PythonQt"
+       - "@DefaultPythonDesktop"
+      binaries:
+       - firewall-config
+       - firewall-applet
+
+ - name: "@NetworkManagerAPI"
+   sourceproject: Systemd
+   requires:
+    - "@NetworkManager"
+    - "@CoreAPI"
+    - "@Glib2API"
+
+ - name: "@NetworkManager"
+   api: "@NetworkManagerAPI"
+   sourceproject: Systemd
+   requires:
+    - "@HostNetworking"
+    - "@MinimalSystemd"
+    - "@AvahiLibraries"
+    - "@DesktopIcons"
+    - "@Console"
+    - "@PolicyKit"
+    - "@Kernel"         # for openvswitch
+    - "@NetworkAnalysis+systemd"
+    - "@InputDeviceLibraries"
+   packages:
+    - NetworkManager
+   binaries:
+    - libnm0
+    - NetworkManager
+    - NetworkManager-wwan
+    - NetworkManager-pppoe
+    - NetworkManager-branding-SLE
+    - NetworkManager-branding-upstream
+    - NetworkManager-cloud-setup
+    - NetworkManager-tui
+    - typelib-1_0-NM-1_0
+    - libmm-glib0
+    - ModemManager
+    - ppp
+    - rp-pppoe
+    - mobile-broadband-provider-info
+   buildflavors:
+    - name: bluetooth
+      requires:
+       - "@BluetoothLibraries"
+      binaries:
+       - NetworkManager-bluetooth
+    - name: gui
+      requires:
+       - "@Gnome"
+       - "@EssentialQtLibraries"
+       - "@PythonStandard+desktop"
+      binaries:
+       - firewall-config
+       - firewall-applet
+

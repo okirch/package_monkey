@@ -1,0 +1,364 @@
+# vi: ai et
+# Definition of X11 component
+
+components:
+ - name: X11
+   globals:
+    devel: X11Devel
+   requires:
+    - CorePlus
+    - Systemd
+    - Multimedia
+    - Typesetting
+    - KernelPlus
+    - LLVM
+   exports:
+    - "@X11Libraries"
+    - "@X11StandardUtils"
+    - "@AccessibilityLibraries"
+    - "@OpenGL"
+    # this is really just exported for devel labels
+    - "@X11API"
+
+build_configs:
+ - name: X11/standard
+   buildrequires:
+    - "@I18nTools"
+    - "@NetworkAPI"
+    - "@FirewallAPI"
+    - "@DevelopmentGoogleTest"
+ - name: X11/llvm
+   buildrequires:
+    - "@LLVMAPI"
+
+groups:
+ - name: "@X11API"
+   sourceproject: X11
+   requires:
+    - "@KernelAPI"
+    - "@X11Libraries"
+    - "@FontLibsAPI"
+    - "@CoreAPI"
+    - "@CoreX11API"
+    - "@OpenGL"
+    - "@Meson"
+   binaries:
+    - libXcursor-devel
+    - libXdamage-devel
+    - libXinerama-devel
+    - libXrandr-devel
+    - libXt-devel
+    - libXtst-devel
+    - libxkbcommon-devel
+    - libfontenc-devel
+    - wayland-devel
+    - wayland-protocols-devel
+
+    # do we need @OpenGLAPI?
+    - libgbm-devel      priority=0
+    - Mesa-devel        priority=0
+    - Mesa-*-devel      priority=0
+    - libepoxy-devel
+    - glu-devel
+    - libOSMesa-devel
+    - libglvnd-devel
+
+    # for the time being, we need to specify the following packages explicitly. The solver
+    # will only label foobar-devel packages correctly if there is a corresponding
+    # foobar package somewhere.
+    - xcb-proto-devel
+    - fontcacheproto-devel
+    - printproto-devel
+    - pthread-stubs-devel
+    - util-macros-devel
+    - python3-xcb-proto-devel
+
+ - name: "@X11LegacyAPI"
+   is_api: True
+   sourceproject: X11
+   requires:
+    - "@X11API"
+   binaries:
+    - imake
+    - xorg-cf-files
+    - makedepend
+    - gccmakedep
+
+ - name: "@X11Legacy"
+   sourceproject: X11
+   requires:
+    - "@X11"
+    - "@TclCore"
+   packages:
+    - libFS
+   binaries:
+    - x3270
+    - libFS6
+
+ - name: "@X11ServerSDK"
+   sourceproject: X11
+   requires:
+    - "@SystemdAPI"
+    - "@InputDeviceAPI"
+    - "@X11API"
+    - "@X11LegacyAPI"
+    - "@X11Server"
+   binaries:
+    - xorg-x11-server-sdk
+    - libxcvt-devel
+
+ - name: X11Devel
+   requires:
+    - CoreDevel
+    - "@X11API"
+   binaries:
+
+ - name: "@DesktopCore"
+   sourceproject: X11
+   requires:
+    - "@Core0"
+    - "@Perl"
+    - "@FontLibraries"
+    - "@SystemdLibraries"
+   binaries:
+    - xdg-utils
+
+ - name: "@DesktopBuild"
+   sourceproject: X11
+   requires:
+    - "@DesktopCore"
+
+ - name: "@X11Libraries"
+   sourceproject: X11
+   api: "@X11API"
+   requires:
+    - "@CoreX11Libraries"
+    - "@FontLibraries"
+    - "@Fonts"
+#   - "@DesktopCore"
+    # the only reason this is here is imlib2-loaders which requires libheif1
+    # which implements AVIF by using libdav1d
+    - "@EssentialVideoLibraries"
+    - "@KernelLibraries"
+   binaries:
+    - libwayland-client0
+    - libnvidia-egl-wayland
+    - libXaw3d6
+    - libXaw3d7
+    - libXaw3d8
+    - libxkbcommon0
+    - libxkbcommon-x11-0
+    - libXcursor1
+    - libxvct0
+    - libXdmcp6
+    - libXinerama1
+    - libXrandr2
+    - libxshmfence1
+    - libXt
+    - libXtst6
+    - libXv1
+    - libXxf86vm1
+    - libXprintUtil1
+    - libXp6
+    - libXRes1
+    - libXxf86dga1
+    - xaw3dd
+    - libXdamage1
+    - util-macros
+    - xkeyboard-config
+    - xkeyboard-config-lang
+    - libXevie1
+    - libXfontcache1
+    - libXfont1
+    - libXfont2*
+    - libxkbui1
+    - libXprintAppUtil1
+    - libXvMC1
+    - libdmx1
+    - liblbxutil1
+    - liboldX6
+    - xtrans
+    - libfontenc1
+   buildflavors:
+    - name: gdk
+      requires:
+       - "@GdkPixbuf"
+      binaries:
+    - name: multimedia
+      requires:
+       - "@GraphicsLibraries"
+      binaries:
+       - imlib2
+       - imlib2-loaders
+
+ - name: "@X11StandardUtils"
+   sourceproject: X11
+   requires:
+    - "@X11Libraries"
+    - "@CoreX11Utils"
+   binaries:
+    - xauth
+    - xdpyinfo
+    - xclip
+    - xsel
+    - xset
+    - xsetroot
+
+ - name: "@X11"
+   sourceproject: X11
+   requires:
+    - "@X11Libraries"
+    - "@X11StandardUtils"
+   binaries:
+    - mkfontdir
+    - mkfontscale
+    - setxkbmap
+    - wayland*
+    - xcb-*
+    - xconsole
+    - xdmbgrd
+    - xf86*
+    - xineramaproto
+    - xinit
+    - xkbcomp
+#   - xkeyboard-config
+    - xmessage
+    - xmodmap
+    - xorg-*
+    - xprop
+    - xproto
+    - xrandr
+    - xrdb
+    - xrdp
+    - xrefresh
+    - xscreensaver
+    - xterm
+    - xtermset
+    - xcursorgen
+    - xeyes
+    - x11-tools
+    - fonttosfnt
+
+
+ - name: "@WaylandLibraries"
+   sourceproject: X11
+   requires:
+    - "@FontLibraries+x11"
+    - "@X11Libraries"
+    # libdecor wants libdbus *shrug*
+    - "@SystemdLibraries"
+   packages:
+    - libdecor
+    - libei
+   binaries:
+    - libdecor-0*
+    - libei1
+
+ - name: "@X11Server"
+   api: "@X11ServerSDK"
+   sourceproject: X11
+   requires:
+    - "@X11"
+    - "@OpenGL"
+    - "@WaylandLibraries"
+    - "@InputDeviceLibraries"
+    - "@NetworkLibraries"
+    # both x11-xorg-server and xwayland want pkgconfig
+    - "@MinimalCDevelopment"
+   packages:
+    - libxcvt
+   binaries:
+    - xorg-x11-server
+    - xorg-x11-server-*
+    - xdm
+    - xf86-input-libinput
+    - xf86-video-amdgpu
+    - xf86-video-ati
+    - xf86-video-qxl
+    - xf86-video-vmware
+    - xwayland
+   buildflavors:
+    - name: spice
+      requires:
+       - "@Virtualization"
+      binaries:
+       - xorg-x11-server-Xspice
+    - name: test
+      binaries:
+       - rendercheck
+
+ - name: "@X11Applications"
+   sourceproject: X11
+   requires:
+    - "@X11Libraries"
+   binaries:
+
+ - name: "@AccessibilityLibraries"
+   api: "@AccessibilityAPI"
+   sourceproject: X11
+   requires:
+    - "@Core0"
+    - "@DBus"
+    - "@Glib2"
+    - "@X11"
+   binaries:
+    - at-spi2*
+    - libatk-1*
+    - libatkmm-1*
+    - libatk-bridge-2*
+    - libatspi0
+
+ - name: "@AccessibilityAPI"
+   sourceproject: X11
+   requires:
+    - "@AccessibilityLibraries"
+    - "@Glib2API"
+    - "@X11API"
+    - "@SystemdAPI"
+   binaries:
+    - at-spi2-core-devel
+
+ - name: "@OpenGLAPI"
+   sourceproject: X11
+   requires:
+    - "@OpenGL"
+    - "@X11API"
+   binaries:
+    - libXNVCtrl-devel
+    - glm-devel
+
+ # It would be nice if we could isolate the dependency on LLVM to
+ # the Mesa OpenGL drivers only. However, libglvnd depends on
+ # libLLVM directly, and is in turn being pulled in by a huge number
+ # of packages
+ - name: "@OpenGL"
+   api: "@OpenGLAPI"
+   sourceproject: X11
+   requires:
+    - "@Core"
+    - "@CoreXMLLibraries"
+    - "@X11"
+    - "@LLVMRuntime"
+    - "@GPU"
+   packages:
+    - libvdpau
+    - libglvnd
+    - libgbm
+   binaries:
+    - Mesa*
+    - libglut3
+    - libGLU1
+    - libGLEW2*
+    - libvdpau1
+    - libvdpau_*
+    - libvulkan_*
+    - libepoxy0
+    - DirectX-Headers           purpose=devel
+    - spirv-headers             purpose=devel
+    - spirv-llvm-Headers        purpose=devel
+    - libxatracker2
+    - libXNVCtrl0
+    - libfltk1*
+    - libshaderc_shared1
+
+

@@ -284,6 +284,21 @@ class NameMatcher:
 		return result
 
 ##################################################################
+##################################################################
+class CountingDict(object):
+	def __init__(self):
+		self._count = {}
+
+	def increment(self, key, count):
+		try:
+			self._count[key] += count
+		except:
+			self._count[key] = count
+
+	def __getitem__(self, key):
+		return self._count.get(key, 0)
+
+##################################################################
 #
 # Format sorted triples of (tag1, tag2, message) so that
 # recurring tags are hidden

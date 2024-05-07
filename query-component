@@ -2,7 +2,7 @@
 
 from options import Application
 from filter import Classification, PackageFilter
-from util import IndexFormatterTwoLevels
+from util import IndexFormatterTwoLevels, CountingDict
 from queries import QueryContext, QuerySubjectComponent, QuerySubjectComponentOrTopic
 from queries import PackageRequiresLabelsPredicate, RequirementsReport
 
@@ -11,10 +11,11 @@ class QueryApplication(Application):
 		super().__init__(name, *args, **kwargs)
 
 		self.addArgument(dest = 'components', metavar = 'COMPONENTS', nargs = '*', help = 'list of labels to query')
-		self.addArgument('--what-requires', action = 'append', default = [])
 		self.addArgument('--imports', action = 'store_true', default = False)
 		self.addArgument('--terse', action = 'store_true', default = False)
 		self.addArgument('--verbose', action = 'store_true', default = False)
+		self.addArgument('--list', action = 'store_true', default = False)
+		self.addArgument('--what-requires', action = 'append', default = [])
 		self.addArgument('--unclassified', action = 'store_true', default = False)
 		self.addArgument('--inversions', action = 'store_true', default = False)
 		self.addArgument('--bubble-up', action = 'store_true', default = False)
@@ -31,6 +32,8 @@ class QueryApplication(Application):
 		context = QueryContext(self)
 
 		actions = []
+		if self.opts.list:
+			actions.append(ListQuery(context))
 		if self.opts.what_requires:
 			actions.append(WhatRequiresQuery(context, self.opts.what_requires))
 		if self.opts.imports:
@@ -46,7 +49,7 @@ class QueryApplication(Application):
 			raise Exception(f"Expected exactly one action argument")
 
 		for label in context.enumerateLabelsForQuery(self.opts.components):
-			print(f"Inspecting {label}")
+			# print(f"Inspecting {label}")
 			for ac in actions:
 				ac(label)
 
@@ -493,5 +496,58 @@ class BubbleUpQuery(GenericQuery):
 
 		def get(self, build):
 			return self.dominatedBy.get(build)
+
+class ListQuery(GenericQuery):
+	def __init__(self, context, onlyBaseLabels = None):
+		super().__init__(context, None)
+
+		classification = context.classification
+		membershipSizes = CountingDict()
+
+		if onlyBaseLabels is None and context.verbosityLevel < 2:
+			onlyBaseLabels = True
+
+		for label, members in classification.enumeratePackages():
+			if onlyBaseLabels:
+				label = label.baseLabel
+			membershipSizes.increment(label, len(members))
+
+		for label, build in classification.enumerateBuilds():
+			membershipSizes.increment(label, 1)
+
+		self._membershipSizes = membershipSizes
+
+	def __call__(self, queryTargetLabel):
+		# stats = self.getComponentStats(queryTargetLabel)
+
+		if queryTargetLabel.type is Classification.TYPE_BINARY:
+			self.processTopic(queryTargetLabel)
+			return
+
+		size = self._membershipSizes[queryTargetLabel]
+		print(f"  {queryTargetLabel} ({size} OBS packages)")
+
+		verbosityLevel = self.context.verbosityLevel
+		if verbosityLevel > 0:
+			classificationScheme = self.context.classificationScheme
+			topicOrder = self.context.labelOrder
+
+			binaryLabels = classificationScheme.getReferencingLabels(queryTargetLabel)
+			for label in topicOrder.bottomUpTraversal(binaryLabels):
+				self.processTopic(label)
+
+			print()
+		return
+
+	def processTopic(self, label):
+		size = self._membershipSizes[label]
+		if not size:
+			return
+
+		print(f"      - {label} ({size} rpms)")
+		if self.context.verbosityLevel > 1:
+			classification = self.context.classification
+			for rpm in sorted(classification.getPackagesForLabel(label), key = str):
+				print(f"          {rpm}")
 
 main()

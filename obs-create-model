@@ -558,8 +558,8 @@ class ConcreteModel(ConcreteOBSObject):
 		for concreteProject in setOfProjects:
 			result.add(concreteProject)
 			result.update(concreteProject.subProjects)
-			if concreteProject.bootstrapRepository:
-				result.add(concreteProject.bootstrapRepository.parent)
+			if concreteProject.bootstrapSelfFrom:
+				result.add(concreteProject.bootstrapSelfFrom.parent)
 
 		# Return only those projects that we actually own
 		result = set(filter(lambda p: p.allowedToModify, result))
@@ -754,7 +754,8 @@ class ConcreteProject(ConcreteOBSObject):
 		self.buildRequirements = None
 		self.repositoriesUsedForBuild = []
 
-		self.bootstrapRepository = None
+		# This is a ConcreteRepository object that we're using when bootstrap mode is 'self'
+		self.bootstrapSelfFrom = None
 
 		# This is a dict of generated packages (usually 000component)
 		self._generatedPackages = {}
@@ -1748,7 +1749,7 @@ class ComponentCentricMediator(Mediator):
 				concreteProject = self.createVersionedComponent(abstractComponent, componentSettings, **kwargs)
 				if componentSettings.bootstrapSelf:
 					bootstrapProject = self.createBootstrapComponent(abstractComponent, componentSettings)
-					concreteProject.bootstrapRepository = bootstrapProject.standard
+					concreteProject.bootstrapSelfFrom = bootstrapProject.standard
 
 			concreteProject.config = self.createMainProjectConfig(concreteProject, componentSettings.projectConfigSnippet)
 
@@ -2024,8 +2025,8 @@ class ComponentCentricMediator(Mediator):
 
 		# If we're bootstrapping ourselves from an existing code snapshot,
 		# append that bootstrap snapshot at the very end
-		if concreteProject.bootstrapRepository:
-			repositoryBuildRequires.appendRepository(concreteProject.bootstrapRepository)
+		if concreteProject.bootstrapSelfFrom:
+			repositoryBuildRequires.appendRepository(concreteProject.bootstrapSelfFrom)
 
 		# Append all required repositories to concreteRepository.repositoriesUsedForBuild.
 		# Make sure we're not duplicating any repos, because otherwise OBS will complain
@@ -2176,8 +2177,8 @@ class ComponentCentricMediator(Mediator):
 				self.explainInversions(componentLabel, concreteExport, inversions)
 			concreteExport.inversions = inversions
 
-		if concreteProject.bootstrapRepository:
-			sourceProject = concreteProject.bootstrapRepository.parent
+		if concreteProject.bootstrapSelfFrom:
+			sourceProject = concreteProject.bootstrapSelfFrom.parent
 		else:
 			sourceProject = concreteProject
 

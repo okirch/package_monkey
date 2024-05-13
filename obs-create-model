@@ -688,87 +688,12 @@ class ConcreteModel(ConcreteOBSObject):
 		for concreteProject in sorted(projectsToPublish, key = str):
 			concreteProject.publishPackages()
 			concreteProject.cleanupPackages()
-			continue
-
-			# FIXME nuke
-			allPackages = []
-			for concreteRepository in concreteProject.repositories:
-				allPackages += concreteRepository.packages
-
-			if allPackages:
-				infomsg(f"{concreteProject}: linking all packages from {self.settings.sourceRepository}")
-				with loggingFacade.temporaryIndent():
-					missing = concreteProject.filterMissingPackages(allPackages)
-					for concretePackage in missing:
-						self.linkOnePackage(concreteProject, concretePackage)
-
-			for concreteRepository in concreteProject.repositories:
-				missing = concreteProject.filterMissingPackages(concreteRepository.aggregatePackages)
-				if not missing:
-					continue
-
-				infomsg(f"{concreteRepository}: aggregating packages")
-				for concretePackage in missing:
-					self.aggregateOnePackage(concreteRepository, concretePackage)
-
-
-			obsolete = concreteProject.obsoletePackageNames
-			if obsolete:
-				infomsg(f"{concreteProject}: the following packages need to be removed: {' '.join(obsolete)}")
-				for packageName in obsolete:
-					self.deleteOnePackage(concreteProject, packageName)
 
 		return True
 
 	def reportProblem(self, msg):
 		self.problems.append(msg)
 
-	# FIXME dead
-	def linkOnePackage(self, concreteProject, concretePackage):
-		sourceProject = self.settings.sourceRepository.parent
-		packageName = concretePackage.baseName
-
-		if concreteProject.packageExists(packageName):
-			if concretePackage.name == packageName:
-				# do not spew this message for multibuilds - there may be
-				# lots and lots of them, eg for binutils or gcc.
-				infomsg(f"{concretePackage} already exists in {concreteProject}")
-			concreteProject.recordPackageCreationResult(packageName, True)
-			return True
-
-		infomsg(f"{packageName}: linking from {sourceProject}")
-		with loggingFacade.temporaryIndent():
-			# link the package into the CM project. For the time being, we freeze the
-			# revision to avoid lots of rebuilds
-			if not concreteProject.linkpac(sourceProject, packageName, freezeRevision = True):
-				self.reportProblem(f"{concreteProject}: unable to link package {packageName}")
-
-	# FIXME dead
-	def aggregateOnePackage(self, concreteRepository, concretePackage):
-		packageName = concretePackage.baseName
-
-		concreteProject = concreteRepository.parent
-		if concreteProject.packageExists(packageName):
-			if concretePackage.name == packageName:
-				# do not spew this message for multibuilds - there may be
-				# lots and lots of them, eg for binutils or gcc.
-				infomsg(f"{concretePackage} already exists in {concreteProject}")
-			concreteProject.recordPackageCreationResult(packageName, True)
-			return True
-
-		infomsg(f"{packageName}: aggregating from {concretePackage.parent}")
-		with loggingFacade.temporaryIndent():
-			# aggregate the package into another project/repository
-			if not concreteRepository.aggregatepac(concretePackage):
-				self.reportProblem(f"{concreteRepository}: unable to aggregate package {concretePackage}")
-
-
-	# FIXME dead
-	def deleteOnePackage(self, concreteProject, packageName):
-		infomsg(f"Deleting {concreteProject}/{packageName}")
-		with loggingFacade.temporaryIndent():
-			if not concreteProject.deletepac(packageName):
-				self.reportProblem(f"{concreteProject}: unable to aggregate package {packageName}")
 
 class ConcreteProject(ConcreteOBSObject):
 	AUTO_INDEX = 1000
@@ -1831,36 +1756,10 @@ class ComponentCentricMediator(Mediator):
 		return concreteProject
 
 	def createBootstrapComponent(self, abstractComponent, componentSettings, **kwargs):
-		if False:
-			# FIXME nuke
-			if componentSettings.bootstrapRepository is not None:
-				bootstrapRepository = self.model.resolveRepositoryReference(componentSettings.bootstrapRepository)
-			else:
-				bootstrapRepository = self.model.bootstrapRepository
-			if bootstrapRepository is None:
-				raise Exception(f"Cannot bootstrap component {abstractComponent}: no bootstrap repository defined")
-
-			#strategy = PackageBootstrapStrategy(self.obs, bootstrapRepository.parent)
-			strategy = PackageAggregateStrategy(self.obs, bootstrapRepository.parent)
-			description = f"Bootstrapped with packages from {bootstrapRepository}"
-			actualTopics = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
-
-			obsProjectName = f"{self.settings.targetProjectBase}:bootstrap:{abstractComponent.name}"
-			concreteProject = self.createProject(obsProjectName,
-						publishingStrategy = strategy,
-						componentName = abstractComponent.name,
-						generation = 'bootstrap',
-						title = f"Bootstrap component {abstractComponent.name}",
-						description = description,
-						labelScope = actualTopics)
-
-			# Create a minimal prjconf that makes sure the project builds
-			concreteProject.config = self.createMainProjectConfig(concreteProject)
-		else:
-			actualTopics = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
-			concreteProject = self.createBootstrapProject(abstractComponent.name, componentSettings,
-							bootstrapComponent = abstractComponent,
-							labelScope = actualTopics, **kwargs)
+		actualTopics = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
+		concreteProject = self.createBootstrapProject(abstractComponent.name, componentSettings,
+						bootstrapComponent = abstractComponent,
+						labelScope = actualTopics, **kwargs)
 
 		# Create all $Component:bootstrap:exports:* projects
 		# /unless/ this is just for building $Component
@@ -1901,34 +1800,6 @@ class ComponentCentricMediator(Mediator):
 
 	def createWorkbenchProject(self, componentSettings, **kwargs):
 		return self.createBootstrapProject('Workbench', componentSettings, **kwargs)
-
-		# FIXME nuke
-		if componentSettings.bootstrapRepository is not None:
-			bootstrapRepository = self.model.resolveRepositoryReference(componentSettings.bootstrapRepository)
-		else:
-			bootstrapRepository = self.model.bootstrapRepository
-		if bootstrapRepository is None:
-			raise Exception(f"Cannot bootstrap Workbench: no bootstrap repository defined")
-
-		# This would create a single 000aggregate package
-		strategy = PackageBootstrapStrategy(self.obs, bootstrapRepository.parent)
-		# This creates individual packages with an _aggregate file
-		#strategy = PackageAggregateStrategy(self.obs, bootstrapRepository.parent)
-		description = f"Bootstrapped with packages from {bootstrapRepository}"
-
-		obsProjectName = f"{self.settings.targetProjectBase}:bootstrap:Workbench"
-		concreteProject = self.createProject(obsProjectName,
-					publishingStrategy = strategy,
-					componentName = 'Workbench',
-					generation = 'bootstrap',
-					title = f"Bootstrap component Workbench",
-					description = description,
-					**kwargs)
-
-		# Create a minimal prjconf that makes sure the project builds
-		concreteProject.config = self.createMainProjectConfig(concreteProject)
-
-		return concreteProject
 
 	def createBootstrapProject(self, projectBaseName, componentSettings, bootstrapComponent = None, **kwargs):
 		if componentSettings.bootstrapRepository is not None:

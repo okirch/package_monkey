@@ -407,6 +407,8 @@ class TreeFormatter(object):
 			for pair in self.renderWork(child, prefix + cc1 + self.HSPACE):
 				yield pair
 
+	def standout(self, s):
+		return s
 
 class ANSITreeFormatter(TreeFormatter):
 	LINE_DOWN = ' \u2502'
@@ -414,6 +416,13 @@ class ANSITreeFormatter(TreeFormatter):
 	ARROW_DOWN_RIGHT = ' \u2514\u2500>'
 	NO_LINE = '  '
 	HSPACE = ' '
+
+	RED = '\u001b[31m'
+	YELLOW = '\u001b[33m'
+	NOCOL = '\u001b[0m'
+
+	def standout(self, s):
+		return self.YELLOW + str(s) + self.NOCOL
 
 ##################################################################
 # Expand "foo${variable}bar" strings

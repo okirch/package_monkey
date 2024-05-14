@@ -233,6 +233,9 @@ class PartialOrder(object):
 				result.update(self.upwardClosureFor(key))
 		return result
 
+	def convexClosureForSet(self, keySet):
+		return self.downwardClosureForSet(keySet).intersection(self.upwardClosureForSet(keySet))
+
 	def isBelow(self, key1, key2):
 		return key1 in self.downwardClosureFor(key2)
 

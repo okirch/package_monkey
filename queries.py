@@ -228,10 +228,9 @@ class RequirementsReport(object):
 		if subtree is None:
 			return None
 
-		tf = ANSITreeFormatter()
-		self.subtreeForLabelWork(topic, subtree, tf.root, set())
-
-		return tf
+		topicOrder = self.context.labelOrder
+		subtree = topicOrder.convexClosureForSet(subtree)
+		return topicOrder.asTreeFormatter(subtree, topDown = True)
 
 	def subtreeForLabelWork(self, topic, subtree, tfParent, seen):
 		seen.add(topic)

@@ -481,50 +481,6 @@ class InversionsQuery(WhatRequiresQuery):
 		report = self.getTopicsRequiringLabelSet(querySubject, self.inversionLabels)
 		renderer.renderRequirementsReport(queryTargetLabel, report)
 
-class OldInversionsQuery(GenericQuery):
-	def __init__(self, context):
-		renderer = InversionRenderer(context)
-		super().__init__(context, renderer)
-
-	def __call__(self, queryTargetLabel):
-		forwardMap = self.buildForwardMap(queryTargetLabel)
-
-		renderer = self.renderer
-		for componentName, invTopic, requiredBy in forwardMap:
-			renderer.render(componentName, invTopic, requiredBy)
-
-	class PerComponent(object):
-		def __init__(self, name):
-			self.name = name
-			self.perTopic = {}
-
-		def add(self, topic, invTopic):
-			self.perTopic[invTopic] = Classification.createLabelSet((topic, ))
-
-	class ForwardMap(object):
-		def __init__(self):
-			self.perComponent = {}
-
-		def add(self, topic, inversions):
-			for invTopic in inversions:
-				component = invTopic.componentLabel
-				if component not in self.perComponent:
-					self.perComponent[component] = InversionsQuery.PerComponent(component.name)
-
-				self.perComponent[component].add(topic, invTopic)
-
-		def __iter__(self):
-			for pc in sorted(self.perComponent.values(), key = lambda pc: pc.name):
-				for invTopic, requiredBy in pc.perTopic.items():
-					yield pc.name, invTopic, requiredBy
-
-	def buildForwardMap(self, queryTargetLabel):
-		fwdMap = self.ForwardMap()
-		for topic, inversions in self.context.getInversionsForComponent(queryTargetLabel):
-			fwdMap.add(topic, inversions)
-		return fwdMap
-
-
 class InversionRenderer(Renderer):
 	def __init__(self, context):
 		self.context = context

@@ -236,17 +236,6 @@ class RequirementsReport(object):
 		subtree = topicOrder.convexClosureForSet(subtree)
 		return topicOrder.asTreeFormatter(subtree, topDown = True)
 
-	def subtreeForLabelWork(self, topic, subtree, tfParent, seen):
-		seen.add(topic)
-
-		labelOrder = self.context.labelOrder
-		for child in labelOrder.lowerNeighbors(topic):
-			if child not in subtree or child in seen:
-				continue
-
-			tfChild = tfParent.add(child)
-			self.subtreeForLabelWork(child, subtree, tfChild, seen)
-
 class BooleanPredicateWithCache(object):
 	def __init__(self):
 		self._state = {}

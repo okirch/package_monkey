@@ -753,25 +753,28 @@ class Classification:
 			values = tuple(label.fingerprint for label in self.allLabels)
 			return hash(values)
 
+		def getAllLabelsWithType(self, type):
+			return Classification.createLabelSet(filter(lambda label: label.type == type, self._labels.values()))
+
 		@property
 		def allBinaryLabels(self):
-			return set(filter(lambda label: label.type == Classification.TYPE_BINARY, self._labels.values()))
+			return self.getAllLabelsWithType(Classification.TYPE_BINARY)
 
 		@property
 		def allAutoPurposes(self):
-			return set(filter(lambda label: label.type == Classification.TYPE_PURPOSE, self._labels.values()))
+			return self.getAllLabelsWithType(Classification.TYPE_PURPOSE)
 
 		@property
 		def allAutoFlavors(self):
-			return set(filter(lambda label: label.type == Classification.TYPE_AUTOFLAVOR, self._labels.values()))
+			return self.getAllLabelsWithType(Classification.TYPE_AUTOFLAVOR)
 
 		@property
 		def allBuildConfigs(self):
-			return set(filter(lambda label: label.type == Classification.TYPE_BUILDCONFIG, self._labels.values()))
+			return self.getAllLabelsWithType(Classification.TYPE_BUILDCONFIG)
 
 		@property
 		def allComponents(self):
-			return set(filter(lambda label: label.type == Classification.TYPE_SOURCE, self._labels.values()))
+			return self.getAllLabelsWithType(Classification.TYPE_SOURCE)
 
 		def isFrozen(self, type):
 			return self._category[type].frozen

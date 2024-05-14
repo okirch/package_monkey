@@ -104,22 +104,37 @@ groups:
        - thin-provisioning-tools
     - name: x11
       requires:
-       - "@DesktopQuarks"
+       - "@DesktopFiles"
+       - "@PerlCore"
+      binaries:
+       - hwloc
+    - name: gui
+      requires:
+       - "@KernelLibraries+x11"
        - "@FontLibraries+x11"
        - "@OpenGL"
       binaries:
-       - hwloc
        - hwloc-gui
        - hwloc-gl
     - name: kdump
+      autoselect: no
       requires:
        - "@ArchivingLibraries"
       binaries:
        - libkdumpfile10
+       - crash
+
+ - name: "@KernelCryptoAPI"
+   sourceproject: KernelPlus
+   requires:
+    - "@CoreAPI"
+    - "@KernelCrypto"
+   binaries:
+    - keyutils-devel
 
  - name: "@KernelCrypto"
    sourceproject: KernelPlus
-   api: "@KernelAPI"
+   api: "@KernelCryptoAPI"
    requires:
     - "@CoreLibraries"
    binaries:
@@ -217,11 +232,6 @@ groups:
       binaries:
        - lvm2
        - liblvm2cmd2_03
-    - name: ha
-      requires:
-       - "@HA"
-      binaries:
-       - lvm2-lockd
     - name: test
       requires:
        - "@KernelCore+systemdlibs"
@@ -258,6 +268,7 @@ groups:
     - "@KernelLibraries"
     - "@Kernel"
     - "@GlibcDevel"
+    - "@KernelCryptoAPI"
     # lksctp-tools-devel buildrequires lksctp-tools
     - "@KernelNetworkUtils"
    binaries:
@@ -272,7 +283,7 @@ groups:
     - name: udev
       requires:
        - "@CoreAPI"
-       - "@SystemdAPI"
+       - "@MinimalSystemdAPI"
        - "@KernelLibraries+udev"
        - "@KernelCore+systemdlibs"
        - "@KernelNetworkLibraries+systemd"
@@ -306,6 +317,7 @@ groups:
     - "@NetworkCore"
     - "@PerlCore"
     - "@Boot"
+    - "@Glib2Core"
    binaries:
     - cpupower
     - dmidecode
@@ -333,16 +345,12 @@ groups:
     - ledmon
     - mstflint
     - conntrack-tools
+    - irqbalance
+    - irqbalance-ui
    buildflavors:
     - name: obs
       binaries:
        - kernel-obs-build
-    - name: glib
-      requires:
-       - "@Glib2"
-      binaries:
-       - irqbalance
-       - irqbalance-ui
     - name: systemd
       requires:
        - "@SystemdLibraries"
@@ -443,7 +451,8 @@ groups:
     - "@PerlCore"
     - "@KernelCore"
     - "@FilesystemLibraries"
-    - "@SystemdServices"
+    - "@SystemdLibraries"
+    - "@UdevLibraries"
     - "@CoreFontLibraries"
     - "@PlatformCryptoLibraries"
     - "@GettextTools"
@@ -462,6 +471,13 @@ groups:
     - libply5
     - libply-*5
    buildflavors:
+    - name: misplaced
+      description: |
+        We really need to make SLE-branding a multibuild package so that we
+        rebuild the package in the appropriate context with the appropriate
+        dependencies.
+      binaries:
+       - gdm-branding-SLE
     - name: security
       requires:
        - "@HostSecurity"
@@ -479,11 +495,6 @@ groups:
       binaries:
        - grub2-x86_64-xen
        - grub2-x86_64-xen-extras
-    - name: zypper
-      requires:
-       - "@SUSEConnect"
-      binaries:
-       - rollback-helper
     - name: splash
       requires:
       binaries:

@@ -326,6 +326,8 @@ groups:
    binaries:
     - libXNVCtrl-devel
     - glm-devel
+    - vulkan-headers
+    - vulkan-devel
 
  # It would be nice if we could isolate the dependency on LLVM to
  # the Mesa OpenGL drivers only. However, libglvnd depends on
@@ -360,5 +362,6 @@ groups:
     - libXNVCtrl0
     - libfltk1*
     - libshaderc_shared1
+    - libvulkan1
 
 

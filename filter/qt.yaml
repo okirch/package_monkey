@@ -32,6 +32,7 @@ groups:
     - "@PrintingAPI"
     - "@CoreHardwareAPI+systemd"
     - "@InputDeviceAPI"
+    - "@OpenGLAPI"
    binaries:
     - qml-autoreqprov
     - libQt5Widgets-devel

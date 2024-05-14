@@ -36,6 +36,7 @@ groups:
     # regionsrv-client needs these:
     - "@UpdateStack"
     - "@SUSEConnect"
+    - "@ManDoc"
    binaries:
     - cloud-init
     - python3-ec2*

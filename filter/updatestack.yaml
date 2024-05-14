@@ -49,6 +49,10 @@ groups:
     - libsuseconnect
     - suseconnect-ng
     - suseconnect-ruby-bindings
+   buildflavors:
+    - name: boot
+      binaries:
+       - rollback-helper
 
  - name: "@UpdateStackLibraries"
    api: "@UpdateStackAPI"

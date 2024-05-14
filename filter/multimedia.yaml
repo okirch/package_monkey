@@ -89,6 +89,14 @@ groups:
     - "@AudioLibraries"
     - "@CoreAPI"
     - "@HardwareAccessAPI"
+   binaries:
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11API"
+      binaries:
+       - SDL2-devel
+       - sdl12_compat-devel
 
  - name: "@AudioLibraries"
    api: "@AudioAPI"
@@ -171,6 +179,7 @@ groups:
     - "@GPU"
     - "@OpenGL"
     - "@NumericLibraries"
+    - "@InfoReader"
    packages:
    binaries:
     - libass9

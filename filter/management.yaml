@@ -254,7 +254,6 @@ groups:
     - "@SUSEConnect"
     - "@HardwareAccessUtilities"
     - "@Kernel+xen"
-    - "@SELinux+gtk"
     - "@MicrosoftTools"
     - "@NetworkManager"
     - "@GoExtras"
@@ -277,6 +276,16 @@ groups:
        - "@Virtualization"
       binaries:
        - cockpit-machines
+    - name: gtk
+      requires:
+       - "@Gtk3"
+      binaries:
+       - lshw-gui
+    - name: setrouble
+      requires:
+       - "@SELinuxTroubleshoot"
+      binaries:
+       - cockpit-selinux
 
  - name: "@Yast2API"
    sourceproject: Management
@@ -378,6 +387,7 @@ groups:
     - "@Python"
     - "@MinimalManagement"
     - "@UpdateStack"
+    - "@InfoReader"
    binaries:
     - freeipmi
     - ipmitool
@@ -439,6 +449,29 @@ groups:
     - salt
     - python${defaultPythonVersion}-salt priority=0
 
+ - name: "@SELinuxTroubleshoot"
+   sourceproject: Management
+   requires:
+    - "@SELinux"
+    - "@Gtk3"
+    # for audit:
+    - "@Security"
+    - "@DefaultPythonGobject"
+    # needs python311-libxml2
+    - "@CoreLibraries+python"
+    - "@Core0+syspython"
+    - "@DesktopCore"
+    - "@DesktopFiles"
+   binaries:
+    - setroubleshoot
+    - setroubleshoot-server
 
+ - name: "@InfinibandManagement"
+   sourceproject: Management
+   requires:
+    - "@Infiniband"
+    - "@Graphviz+tcl"
+   binaries:
+    - ibutils-ui
 
 

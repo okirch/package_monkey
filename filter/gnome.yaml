@@ -302,7 +302,7 @@ groups:
     - "@GStreamerPluginsBad"
     - "@Gtk4API"
     - "@FontLibsAPI+x11"
-#   - "@HardwareAccessAPI"
+    - "@OpenGLAPI"
    binaries:
     - gstreamer-plugins-vaapi-devel
    buildflavors:

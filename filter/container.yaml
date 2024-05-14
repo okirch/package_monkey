@@ -57,7 +57,6 @@ groups:
     - "@HostNetworking"
     - "@StorageServices"
     - "@SELinux"
-    - "@ManDoc"
     - "@HostWorkloads"
     - "@NetworkUtils"
     - "@NetworkLibraries"

@@ -8,10 +8,6 @@ components:
    requires:
     - Core
     - KernelPlus
-   imports:
-    # for ibutils-ui
-    - "@EssentialGraphicsLibraries"
-    - "@DrawingLibraries+x11"
    exports:
     - "@PlatformCryptoLibraries"
 
@@ -107,6 +103,11 @@ groups:
     - "@GPU"
    binaries:
     - gmmlib-devel
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11API"
+      binaries:
 
  - name: "@GPU"
    api: "@GPUAPI"
@@ -116,7 +117,6 @@ groups:
    packages:
     - gmmlib
    binaries:
-    - libvulkan1
     - libigdgmm12
    buildflavors:
     - name: x11
@@ -134,19 +134,13 @@ groups:
    requires:
     - "@CoreAPI"
     - "@CoreHardwareAPI"
-#   - "@Glib2API"
     - "@KernelAPI"
     - "@USBLibraries"
    binaries:
     - libftdi1-devel
     - flashrom-devel
+    - libgusb-devel
    buildflavors:
-    - name: glib
-      requires: 
-       - "@USBLibraries+glib"
-       - "@CoreHardwareAPI"
-      binaries:
-       - libgusb-devel
     - name: obsonly
       requires: 
        - "@CoreAPI"
@@ -169,6 +163,8 @@ groups:
    binaries:
     - libftdi1*
     - usbutils
+    - libgusb2
+    - typelib*GUsb*
    buildflavors:
     - name: syspython
       autoselect: no
@@ -176,13 +172,6 @@ groups:
        - "@SystemPythonCore"
       binaries:
        - python3-libftdi1
-    - name: glib
-      autoselect: no
-      requires:
-       - "@Glib2"
-      binaries:
-       - libgusb2
-       - typelib.*Gusb*
 
  - name: "@OpticalMedia"
    api: "@HardwareAccessAPI"
@@ -212,6 +201,7 @@ groups:
     - name: tcl
       requires:
        - "@TclCore+x11"
+       - "@InfoReader"
       binaries:
        - xorriso
 
@@ -220,7 +210,6 @@ groups:
    sourceproject: HardwareAccess
    requires:
     - "@CoreLibraries"
-    - "@ArchivingLibraries"
    binaries:
     - libvpd-2*
     - libqatzip3
@@ -241,8 +230,7 @@ groups:
  - name: "@HardwareAccessAPI"
    sourceproject: HardwareAccess
    requires:
-    - "@X11API"
-#   - "@Glib2API"
+    - "@CoreAPI"
     - "@GPU"
     - "@InputDeviceLibraries"
     - "@OpticalMedia"
@@ -251,15 +239,19 @@ groups:
     - "@X86Libraries"
    binaries:
     - libmanette-devel
-    # shouldn't the vulkan stuff be in GPUAPI?
-    - vulkan-headers
-    - vulkan-devel
    buildflavors:
     - name: perl
       requires:
        - "@Perl"
+       - "@KernelNetworkUtils"
+       - "@CoreXMLAPI"
       binaries:
        - hwinfo-devel
+    - name: kernel
+      requires:
+       - "@MiscHardware+xeon"
+      binaries:
+       - accel-config-devel
 
  - name: "@X86Libraries"
    api: "@HardwareAccessAPI"
@@ -288,12 +280,10 @@ groups:
    requires:
     - "@CoreNetworkLibraries"
     - "@CoreXMLLibraries"
-    - "@Glib2"
-    - "@SystemdServices"
+    - "@SystemdLibraries"
     - "@UdevLibraries"
     - "@KernelCore"
     - "@TclCore"
-    - "@SNMPLibraries"
     - "@CoreServices"
    packages:
     - openucx
@@ -315,15 +305,11 @@ groups:
     - libvma9
     - opa-*
     - smc-tools
+    - ibacm
    buildflavors:
     - name: test
       requires:
        - "@DevelopmentCore"
-    - name: gui
-      requires:
-       - "@Graphviz+tcl"
-      binaries:
-       - ibutils-ui
     - name: snmp
       # SNMP stuff has moved to component Network
       requires:

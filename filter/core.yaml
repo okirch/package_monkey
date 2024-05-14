@@ -32,21 +32,21 @@ build_configs:
     - "@DevelopmentUnitTests"
     - "@SystemPython"
     - "@GtkDoc"
-    - "@ManDoc+ruby"
+#   - "@ManDoc+ruby"
     - "@Valgrind"
  - name: Core/java
    buildrequires:
     - "@JavaTimezoneTools"
     - "@Java"
     - "@ApacheCommons"
-    - "@DesktopQuarks"
+#   - "@DesktopQuarks"
  - name: Core/cross
    buildrequires:
     - "@GccCross"
     - "@KernelHeaders"
  - name: Core/systemd
    buildrequires:
-    - "@SystemdAPI"
+    - "@MinimalSystemdAPI"
     - "@SystemdOnlyForOBS"
     - "@PolicyKitAPI"
     - "@PolicyKit"
@@ -67,7 +67,7 @@ build_configs:
    buildrequires:
     - "@GtkAPIs"
     - "@GdkPixbufAPI"
-    - "@DesktopQuarks"
+#   - "@DesktopQuarks"
     # for gi-docgen
     - "@SystemPythonBuildSupport"
  - name: Core/database
@@ -106,7 +106,7 @@ build_configs:
    buildrequires:
     - "@ApacheCommonsMinimal"
     - "@BrowsersConsole+ruby"
-    - "@SystemdAPI"
+    - "@MinimalSystemdAPI"
    packages:
     - pam:full
  - name: "Core/build:permissions"
@@ -125,7 +125,7 @@ build_configs:
    inheritable: False
    buildrequires:
     - "@HostSecurityAPI"
-    - "@SystemdAPI"
+    - "@MinimalSystemdAPI"
     - "@SystemdOnlyForOBS"
    packages:
     - p11-kit
@@ -147,14 +147,14 @@ build_configs:
  - name: Core/nghttp
    inheritable: False
    buildrequires:
-    - "@SystemdAPI"
+    - "@MinimalSystemdAPI"
     - "@BoostAPI"
 
 groups:
  - name: CoreDevel
    requires:
     - "@GlibcDevel"
-    - "@Glib2API"
+#   - "@Glib2API"
     - "@CoreAPI"
    binaries:
 
@@ -206,7 +206,9 @@ groups:
     - pkgconf-m4
     - pkgconf-pkg-config
    buildflavors:
-    - name: python
+    - name: syspython
+      requires:
+       - "@SystemPythonCore"
       binaries:
        - python${systemPythonVersion}-pkgconfig
 
@@ -610,8 +612,6 @@ groups:
     - gzip
     - hardlink
     - hostname
-    - info
-    - info-lang # unfortunately, info requires info-lang
     - jq
     - lastlog2
     - less
@@ -687,6 +687,7 @@ groups:
 #      - python${systemPythonVersion}-magic
        - python${systemPythonVersion}-rpm
     - name: test
+      autoselect: no
       binaries:
        - coreutils-testsuite
    purposes:
@@ -738,12 +739,14 @@ groups:
     - python311-dbm
     - python311-tools
     - python311-packaging
+    - python311-distro
     - libpython311
    purposes:
     - name: doc
       binaries:
        - python311-doc
        - python-six-doc
+       - python311-doc-devhelp
    buildflavors:
     - name: tcl
       requires:
@@ -847,11 +850,6 @@ groups:
        - "@SystemdLibraries"
       binaries:
        - openslp-server
-    - name: fancy
-      requires:
-       - "@DrawingLibraries+x11"
-      binaries:
-       - glibc-utils
 
  - name: "@CoreCryptoAPI"
    sourceproject: Core
@@ -876,7 +874,6 @@ groups:
       requires:
        - "@Core+systemdlibs"
        - "@Core+udevlibs"
-       - "@SystemdServices"
       binaries:
        - openssh-server
        - openssh
@@ -921,7 +918,7 @@ groups:
    buildflavors:
     - name: systemd
       requires:
-       - "@SystemdAPI"
+       - "@MinimalSystemdAPI"
       binaries:
        - libhidapi-devel
 
@@ -972,7 +969,7 @@ groups:
     - name: fonts
       requires:
        - "@CoreX11Libraries+fonts"
-       - "@FontLibsAPI"
+       - "@CoreFontAPI"
       binaries:
        - libXft-devel
 
@@ -1055,7 +1052,8 @@ groups:
    sourceproject: Core
    api: "@CoreAPI"
    requires:
-    - "@CoreHardware"
+    - "@Core0"
+    - "@Permissions"
     - "@KerberosLibraries"
    binaries:
     - nscd
@@ -1127,20 +1125,20 @@ groups:
       binaries:
        - util-linux-tty-tools
        - nghttp2
-    - name: systemd
+       - uuidd
+    - name: krb5
       requires:
        - "@Core+systemdlibs"
        - "@Core+udevlibs"
-       - "@SystemdServices"
+       - "@SystemdLibraries"
       binaries:
        - cyrus-sasl-*
-       - uuidd
        # all other krb5 packages are probably network services and go here:
        - krb5-*
     - name: database
       requires:
        - "@SystemDatabaseLibraries"
-       - "@Core+systemd"
+       - "@Core+krb5"
       binaries:
        - cyrus-sasl-sqlauxprop*
        - cyrus-sasl-sqlauthd*
@@ -1162,6 +1160,7 @@ groups:
        - cryptsetup
        - efivar
     - name: test
+      autoselect: no
       binaries:
        - uid_wrapper
        - nss_wrapper
@@ -1173,17 +1172,13 @@ groups:
     - "@CoreLibraries"
     - "@KernelCrypto"
     - "@CoreInstUtils"
+    - "@Glib2Core"
    binaries:
     - krb5
     - krb5-mini
     - libverto1
     - libverto-libev1
-   buildflavors:
-    - name: glib
-      requires:
-       - "@Glib2NoDBus"
-      binaries:
-       - libverto-glib1
+    - libverto-glib1
 
  - name: "@KerberosAPI"
    sourceproject: Core
@@ -1198,29 +1193,7 @@ groups:
     - krb5-mini-devel
     - libgsasl-devel
     - libverto-devel
-   buildflavors:
-    - name: glib
-      requires:
-       - "@KerberosLibraries+glib"
-      binaries:
-       - libverto-glib-devel
-
-
- - name: "@Texinfo"
-   sourceproject: Core
-   requires:
-    - "@Core0"
-    - "@Perl"
-    - "@GettextTools"
-   binaries:
-    - texi2info
-    - texi2html
-    - makeinfo
-    - perl-libintl-perl
-   buildflavors:
-    - name: tex
-      requires:
-       - "@Texlive"
+    - libverto-glib-devel
 
  - name: "@TclAPI"
    sourceproject: Core
@@ -1280,6 +1253,22 @@ groups:
     - net-tools
     - net-tools-deprecated
 
+ - name: "@DesktopFiles"
+   sourceproject: Core
+   requires:
+    - "@Glib2Core"
+    - "@Core0"
+   binaries:
+    - desktop-file-utils
+    - update-desktop-files
+   buildflavors:
+    - name: obs
+      requires:
+       - "@XMLLibraries"
+      binaries:
+       - brp-extract-translations
+       - brp-trim-translations
+
  # Really?!
  # FIXME: move this to Network
  - name: "@NetworkCore"
@@ -1289,11 +1278,19 @@ groups:
     - "@KernelLibraries"
 
  - name: "@HPCCoreLibraries"
+   api: "@HPCCoreAPI"
    sourceproject: Core
    requires:
     - "@CoreLibraries"
    binaries:
     - libgsl27
+
+ - name: "@HPCCoreAPI"
+   sourceproject: Core
+   requires:
+    - "@HPCCoreLibraries"
+   binaries:
+    - gsl-devel
 
  - name: "@PerlCoreAPI"
    sourceproject: Core

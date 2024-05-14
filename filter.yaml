@@ -32,6 +32,9 @@ options:
    - systemtap
    - timezone
    - libdb-4_8
+   - gcc13
+   - glibc
+   - ibutils
 
 autoflavors:
  - name: perl
@@ -145,7 +148,7 @@ purposes:
    priority: 4
    autoselect: no
    augments:
-    - "@ManDoc"
+#   - "@ManDoc"
    binaries:
     - "*-man"
     - "*-manpages"

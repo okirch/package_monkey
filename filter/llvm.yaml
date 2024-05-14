@@ -7,6 +7,7 @@ components:
     devel: LlvmDevel
    requires:
     - Core
+    - GCC
    exports:
     - "@LLVMRuntime"
 
@@ -60,3 +61,11 @@ groups:
     - llvm1?-libclang13
     - llvm1?-libc++abi1
 
+ - name: "@GccLLVM"
+   sourceproject: LLVM
+   requires:
+    - "@GCC"
+    - "@LLVM"
+   binaries:
+    - cross-amdgcn-gcc13
+    - cross-amdgcn-newlib13-devel

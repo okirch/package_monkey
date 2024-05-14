@@ -42,19 +42,10 @@ groups:
  - name: "@DesktopQuarks"
    sourceproject: Gtk
    requires:
+    - "@DesktopFiles"
     - "@Glib2NoDBus"
-    - "@Core0"
    binaries:
-    - desktop-file-utils
-    - update-desktop-files
     - xdg-dbus-proxy
-   buildflavors:
-    - name: obs
-      requires:
-       - "@XMLLibraries"
-      binaries:
-       - brp-extract-translations
-       - brp-trim-translations
 
  - name: "@DConf"
    sourceproject: Gtk
@@ -93,6 +84,7 @@ groups:
     - "@FontLibraries+x11"
     - "@PlusLibraries"
     - "@DesktopIcons"
+    - "@DesktopFiles"
     - "@GdkPixbuf"
     - "@SVGLibraries"
     - "@Glib2Networking"

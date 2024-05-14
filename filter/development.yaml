@@ -107,6 +107,7 @@ groups:
    sourceproject: Development
    requires:
     - "@Core0"
+    - "@InfoReader"
    binaries:
     - gettext-runtime
     - gettext-tools-mini
@@ -208,7 +209,7 @@ groups:
     - "@Core0"
     - "@Docbook"
     - "@TclCore"
-    - "@ManDoc"
+#   - "@ManDoc"
     - "@Texinfo"
     - "@SystemPython"
    binaries:

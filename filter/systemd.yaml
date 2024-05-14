@@ -67,21 +67,30 @@ groups:
    requires:
     - "@SystemdAPI"
 
- - name: "@SystemdAPI"
+ - name: "@MinimalSystemdAPI"
+   is_api: True
    sourceproject: Systemd
    requires:
     - "@CoreAPI"
     - "@SystemdLibraries"
+   binaries:
+    - systemd-mini-devel
+    - systemd-devel
+    - dbus-1-devel
+
+ - name: "@SystemdAPI"
+   sourceproject: Systemd
+   requires:
+    - "@MinimalSystemdAPI"
     - "@CorePlusAPI"
     # why do dbus-1-*devel require dbus-1?
     - "@DBus"
    binaries:
-    - systemd-mini-devel
-    - dbus-1-devel
     - dbus-1-glib-devel
 
  - name: "@UdevLibraries"
    sourceproject: Systemd
+   api: "@SystemdAPI"
    requires:
     - "@Core0"
    packages:

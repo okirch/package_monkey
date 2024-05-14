@@ -18,7 +18,6 @@ groups:
    sourceproject: SELinux
    requires:
     - "@SELinux"
-    - "@DefaultPythonEssentials"
    binaries:
     - selinux-policy-devel
 
@@ -28,8 +27,8 @@ groups:
    api: "@SELinuxAPI"
    requires:
     - "@Core0"
-#   - "@CoreLibraries+pythoncore"
     - "@AuditServices+syspython"
+    - "@Glib2Core"
     # we /have/ to pull in PythonCore here, unfortunately
     - "@SystemPython"
    binaries:
@@ -46,6 +45,7 @@ groups:
     - python${systemPythonVersion}-semanage
     - python${systemPythonVersion}-setools
     - python3-selinux
+    - restorecond
    buildflavors:
     - name: ruby
       binaries:
@@ -53,24 +53,4 @@ groups:
     - name: glib
       autoselect: no
       requires:
-       - "@Glib2"
       binaries:
-       - restorecond
-    - name: gtk
-      autoselect: no
-      requires:
-       - "@Gtk3"
-       # for audit:
-       - "@Security"
-       # we cannot avoid default python here, unfortunately
-       - "@DefaultPythonGobject"
-       # needs python311-libxml2
-       - "@CoreLibraries+python"
-       - "@Core0+syspython"
-       # lives in X11
-       - "@DesktopCore"
-       # lives in Gtk
-       - "@DesktopQuarks"
-      binaries:
-       - setroubleshoot
-       - setroubleshoot-server

@@ -75,12 +75,6 @@ groups:
    binaries:
     - cross-*
     - cross-*-newlib13-devel
-   buildflavors:
-    - name: llvm
-      requires:
-       - "@LLVM"
-      binaries:
-       - cross-amdgcn-gcc13
 
  - name: GccDevel
    sourceproject: GCC

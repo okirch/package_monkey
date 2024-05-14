@@ -35,7 +35,7 @@ groups:
    sourceproject: Samba
    requires:
     - "@Core"
-    - "@Core+systemd"
+    - "@Core+krb5"
     - "@DefaultPython"
    binaries:
     - sssd
@@ -84,7 +84,7 @@ groups:
    sourceproject: Samba
    requires:
     - "@Core"
-    - "@Core+systemd"
+    - "@Core+krb5"
     - "@DefaultPythonStandard"
     - "@KernelNetworkUtils"
    binaries:

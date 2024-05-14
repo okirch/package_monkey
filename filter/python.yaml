@@ -266,7 +266,6 @@ templates:
        - pythonXXX-platformdirs
        - pythonXXX-typing_extensions
        - pythonXXX-python-magic
-       - pythonXXX-distro
        # essential or convenience?
        - pythonXXX-more-itertools
        - pythonXXX-autocommand
@@ -632,6 +631,8 @@ templates:
        - pythonXXX-numpy
        - pythonXXX-zope
        - pythonXXX-zope.*
+       # really?
+       - pythonXXX-systemd
       buildflavors:
        - name: x11
          requires:
@@ -666,6 +667,7 @@ templates:
        - name: kernel
          requires:
           - "@Kernel"
+          - "@KernelLibraries+kdump"
          binaries:
           - pythonXXX-pandas-fss
           - pythonXXX-libkdumpfile

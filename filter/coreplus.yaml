@@ -321,6 +321,12 @@ groups:
     - gperftools
     - pprof
     - patchelf
+   buildflavors:
+    - name: x11
+      requires:
+       - "@DrawingLibraries+x11"
+      binaries:
+       - glibc-utils
    purposes: 
     - name: doc
       binaries:
@@ -356,6 +362,7 @@ groups:
     - "@Core0"
     - "@Glib2NoDBus"
     - "@PlusLibraries"
+    - "@InfoReader"
    packages:
     - aspell
    binaries:
@@ -545,7 +552,6 @@ groups:
    requires:
     - "@CoreAPI"
     - "@I18nLibraries"
-#   - "@I18nTools"
 
  - name: "@I18nLibraries"
    sourceproject: CorePlus
@@ -791,4 +797,28 @@ groups:
        - libgd3
        - plotutils
        - libplotter2
+
+ - name: "@InfoReader"
+   sourceproject: CorePlus
+   requires:
+    - "@Core0"
+   binaries:
+    - info
+    - info-lang # unfortunately, info requires info-lang
+
+ - name: "@Texinfo"
+   sourceproject: CorePlus
+   requires:
+    - "@Core0"
+    - "@Perl"
+    - "@GettextTools"
+   binaries:
+    - texi2info
+    - texi2html
+    - makeinfo
+    - perl-libintl-perl
+   buildflavors:
+    - name: tex
+      requires:
+       - "@Texlive"
 

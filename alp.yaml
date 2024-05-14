@@ -107,6 +107,10 @@ resolverhints:
       - libgstpbutils-1_0-0
       - libgstriff-1_0-0
       - libgsttag-1_0-0
+   - name: dbus-1-devel
+     warning: "dbus-1-devel should not depend on dbus-1"
+     ignore:
+      - dbus-1
 
   ignore:
     # we want to place these somewhere in Core, but dont want to pollute Core

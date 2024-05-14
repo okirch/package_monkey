@@ -20,6 +20,7 @@ class QueryApplication(Application):
 		self.addArgument('--unclassified', action = 'store_true', default = False)
 		self.addArgument('--inversions', action = 'store_true', default = False)
 		self.addArgument('--bubble-up', action = 'store_true', default = False)
+		self.addArgument('--ignore', action = 'append', default = [])
 		self.addArgument('--max-alternatives')
 		self.parseArguments()
 
@@ -44,7 +45,7 @@ class QueryApplication(Application):
 		if self.opts.unclassified:
 			actions.append(UnclassifiedQuery(context, self.opts.max_alternatives))
 		if self.opts.inversions:
-			actions.append(InversionsQuery(context))
+			actions.append(InversionsQuery(context, self.opts.ignore))
 		if self.opts.bubble_up:
 			actions.append(BubbleUpQuery(context))
 
@@ -62,7 +63,7 @@ def main():
 
 class Renderer(object):
 	def __init__(self, context):
-		pass
+		self.context = context
 
 	@staticmethod
 	def renderLabelSet(msg, labelSet):
@@ -79,9 +80,7 @@ class GenericQuery(object):
 		self.renderer = renderer
 
 class WhatRequiresRenderer(Renderer):
-	def renderRequirementsReport(self, component, requirementsReport):
-		requiredLabel = requirementsReport.requiredLabel
-
+	def renderRequirementsReport(self, component, requirementsReport, requiredLabel):
 		if not requirementsReport:
 			print(f"   {component}: nothing requires {requiredLabel}")
 		elif not requirementsReport.verbosityLevel:
@@ -90,27 +89,43 @@ class WhatRequiresRenderer(Renderer):
 				print(f"      {label}")
 		else:
 			print(f"   {component}: the following topics and packages require {requiredLabel}")
+			self.renderRequirementsReportDetails(component, requirementsReport)
 
-			alreadyReported = Classification.createLabelSet()
-			for label in requirementsReport.allLabels:
-				packages = sorted(requirementsReport.packagesForLabel(label), key = str)
-				if packages:
-					print(f"      {label}")
-					self.renderRequirementsForLabel(requirementsReport, label)
-				elif label.parent not in alreadyReported:
-					print(f"      {label} (no packages)")
+	def renderRequirementsReportDetails(self, component, requirementsReport):
+		alreadyReported = Classification.createLabelSet()
+		for label in requirementsReport.allLabels:
+			packages = sorted(requirementsReport.packagesForLabel(label), key = str)
+			if packages:
+				print(f"      {label}")
+				self.renderRequirementsForLabel(requirementsReport, label)
+			elif label.parent in alreadyReported:
+				pass
+			elif self.context.getPackagesForLabel(label):
+				print(f"      {label} (just label dependency)")
+				self.renderRequirementsForLabel(requirementsReport, label)
+			else:
+				print(f"      {label} (empty label)")
 
-				alreadyReported.add(label)
+			alreadyReported.add(label)
 
-			dropAdvice = requirementsReport.dropRequirementsFrom
-			if dropAdvice:
-				print()
-				print("      Consider dropping explicit requirements from the following label(s)")
-				for label in sorted(dropAdvice, key = str):
-					print(f"       - {label}")
+		dropAdvice = requirementsReport.dropRequirementsFrom
+		if dropAdvice:
+			print()
+			print("      Consider dropping explicit requirements from the following label(s)")
+			for label in sorted(dropAdvice, key = str):
+				print(f"       - {label}")
 
 	def renderRequirementsForLabel(self, requirementsReport, label):
 		projection = set()
+
+		tf = requirementsReport.subtreeForLabel(label)
+		if tf is not None and requirementsReport.verbosityLevel >= 2:
+			for prefix, topic in tf.render():
+
+				s = f"{topic.componentName}:{topic}"
+				if topic in requirementsReport.inspectLabelSet:
+					s = tf.standout(s)
+				print(f"          {prefix}{s}")
 
 		packages = sorted(requirementsReport.packagesForLabel(label), key = str)
 		if not packages:
@@ -138,7 +153,7 @@ class WhatRequiresRenderer(Renderer):
 
 		if projection:
 			print()
-			print(f"        The following packages from {requirementsReport.requiredLabel} are needed:")
+			print(f"        The following packages are used:")
 			for node in sorted(projection, key = str):
 				print(f"         {node.rpm} ({node.label})")
 			print()
@@ -153,8 +168,9 @@ class WhatRequiresRenderer(Renderer):
 			print(f"       - {rpm}")
 
 class WhatRequiresQuery(GenericQuery):
-	def __init__(self, context, what_requires):
-		renderer = WhatRequiresRenderer(context)
+	def __init__(self, context, what_requires, renderer = None):
+		if renderer is None:
+			renderer = WhatRequiresRenderer(context)
 		super().__init__(context, renderer)
 		self.what_requires = what_requires
 
@@ -166,20 +182,23 @@ class WhatRequiresQuery(GenericQuery):
 
 		for req in self.what_requires:
 			topic = context.getLabel('label', req)
-			report = self.getTopicsRequiringLabel(querySubject, topic)
-			renderer.renderRequirementsReport(queryTargetLabel, report)
 
-	def getTopicsRequiringLabel(self, querySubject, inspectLabel):
+			if topic.type is Classification.TYPE_BINARY:
+				inspectLabelSet = Classification.createLabelSet([topic])
+			elif topic.type is Classification.TYPE_SOURCE:
+				inspectLabelSet = context.getLabelsForComponent(topic)
+			else:
+				raise Exception(f"{self.__class__.__name__}: label type {topic.type} not supported")
+
+			report = self.getTopicsRequiringLabelSet(querySubject, inspectLabelSet)
+
+			renderer.renderRequirementsReport(queryTargetLabel, report, topic)
+
+	def getTopicsRequiringLabelSet(self, querySubject, inspectLabelSet):
 		verbosityLevel = self.context.verbosityLevel
 		labelOrder = self.context.labelOrder
 
-		result = RequirementsReport(self.context, inspectLabel, verbosityLevel = verbosityLevel)
-		if inspectLabel.type is Classification.TYPE_BINARY:
-			inspectLabelSet = Classification.createLabelSet([inspectLabel])
-		elif inspectLabel.type is Classification.TYPE_SOURCE:
-			inspectLabelSet = self.context.getLabelsForComponent(inspectLabel)
-		else:
-			raise Exception(f"{self.__class__.__name__}.getTopicsRequiringLabel: label type {inspectLabel.type} not supported")
+		result = RequirementsReport(self.context, inspectLabelSet, verbosityLevel = verbosityLevel)
 
 		predicate = None
 		if verbosityLevel:
@@ -188,6 +207,10 @@ class WhatRequiresQuery(GenericQuery):
 
 		inspectUpperCone = labelOrder.upwardClosureForSet(inspectLabelSet)
 		for label in self.context.topDownTraversal(querySubject.binaryLabels):
+			# skip over labels that are completely empty
+			if not self.context.getPackagesForLabel(label):
+				continue
+
 			# hits is a convex set that includes the subtree that is limited by label above and
 			# inspectLabelSet below.
 			hits = labelOrder.downwardClosureFor(label).intersection(inspectUpperCone)
@@ -195,9 +218,15 @@ class WhatRequiresQuery(GenericQuery):
 				result.add(label, hits)
 
 				if verbosityLevel:
-					for rpm in self.context.getPackagesForLabel(label):
+					for orpm in self.context.getPackagesForLabel(label):
+						if orpm.isSynthetic:
+							continue
+
 						# Retrieve rpm dependencies from the DB
-						rpm = store.recoverLatestPackageByName(rpm.name)
+						rpm = store.recoverLatestPackageByName(orpm.name)
+
+						if rpm is None:
+							raise Exception(f"label {label} references {orpm} which is not in the DB")
 
 						if predicate(rpm):
 							result.addPackage(label, rpm, predicate)
@@ -393,7 +422,66 @@ class UnclassifiedRenderer(Renderer):
 		else:
 			print(f"  {rpm} - {numOther} alternatives")
 
-class InversionsQuery(GenericQuery):
+class InversionsRenderer(WhatRequiresRenderer):
+	def renderRequirementsReport(self, component, requirementsReport):
+		if not requirementsReport:
+			print(f"   {component}: no inversions")
+		elif not requirementsReport.verbosityLevel:
+			print(f"   {component}: the following topics have inversions")
+			for label in requirementsReport.minimalLabels:
+				print(f"      {label}")
+		else:
+			print(f"   {component}: the following topics and packages have inversions")
+			self.renderRequirementsReportDetails(component, requirementsReport)
+
+
+class InversionsQuery(WhatRequiresQuery):
+	def __init__(self, context, ignore):
+		renderer = InversionsRenderer(context)
+		super().__init__(context, [], renderer = renderer)
+
+		opts = context.application.opts
+
+		topicOrder = context.labelOrder
+		componentOrder = context.componentOrder
+
+		visibleComponents = Classification.createLabelSet()
+		for componentLabel in context.enumerateLabelsForQuery(opts.components):
+			visibleComponents.update(componentOrder.downwardClosureFor(componentLabel))
+
+		visibleTopics = Classification.createLabelSet()
+		for componentLabel in visibleComponents:
+			topics = context.getLabelsForComponent(componentLabel)
+			visibleTopics.update(topics)
+
+		ignoredTopics = Classification.createLabelSet()
+		for labelName in ignore:
+			ignoreLabel = context.getLabel('--ignore label', labelName, Classification.TYPE_BINARY)
+			ignoredTopics.add(ignoreLabel)
+			for purpose in ignoreLabel.objectPurposes:
+				ignoredTopics.add(purpose)
+
+		ignoredTopics = topicOrder.downwardClosureForSet(ignoredTopics).difference(visibleTopics)
+		if ignoredTopics:
+			print(f"The following topic labels are considered \"good\" in this query:")
+			for topic in sorted(ignoredTopics, key = str):
+				print(f" - {topic.componentName}:{topic}")
+			print()
+
+		visibleTopics.update(ignoredTopics)
+
+		self.inversionLabels = context.allBinaryLabels.difference(visibleTopics)
+
+	def __call__(self, queryTargetLabel):
+		renderer = self.renderer
+		context = self.context
+
+		querySubject = QuerySubjectComponentOrTopic("inversions", context, queryTargetLabel)
+
+		report = self.getTopicsRequiringLabelSet(querySubject, self.inversionLabels)
+		renderer.renderRequirementsReport(queryTargetLabel, report)
+
+class OldInversionsQuery(GenericQuery):
 	def __init__(self, context):
 		renderer = InversionRenderer(context)
 		super().__init__(context, renderer)

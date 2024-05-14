@@ -54,6 +54,10 @@ class QueryContext(object):
 			raise Exception(f"Incompatible {desc} {name} - defined as {result.type} label, but expected {expectedType}")
 		return result
 
+	@property
+	def allBinaryLabels(self):
+		return self.classificationScheme.allBinaryLabels
+
 	def getLabelsForComponent(self, component):
 		return self.classificationScheme.getReferencingLabels(component)
 
@@ -145,10 +149,10 @@ class RequirementsReport(object):
 			for child in self.children:
 				child.formatWork(tfNode, seen)
 
-	def __init__(self, context, requiredLabel, verbosityLevel = 0):
+	def __init__(self, context, inspectLabelSet, verbosityLevel = 0):
 		self.context = context
-		self.requiredLabel = requiredLabel
 		self.verbosityLevel = verbosityLevel
+		self.inspectLabelSet = inspectLabelSet
 		self.requiringLabels = Classification.createLabelSet()
 		self._paths = {}
 		self._packages = {}
@@ -274,6 +278,7 @@ class PackageRequiresLabelsPredicate(BooleanPredicateWithCache):
 				self._nameToLabel[rpm.name] = label
 
 	def compute(self, rpm):
+		assert(rpm is not None)
 		label = self._nameToLabel.get(rpm.name)
 		if label in self.focusLabels:
 			return True
@@ -286,6 +291,13 @@ class PackageRequiresLabelsPredicate(BooleanPredicateWithCache):
 			# dependencies:
 			if req.name in ('systemd', 'udev'):
 				continue
+			if rpm.name.startswith('libgio-2') and req.name in ('dbus-1', 'dbus-1-x11'):
+				continue
+
+			if rpm.name.startswith('gdm'):
+				edge = (rpm.name, req.name)
+				if edge == ('gdm-branding-SLE', 'gdm') or edge == ('gdm', 'gdm-branding-SLE'):
+					continue
 
 			if self.evaluate(req):
 				return True

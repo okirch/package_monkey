@@ -17,6 +17,9 @@ class QueryContext(object):
 		self.inversionMap = classification.inversionMap
 		self._allAPIs = self.getAPIs()
 
+		self._rpmToBuildMap = None
+		self._rpmToLabelMap = None
+
 		self.verbosityLevel = 1
 		if application.opts.terse:
 			self.verbosityLevel = 0
@@ -61,14 +64,68 @@ class QueryContext(object):
 	def getLabelsForComponent(self, component):
 		return self.classificationScheme.getReferencingLabels(component)
 
-	def getPackagesForLabel(self, label):
-		return self.classification.getPackagesForLabel(label)
+	def getPackagesForLabel(self, label, fromDB = False):
+		if not fromDB:
+			return self.classification.getPackagesForLabel(label)
+
+		result = []
+		store = self.connectDatabase()
+		for orpm in self.classification.getPackagesForLabel(label):
+			if orpm.isSynthetic:
+				continue
+
+			# Retrieve rpm dependencies from the DB
+			rpm = store.recoverLatestPackageByName(orpm.name)
+
+			if rpm is None:
+				raise Exception(f"label {label} references {orpm} which is not in the DB")
+
+			result.append(rpm)
+
+		return result
 
 	def getPackageCountForLabel(self, label):
 		packages = self.getPackagesForLabel(label)
 		if packages is None:
 			return 0
 		return len(packages)
+
+	def getBuildForPackage(self, queryRpm):
+		if self._rpmToBuildMap is None:
+			self._rpmToBuildMap = {}
+			for label, buildSpec in self.classification.enumerateBuilds():
+				for rpm in buildSpec.binaries:
+					self._rpmToBuildMap[rpm.shortname] = buildSpec
+
+		return self._rpmToBuildMap.get(queryRpm.shortname)
+
+	def getLabelForPackage(self, queryRpm):
+		if self._rpmToLabelMap is None:
+			self._rpmToLabelMap = {}
+			for label, members in self.classification.enumeratePackages():
+				for rpm in members:
+					self._rpmToLabelMap[rpm.shortname] = label
+
+		return self._rpmToLabelMap.get(queryRpm.shortname)
+
+	def getSiblingsForPackage(self, queryRpm):
+		obsBuild = self.getBuildForPackage(queryRpm)
+		if obsBuild is None:
+			return []
+		return obsBuild.binaries
+
+	def enumerateBuildRequirements(self, obsBuild):
+		if not obsBuild.sources:
+			print(f"Warning: no source package for {obsBuild} (could be an import)")
+
+		for srpm in obsBuild.sources:
+			for rpm in srpm.enumerateRequiredRpms():
+				label = self.getLabelForPackage(rpm)
+				if label is None:
+					print(f"Error: {obsBuild} requires {rpm} for building, but this package has not been labelled yet")
+					continue
+
+				yield rpm, label
 
 	def bottomUpTraversal(self, *args, **kwargs):
 		return iter(self.labelOrder.bottomUpTraversal(*args, **kwargs))
@@ -122,7 +179,7 @@ class QueryContext(object):
 				result.append(label)
 		return result
 
-class RequirementsReport(object):
+class RequirementsReportBase(object):
 	class PackageRequirements:
 		def __init__(self, rpm, label):
 			self.rpm = rpm
@@ -153,10 +210,36 @@ class RequirementsReport(object):
 		self.context = context
 		self.verbosityLevel = verbosityLevel
 		self.inspectLabelSet = inspectLabelSet
+		self._dependencies = {}
+
+	def addPackageRequirements(self, predicate, rpm):
+		requirements = self._dependencies.get(rpm.name)
+		if requirements is None:
+			label = predicate.getLabel(rpm)
+			requirements = self.PackageRequirements(rpm, label)
+			self._dependencies[rpm.name] = requirements
+
+			for req in filter(predicate, rpm.enumerateRequiredRpms()):
+				if req is rpm:
+					continue
+				# I'm too lazy right now to use the ResolverHints to transform
+				# dependencies:
+				if req.name in ('systemd', 'udev'):
+					continue
+
+				requirements.children.append(self.addPackageRequirements(predicate, req))
+		return requirements
+
+	def requirementsForRpm(self, rpm):
+		return self._dependencies.get(rpm.name, None)
+
+class RequirementsReport(RequirementsReportBase):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+
 		self.requiringLabels = Classification.createLabelSet()
 		self._paths = {}
 		self._packages = {}
-		self._dependencies = {}
 		self._subtrees = {}
 		self.dropRequirementsFrom = Classification.createLabelSet()
 
@@ -183,27 +266,6 @@ class RequirementsReport(object):
 		if predicate is not None:
 			self.addPackageRequirements(predicate, rpm)
 
-	def addPackageRequirements(self, predicate, rpm):
-		requirements = self._dependencies.get(rpm.name)
-		if requirements is None:
-			label = predicate.getLabel(rpm)
-			requirements = self.PackageRequirements(rpm, label)
-			self._dependencies[rpm.name] = requirements
-
-			for req in filter(predicate, rpm.enumerateRequiredRpms()):
-				if req is rpm:
-					continue
-				# I'm too lazy right now to use the ResolverHints to transform
-				# dependencies:
-				if req.name in ('systemd', 'udev'):
-					continue
-
-				requirements.children.append(self.addPackageRequirements(predicate, req))
-		return requirements
-
-	def addDependency(self, rpm, requiredRpm, label):
-		self._dependencies[rpm] = (requiredRpm, label)
-
 	def adviseDropRequirements(self, label, explicitRequirement):
 		self.dropRequirementsFrom.add(label)
 
@@ -224,9 +286,6 @@ class RequirementsReport(object):
 	def pathsForLabel(self, topic):
 		return self._paths.get(topic, [])
 
-	def requirementsForRpm(self, rpm):
-		return self._dependencies.get(rpm.name, None)
-
 	def subtreeForLabel(self, topic):
 		subtree = self._subtrees.get(topic)
 		if subtree is None:
@@ -235,6 +294,73 @@ class RequirementsReport(object):
 		topicOrder = self.context.labelOrder
 		subtree = topicOrder.convexClosureForSet(subtree)
 		return topicOrder.asTreeFormatter(subtree, topDown = True)
+
+class BuildRequirementsReport(RequirementsReportBase):
+	class BuildRequirements(object):
+		def __init__(self, requiredRpms = None, requiredTopics = None):
+			if requiredRpms is None:
+				requiredRpms = set()
+			self.requiredRpms = requiredRpms
+
+			if requiredTopics is None:
+				requiredTopics = Classification.createLabelSet()
+			self.requiredTopics = requiredTopics
+
+		def intersection_update(self, requiredRpms, requiredTopics):
+			self.requiredRpms.intersection_update(requiredRpms)
+			self.requiredTopics.intersection_update(requiredTopics)
+
+		def update(self, requiredRpms, requiredTopics):
+			self.requiredRpms.update(requiredRpms)
+			self.requiredTopics.update(requiredTopics)
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+
+		self._buildRequires = {}
+
+		self._commonRequired = None
+		self._allRequired = self.BuildRequirements()
+
+	def __bool__(self):
+		return bool(self._buildRequires)
+
+	def __len__(self):
+		return len(self._buildRequires)
+
+	def add(self, obsBuild, requiredRpms, requiredTopics):
+		self._buildRequires[obsBuild] = self.BuildRequirements(requiredRpms, requiredTopics)
+
+		if self._commonRequired is None:
+			self._commonRequired = self.BuildRequirements(requiredRpms, requiredTopics)
+		else:
+			self._commonRequired.intersection_update(requiredRpms, requiredTopics)
+
+		self._allRequired.update(requiredRpms, requiredTopics)
+
+	def enumerate(self):
+		for obsBuild, req in self._buildRequires.items():
+			yield obsBuild, req.requiredTopics, req.requiredRpms
+
+	@property
+	def allRequiredTopics(self):
+		return self._allRequired.requiredTopics
+
+	@property
+	def allRequiredRpms(self):
+		return self._allRequired.requiredRpms
+
+	@property
+	def commonRequiredTopics(self):
+		if self._commonRequired is None:
+			return Classification.createLabelSet()
+		return self._commonRequired.requiredTopics
+
+	@property
+	def commonRequiredRpms(self):
+		if self._commonRequired is None:
+			return set()
+		return self._commonRequired.requiredRpms
 
 class BooleanPredicateWithCache(object):
 	def __init__(self):
@@ -256,10 +382,11 @@ class BooleanPredicateWithCache(object):
 		return result
 
 class PackageRequiresLabelsPredicate(BooleanPredicateWithCache):
-	def __init__(self, classification, focusLabels):
+	def __init__(self, classification, focusLabels, excludePackages = None):
 		super().__init__()
 		self.classification = classification
 		self.focusLabels = focusLabels
+		self.excludePackages = excludePackages
 
 		self._nameToLabel = {}
 		for label, members in classification.enumeratePackages():
@@ -268,6 +395,10 @@ class PackageRequiresLabelsPredicate(BooleanPredicateWithCache):
 
 	def compute(self, rpm):
 		assert(rpm is not None)
+		if self.excludePackages is not None:
+			if rpm in self.excludePackages:
+				return False
+
 		label = self._nameToLabel.get(rpm.name)
 		if label in self.focusLabels:
 			return True
@@ -303,6 +434,9 @@ class QuerySubject(object):
 	def __init__(self, queryName, context):
 		self.queryName = queryName
 		self.context = context
+
+	def __str__(self):
+		return self.queryName
 
 	def getLabelsForComponent(self, component):
 		return self.context.getLabelsForComponent(component)

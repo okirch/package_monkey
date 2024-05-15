@@ -4,7 +4,7 @@ from options import Application
 from filter import Classification, PackageFilter
 from util import IndexFormatter, IndexFormatterTwoLevels, CountingDict
 from queries import QueryContext, QuerySubjectComponent, QuerySubjectComponentOrTopic
-from queries import PackageRequiresLabelsPredicate, RequirementsReport
+from queries import PackageRequiresLabelsPredicate, RequirementsReport, BuildRequirementsReport
 from csvio import CSVWriter
 
 class QueryApplication(Application):
@@ -18,6 +18,7 @@ class QueryApplication(Application):
 		self.addArgument('--list', action = 'store_true', default = False)
 		self.addArgument('--requires', action = 'store_true', default = False)
 		self.addArgument('--what-requires', action = 'append', default = [])
+		self.addArgument('--what-build-requires', action = 'append', default = [])
 		self.addArgument('--unclassified', action = 'store_true', default = False)
 		self.addArgument('--inversions', action = 'store_true', default = False)
 		self.addArgument('--bubble-up', action = 'store_true', default = False)
@@ -43,6 +44,8 @@ class QueryApplication(Application):
 			actions.append(RequiresQuery(context))
 		if self.opts.what_requires:
 			actions.append(WhatRequiresQuery(context, self.opts.what_requires))
+		if self.opts.what_build_requires:
+			actions.append(WhatBuildRequiresQuery(context, self.opts.what_build_requires))
 		if self.opts.imports:
 			actions.append(ImportedLabelsQuery(context))
 		if self.opts.unclassified:
@@ -239,6 +242,132 @@ class WhatRequiresQuery(GenericQuery):
 					explicitRequirement = label.configuredRuntimeRequires.intersection(inspectLabelSet)
 					if explicitRequirement and not result.packagesForLabel(label):
 						result.adviseDropRequirements(label, explicitRequirement)
+
+		return result
+
+class WhatBuildRequiresRenderer(Renderer):
+	def renderRequirementsReport(self, component, requirementsReport, requiredLabel):
+		if not requirementsReport:
+			print(f"   {component}: nothing requires {requiredLabel}")
+		elif not requirementsReport.verbosityLevel:
+			print(f"   {component}: the following packages buildrequire {requiredLabel}")
+			for rpm in requirementsReport.allRequiredRpms:
+				print(f"      {rpm}")
+		else:
+			print(f"   {component}: the following packages buildrequire {requiredLabel}")
+			self.renderRequirementsReportDetails(component, requirementsReport)
+
+	def renderRequirementsReportDetails(self, component, requirementsReport):
+		if len(requirementsReport) <= 1:
+			commonRpms = set()
+		else:
+			commonRpms = requirementsReport.commonRequiredRpms
+			if commonRpms:
+				print(f"     Packages required by all of the following builds:")
+				self.renderPackages(commonRpms)
+			print()
+
+		verbosityLevel = self.context.verbosityLevel
+		for obsBuild, requiredTopics, requiredRpms in requirementsReport.enumerate():
+			if not requiredRpms:
+				if verbosityLevel < 2:
+					print(f"     {obsBuild} (only label dependency)")
+				continue
+
+			extraRpms = requiredRpms.difference(commonRpms)
+			if not extraRpms:
+				print(f"     {obsBuild} (only common packages)")
+				continue
+
+			print(f"     {obsBuild}:")
+
+			if obsBuild.sources:
+				srpm = obsBuild.sources[0]
+				requirements = requirementsReport.requirementsForRpm(srpm)
+				if requirements:
+					tf = requirements.format()
+					for prefix, node in tf.render():
+						if node.label is not None:
+							print(f"     {prefix}{node.rpm} ({node.label})")
+						else:
+							print(f"     {prefix}{node.rpm}")
+					continue
+
+			self.renderPackages(extraRpms)
+
+		return
+
+	def renderPackages(self, rpmSet):
+		for rpm in sorted(rpmSet, key = lambda R: str(self.context.getLabelForPackage(R))):
+			label = self.context.getLabelForPackage(rpm)
+			print(f"       {rpm} ({label.componentName}:{label})")
+
+class WhatBuildRequiresQuery(GenericQuery):
+	def __init__(self, context, what_requires, renderer = None):
+		if renderer is None:
+			renderer = WhatBuildRequiresRenderer(context)
+		super().__init__(context, renderer)
+		self.what_requires = what_requires
+
+	def __call__(self, queryTargetLabel):
+		renderer = self.renderer
+		context = self.context
+
+		querySubject = QuerySubjectComponentOrTopic("what-build-requires", context, queryTargetLabel)
+
+		for req in self.what_requires:
+			topic = context.getLabel('label', req)
+
+			if topic.type is Classification.TYPE_BINARY:
+				inspectLabelSet = Classification.createLabelSet([topic])
+			elif topic.type is Classification.TYPE_SOURCE:
+				inspectLabelSet = context.getLabelsForComponent(topic)
+			else:
+				raise Exception(f"{self.__class__.__name__}: label type {topic.type} not supported")
+
+			report = self.getTopicsRequiringLabelSet(querySubject, inspectLabelSet)
+
+			renderer.renderRequirementsReport(queryTargetLabel, report, topic)
+
+	def getTopicsRequiringLabelSet(self, querySubject, inspectLabelSet):
+		verbosityLevel = self.context.verbosityLevel
+		labelOrder = self.context.labelOrder
+
+		result = BuildRequirementsReport(self.context, inspectLabelSet, verbosityLevel = verbosityLevel)
+
+		predicate = None
+		if verbosityLevel:
+			predicate = PackageRequiresLabelsPredicate(self.context.classification, inspectLabelSet)
+			store = self.context.connectDatabase()
+
+		obsBuilds = set()
+		for label in querySubject.binaryLabels:
+			for rpm in self.context.getPackagesForLabel(label, fromDB = True):
+				build = self.context.getBuildForPackage(rpm)
+				if build is None:
+					raise Exception(f"unable to find an OBS build for {rpm} ({label})")
+				obsBuilds.add(build)
+
+		labelOrder = self.context.labelOrder
+		inspectUpperCone = labelOrder.upwardClosureForSet(inspectLabelSet)
+
+		for obsBuild in sorted(obsBuilds, key = str):
+			requiredTopics = Classification.createLabelSet()
+			requiredRpms = set()
+			for rpm, requiredLabel in self.context.enumerateBuildRequirements(obsBuild):
+				if requiredLabel in inspectUpperCone:
+					requiredTopics.update(inspectLabelSet.intersection(labelOrder.downwardClosureFor(requiredLabel)))
+				if requiredLabel in inspectLabelSet:
+					requiredRpms.add(rpm)
+
+			if predicate and obsBuild.sources:
+				assert(len(obsBuild.sources) == 1)
+				srpm = obsBuild.sources[0]
+				if predicate(srpm):
+					result.addPackageRequirements(predicate, srpm)
+
+			if requiredTopics:
+				result.add(obsBuild, requiredRpms, requiredTopics)
 
 		return result
 
@@ -452,6 +581,9 @@ class InversionsQuery(WhatRequiresQuery):
 
 		visibleComponents = Classification.createLabelSet()
 		for componentLabel in context.enumerateLabelsForQuery(opts.components):
+			if componentLabel.type is Classification.TYPE_BINARY:
+				assert(componentLabel.sourceProject is not None)
+				componentLabel = componentLabel.sourceProject
 			visibleComponents.update(componentOrder.downwardClosureFor(componentLabel))
 
 		visibleTopics = Classification.createLabelSet()

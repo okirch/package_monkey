@@ -2,9 +2,10 @@
 
 from options import Application
 from filter import Classification, PackageFilter
-from util import IndexFormatterTwoLevels, CountingDict
+from util import IndexFormatter, IndexFormatterTwoLevels, CountingDict
 from queries import QueryContext, QuerySubjectComponent, QuerySubjectComponentOrTopic
 from queries import PackageRequiresLabelsPredicate, RequirementsReport
+from csvio import CSVWriter
 
 class QueryApplication(Application):
 	def __init__(self, name, *args, **kwargs):
@@ -20,7 +21,9 @@ class QueryApplication(Application):
 		self.addArgument('--unclassified', action = 'store_true', default = False)
 		self.addArgument('--inversions', action = 'store_true', default = False)
 		self.addArgument('--bubble-up', action = 'store_true', default = False)
+		self.addArgument('--food-for-pm', action = 'store_true', default = False)
 		self.addArgument('--ignore', action = 'append', default = [])
+		self.addArgument('--output-directory', default = None)
 		self.addArgument('--max-alternatives')
 		self.parseArguments()
 
@@ -48,6 +51,8 @@ class QueryApplication(Application):
 			actions.append(InversionsQuery(context, self.opts.ignore))
 		if self.opts.bubble_up:
 			actions.append(BubbleUpQuery(context))
+		if self.opts.food_for_pm:
+			actions.append(FoodForPMQuery(context, self.opts.output_directory, ignore = self.opts.ignore))
 
 		if len(actions) != 1:
 			raise Exception(f"Expected exactly one action argument")
@@ -636,5 +641,139 @@ class RequiresQuery(GenericQuery):
 				print(f" {prefix}{label}")
 		print()
 		return
+
+class FoodForPMQuery(GenericQuery):
+	def __init__(self, context, outputPath = None, ignore = []):
+		super().__init__(context, None)
+		self.outputPath = outputPath
+		self.once = False
+
+		self.ignore = None
+		if ignore is not None:
+			self.ignore = Classification.createLabelSet()
+			for name in ignore:
+				label = context.getLabel('ignored label', name)
+				if label.type is Classification.TYPE_BINARY:
+					self.ignore.add(label)
+				elif label.type is Classification.TYPE_SOURCE:
+					self.ignore.update(context.getLabelsForComponent(label))
+				else:
+					raise Exception(f"Cannot ignore label {name} - unsupported type {label.type}")
+
+		self._packageTopicsWritten = Classification.createLabelSet()
+
+	def __call__(self, queryTargetLabel):
+		if self.once:
+			return
+		self.once = True
+
+		context = self.context
+		topicOrder = context.labelOrder
+		allTopics = context.allBinaryLabels
+
+		# we only ever look at base labels
+		baseTopics = Classification.createLabelSet()
+		topicPackageCount = CountingDict()
+		baseTopicClosure = {}
+		for topic in allTopics:
+			baseLabel = topic.baseLabel
+			baseTopics.add(baseLabel)
+
+			count = len(context.classification.getPackagesForLabel(topic))
+			topicPackageCount.increment(baseLabel, count)
+
+			closure = baseTopicClosure.get(baseLabel)
+			if closure is None:
+				closure = Classification.createLabelSet()
+				baseTopicClosure[baseLabel] = closure
+			closure.update(topicOrder.downwardClosureFor(topic))
+
+		# ignore any topics that exist just as a handle (like @SystemPythonCore is a front for @Python311)
+		empty = Classification.createLabelSet(filter(lambda topic: not topicPackageCount[topic], baseTopics))
+		baseTopics.difference_update(empty)
+
+		apiTopics = Classification.createLabelSet(filter(lambda L: L.isAPI, allTopics))
+
+		allTopics = baseTopics.difference(apiTopics)
+
+		firstLevelTopics = topicOrder.maxima(allTopics)
+
+		firstLevelTopicsClosure = topicOrder.upwardClosureForSet(firstLevelTopics)
+		secondLevelTopics = topicOrder.maxima(allTopics.difference(firstLevelTopicsClosure))
+
+		if self.ignore:
+			firstLevelTopics.difference_update(self.ignore)
+			secondLevelTopics.difference_update(self.ignore)
+
+		csv = None
+
+		print(f"First level topics")
+		if self.outputPath is not None:
+			csv = CSVWriter(self.outputPath + "/firstlevel.csv", ['component', 'topic'])
+
+		for topic in self.sortedTopics(firstLevelTopics):
+			print(f"   {topic.componentName}:{topic}")
+			if csv:
+				csv.write((topic.componentName, topic.name))
+
+		print(f"Second level topics")
+		if self.outputPath is not None:
+			csv = CSVWriter(self.outputPath + "/secondlevel.csv", ['component', 'topic', 'required by'])
+
+		for topic in self.sortedTopics(secondLevelTopics):
+			print(f"   {topic.componentName}:{topic} required by:")
+			for upper in self.dominatingLabels(topic):
+				print(f"     {upper.componentName}:{upper}")
+				if csv:
+					csv.write((topic.componentName, topic.name, upper.name))
+
+		if self.outputPath is not None:
+			csv = CSVWriter(self.outputPath + "/packages.csv", ['component', 'topic', 'package'])
+			for topic in firstLevelTopics:
+				self.writePackagesForTopic(topic, csv)
+			for topic in secondLevelTopics:
+				self.writePackagesForTopic(topic, csv)
+
+	def sortedTopics(self, topics):
+		def sortkey(label):
+			return (label.componentName, label.name)
+		return sorted(topics, key = sortkey)
+
+	def dominatingLabels(self, topic):
+		topicOrder = self.context.labelOrder
+
+		result = Classification.createLabelSet()
+		for label in topicOrder.upperNeighbors(topic):
+			label = label.baseLabel
+			if label is topic:
+				continue
+			# this doesn't work right now because we don't store the "is api for" relation in
+			# the XML file generated by the labelling run
+			if label is topic.correspondingAPI:
+				continue
+
+			# what we do instead is we hide all API labels at this point
+			if label.isAPI:
+				continue
+
+			result.add(label)
+
+		return result
+
+	def writePackagesForTopic(self, topic, csv):
+		context = self.context
+		topicOrder = context.labelOrder
+
+		topicClosure = topicOrder.upwardClosureFor(topic).difference(self._packageTopicsWritten)
+		self._packageTopicsWritten.update(topicClosure)
+
+		packages = set()
+		for rpm in context.classification.getPackagesForLabel(topic):
+			for sib in context.getSiblingsForPackage(rpm):
+				if context.getLabelForPackage(sib) in topicClosure:
+					packages.add(sib)
+
+		for rpm in packages:
+			csv.write((topic.componentName, topic.name, rpm.shortname))
 
 main()

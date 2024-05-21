@@ -111,7 +111,6 @@ groups:
    requires:
     - "@Core0"
     - "@UdevLibraries"
-    - "@ArchivingLibraries"
    packages:
     - libbytesize
    binaries:

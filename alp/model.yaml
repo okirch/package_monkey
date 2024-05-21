@@ -1,7 +1,7 @@
 # vi: ai et
 
 name:                   Testing
-type:                   "component-centric"
+type:                   "project-centric"
 source_repository:      "SUSE:ALP:Source:Standard:1.0/standard"
 target_project_base:    "home:okir:CM"
 target_architectures:
@@ -35,6 +35,16 @@ defaults:
         # we can no longer use the old Workbench repository because it doesn't have gcc:build yet
         #bootstrap_repository:  "SUSE:ALP:Workbench:1.0/standard"
 
+projects:
+  Foundations:
+    bootstrap: self
+    components:
+     - GCC
+     - Core
+     - KernelPlus
+     - SELinux
+     - HardwareAccess
+
 workbench:
   include:
    - "@Graphviz"
@@ -51,7 +61,7 @@ workbench:
    - "@Vala"
    - "@GtkDoc"
    - "@ManDoc+ruby"
-   - "@RpmBuild+lint"
+   - "@RpmLint"
    - "@Valgrind"
    - "@ManDoc"
    - "@Docbook"
@@ -76,7 +86,7 @@ components:
    bootstrap: self
    exports:
      runtime:
-      - "@Spelling+perl"
+      - "@Spelling"
       - "@Glib2+python"
       - "@Console"
      api:

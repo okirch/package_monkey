@@ -253,3 +253,23 @@ groups:
       binaries:
        - nvme-stas
 
+ - name: "@CrashdumpAPI"
+   sourceproject: Host
+   requires:
+    - "@Crashdump"
+    - "@ArchivingAPI"
+   binaries:
+    - libkdumpfile-devel
+
+ - name: "@Crashdump"
+   api: "@CrashdumpAPI"
+   sourceproject: Host
+   requires:
+    - "@Kernel"
+    - "@SystemdLibraries"
+    - "@ArchivingLibraries"
+   binaries:
+    - makedumpfile
+    - kdump
+    - libkdumpfile10
+    - crash

@@ -26,6 +26,7 @@ options:
    - metis
    - openblas
    - openblas
+   - openssh
    - python-numpy
    - python-scipy
    - superlu
@@ -35,6 +36,9 @@ options:
    - gcc13
    - glibc
    - ibutils
+   - cmake
+   - doxygen
+   - unzip
 
 autoflavors:
  - name: perl

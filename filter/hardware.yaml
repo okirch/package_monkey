@@ -305,11 +305,14 @@ groups:
     - libvma9
     - opa-*
     - smc-tools
+    - libiscsi-utils
     - ibacm
    buildflavors:
     - name: test
       requires:
-       - "@DevelopmentCore"
+       - "@UnitTestLibraries"
+      binaries:
+       - libiscsi-test
     - name: snmp
       # SNMP stuff has moved to component Network
       requires:

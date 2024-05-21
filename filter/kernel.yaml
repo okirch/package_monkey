@@ -74,7 +74,6 @@ groups:
     - libpciaccess0
     - libhwloc15
     - libhugetlbfs
-    - libsensors4
     - libell0
     - libtracefs1
     - libtraceevent1
@@ -116,13 +115,6 @@ groups:
       binaries:
        - hwloc-gui
        - hwloc-gl
-    - name: kdump
-      autoselect: no
-      requires:
-       - "@ArchivingLibraries"
-      binaries:
-       - libkdumpfile10
-       - crash
 
  - name: "@KernelCryptoAPI"
    sourceproject: KernelPlus
@@ -272,7 +264,6 @@ groups:
     # lksctp-tools-devel buildrequires lksctp-tools
     - "@KernelNetworkUtils"
    binaries:
-    - libsensors4-devel
     - libpciaccess-devel
     - keyutils-devel
     - lksctp-tools-devel
@@ -291,12 +282,6 @@ groups:
        - device-mapper-devel
        - libnvme-devel
        - lvm2-devel
-    - name: kdump
-      requires:
-       - "@KernelLibraries+kdump"
-       - "@ArchivingAPI"
-      binaries:
-       - libkdumpfile-devel
     - name: ksyms
       requires:
        - "@CoreAPI"
@@ -337,7 +322,6 @@ groups:
     - numad
     - sdparm
     - ucode-intel
-    - sensors
     - virt-what
     - sevctl
     - smbios-utils
@@ -347,22 +331,11 @@ groups:
     - conntrack-tools
     - irqbalance
     - irqbalance-ui
+    - kexec-tools
    buildflavors:
     - name: obs
       binaries:
        - kernel-obs-build
-    - name: systemd
-      requires:
-       - "@SystemdLibraries"
-      binaries:
-       - conntrack-tools
-       - kexec-tools
-       - kdump
-    - name: rrd
-      requires:
-       - "@RRDSupportLibraries"
-      binaries:
-       - sensord
     - name: powerpc
       requires:
        - "@ConfigFileLibraries"

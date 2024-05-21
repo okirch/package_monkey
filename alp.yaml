@@ -111,6 +111,18 @@ resolverhints:
      warning: "dbus-1-devel should not depend on dbus-1"
      ignore:
       - dbus-1
+   - name: gettext-tools
+     ignore: info
+   - name: autoconf
+     ignore: info
+   - name: automake
+     ignore: info
+   - name: aspell
+     ignore: info
+   - name: dejagnu
+     ignore: info
+   - name: libgpg-error-devel
+     ignore: info
 
   ignore:
     # we want to place these somewhere in Core, but dont want to pollute Core
@@ -250,9 +262,6 @@ resolverhints:
      - acceptable:
          - libgtop
          - libgtop-2_0-11
-     - acceptable:
-         - unzip
-         - unzip-rcc
      - acceptable:
          - texlive-hyphen-base
          - texlive-lambda
@@ -616,5 +625,7 @@ resolverhints:
        alias: javacc-bootstrap
      - collapse: scala
        alias: scala-bootstrap
+     - collapse: unzip
+       alias: unzip-rcc
      - collapse: maven-resources-plugin
        alias: maven-resources-plugin-bootstrap

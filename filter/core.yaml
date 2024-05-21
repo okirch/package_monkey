@@ -232,6 +232,7 @@ groups:
     - "@CoreAPI"
    binaries:
     - rpm-build
+    - rpm-build-perl
     - rpm-devel
    buildflavors:
     - name: lua
@@ -367,6 +368,8 @@ groups:
     # But then, quite a few labels in HardwareAccess would suddenly depend on
     # CorePlus, which we do not want.
     - lz4
+    # The same argument, except with several build tools that rely on libarchive
+    - libarchive
    binaries:
     - environment_with_systemd
     - environment_with_udev
@@ -433,6 +436,7 @@ groups:
     - libldapcpp0
     - liblmdb-0*
     - liblz4*
+    - libarchive13
     - liblzma5
     - liblzo2*
     - libminizip1
@@ -564,6 +568,7 @@ groups:
     - rpm:python-rpm
     - libpwquality
     - bzip2
+    - bsdtar
    binaries:
     - rpm
     # this is placed in Core because suse-module-tools requires it
@@ -654,6 +659,7 @@ groups:
     - tar
     - tcsh
     - time
+    - unzip
     - util-linux*
     - which
     - wtmpdb
@@ -882,11 +888,6 @@ groups:
        - "@PlatformCryptoLibraries"
       binaries:
        - gpm2-tpm
-    - name: gtk
-      requires:
-       - "@Gtk3"
-      binaries:
-       - openssh-askpass-gnome
 
  - name: "@CoreHardware"
    sourceproject: Core

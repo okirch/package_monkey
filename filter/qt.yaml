@@ -68,10 +68,13 @@ groups:
     - "@Glib2Networking"
     - "@SmartcardLibraries"
     - "@InputDeviceLibraries"
+    - "@Doxygen"
    packages:
     - qt6-base
     - libqt5-qtbase
+    - doxygen:doxywizard
    binaries:
+    - doxywizard
     - libQt6Concurrent6
     - libQt6Core6
     - libQt6DBus6
@@ -387,3 +390,10 @@ groups:
 #      - python3-pyside2-devel purpose=devel
        - python3-pyside2-examples purpose=doc
 
+ - name: "@CMakeGUI"
+   sourceproject: Qt
+   requires:
+    - "@EssentialQtLibraries"
+    - "@MinimalCDevelopment"
+   binaries:
+    - cmake-gui

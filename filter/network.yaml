@@ -296,7 +296,7 @@ groups:
    sourceproject: Network
    requires:
     - "@CoreAPI"
-    - "@KernelAPI"
+    - "@HardwareMonitoringAPI"
     - "@RpmAPI"
     - "@SNMPLibraries"
    binaries:
@@ -309,7 +309,7 @@ groups:
     - "@Core0"
     - "@PerlCore"
     - "@CoreNetworkLibraries"
-    - "@KernelLibraries"
+    - "@HardwareMonitoringLibraries"
    binaries:
     - net-snmp
     - perl-SNMP

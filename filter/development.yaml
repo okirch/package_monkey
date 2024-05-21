@@ -2,22 +2,29 @@
 # Definition of Development component
 
 components:
+ - name: CoreWorkbench
+   globals:
+    devel: CoreWorkbenchDevel
+   requires:
+    - Core
+    - GCC
+   exports:
+    - "@DevelopmentRuntime"
+    - "@GettextTools"
+    - "@MinimalCDevelopment"
+
  - name: Development
    globals:
     devel: DevelopmentDevel
    requires:
-    - Core
+    - CoreWorkbench
     - CorePlus
-    - GCC
     - Python
     - LUA
    exports:
-    - "@DevelopmentRuntime"
     - "@DevelopmentEssentials"
-    - "@GettextTools"
     - "@DevelopmentCore"
     # These are really exported for devel only
-    - "@MinimalCDevelopment"
     - "@Meson"
 
 build_configs:
@@ -55,10 +62,9 @@ groups:
     - "@Core0"
 
  - name: "@BaseDevTools"
-   sourceproject: Development
+   sourceproject: CoreWorkbench
    requires:
-    - "@DevelopmentCore"
-    - "@SystemPythonStandard"
+    - "@SystemPythonCore"
    binaries:
     - bison
     - datefudge
@@ -96,7 +102,7 @@ groups:
        - ocaml-graphics
 
  - name: "@DevelopmentRuntime"
-   sourceproject: Development
+   sourceproject: CoreWorkbench
    requires:
     - "@MinimalCRuntime"
    binaries:
@@ -104,10 +110,10 @@ groups:
     - gettext-runtime-mini
 
  - name: "@GettextTools"
-   sourceproject: Development
+   sourceproject: CoreWorkbench
    requires:
     - "@Core0"
-    - "@InfoReader"
+#   - "@InfoReader"
    binaries:
     - gettext-runtime
     - gettext-tools-mini
@@ -165,16 +171,15 @@ groups:
    description: |
      This defines the set of packages that have to be present in order
      to install the average -devel package.
-   sourceproject: Development
+   sourceproject: CoreWorkbench
    autoselect: no
    requires:
     - "@DevelopmentRuntime"
     - "@GCC"
     - "@Guile" # for autogen
-    - "@SystemPython" # for cmake-mini
+    - "@SystemPythonCore" # for cmake-mini
     - "@PerlCore"
     - "@CoreXMLLibraries"
-    - "@ArchivingLibraries"
     - "@GettextTools"
    binaries:
     # llvm15 requires libtool
@@ -189,12 +194,64 @@ groups:
     - cmake-mini
     - cmake
     - make
-   buildflavors:
-    - name: qt
-      requires:
-       - "@EssentialQtLibraries"
-      binaries:
-       - cmake-gui
+    - gperf
+
+ - name: "@UnitTestAPI"
+   sourceproject: CoreWorkbench
+   requires:
+    - "@UnitTestLibraries"
+    - "@CoreAPI"
+   binaries:
+    - cunit-devel
+    - check-devel
+
+ - name: "@UnitTestLibraries"
+   api: "@UnitTestAPI"
+   sourceproject: CoreWorkbench
+   requires:
+    - "@MinimalCDevelopment"
+    - "@GCC"
+   binaries:
+    - libcunit1
+    - libcheck0
+
+ - name: "@UnitTests"
+   api: "@UnitTestAPI"
+   sourceproject: CoreWorkbench
+   requires:
+    - "@MinimalCDevelopment"
+    - "@GCC"
+    - "@TclCore"
+   packages:
+    - cunit
+    - check
+   binaries:
+    - dejagnu
+
+ - name: "@Doxygen"
+   sourceproject: CoreWorkbench
+   requires:
+    - "@MinimalCDevelopment"
+   binaries:
+    - doxygen
+
+ - name: "@OBSEssentials"
+   sourceproject: CoreWorkbench
+   requires:
+    - "@MinimalCDevelopment"
+    - "@Doxygen"
+    - "@PerlCore"
+    - "@Core0"
+   binaries:
+    - build
+    - build-compare
+    - build-mkbaselibs
+    - brp-check-suse
+    - memory-constraints
+    - post-build-checks
+    - python-rpm-packaging
+    # OBS wants to install it everywhere
+    - rzsz
 
  - name: "@DevelopmentCore"
    description: |
@@ -203,6 +260,7 @@ groups:
    sourceproject: Development
    requires:
     - "@MinimalCDevelopment"
+    - "@OBSEssentials"
     - "@GCC"
     - "@Guile"
     - "@Kernel+obs"
@@ -213,22 +271,8 @@ groups:
     - "@Texinfo"
     - "@SystemPython"
    binaries:
-    - memory-constraints
-    - brp-check-suse
-    - build-compare
-    - build-mkbaselibs
-    - doxygen
-    - gperf
-    - post-build-checks
     - swig
-    - libcunit1
-    - libcheck0
-    # OBS wants to install it everywhere
-    - rzsz
    buildflavors:
-    - name: qt
-      requires:
-       - "@EssentialQtLibraries"
     - name: llvm
       requires:
        - "@LLVMRuntime"
@@ -244,10 +288,10 @@ groups:
     - valgrind-devel
     - valgrind-client-headers
 
- - name: "@DevelopmentUnused"
-   sourceproject: Development
+ - name: "@CoreWorkbenchUnused"
+   sourceproject: CoreWorkbench
    requires:
-    - "@DevelopmentCore"
+    - "@MinimalCDevelopment"
    binaries:
     - autoconf-el
 
@@ -279,9 +323,9 @@ groups:
     - "@SystemPythonStandard"
     - "@GCCDevel"
     - "@DevelopmentUnitTests"
+    - "@OBSEssentials"
     - "@Git"
    binaries:
-    - python-rpm-packaging
     - obs-service-*
     - uasm
     - yasm
@@ -299,11 +343,10 @@ groups:
     - "@Texinfo"
     - "@CoreAPI"
     - "@Glib2API"
+    - "@UnitTests"
    packages:
     - libcmocka
     - umockdev
-    - cunit
-    - check
     - Catch2
     - Catch2-2
    binaries:
@@ -314,10 +357,7 @@ groups:
     - libumockdev-preload0
     - umockdev
     - umockdev-devel
-    - cunit-devel
-    - check-devel
     - Catch2-2-devel
-    - dejagnu
 
  - name: "@DebianCompat"
    is_api: True

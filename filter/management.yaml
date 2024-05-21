@@ -44,7 +44,7 @@ groups:
    requires:
     - "@CoreLibraries"
     - "@FontLibraries+x11"
-    - "@Glib2NoDBus"
+    - "@Glib2Core"
     - "@CommonDatabaseLibraries"
    binaries:
     - librrd8
@@ -56,7 +56,33 @@ groups:
     - "@TclCore"
     - "@RRDSupportLibraries"
    binaries:
+
+ - name: "@HardwareMonitoringAPI"
+   sourceproject: Management
+   requires:
+    - "@HardwareMonitoring"
+    - "@CoreAPI"
+   binaries:
+     - libsensors4-devel
+
+ - name: "@HardwareMonitoringLibraries"
+   api: "@HardwareMonitoringAPI"
+   sourceproject: Management
+   requires:
+    - "@Kernel"
+   binaries:
+    - libsensors4
+
+ - name: "@HardwareMonitoring"
+   sourceproject: Management
+   requires:
+    - "@HardwareMonitoringLibraries"
+    - "@RRDSupportLibraries"
+    - "@TclCore"
+   binaries:
     - rrdtool
+    - sensors
+    - sensord
 
  - name: "@PCPAPI"
    sourceproject: Management
@@ -77,7 +103,7 @@ groups:
    requires:
     - "@Core0"
     - "@Perl"
-    - "@KernelLibraries"
+    - "@HardwareMonitoringLibraries"
     - "@DefaultPythonStandard"
     - "@AvahiLibraries"
     - "@GCC"
@@ -173,6 +199,7 @@ groups:
     - "@ManagementLibraries"
    binaries:
     - augeas
+    - augeas-lenses
 
  - name: "@YastCommonAPI"
    sourceproject: Management
@@ -430,6 +457,7 @@ groups:
     - "@Kernel"
     - "@Busybox"
     - "@PrintingLibraries"
+    - "@HardwareMonitoring"
    binaries:
     - monitoring-plugins-*
     - nagios-rpm-macros purpose=devel

@@ -281,6 +281,15 @@ groups:
     - "@EssentialGraphicsAPI"
     - "@GdkPixbufAPI"
 
+ - name: "@OpenSSHAskPassGnome"
+   sourceproject: Gtk
+   requires:
+    - "@CoreCrypto"
+    - "@Glib2Core"
+    - "@Gtk3"
+   binaries:
+    - openssh-askpass-gnome
+
  - name: "@AppstreamAPI"
    sourceproject: Gtk
    requires:

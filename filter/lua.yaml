@@ -1,5 +1,8 @@
 # vi: ai et
 # Definition of LUA component
+#
+# It's tempting to move all LUA stuff into Core, or at least the @SystemLUA part.
+# However, this also means moving unzip into Core, which is currently in CorePlus
 
 components:
  - name: LUA
@@ -37,7 +40,6 @@ templates:
       api: "@LUAAPI"
       requires:
        - "@Core0"
-       - "@Archivers"
        - "@LUARuntimeVERSION"
       binaries:
        - luaVERSION

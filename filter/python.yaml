@@ -667,11 +667,12 @@ templates:
        - name: kernel
          requires:
           - "@Kernel"
-          - "@KernelLibraries+kdump"
+          - "@Crashdump"
          binaries:
           - pythonXXX-pandas-fss
           - pythonXXX-libkdumpfile
           - pythonXXX-drgn
+          - pythonXXX-libkdumpfile
        - name: hpc
          requires:
           - "@Infiniband"

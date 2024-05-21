@@ -292,8 +292,15 @@ groups:
    binaries:
     - sassc
 
+ - name: "@GuileAPI"
+   sourceproject: Core
+   requires:
+    - "@CoreAPI"
+    - "@Guile"
+
  - name: "@Guile"
-   sourceproject: CorePlus
+   api: "@GuileAPI"
+   sourceproject: Core
    requires:
     - "@Core0"
    binaries:
@@ -634,12 +641,10 @@ groups:
     - snappy
     - blosc
     - blosc2
-    - libarchive
    binaries:
     - libsnappy1
     - libblosc1
     - libblosc2
-    - libarchive13
     - libdeflate0
     - libzopfli1
     - libzopflipng1
@@ -650,9 +655,7 @@ groups:
    requires:
     - "@ArchivingLibraries"
    binaries:
-    - unzip
     - unzip-rcc
-    - bsdtar
     - lzop
     - 7zip
     - libdeflate-tools

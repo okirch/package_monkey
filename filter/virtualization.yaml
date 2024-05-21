@@ -178,6 +178,7 @@ groups:
     - "@Boot"
     - "@PGPLibraries"
     - "@UpdateStack"
+    - "@Soup3Libraries"
     - "@Management"
     - "@Virtualization"
     - "@MicrosoftLibraries"

@@ -53,7 +53,17 @@ groups:
       binaries:
        - ruby3.2-rubygem-asciidoctor
 
+ - name: "@PostscriptAPI"
+   sourceproject: DocumentFormats
+   requires:
+    - "@Postscript"
+    - "@CoreAPI"
+   binaries:
+    - ghostscript-devel
+    - ghostscript-mini-devel
+
  - name: "@Postscript"
+   api: "@PostscriptAPI"
    sourceproject: DocumentFormats
    requires:
     - "@Core"

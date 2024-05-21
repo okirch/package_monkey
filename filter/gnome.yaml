@@ -190,6 +190,10 @@ groups:
     - "@SystemdAPI"
     - "@X11API"
     - "@FontLibsAPI+x11"
+    - "@GnomeVTE"
+    - "@GtkAPIs"
+   binaries:
+    - vte-devel
 
  - name: "@GnomeLibraries"
    api: "@GnomeAPI"

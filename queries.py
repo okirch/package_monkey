@@ -409,8 +409,9 @@ class PackageRequiresLabelsPredicate(BooleanPredicateWithCache):
 
 			# I'm too lazy right now to use the ResolverHints to transform
 			# dependencies:
-			if req.name in ('systemd', 'udev'):
+			if req.name in ('systemd', 'udev', 'info'):
 				continue
+
 			if rpm.name.startswith('libgio-2') and req.name in ('dbus-1', 'dbus-1-x11'):
 				continue
 

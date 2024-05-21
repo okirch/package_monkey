@@ -21,6 +21,7 @@ class QueryApplication(Application):
 		self.addArgument('--what-build-requires', action = 'append', default = [])
 		self.addArgument('--unclassified', action = 'store_true', default = False)
 		self.addArgument('--inversions', action = 'store_true', default = False)
+		self.addArgument('--build-inversions', action = 'store_true', default = False)
 		self.addArgument('--bubble-up', action = 'store_true', default = False)
 		self.addArgument('--food-for-pm', action = 'store_true', default = False)
 		self.addArgument('--ignore', action = 'append', default = [])
@@ -52,6 +53,8 @@ class QueryApplication(Application):
 			actions.append(UnclassifiedQuery(context, self.opts.max_alternatives))
 		if self.opts.inversions:
 			actions.append(InversionsQuery(context, self.opts.ignore))
+		if self.opts.build_inversions:
+			actions.append(BuildInversionsQuery(context, self.opts.ignore))
 		if self.opts.bubble_up:
 			actions.append(BubbleUpQuery(context))
 		if self.opts.food_for_pm:
@@ -568,12 +571,8 @@ class InversionsRenderer(WhatRequiresRenderer):
 			print(f"   {component}: the following topics and packages have inversions")
 			self.renderRequirementsReportDetails(component, requirementsReport)
 
-
-class InversionsQuery(WhatRequiresQuery):
+class InversionsQueryMixin(object):
 	def __init__(self, context, ignore):
-		renderer = InversionsRenderer(context)
-		super().__init__(context, [], renderer = renderer)
-
 		opts = context.application.opts
 
 		topicOrder = context.labelOrder
@@ -609,6 +608,13 @@ class InversionsQuery(WhatRequiresQuery):
 
 		self.inversionLabels = context.allBinaryLabels.difference(visibleTopics)
 
+class InversionsQuery(WhatRequiresQuery, InversionsQueryMixin):
+	def __init__(self, context, ignore):
+		renderer = InversionsRenderer(context)
+		super().__init__(context, [], renderer = renderer)
+
+		InversionsQueryMixin.__init__(self, context, ignore)
+
 	def __call__(self, queryTargetLabel):
 		renderer = self.renderer
 		context = self.context
@@ -632,6 +638,96 @@ class InversionRenderer(Renderer):
 	def renderTopic(self, label):
 		packageCount = self.context.getPackageCountForLabel(label)
 		return f"{label} ({packageCount} packages)"
+
+class BuildInversionsQuery(GenericQuery, InversionsQueryMixin):
+	def __init__(self, context, ignore, renderer = None):
+		if renderer is None:
+			renderer = BuildInversionsRenderer(context)
+
+		super().__init__(context, renderer)
+		InversionsQueryMixin.__init__(self, context, ignore)
+
+	def __call__(self, queryTargetLabel):
+		renderer = self.renderer
+		context = self.context
+
+		querySubject = QuerySubjectComponentOrTopic("inversions", context, queryTargetLabel)
+
+		report = self.getTopicsRequiringLabelSet(querySubject, self.inversionLabels)
+		renderer.renderRequirementsReport(queryTargetLabel, report)
+		return
+		renderer = self.renderer
+		context = self.context
+
+		querySubject = QuerySubjectComponentOrTopic("what-build-requires", context, queryTargetLabel)
+
+		for req in self.what_requires:
+			topic = context.getLabel('label', req)
+
+			if topic.type is Classification.TYPE_BINARY:
+				inspectLabelSet = Classification.createLabelSet([topic])
+			elif topic.type is Classification.TYPE_SOURCE:
+				inspectLabelSet = context.getLabelsForComponent(topic)
+			else:
+				raise Exception(f"{self.__class__.__name__}: label type {topic.type} not supported")
+
+			report = self.getTopicsRequiringLabelSet(querySubject, inspectLabelSet)
+
+			renderer.renderRequirementsReport(queryTargetLabel, report, topic)
+
+	def getTopicsRequiringLabelSet(self, querySubject, inspectLabelSet):
+		verbosityLevel = self.context.verbosityLevel
+		labelOrder = self.context.labelOrder
+
+		result = BuildRequirementsReport(self.context, inspectLabelSet, verbosityLevel = verbosityLevel)
+
+		predicate = None
+		if verbosityLevel:
+			predicate = PackageRequiresLabelsPredicate(self.context.classification, inspectLabelSet)
+			store = self.context.connectDatabase()
+
+		obsBuilds = set()
+		for label in querySubject.binaryLabels:
+			for rpm in self.context.getPackagesForLabel(label, fromDB = True):
+				build = self.context.getBuildForPackage(rpm)
+				if build is None:
+					raise Exception(f"unable to find an OBS build for {rpm} ({label})")
+				obsBuilds.add(build)
+
+		labelOrder = self.context.labelOrder
+		inspectUpperCone = labelOrder.upwardClosureForSet(inspectLabelSet)
+
+		for obsBuild in sorted(obsBuilds, key = str):
+			requiredTopics = Classification.createLabelSet()
+			requiredRpms = set()
+			for rpm, requiredLabel in self.context.enumerateBuildRequirements(obsBuild):
+				if requiredLabel in inspectUpperCone:
+					requiredTopics.update(inspectLabelSet.intersection(labelOrder.downwardClosureFor(requiredLabel)))
+				if requiredLabel in inspectLabelSet:
+					requiredRpms.add(rpm)
+
+			if predicate and obsBuild.sources:
+				assert(len(obsBuild.sources) == 1)
+				srpm = obsBuild.sources[0]
+				if predicate(srpm):
+					result.addPackageRequirements(predicate, srpm)
+
+			if requiredTopics:
+				result.add(obsBuild, requiredRpms, requiredTopics)
+
+		return result
+
+class BuildInversionsRenderer(WhatBuildRequiresRenderer):
+	def renderRequirementsReport(self, component, requirementsReport):
+		if not requirementsReport:
+			print(f"   {component}: no build inversions")
+		elif not requirementsReport.verbosityLevel:
+			print(f"   {component}: the following topics have build inversions")
+			for label in requirementsReport.minimalLabels:
+				print(f"      {label}")
+		else:
+			print(f"   {component}: the following topics and packages have build inversions")
+			self.renderRequirementsReportDetails(component, requirementsReport)
 
 class BubbleUpQuery(GenericQuery):
 	def __init__(self, context):

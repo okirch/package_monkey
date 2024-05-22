@@ -18,8 +18,55 @@ class Model:
 		BOOTSTRAP_STRATEGY_MULTI,
 		BOOTSTRAP_STRATEGY_SINGLE,
 	)
+	BUILD_CONFIG_MODEL		= 'model'
+	BUILD_CONFIG_SINGLE		= 'single'
+	VALID_BUILD_CONFIG_STRATEGIES = (
+		BUILD_CONFIG_MODEL,
+		BUILD_CONFIG_SINGLE,
+	)
 
-class ComponentMapping(object):
+	METHOD_REST_API			= 'rest'
+	METHOD_GIT			= 'git'
+
+class Methods(object):
+	def __init__(self, defaultProtocol = 'rest'):
+		self.defaultProtocol = self.parse(defaultProtocol)
+		self.protocols = {}
+
+	@classmethod
+	def parse(klass, protocol):
+		if protocol in (Model.METHOD_REST_API, Model.METHOD_GIT):
+			return protocol
+		raise Exception(f"Invalid protocol {protocol}")
+
+	def set(self, method, protocol):
+		if method == 'default':
+			self.defaultProtocol = self.parse(protocol)
+		else:
+			self.protocols[method] = self.parse(protocol)
+
+	def get(self, method):
+		return self.protocols.get(method, self.defaultProtocol)
+
+class ProjectSettingsMixin(object):
+	def __init__(self):
+		self.mode = None
+		self.generation = None
+		self.bootstrapRepository = None
+		self.bootstrapStrategy = None
+		self.projectConfigSnippet = None
+		self.gitProjectUrl = None
+		self.buildConfigStrategy = None
+
+	@property
+	def bootstrapSelf(self):
+		return self.mode == Model.COMPONENT_MODE_BOOTSTRAP_SELF
+
+	@property
+	def bootstrapOnly(self):
+		return self.mode == Model.COMPONENT_MODE_BOOTSTRAP
+
+class ComponentMapping(ProjectSettingsMixin):
 	class Export:
 		def __init__(self, name):
 			self.name = name
@@ -29,24 +76,13 @@ class ComponentMapping(object):
 			self.topics.add(topic)
 
 	def __init__(self, name):
+		super().__init__()
+
 		self.name = name
-		self.mode = None
-		self.generation = None
-		self.bootstrapRepository = None
-		self.bootstrapStrategy = None
-		self.projectConfigSnippet = None
 		self._exports = {}
 
 	def __str__(self):
 		return self.name
-
-	@property
-	def bootstrapSelf(self):
-		return self.mode == Model.COMPONENT_MODE_BOOTSTRAP_SELF
-
-	@property
-	def bootstrapOnly(self):
-		return self.mode == Model.COMPONENT_MODE_BOOTSTRAP
 
 	@property
 	def exports(self):
@@ -59,18 +95,35 @@ class ComponentMapping(object):
 			self._exports[name] = export
 		return export
 
+class ProjectMapping(ProjectSettingsMixin):
+	def __init__(self, name):
+		super().__init__()
+
+		self.name = name
+		self.componentNames = None
+
+	def __str__(self):
+		return self.name
+
 class WorkbenchDefinition(ComponentMapping):
 	def __init__(self):
 		super().__init__('Workbench')
 		self.includeNames = set()
 		self.excludeNames = set()
 
+class GenericProjectLocation(object):
+	def __init__(self, name):
+		self.name = name
+		self.obsRepositoryName = None
+		self.gitProjectUrl = None
+		self.gitPackageUrl = None
+
 class ComponentModelMapping(object):
 	def __init__(self, name, type):
 		self.name = name
 		self.type = type
 
-		self.sourceRepository = None
+		self.source = GenericProjectLocation('source')
 		self.targetProjectBase = None
 		self.targetArchitectures = []
 		self.useFallback = False
@@ -78,9 +131,17 @@ class ComponentModelMapping(object):
 		self._defaultComponent = None
 		self.ignorePackages = []
 		self.workbench = None
+		self.projects = []
+		self.workingDir = None
+		self.gitBaseUrl = None
+		self.accessMethods = Methods()
 
 		# TBD
 		self.exportsSubProjectName = 'exports'
+
+	@property
+	def sourceRepository(self):
+		return self.source.obsRepositoryName
 
 	def addComponent(self, component):
 		if self._components.get(component.name) is not None:
@@ -101,11 +162,19 @@ class ComponentModelMapping(object):
 
 		return self._defaultComponent
 
+	def addProject(self, project):
+		self.projects.append(project)
+
 	@property
 	def bootstrapRepository(self):
 		if self._defaultComponent is not None:
 			return self._defaultComponent.bootstrapRepository
 		return None
+
+	def workingDirPath(self, relativeName):
+		if self.workingDir is None:
+			return relativeName
+		return f"{self.workingDir}/{relativeName}"
 
 	@classmethod
 	def load(klass, path):
@@ -114,8 +183,14 @@ class ComponentModelMapping(object):
 
 		cm = ComponentModelMapping(data['name'], data['type'])
 
-		cm.sourceRepository = klass.getYamlString(data, 'source_repository')
+		source = cm.source
+		source.obsRepositoryName = klass.getYamlString(data, 'source_repository')
+		source.gitProjectUrl = klass.getYamlString(data, 'source_git_project_url', default = None)
+		source.gitPackageUrl = klass.getYamlString(data, 'source_git_package_url', default = None)
+
 		cm.targetProjectBase = klass.getYamlString(data, 'target_project_base')
+		cm.gitBaseUrl = klass.getYamlString(data, 'git_base_url', default = None)
+		cm.workingDir = klass.getYamlString(data, 'working_dir', default = 'work')
 		cm.targetArchitectures = klass.getYamlStringList(data, 'target_architectures')
 		cm.alwaysBuildRequires = klass.getYamlStringList(data, 'always_build_requires')
 		cm.useFallback = klass.getYamlBool(data, 'use_fallback')
@@ -125,7 +200,7 @@ class ComponentModelMapping(object):
 
 		cd = data.get('defaults')
 		if cd is not None:
-			cm.processComponentSettings(defaults, cd)
+			cm.processProjectSettings(defaults, cd)
 		else:
 			defaults.mode = Model.COMPONENT_MODE_BOOTSTRAP
 			defaults.generation = 'bootstrap'
@@ -137,24 +212,36 @@ class ComponentModelMapping(object):
 				cd = {}
 
 			component = ComponentMapping(name)
-			cm.processComponentSettings(component, cd)
+			cm.processProjectSettings(component, cd)
 
 			exportData = klass.getYamlDict(cd, 'exports', default = {})
 			klass.processExports(component, exportData)
 
 			cm.addComponent(component)
 
+		projectData = klass.getYamlDict(data, 'projects')
+		for name, cd in projectData.items():
+			project = ProjectMapping(name)
+			cm.processProject(project, cd)
+
+			cm.addProject(project)
+
+		cd = data.get('methods')
+		if cd is not None:
+			for method, protocol in cd.items():
+				cm.setAccessMethod(method, protocol)
+
 		wb = klass.getYamlDict(data, 'workbench', default = None)
 		if wb is not None:
 			workbench = WorkbenchDefinition()
-			cm.processComponentSettings(workbench, wb)
+			cm.processProjectSettings(workbench, wb)
 			workbench.includeNames = set(klass.getYamlStringList(wb, 'include', default= []))
 			workbench.excludeNames = set(klass.getYamlStringList(wb, 'exclude', default= []))
 			cm.workbench = workbench
 
 		return cm
 
-	def processComponentSettings(self, component, cd):
+	def processProjectSettings(self, component, cd):
 		cmDefaults = self.defaultComponent
 
 		mode = cd.get('bootstrap')
@@ -162,6 +249,9 @@ class ComponentModelMapping(object):
 		bootstrap_repository = self.getYamlString(cd, 'bootstrap_repository', default = None)
 		bootstrap_strategy = self.getYamlString(cd, 'bootstrap_strategy', default = None)
 		prjconf = self.getYamlString(cd, 'prjconf', default = None)
+		git_project = self.getYamlString(cd, 'git_project_url', default = None)
+		git_package = self.getYamlString(cd, 'git_package_url', default = None)
+		build_config = self.getYamlString(cd, 'build_config', default = 'model')
 
 		if mode is not None:
 			if mode is True:
@@ -190,20 +280,31 @@ class ComponentModelMapping(object):
 			if bootstrap_strategy is None:
 				bootstrap_strategy = Model.BOOTSTRAP_STRATEGY_MULTI
 
+		git_working_dir = None
+		if git_project is not None:
+			git_project = self.processGitUrl(component, git_project, cmDefaults.gitProjectUrl)
+		if git_package is not None:
+			git_package = self.processGitUrl(component, git_package, cmDefaults.gitPackageUrl)
+
 		if generation is None:
 			raise Exception(f"Incomplete definition of OBS component {component}: missing generation")
 		if bootstrap_repository is None:
 			raise Exception(f"Incomplete definition of OBS component {component}: missing bootstrap_repository")
 		if bootstrap_strategy not in Model.VALID_BOOTSTRAP_STRATEGIES:
 			raise Exception(f"Incomplete definition of OBS component {component}: missing or invalid bootstrap_strategy={bootstrap_strategy}")
+		if build_config not in Model.VALID_BUILD_CONFIG_STRATEGIES:
+			raise Exception(f"Bad definition of OBS component {component}: invalid setting build_config={build_config}")
 
 		component.mode = mode
 		component.generation = generation
 		component.bootstrapRepository = bootstrap_repository
 		component.bootstrapStrategy = bootstrap_strategy
 		component.projectConfigSnippet = prjconf
+		component.gitProjectUrl = git_project
+		component.gitPackageUrl = git_package
+		component.buildConfigStrategy = build_config
 
-		# print(f"Define {component} mode={mode} generation={generation} bsr={component.bootstrapRepository} bss={component.bootstrapStrategy}")
+		# print(f"Define {component} mode={mode} generation={generation} bsr={component.bootstrapRepository} bss={component.bootstrapStrategy} bcs={component.buildConfigStrategy} git={component.gitProjectUrl}")
 		return component
 
 	@classmethod
@@ -216,6 +317,37 @@ class ComponentModelMapping(object):
 				for topic in values:
 					assert(type(topic) is str)
 					export.add(topic)
+
+	def processProject(self, project, cd):
+		self.processProjectSettings(project, cd)
+
+		componentNames = self.getYamlStringList(cd, 'components')
+		project.componentNames = componentNames.copy()
+
+	def processGitUrl(self, component, git_url, default_url):
+		if git_url is None:
+			return None
+
+		# recognize these ase absolute:
+		#  urlmethod://host/bla
+		#  git@host:bla
+		if '/' not in git_url and '@' not in git_url:
+			base_url = default_url
+			if base_url is None:
+				base_url = self.gitBaseUrl
+			if base_url is None:
+				raise Exception(f"Invalid git project for {component}: relative project name but no git base url")
+			git_url = f"{base_url}/{git_url}"
+
+		return git_url
+
+	def getAccessMethod(self, method):
+		return self.accessMethods.get(method)
+
+	def setAccessMethod(self, method, protocol):
+		# FIXME: validate there are no spelling errors in the
+		# method name
+		self.accessMethods.set(method, protocol)
 
 	NODEFAULT = type(None)
 

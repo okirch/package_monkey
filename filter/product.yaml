@@ -1,0 +1,16 @@
+# vi: ai et
+# Definition of Product component
+
+components:
+ - name: Product
+   globals:
+    devel: ProductDevel
+
+build_configs:
+
+groups:
+ - name: "@Branding"
+   requires:
+    - "@Glib2Core"
+   binaries:
+    - gio-branding-*

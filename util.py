@@ -284,6 +284,7 @@ class NameMatcher:
 		return result
 
 ##################################################################
+# Simple helper classes
 ##################################################################
 class CountingDict(object):
 	def __init__(self):
@@ -297,6 +298,33 @@ class CountingDict(object):
 
 	def __getitem__(self, key):
 		return self._count.get(key, 0)
+
+class UniqueList(object):
+	def __init__(self, members = None):
+		self._inorder = []
+		self._set = set()
+
+		if members is not None:
+			self.update(members)
+
+	def append(self, item):
+		if item not in self._set:
+			self._inorder.append(item)
+			self._set.add(item)
+
+	def update(self, members):
+		for item in members:
+			self.append(item)
+
+	def __iadd__(self, members):
+		for item in members:
+			self.append(item)
+
+	def __iter__(self):
+		return iter(self._inorder)
+
+	def __str__(self):
+		return f"[{', '.join(map(str, self._inorder))}]"
 
 ##################################################################
 #

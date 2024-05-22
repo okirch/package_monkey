@@ -4,7 +4,7 @@ from packages import Product, Resolver, ResolverWorker, PackageCollection
 from filter import PackageFilter, Classification
 from solver import PotentialClassification
 from options import OBSClientApplication
-from util import ExecTimer, ThatsProgress
+from util import ExecTimer, ThatsProgress, UniqueList
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from writers import XmlReader
 from obsclnt import OBSError, OBSProject, OBSProjectMeta, OBSAggregate
@@ -18,7 +18,7 @@ application = OBSClientApplication('obs-create-model')
 application.addArgument('--initialize', action = 'store_true', default = True)
 application.addArgument('--no-initialize', dest = 'initialize', action = 'store_false')
 application.addArgument('--dry-run', action = 'store_true', default = False)
-application.addArgument(dest = 'action', metavar = 'ACTION', nargs = 1, help = 'one of initialize, populate, prune')
+application.addArgument(dest = 'action', metavar = 'ACTION', nargs = 1, help = 'one of validate, initialize, populate, prune')
 application.addArgument(dest = 'components', metavar = 'COMPONENTS', nargs = '*', help = 'list of components to publish')
 application.parseArguments()
 
@@ -33,10 +33,31 @@ application.parseArguments()
 # is in Core.
 ##################################################################
 class LabelScope(PartiallyOrderedSet):
-	def __init__(self, order, members, support = None):
+	def __init__(self, order, members = None, support = None, visible = None):
 		super().__init__(order, members)
+
+		if members is None:
+			assert(support is None)
+
 		self._closure = None
 		self._support = support
+		self._visible = visible
+
+	def preModifyCallback(self):
+		self._closure = None
+		self._support = None
+
+	def update(self, otherScope):
+		assert(isinstance(otherScope, self.__class__))
+
+		self.members.update(otherScope.members)
+		self._closure = None
+		self._support = None
+
+		if otherScope._visible is None:
+			self._visible = None
+		elif self._visible is not None:
+			self._visible = self._visible.union(otherScope._visible)
 
 	@property
 	def closure(self):
@@ -47,11 +68,11 @@ class LabelScope(PartiallyOrderedSet):
 	@property
 	def support(self):
 		if self._support is None:
-			support = Classification.createLabelSet()
-			for topic in self.members:
-				unsatisfied = topic.runtimeRequires.difference(self.members)
-				support.update(unsatisfied)
-			self._support = support
+			if self._visible:
+				self._support = self.closure.difference(self._visible)
+			else:
+				self._support = self.closure.difference(self.members)
+			infomsg(f" *** recomputing support")
 		return self._support
 
 class AbstractModel(object):
@@ -193,17 +214,18 @@ class AbstractModel(object):
 
 	def getComponentTopics(self, componentLabel, generator = None):
 		topicLabels = self.classificationScheme.getReferencingLabels(componentLabel)
+
+		# create a copy of topicLabels so that we can modify it without fear
+		topicLabels = topicLabels.copy()
+
 		if generator is None:
-			return LabelScope(self.topicOrder, topicLabels)
+			# return LabelScope(self.topicOrder, topicLabels)
+			generator = topicLabels
 
-		# do NOT just use .intersection_update because topicLabels may be a
-		# reference to a member of componentLabel
 		topicClosure = self.topicOrder.downwardClosureForSet(generator)
-		topicLabels = topicLabels.intersection(topicClosure)
+		members = topicLabels.intersection(topicClosure)
 
-		supportLabels = topicClosure.difference(topicLabels)
-
-		return LabelScope(self.topicOrder, topicLabels, support = supportLabels)
+		return LabelScope(self.topicOrder, members, visible = topicLabels)
 
 	def getTopicClosure(self, label):
 		if label.type == Classification.TYPE_SOURCE:
@@ -392,7 +414,7 @@ class AbstractArtefact(object):
 		return self.name
 
 class OBSClientWrapper(object):
-	def __init__(self, client):
+	def __init__(self, client, settings):
 		self.client = client
 		self.dryRun = False
 		self._cachedProjects = None
@@ -447,22 +469,28 @@ class OBSClientWrapper(object):
 class ConcreteOBSObject(object):
 	def __init__(self, obs):
 		self.obs = obs
+		self.git = GitClient()
 
 class ConcreteProjectFactory(ConcreteOBSObject):
-	def __init__(self, obs, modelPrefix, fallbackRepository = None):
+	def __init__(self, obs, settings):
 		super().__init__(obs)
 
-		if not modelPrefix.endswith(':'):
-			modelPrefix += ":"
-		self.modelPrefix = modelPrefix
-		self.fallbackRepository = fallbackRepository
+		self.settings = settings
+
+		targetProjectPrefix = settings.targetProjectBase
+		if not targetProjectPrefix.endswith(':'):
+			targetProjectPrefix += ":"
+		self.targetProjectPrefix = targetProjectPrefix
+
+		# FIXME obsolete
+		self.fallbackRepository = None
 
 		self._concreteProjects = {}
 
 	def createProject(self, obsProjectName, **kwargs):
 		concreteProject = self._concreteProjects.get(obsProjectName)
 		if concreteProject is None:
-			if obsProjectName.startswith(self.modelPrefix):
+			if obsProjectName.startswith(self.targetProjectPrefix):
 				concreteProject = ConcreteProject(self, obsProjectName,
 						fallbackRepository = self.fallbackRepository,
 						allowedToModify = True,
@@ -471,6 +499,9 @@ class ConcreteProjectFactory(ConcreteOBSObject):
 				concreteProject = ConcreteProject(self, obsProjectName,
 						allowedToModify = False,
 						**kwargs)
+
+			self.configureAccessMethods(concreteProject)
+
 			self._concreteProjects[obsProjectName] = concreteProject
 		return concreteProject
 
@@ -482,6 +513,14 @@ class ConcreteProjectFactory(ConcreteOBSObject):
 		return iter(sorted(self._concreteProjects.values(), key = lambda p: p.index))
 
 	def resolveRepositoryReference(self, reference):
+		if isinstance(reference, str):
+			return self.resolveRepositoryReferenceByName(reference)
+
+		repository = self.resolveRepositoryReferenceByName(reference.obsRepositoryName)
+		repository.parent.configureGitAccess(projectUrl = reference.gitProjectUrl, packageUrl = reference.gitPackageUrl)
+		return repository
+
+	def resolveRepositoryReferenceByName(self, reference):
 		if '/' not in reference:
 			raise Exception(f"Not a valid repository reference: {reference}")
 
@@ -489,6 +528,11 @@ class ConcreteProjectFactory(ConcreteOBSObject):
 		referencedProject = self.createProject(obsProjectName)
 		referencedRepository = referencedProject.createRepository(repositoryName)
 		return referencedRepository
+
+	def configureAccessMethods(self, concreteProject):
+		for method in ['linkpac', ]:
+			protocol = self.settings.getAccessMethod(method)
+			concreteProject.configureAccessMethod(method, protocol)
 
 ##################################################################
 # ConcreteModel - this is what the component model actually
@@ -510,7 +554,7 @@ class ConcreteModel(ConcreteOBSObject):
 		if settings.sourceRepository is None:
 			raise Exception("No source repository configured")
 
-		self._projectFactory = ConcreteProjectFactory(obs, settings.targetProjectBase)
+		self._projectFactory = ConcreteProjectFactory(obs, settings)
 
 		self.obs.setCacheStrategy('none')
 		self.projectsToPublish = set()
@@ -518,7 +562,7 @@ class ConcreteModel(ConcreteOBSObject):
 		self.sourceProject = None
 		self.bootstrapRepository = None
 
-		self.sourceRepository = self.resolveRepositoryReference(settings.sourceRepository)
+		self.sourceRepository = self.resolveRepositoryReference(settings.source)
 		self.sourceProject = self.sourceRepository.parent
 		if settings.bootstrapRepository is not None:
 			self.bootstrapRepository = self.resolveRepositoryReference(settings.bootstrapRepository)
@@ -587,6 +631,10 @@ class ConcreteModel(ConcreteOBSObject):
 				errormsg(f"   {problem}")
 			return False
 
+		return True
+
+	def validate(self, dryRun = False):
+		infomsg(f"Model definition loaded OK")
 		return True
 
 	def initializeProjects(self, dryRun = False):
@@ -712,7 +760,8 @@ class ConcreteProject(ConcreteOBSObject):
 				publishingStrategy = None,
 				title = None, description = None,
 				labelScope = None,
-				allowedToModify = True):
+				allowedToModify = True,
+				bootstrapRepository = None):
 		super().__init__(projectFactory.obs)
 
 		self.projectFactory = projectFactory
@@ -721,6 +770,9 @@ class ConcreteProject(ConcreteOBSObject):
 		self.fallbackRepository = fallbackRepository
 		self.generation = generation
 		self.allowedToModify = allowedToModify
+		self.bootstrapRepository = bootstrapRepository
+		self.gitPackageUrl = None
+		self.gitProjectUrl = None
 
 		if labelScope is not None:
 			assert(isinstance(labelScope, LabelScope))
@@ -734,7 +786,7 @@ class ConcreteProject(ConcreteOBSObject):
 			componentName = obsProjectName.split(':')[-1]
 		self.componentName = componentName
 
-		self.title = title or f"CM component {self.componentName}"
+		self.title = title or f"Component Model project {self.componentName}"
 		self.description = description or f"Lazy programmer forgot to provide a description"
 
 		# The prjconf if there is one
@@ -748,11 +800,12 @@ class ConcreteProject(ConcreteOBSObject):
 		self._shadowProjects = []
 
 		self.standard = None
+		self.allPackagesRepository = None
 		self._repositories = {}
 
 		# This is a ConcreteBuildRequirements instance
 		self.buildRequirements = None
-		self.repositoriesUsedForBuild = []
+		self.repositoriesUsedForBuild = UniqueList()
 
 		# This is a ConcreteRepository object that we're using when bootstrap mode is 'self'
 		self.bootstrapSelfFrom = None
@@ -767,7 +820,12 @@ class ConcreteProject(ConcreteOBSObject):
 		# knows about
 		self._knownPackageNames = set()
 
+		# This is a dict of ConcreteExport instances
+		self._exports = {}
+
 		self.index = self.autoIndex()
+
+		self.ACCESS_METHODS = None
 
 	def __str__(self):
 		return self.obsProjectName
@@ -777,6 +835,18 @@ class ConcreteProject(ConcreteOBSObject):
 		if self.labelScope is None:
 			return None
 		return self.labelScope.members
+
+	def updateLabelScope(self, labelScope):
+		if self.labelScope is None:
+			self.labelScope = labelScope
+		else:
+			self.labelScope.update(labelScope)
+	
+	def configureGitAccess(self, packageUrl = None, projectUrl = None):
+		self.gitPackageUrl = packageUrl
+		self.gitProjectUrl = projectUrl
+
+		projectDebug(f"Setting git access for {self}: project={self.gitProjectUrl} packages={self.gitPackageUrl}")
 
 	@property
 	def repositories(self):
@@ -810,13 +880,23 @@ class ConcreteProject(ConcreteOBSObject):
 
 			subProject = self.projectFactory.createProject(subProjectName, componentName = f"{self.componentName}:{name}", **kwargs)
 			self._subprojects[name] = subProject
-			if name.endswith(':all'):
-				infomsg(f" *** {name}")
 
 		return subProject
 
 	def getSubProject(self, name):
 		return self._subprojects.get(name)
+
+	@property
+	def exports(self):
+		return iter(self._exports.values())
+
+	def createExport(self, name):
+		concreteExport = self._exports.get(name)
+		if concreteExport is None:
+			concreteExport = ConcreteExport(name)
+			self._exports[name] = concreteExport
+
+		return concreteExport
 
 	def findPackage(self, abstractPackage):
 		for concreteRepository in self.repositories:
@@ -842,6 +922,23 @@ class ConcreteProject(ConcreteOBSObject):
 			self.obsProject = OBSProject(self.obsProjectName)
 
 		return self.obsProject
+
+	def initAccessMethods(self):
+		if self.ACCESS_METHODS is None:
+			self.ACCESS_METHODS = {
+				'linkpac/auto'	: self.linkpacAuto,
+				'linkpac/rest'	: self.linkpacREST,
+				'linkpac/git'	: self.linkpacGit,
+			}
+
+	def configureAccessMethod(self, method, protocol):
+		self.initAccessMethods()
+
+		memberFunction = self.ACCESS_METHODS.get(f"{method}/{protocol}")
+		if memberFunction is None:
+			raise Exception(f"Unsupported access method {method}={protocol}")
+
+		setattr(self, method, memberFunction)
 
 	# When we're creating one or more fresh component projects, we need to provide an
 	# initial _meta document. This should define all repositories, but without referencing
@@ -947,7 +1044,13 @@ class ConcreteProject(ConcreteOBSObject):
 	def fetchExistingPackages(self):
 		if self._existingPackageNames is None:
 			obsProject = self.connect()
-			self._existingPackageNames = set(self.obs.querySourcePackages(obsProject))
+
+			found = self.obs.querySourcePackages(obsProject)
+			if found is None:
+				# there was an error. The most straighforward explanation is that
+				# the project is empty/does not exist. ignore silently for now.
+				found = []
+			self._existingPackageNames = set(found)
 
 		return self._existingPackageNames
 
@@ -994,14 +1097,23 @@ class ConcreteProject(ConcreteOBSObject):
 
 		self._packagePublicationStrategy.cleanup(self)
 
-	def linkpac(self, sourceProject, packageName, **kwargs):
-		targetProject = self.obsProjectName
+	def linkpacAuto(self, *args, **kwargs):
+		if self.gitPackageUrl is None:
+			return self.linkpacREST(*args, **kwargs)
+		return self.linkpacGit(*args, **kwargs)
 
-		infomsg(f"linkpac {sourceProject} {packageName} {targetProject} {packageName}")
-		success = self.obs.linkpac(sourceProject, packageName, targetProject, **kwargs)
+	def linkpacREST(self, sourceProject, packageName, **kwargs):
+		sourceProjectName = sourceProject.obsProjectName
+		targetProjectName = self.obsProjectName
+
+		success = self.obs.linkpac(sourceProjectName, packageName, targetProjectName, **kwargs)
 
 		self.recordPackageCreationResult(packageName, success)
 		return success
+
+	def linkpacGit(self, sourceProject, packageName, **kwargs):
+		infomsg(f"linkpacGit({sourceProject.gitPackageUrl}, {packageName})")
+		xx
 
 	def createAggregate(self, obsAggregate, **kwargs):
 		infomsg(f"create aggregate {self.obsProjectName} {obsAggregate.targetPackageName}")
@@ -1039,7 +1151,7 @@ class ConcreteRepository(ConcreteOBSObject):
 		self.obsRepositoryName = f"{self.obsProjectName}/{self.relativeName}"
 
 		self._packagePublicationStrategy = concreteProject._packagePublicationStrategy
-		self.repositoriesUsedForBuild = []
+		self.repositoriesUsedForBuild = UniqueList()
 		self.packages = []
 
 	def __str__(self):
@@ -1052,8 +1164,9 @@ class ConcreteRepository(ConcreteOBSObject):
 		self.packages += list(packages)
 
 	def usePackage(self, concretePackage, artefacts = None):
+		# ConcretePackage.__init__ will take care of adding the
+		# newly created package to self.packages
 		localPackage = ConcretePackage(self, concretePackage.name)
-		self.addPackage(localPackage)
 
 		link = self._packagePublicationStrategy.addPackage(localPackage,
 				targetRepository = self,
@@ -1207,16 +1320,22 @@ class ConcreteAggregate(ConcreteOBSObject):
 ##################################################################
 ##################################################################
 class ConcreteExport(ConcreteOBSObject):
-	def __init__(self, name, topicLabels):
+	def __init__(self, name, topicLabels = None):
 		self.name = name
 		self.topicLabels = topicLabels
 		self.repository = None
 		self.inversions = None
 
-		assert(isinstance(topicLabels, LabelScope))
+		assert(topicLabels is None or isinstance(topicLabels, LabelScope))
 	
 	def __str__(self):
 		return self.name
+
+	def updateLabelScope(self, topicLabels):
+		if self.topicLabels is None:
+			self.topicLabels = topicLabels
+		else:
+			self.topicLabels.update(topicLabels)
 
 	@property
 	def support(self):
@@ -1367,7 +1486,7 @@ class PackageLinkStrategy(PackagePublicationStrategy):
 		with loggingFacade.temporaryIndent():
 			# link the package into the CM project. For the time being, we freeze the
 			# revision to avoid lots of rebuilds
-			if not targetProject.linkpac(sourceProjectName, packageName, freezeRevision = True):
+			if not targetProject.linkpac(self.sourceProject, packageName, freezeRevision = True):
 				self.reportProblem(f"{targetProject}: unable to link package {packageName}")
 
 class PackageAggregateStrategy(PackagePublicationStrategy):
@@ -1557,7 +1676,7 @@ class ComponentXmlGenerator(FileGenerator):
 ##################################################################
 class Mediator(object):
 	def __init__(self, application, settings):
-		self.obs = OBSClientWrapper(application.obsClient)
+		self.obs = OBSClientWrapper(application.obsClient, settings)
 		self.settings = settings
 
 		self.allInversionsName = 'all'
@@ -1567,6 +1686,9 @@ class Mediator(object):
 
 		# The following dict maps topic labels to repositories
 		self._exportsTable = {}
+
+		self._projects = {}
+		self._primaryProject = {}
 
 	def createProject(self, obsProjectName, **kwargs):
 		return self.model.createProject(obsProjectName, **kwargs)
@@ -1590,10 +1712,9 @@ class Mediator(object):
 		return infoGenerator
 
 ##################################################################
-# This is the only mediator implemented so far. It maps each
-# component to an OBS project, with an optional set of sub-projects
-# for purposes like modeling inversions, or aggregating all
-# packages in one place.
+# This mediator maps each component to an OBS project, with an
+# optional set of sub-projects for purposes like modeling inversions,
+# or aggregating all packages in one place.
 ##################################################################
 class ComponentCentricMediator(Mediator):
 	def __init__(self, application, settings):
@@ -1603,6 +1724,7 @@ class ComponentCentricMediator(Mediator):
 		self.workbenchRepository = None
 
 		self._specialProjects = {}
+		self._commonBuildRequirements = None
 
 	def markProjectToPublish(self, concreteProject):
 		self.model.projectsToPublish.add(concreteProject)
@@ -1614,7 +1736,8 @@ class ComponentCentricMediator(Mediator):
 
 		for abstractComponent in abstractModel.components:
 			componentSettings = self.settings.getComponent(abstractComponent.name)
-			self.mapComponent(abstractComponent, componentSettings)
+			concreteProject = self.mapComponent(abstractComponent, componentSettings)
+			self._primaryProject[abstractComponent.name] = concreteProject
 
 		for name in targetComponents:
 			if name == 'Workbench':
@@ -1634,6 +1757,7 @@ class ComponentCentricMediator(Mediator):
 			infoPackage.addComponent(abstractComponent.componentLabel)
 
 			if concreteProject.generation == 'bootstrap':
+				concreteProject.allPackagesRepository = concreteProject.standard
 				continue
 
 			fredProject = self.createPrjConfSubProject(abstractComponent)
@@ -1643,6 +1767,8 @@ class ComponentCentricMediator(Mediator):
 			for abstractBuildConfig in abstractComponent.buildConfigs:
 				concreteRepository = self.mapBuildConfig(abstractComponent, abstractBuildConfig)
 				repositories.append(concreteRepository)
+
+			concreteProject.allPackagesRepository = self.createAllInversionsRepository(concreteProject)
 
 		alwaysBuildRequires = self.mapCommonRequirements()
 		for abstractComponent in abstractModel.components:
@@ -1690,6 +1816,8 @@ class ComponentCentricMediator(Mediator):
 		self.workbenchRepository = workbenchRepository
 		self.workbenchProject = workbenchProject
 
+		self._projects['Workbench'] = workbenchProject
+		self._primaryProject['Workbench'] = workbenchProject
 		return workbenchProject
 
 	def createSubProjects(self, abstractComponent):
@@ -1701,9 +1829,10 @@ class ComponentCentricMediator(Mediator):
 		if concreteProject.generation == 'bootstrap':
 			return
 
-		allInversions = self.createAllInversionsRepository(concreteProject)
-		for concreteRepository in concreteProject.repositories:
-			allInversions.addPackages(concreteRepository.packages)
+		allPackages = concreteProject.allPackagesRepository
+		if allPackages.parent.obsProjectName.endswith(":" + self.allInversionsName):
+			for concreteRepository in concreteProject.repositories:
+				allPackages.addPackages(concreteRepository.packages)
 
 	# We need to control the repositories against which a specific package is being built.
 	# This could be controlled in the prjconf via BuildFlags. However, whenever we build
@@ -1740,11 +1869,46 @@ class ComponentCentricMediator(Mediator):
 
 		abstractComponent.concreteProject._shadowProjects.append(shadowProject)
 
+	def mapComponentToProject(self, abstractComponent, concreteProject, componentSettings):
+		if componentSettings is not None:
+			pass
+
+		# Create all $Project:$generation:exports:* projects that correspond to an export of AbstractComponent
+		self.createExportsForComponent(abstractComponent, concreteProject, componentSettings)
+
+		# update the project's label scope with the set of topic labels covered by the component
+		actualTopics = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
+		concreteProject.updateLabelScope(actualTopics)
+
+		abstractComponent.concreteProject = concreteProject
+
+		if concreteProject.generation != "bootstrap":
+			self.createSubProjects(abstractComponent)
+
+			if False:
+				for abstractTopic in abstractComponent.exportedTopics:
+					self.mapExportedTopic(abstractComponent, abstractTopic)
+
+			if componentSettings.buildConfigStrategy == 'model':
+				for abstractBuildConfig in abstractComponent.buildConfigs:
+					self.mapBuildConfig(abstractComponent, abstractBuildConfig)
+			elif componentSettings.buildConfigStrategy == 'single':
+				concreteRepository = concreteProject.createRepository('standard')
+				for abstractBuildConfig in abstractComponent.buildConfigs:
+					abstractBuildConfig.concreteRepository = concreteRepository
+
+			self.linkPackages(abstractComponent, concreteProject, self.model.sourceRepository)
+
 	def mapComponent(self, abstractComponent, componentSettings, **kwargs):
 		concreteProject = abstractComponent.concreteProject
 		if concreteProject is None:
 			if componentSettings.generation == "bootstrap":
 				concreteProject = self.createBootstrapComponent(abstractComponent, componentSettings, **kwargs)
+
+				# Create all $Component:bootstrap:exports:* projects
+				# We don't do this in createBootstrapComponent() because this shouldn't happen
+				# for projects that are used for bootstrap mode 'self' only
+				self.createExportsForComponent(abstractComponent, concreteProject, componentSettings)
 			else:
 				concreteProject = self.createVersionedComponent(abstractComponent, componentSettings, **kwargs)
 				if componentSettings.bootstrapSelf:
@@ -1754,18 +1918,33 @@ class ComponentCentricMediator(Mediator):
 			concreteProject.config = self.createMainProjectConfig(concreteProject, componentSettings.projectConfigSnippet)
 
 			abstractComponent.concreteProject = concreteProject
+
+		self.setupExportProjects(concreteProject)
+		return concreteProject
+
+	def setupProject(self, name, projectSettings, **kwargs):
+		if projectSettings.generation == "bootstrap":
+			concreteProject = self.createBootstrapProject(name, projectSettings, **kwargs)
+		else:
+			concreteProject = self.createVersionedProject(name, projectSettings, **kwargs)
+			if projectSettings.bootstrapSelf:
+				bootstrapProject = self.createBootstrapProject(name, projectSettings)
+				projectDebug(f"Bootstrapping {concreteProject} from {bootstrapProject.standard}")
+				concreteProject.bootstrapSelfFrom = bootstrapProject.standard
+
+		concreteProject.config = self.createMainProjectConfig(concreteProject, projectSettings.projectConfigSnippet)
+
+		self._projects[name] = concreteProject
 		return concreteProject
 
 	def createBootstrapComponent(self, abstractComponent, componentSettings, **kwargs):
-		actualTopics = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
-		concreteProject = self.createBootstrapProject(abstractComponent.name, componentSettings,
-						bootstrapComponent = abstractComponent,
-						labelScope = actualTopics, **kwargs)
+		concreteProject = self.createBootstrapProject(abstractComponent.name, componentSettings, **kwargs)
 
-		# Create all $Component:bootstrap:exports:* projects
-		# /unless/ this is just for building $Component
-		if not componentSettings.bootstrapSelf:
-			self.createExportsRepository(abstractComponent, concreteProject, componentSettings)
+		# update the project's label scope with the set of topic labels covered by the component
+		actualTopics = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
+		concreteProject.updateLabelScope(actualTopics)
+
+		self.bootstrapPackages(concreteProject, abstractComponent)
 
 		return concreteProject
 
@@ -1782,6 +1961,8 @@ class ComponentCentricMediator(Mediator):
 					generation = generation,
 					description = description,
 					labelScope = actualTopics)
+
+		concreteProject.configureGitAccess(projectUrl = settings.gitProjectUrl, packageUrl = settings.packageProjectUrl)
 		abstractComponent.concreteProject = concreteProject
 
 		self.createSubProjects(abstractComponent)
@@ -1795,14 +1976,14 @@ class ComponentCentricMediator(Mediator):
 
 		self.linkPackages(abstractComponent, concreteProject, self.model.sourceRepository)
 
-		self.createExportsRepository(abstractComponent, concreteProject, componentSettings)
+		self.createExportsForComponent(abstractComponent, concreteProject, componentSettings)
 
 		return concreteProject
 
 	def createWorkbenchProject(self, componentSettings, **kwargs):
 		return self.createBootstrapProject('Workbench', componentSettings, **kwargs)
 
-	def createBootstrapProject(self, projectBaseName, componentSettings, bootstrapComponent = None, **kwargs):
+	def createBootstrapProject(self, projectBaseName, componentSettings, **kwargs):
 		if componentSettings.bootstrapRepository is not None:
 			bootstrapRepository = self.model.resolveRepositoryReference(componentSettings.bootstrapRepository)
 		else:
@@ -1828,17 +2009,28 @@ class ComponentCentricMediator(Mediator):
 					generation = 'bootstrap',
 					title = f"Bootstrap component {projectBaseName}",
 					description = description,
+					bootstrapRepository = bootstrapRepository,
 					**kwargs)
 
 		# Create a minimal prjconf that makes sure the project builds
 		concreteProject.config = self.createMainProjectConfig(concreteProject)
 
-		# If bootstrapComponent is given, it's an AbstractComponent that provides the
-		# list of packages we're supposed to populate this new project with
-		if bootstrapComponent:
-			assert(isinstance(bootstrapComponent, AbstractComponent))
-			self.bootstrapPackages(bootstrapComponent, concreteProject, bootstrapRepository)
+		if concreteProject.standard is None:
+			concreteProject.createRepository('standard')
 
+		return concreteProject
+
+	def createVersionedProject(self, projectBaseName, projectSettings, **kwargs):
+		generation = projectSettings.generation
+		strategy = PackageLinkStrategy(self.obs, self.model.sourceProject)
+		description = f"Rebuilding packages from {self.model.sourceProject}"
+
+		obsProjectName = f"{self.settings.targetProjectBase}:{generation}:{projectBaseName}"
+		concreteProject = self.createProject(obsProjectName,
+					publishingStrategy = strategy,
+					componentName = projectBaseName,
+					generation = generation,
+					description = description)
 		return concreteProject
 
 	def mapExportedTopic(self, abstractComponent, abstractTopic, repoName = 'standard'):
@@ -1866,6 +2058,9 @@ class ComponentCentricMediator(Mediator):
 		return concreteRepository
 
 	def mapCommonRequirements(self):
+		if self._commonBuildRequirements is not None:
+			return self._commonBuildRequirements
+
 		result = ConcreteBuildRequirements()
 
 		for componentName in self.settings.alwaysBuildRequires:
@@ -1886,16 +2081,18 @@ class ComponentCentricMediator(Mediator):
 			elif componentName == 'Workbench':
 				referencedRepository = self.workbenchRepository
 			else:
-				# This is a component name
+				# This is a primary project name
 				# infomsg(f"Always required for build: {componentName}")
-				abstractComponent = abstractModel.getComponentByName(componentName)
+				concreteProject = self._primaryProject.get(componentName)
+				if concreteProject is None:
+					raise Exception(f"Bad reference to {componentName} in always_build_requires: project not defined yet")
 
-				result.addLabel(abstractComponent.componentLabel)
-
-				labelScope = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
+				labelScope = concreteProject.labelScope
+				assert(labelScope.members)
 				result.addLabelSet(labelScope.members)
 
-				referencedRepository = self.createAllInversionsRepository(abstractComponent.concreteProject)
+				referencedRepository = self.createAllInversionsRepository(concreteProject)
+				# or in single mode, just use concreteProject.standard
 
 			infomsg(f"  always reference {referencedRepository}")
 			if order == 'first':
@@ -1903,6 +2100,7 @@ class ComponentCentricMediator(Mediator):
 			else:
 				result.appendRepository(referencedRepository)
 
+		self._commonBuildRequirements = result
 		return result
 
 	def mapComponentRequirements(self, abstractComponent, alwaysBuildRequires):
@@ -2029,17 +2227,9 @@ class ComponentCentricMediator(Mediator):
 			repositoryBuildRequires.appendRepository(concreteProject.bootstrapSelfFrom)
 
 		# Append all required repositories to concreteRepository.repositoriesUsedForBuild.
-		# Make sure we're not duplicating any repos, because otherwise OBS will complain
-		seen = set()
-		for requiredRepository in repositoryBuildRequires.repositories:
-			if requiredRepository not in seen:
-				concreteRepository.repositoriesUsedForBuild.append(requiredRepository)
-			seen.add(requiredRepository)
-
-		assert(seen)
+		# The UniqueList makes sure we're not duplicating any repos, because otherwise OBS will complain
+		concreteRepository.repositoriesUsedForBuild.update(repositoryBuildRequires.repositories)
 		assert(concreteRepository.repositoriesUsedForBuild)
-
-		#concreteRepository.repositoriesUsedForBuild = repositoryBuildRequires.repositories
 
 	def mapInversionTopic(self, abstractTopic):
 		if abstractTopic.concretePublishingLocation is not None:
@@ -2069,7 +2259,11 @@ class ComponentCentricMediator(Mediator):
 
 		return result
 
-	def bootstrapPackages(self, abstractComponent, concreteProject, bootstrapRepository):
+	def bootstrapPackages(self, concreteProject, abstractComponent):
+		bootstrapRepository = concreteProject.bootstrapRepository
+		if bootstrapRepository is None:
+			raise Exception(f"Cannot bootstrap packages for {abstractComponent} into {concreteProject}: no bootstrap repository defined")
+
 		targetRepository = concreteProject.createRepository('standard')
 
 		result = []
@@ -2109,30 +2303,33 @@ class ComponentCentricMediator(Mediator):
 		for concreteRepository in concreteProject.repositories:
 			nested = prjconf.beginRepositorySpecific(concreteRepository.relativeName)
 			nested.add(f" # This is the list of packages to be built for {concreteRepository}")
-
-			nested.add(f" BuildFlags: !onlybuild:dummy")
-			for concretePackage in sorted(concreteRepository.packages, key = str):
-				nested.add(f" BuildFlags: onlybuild:{concretePackage}")
+			self.addPackagesToProjectConfig(nested, concreteRepository.packages)
 
 		return prjconf
 
-	def createExportsRepository(self, abstractComponent, concreteProject, componentSettings):
+	def addPackagesToProjectConfig(self, prjconf, packages):
+		prjconf.add(f" BuildFlags: !onlybuild:dummy")
+		for concretePackage in sorted(packages, key = str):
+			prjconf.add(f" BuildFlags: onlybuild:{concretePackage}")
+
+	def createExportsForComponent(self, abstractComponent, concreteProject, componentSettings):
 		componentLabel = abstractComponent.componentLabel
 
-		allExports = []
 		for exportDef in componentSettings.exports:
+			concreteExport = concreteProject.createExport(exportDef.name)
+
 			# get the labels we are supposed to export
 			exportedTopics = Classification.createLabelSet(map(self._abstractModel.getLabel, exportDef.topics))
 
 			# get the downward closure, relative to the component we're dealing with
 			exportedTopics = self._abstractModel.getComponentTopics(componentLabel, generator = exportedTopics)
 
-			concreteExport = ConcreteExport(exportDef.name, exportedTopics)
-			allExports.append(concreteExport)
+			concreteExport.updateLabelScope(exportedTopics)
 
+	def setupExportProjects(self, concreteProject):
 		# Sort exports by increasing size of topicLabels.
 		# If export A is a super set of export B, then B will be before A in this list
-		allExports = sorted(allExports, key = lambda e: len(e.topicLabels))
+		allExports = sorted(concreteProject.exports, key = lambda e: len(e.topicLabels))
 
 		# create exports for smaller sets of topics first, then the larger ones.
 		# This helps us ensure that a lookup of topic -> export gives us the project
@@ -2151,31 +2348,32 @@ class ComponentCentricMediator(Mediator):
 						dependencies.append(otherExport)
 
 			with loggingFacade.temporaryIndent():
-				self.createOneExport(concreteProject, componentLabel, concreteExport, dependencies)
+				self.createOneExport(concreteProject, concreteExport, dependencies)
 
 		return
 
-	def createOneExport(self, concreteProject, componentLabel, concreteExport, requiredExports):
+	def createOneExport(self, concreteProject, concreteExport, requiredExports):
 		exportedTopics = concreteExport.topicLabels
 
 		if loggingFacade.isDebugEnabled('project'):
-			infomsg(f"{componentLabel}:{concreteExport} contains {len(concreteExport.topicLabels)} topic(s)")
+			infomsg(f"{concreteProject}:{concreteExport} contains {len(concreteExport.topicLabels)} topic(s)")
 			for topic in sorted(concreteExport.topicLabels, key = str):
-				infomsg(f"   {topic}")
+				infomsg(f"   {topic.sourceProject}:{topic}")
 			infomsg(f"  support:")
 			for topic in sorted(concreteExport.topicLabels.support, key = str):
-				infomsg(f"   {topic}")
+				infomsg(f"   {topic.sourceProject}:{topic}")
 
 		# Get the list of exported topics (and their requirements), restricted to those
 		# topics that are covered by the component we're dealing with
 		actualTopics = concreteExport.topicLabels
 
-		componentClosure = self._abstractModel.getTopicClosure(componentLabel)
-		inversions = concreteExport.support.difference(componentClosure)
-		if inversions:
-			if loggingFacade.isDebugEnabled('project'):
-				self.explainInversions(componentLabel, concreteExport, inversions)
-			concreteExport.inversions = inversions
+		if False:
+			componentClosure = self._abstractModel.getTopicClosure(componentLabel)
+			inversions = concreteExport.support.difference(componentClosure)
+			if inversions:
+				if loggingFacade.isDebugEnabled('project'):
+					self.explainInversions(componentLabel, concreteExport, inversions)
+				concreteExport.inversions = inversions
 
 		if concreteProject.bootstrapSelfFrom:
 			sourceProject = concreteProject.bootstrapSelfFrom.parent
@@ -2183,8 +2381,7 @@ class ComponentCentricMediator(Mediator):
 			sourceProject = concreteProject
 
 		exportsProject = concreteProject.createSubProject(f"exports:{concreteExport}",
-					title = f"All {concreteExport} packages exported by {componentLabel}",
-					#description = f"This project is currently empty.",
+					title = f"All {concreteExport} packages exported by {concreteProject}",
 					publishingStrategy = PackageAggregateStrategy(self.obs, concreteProject),
 					labelScope = actualTopics)
 		exportsProject.config = self.createMainProjectConfig(exportsProject)
@@ -2205,7 +2402,7 @@ class ComponentCentricMediator(Mediator):
 				if concretePackage is None:
 					if concretePackage in alreadyComplained:
 						continue
-					errormsg(f"Unable to find {abstractPackage} in {concreteProject} - probably hasn't been assigned a buildconfig yet")
+					errormsg(f"Cannot find OBS package {abstractPackage} in {concreteProject} - probably hasn't been assigned a buildconfig yet")
 					alreadyComplained.add(concretePackage)
 					continue
 
@@ -2213,12 +2410,6 @@ class ComponentCentricMediator(Mediator):
 
 		for topicLabel in actualTopics:
 			self.defineExportProject(topicLabel, exportsProject)
-
-		if False:
-			displaySet = self._abstractModel.filterLabelsByComponent(topicClosure, componentLabel)
-			infomsg(f"{exportsRepository} covers {len(displaySet)} topics")
-			for topicLabel in sorted(displaySet, key = str):
-				infomsg(f"   {topicLabel}")
 
 		concreteExport.repository = exportsRepository
 		return
@@ -2258,12 +2449,11 @@ class ComponentCentricMediator(Mediator):
 				projectDebug(f"  {label} covered by workbench")
 
 	def createAllInversionsRepository(self, concreteProject):
-		if concreteProject.generation == 'bootstrap':
-			return concreteProject.standard
+		assert(concreteProject.generation != 'bootstrap')
 
 		allRepository = self.createAggregationRepository(concreteProject, self.allInversionsName,
 					strategyClass = AggregateAllStrategy,
-					description = f"Aggregate of all packages in {concreteProject.componentName}",
+					description = f"Aggregate of all packages in {concreteProject}",
 					labelScope = concreteProject.labelScope)
 		allRepository._packagePublicationStrategy.createCatchAllPackage(concreteProject.standard, allRepository)
 		return allRepository
@@ -2311,6 +2501,166 @@ class ComponentCentricMediator(Mediator):
 		subProject = concreteProject.createSubProject(subProjectName)
 		return subProject.createRepository(repoName)
 
+##################################################################
+# This mediator maps one or more components to an OBS project
+##################################################################
+class ProjectCentricMediator(ComponentCentricMediator):
+	def __init__(self, application, settings):
+		super().__init__(application, settings)
+
+	def build(self, abstractModel, targetProjects):
+		self._abstractModel = abstractModel
+
+		workbenchProject = self.buildWorkbench(abstractModel)
+
+		for projectSettings in self.settings.projects:
+			concreteProject = self.setupProject(projectSettings.name, projectSettings)
+			self._primaryProject[projectSettings.name] = concreteProject
+
+			if projectSettings.buildConfigStrategy == Model.BUILD_CONFIG_MODEL:
+				# Here, we would create the "fred" project
+				pass
+
+			abstractComponentList = []
+			for componentName in projectSettings.componentNames:
+				abstractComponent = abstractModel.getComponentByName(componentName)
+				if abstractComponent is None:
+					raise Exception(f"Bad definition of project {projectSettings.name}: unknown component {componentName}")
+
+				componentSettings = self.settings.getComponent(abstractComponent.name)
+				componentSettings.buildConfigStrategy = projectSettings.buildConfigStrategy
+				self.mapComponentToProject(abstractComponent, concreteProject, componentSettings)
+
+				abstractComponentList.append(abstractComponent)
+
+			if projectSettings.buildConfigStrategy == Model.BUILD_CONFIG_MODEL:
+				concreteProject.allPackagesRepository = self.createAllInversionsRepository(concreteProject)
+			else:
+				concreteProject.allPackagesRepository = concreteProject.standard
+
+			# self.setupExportProjects(concreteProject)
+
+			self.setupInfoPackage(abstractModel, concreteProject, abstractComponentList)
+
+			self.setupProjectBuildRequirements(concreteProject, projectSettings, abstractComponentList)
+
+			if projectSettings.buildConfigStrategy == Model.BUILD_CONFIG_SINGLE:
+				self.addPackagesToProjectConfig(concreteProject.config, concreteProject.standard.packages)
+
+		for name in targetProjects:
+			concreteProject = self._projects.get(name)
+			if concreteProject is None:
+				raise Exception(f"Don't know how to publish unknown project {name}")
+
+			self.markProjectToPublish(concreteProject)
+
+		return self.model
+		y
+
+		xxx
+		for abstractComponent in abstractModel.components:
+			componentSettings = self.settings.getComponent(abstractComponent.name)
+			self.mapComponent(abstractComponent, componentSettings)
+
+		for abstractComponent in abstractModel.components:
+			concreteProject = abstractComponent.concreteProject
+
+			if concreteProject.generation == 'bootstrap':
+				continue
+
+			fredProject = self.createPrjConfSubProject(abstractComponent)
+			fredProject.config = self.createPackageProjectConfig(concreteProject)
+
+			repositories = []
+			for abstractBuildConfig in abstractComponent.buildConfigs:
+				concreteRepository = self.mapBuildConfig(abstractComponent, abstractBuildConfig)
+				repositories.append(concreteRepository)
+
+		alwaysBuildRequires = self.mapCommonRequirements()
+		for abstractComponent in abstractModel.components:
+			concreteProject = abstractComponent.concreteProject
+			if concreteProject.generation == 'bootstrap':
+				continue
+
+			componentRequires = self.mapComponentRequirements(abstractComponent, alwaysBuildRequires)
+
+			infomsg(f"Creating buildconfigs for {abstractComponent}")
+			if loggingFacade.isDebugEnabled('project'):
+				projectDebug(f"   Common setup:")
+				for concreteRepository in componentRequires.repositories:
+					projectDebug(f"    - {concreteRepository}")
+
+			for abstractBuildConfig in abstractComponent.buildConfigs:
+				concreteRepository = abstractBuildConfig.concreteRepository
+				if concreteRepository is None:
+					raise Exception(f"{abstractBuildConfig} has not been mapped to a repository")
+
+				with loggingFacade.temporaryIndent():
+					projectDebug(f"Resolving requirements for {abstractBuildConfig}")
+					self.mapBuildConfigRequirements(abstractBuildConfig, concreteRepository, componentRequires)
+
+		for abstractComponent in abstractModel.components:
+			if abstractComponent.name in targetComponents:
+				self.populateSubProjects(abstractComponent)
+
+		return self.model
+
+	def setupInfoPackage(self, abstractModel, concreteProject, abstractComponentList):
+		infoPackage = self.createComponentInfoPackage(abstractModel, concreteProject)
+		for abstractComponent in abstractComponentList:
+			infoPackage.addComponent(abstractComponent.componentLabel)
+		
+		return infoPackage
+
+	def setupProjectBuildRequirements(self, concreteProject, projectSettings, abstractComponentList):
+		if concreteProject.generation == 'bootstrap':
+			return
+
+		alwaysBuildRequires = self.mapCommonRequirements()
+
+		projectBuildRequires = ConcreteBuildRequirements(alwaysBuildRequires)
+
+		# FIXME: inspect projectSettings.buildRequires
+
+		self.mapBuildConfigRequirements(concreteProject.standard, projectBuildRequires)
+
+		concreteProject.buildRequirements = projectBuildRequires
+		return
+
+		for abstractComponent in abstractModel.components:
+			componentRequires = self.mapComponentRequirements(abstractComponent, alwaysBuildRequires)
+
+			infomsg(f"Creating buildconfigs for {abstractComponent}")
+			if loggingFacade.isDebugEnabled('project'):
+				projectDebug(f"   Common setup:")
+				for concreteRepository in componentRequires.repositories:
+					projectDebug(f"    - {concreteRepository}")
+
+			for abstractBuildConfig in abstractComponent.buildConfigs:
+				concreteRepository = abstractBuildConfig.concreteRepository
+				if concreteRepository is None:
+					raise Exception(f"{abstractBuildConfig} has not been mapped to a repository")
+
+				with loggingFacade.temporaryIndent():
+					projectDebug(f"Resolving requirements for {abstractBuildConfig}")
+					self.mapBuildConfigRequirements(abstractBuildConfig, concreteRepository, componentRequires)
+
+	def mapBuildConfigRequirements(self, concreteRepository, componentBuildRequires):
+		concreteProject = concreteRepository.parent
+
+		repositoryBuildRequires = ConcreteBuildRequirements(componentBuildRequires)
+
+		infomsg(f"{concreteRepository} bootstrap from {concreteProject.bootstrapSelfFrom}")
+
+		# If we're bootstrapping ourselves from an existing code snapshot,
+		# append that bootstrap snapshot at the very end
+		if concreteProject.bootstrapSelfFrom:
+			repositoryBuildRequires.appendRepository(concreteProject.bootstrapSelfFrom)
+
+		concreteRepository.repositoriesUsedForBuild.update(repositoryBuildRequires.repositories)
+		infomsg(f"{concreteRepository.repositoriesUsedForBuild}")
+		assert(concreteRepository.repositoriesUsedForBuild)
+
 class ProjectConfigBuilder(object):
 	def __init__(self):
 		self.lines = []
@@ -2334,6 +2684,12 @@ class Action(object):
 	def __init__(self, application):
 		self.dryRun = application.opts.dry_run
 
+class ActionValidate(Action):
+	names = ('validate')
+
+	def perform(self, concreteModel):
+		return concreteModel.validate(dryRun = self.dryRun)
+
 class ActionInitialize(Action):
 	names = ('init', 'initialize')
 
@@ -2352,12 +2708,14 @@ class ActionPrune(Action):
 	def perform(self, concreteModel):
 		return concreteModel.pruneProjects(dryRun = self.dryRun)
 
-actions = [ActionInitialize, ActionPublish, ActionPrune]
+actions = [ActionValidate, ActionInitialize, ActionPublish, ActionPrune]
 
 mapping = application.loadModelMapping()
 
 if mapping.type == 'component-centric':
 	mediator = ComponentCentricMediator(application, mapping)
+elif mapping.type == 'project-centric':
+	mediator = ProjectCentricMediator(application, mapping)
 else:
 	errormsg(f"Cannot map component model: unknown mapping type {mapping.type}")
 	exit(1)
@@ -2380,7 +2738,6 @@ concreteModel = mediator.build(abstractModel, application.opts.components)
 # translate abstract to concrete packages
 success = False
 try:
-	# success = concreteModel.publish(init = application.opts.initialize, dryRun = application.opts.dry_run)
 	success = action.perform(concreteModel)
 except OBSError as e:
 	errormsg(f"OBS returned an error while trying to publish the component model")

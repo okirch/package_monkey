@@ -42,9 +42,23 @@ class OrderedSetMember(object):
 # Base class for cones, convex sets etc
 ##################################################################
 class PartiallyOrderedSet(object):
-	def __init__(self, order, members):
+	def __init__(self, order, members = None):
 		self.order = order
+
+		if members is None:
+			members = order._setClass()
 		self.members = members
+
+	def preModifyCallback(self):
+		pass
+
+	def add(self, x):
+		self.members.add(x)
+		self.preModifyCallback()
+
+	def update(self, s):
+		self.members.update(s)
+		self.preModifyCallback()
 
 	def __contains__(self, x):
 		return x in self.members

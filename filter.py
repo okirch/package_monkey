@@ -259,7 +259,7 @@ class Classification:
 			apis = Classification.createLabelSet()
 			for exportedLabel in self.exports:
 				if exportedLabel.componentLabel != self:
-					raise Exception(f"{self}: illegal export of {exportedLabel} which is part of component {api.componentLabel}")
+					raise Exception(f"{self}: illegal export of {exportedLabel} which is part of component {exportedLabel.componentLabel}")
 
 				# if component Foo exports @BarLibraries, we also want to export @BarAPI
 				api = exportedLabel.correspondingAPI

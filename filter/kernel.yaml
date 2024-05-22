@@ -434,7 +434,7 @@ groups:
     - dracut-*
     - efibootmgr
     - grub2
-    - grub2-branding*
+    - grub2-branding-upstream
     - mokutil
     - shim
     - u-boot
@@ -450,7 +450,6 @@ groups:
         rebuild the package in the appropriate context with the appropriate
         dependencies.
       binaries:
-       - gdm-branding-SLE
     - name: security
       requires:
        - "@HostSecurity"
@@ -463,7 +462,6 @@ groups:
       # libudisks2 gtk4-tools geoclue2... not sure why.
       # FIXME: there's no reason this package has to live in @Boot
       binaries:
-       - grub2-branding-*
     - name: xen
       binaries:
        - grub2-x86_64-xen
@@ -484,7 +482,6 @@ groups:
        - plymouth-plugin-label
        - plymouth-plugin-space-flares
        - plymouth-plugin-two-step
-       - plymouth-branding-SLE
        - plymouth-theme-fade-in
        - plymouth-theme-solar
        - plymouth-theme-spinner

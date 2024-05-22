@@ -79,6 +79,15 @@ resolverhints:
      warning: "plymouth should not depend on the plymouth branding package"
      ignore:
       - gdm-branding-SLE
+   - name: cockpit-ws
+     warning: "cockpit-ws should not depend on the wallpaper branding package"
+     ignore:
+      - wallpaper-branding-SLE
+   - name: desktop-data-SLE
+     warning: "cockpit-ws should not depend on the wallpaper branding package"
+     ignore:
+      - wallpaper-branding-SLE
+
    - name: fuse-devel
      warning: "fuse-devel should probably just recommend fuse-doc, not require it"
      ignore:

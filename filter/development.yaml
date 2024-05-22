@@ -204,6 +204,7 @@ groups:
    binaries:
     - cunit-devel
     - check-devel
+    - libcmocka-devel
 
  - name: "@UnitTestLibraries"
    api: "@UnitTestAPI"
@@ -211,9 +212,12 @@ groups:
    requires:
     - "@MinimalCDevelopment"
     - "@GCC"
+   packages:
+    - libcmocka
    binaries:
     - libcunit1
     - libcheck0
+    - libcmocka0
 
  - name: "@UnitTests"
    api: "@UnitTestAPI"
@@ -345,13 +349,10 @@ groups:
     - "@Glib2API"
     - "@UnitTests"
    packages:
-    - libcmocka
     - umockdev
     - Catch2
     - Catch2-2
    binaries:
-    - libcmocka0
-    - libcmocka-devel
     - libumockdev0
     - typelib-1_0-UMockdev-* priority=0
     - libumockdev-preload0

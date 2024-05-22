@@ -260,8 +260,8 @@ groups:
     - libgirepository-1*
     - girepository-1*
     - libjson-glib-1*
-    - gio-branding-*
     - typelib-1_0-Json-*
+    - gio-branding-upstream
    buildflavors:
     - name: syspython
       requires:
@@ -966,6 +966,10 @@ groups:
     - libXrender-devel
     - libXt-devel
     - xorgproto-devel
+    - util-macros-devel
+    - xcb-proto-devel
+    - pthread-stubs-devel
+    - python3-xcb-proto-devel
    buildflavors:
     - name: fonts
       requires:

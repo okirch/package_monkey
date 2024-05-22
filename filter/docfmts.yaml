@@ -51,7 +51,7 @@ groups:
       requires:
        - "@Ruby"
       binaries:
-       - ruby3.2-rubygem-asciidoctor
+       - ruby${systemRubyVersion}-rubygem-asciidoctor
 
  - name: "@PostscriptAPI"
    sourceproject: DocumentFormats

@@ -66,12 +66,8 @@ groups:
     # for the time being, we need to specify the following packages explicitly. The solver
     # will only label foobar-devel packages correctly if there is a corresponding
     # foobar package somewhere.
-    - xcb-proto-devel
     - fontcacheproto-devel
     - printproto-devel
-    - pthread-stubs-devel
-    - util-macros-devel
-    - python3-xcb-proto-devel
 
  - name: "@X11LegacyAPI"
    is_api: True

@@ -3,14 +3,26 @@
 
 components:
  - name: Product
+   requires:
+    - Core
+    - KernelPlus
    globals:
     devel: ProductDevel
 
 build_configs:
+ - name: Product/standard
 
 groups:
- - name: "@Branding"
+ - name: "@BrandingSLE"
+   sourceproject: Product
    requires:
     - "@Glib2Core"
+    - "@Boot+x11"
    binaries:
-    - gio-branding-*
+    - branding-SLE
+    - gio-branding-SLE
+    - grub2-branding-SLE
+    - gdm-branding-SLE
+    - plymouth-branding-SLE
+    - gfxboot-branding-SLE
+    - wallpaper-branding-SLE

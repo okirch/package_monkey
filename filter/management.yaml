@@ -267,6 +267,7 @@ groups:
     - yast2-services-manager
     - distribution-logos-SLE
     - initviocons
+    - ruby${systemRubyVersion}-rubygem-nokogiri
 
  - name: "@Agama"
    sourceproject: Management
@@ -285,7 +286,7 @@ groups:
     - "@NetworkManager"
     - "@GoExtras"
    binaries:
-    - ruby3.2-rubygem-agama
+    - ruby${systemRubyVersion}-rubygem-agama
     - agama
     - agama-cli
     - agama-dbus-server
@@ -363,7 +364,6 @@ groups:
     - autoyast2-installation
     - yast2*
     - libyui*
-    - ruby3.2-rubygem-agama
     - ruby-yui
     - libstorage-ng-*
     - yast2-ruby-bindings

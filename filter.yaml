@@ -3,6 +3,8 @@ defines:
  systemPythonVersion: 311
  defaultPythonVersion: 311
  systemLUAVersion: 54
+ systemRubyVersion: 3.2
+ systemRubySharedLibVersion: 3_2
 
 options:
  # Sometimes, we need to split multibuilds between 2 components. Mostly, this happens
@@ -39,6 +41,7 @@ options:
    - cmake
    - doxygen
    - unzip
+   - glib2
 
 autoflavors:
  - name: perl
@@ -213,6 +216,7 @@ include:
  - filter/virtualization.yaml
  - filter/cloud.yaml
  - filter/applications.yaml
+ - filter/product.yaml
 
 build_configs:
 

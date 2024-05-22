@@ -6,7 +6,7 @@ components:
    globals:
     devel: RubyDevel
    requires:
-    - CorePlus
+    - Core
    exports:
     - "@Ruby"
 
@@ -16,29 +16,50 @@ build_configs:
     - "@Valgrind"
 
 groups:
- - name: "@RubyAPI"
-   sourceproject: Ruby
+ - name: "@SystemRubyAPI"
+   sourceproject: Core
    requires:
     - "@Ruby"
     - "@PkgConfig"
    binaries:
-    - ruby3.2-rubygem-pkg-config
     - ruby-bundled-gems-rpmhelper
+
+ - name: "@SystemRuby"
+   api: "@SystemRubyAPI"
+   sourceproject: Core
+   requires:
+    - "@Core0"
+    - "@ConfigFileLibraries"
+   binaries:
+    - ruby
+    - ruby${systemRubyVersion}
+    - ruby${systemRubyVersion}-rubygem-gem2rpm
+    - libruby${systemRubySharedLibVersion}*
+    - rubygem-*
+    - ruby-common
+    - ruby-common-rails
+    - ruby-packaging-helpers
+
+ - name: "@RubyAPI"
+   sourceproject: Ruby
+   requires:
+    - "@SystemRubyAPI"
+    - "@Ruby"
+    - "@PkgConfig"
+   binaries:
+    - ruby${systemRubyVersion}-rubygem-pkg-config
 
  - name: "@Ruby"
    api: "@RubyAPI"
    sourceproject: Ruby
    requires:
-    - "@Core0"
-    - "@XMLLibraries"
-    - "@ConfigFileLibraries"
+    - "@SystemRuby"
    binaries:
-    - ruby
-    - ruby2.5
-    - ruby3.2-rubygem-gem2rpm
-    - libruby3_2*
-    - rubygem-*
-    - ruby-common
+#   - ruby
+#   - ruby${systemRubyVersion}-rubygem-gem2rpm
+#   - libruby${systemRubySharedLibVersion}*
+#   - rubygem-*
+#   - ruby-common
 
  - name: RubyDevel
    requires:
@@ -49,7 +70,6 @@ groups:
    sourceproject: Ruby
    requires:
     - "@Ruby"
-    - "@XMLLibraries"
    binaries:
-    - ruby3.2-rubygem-*
+    - ruby${systemRubyVersion}-rubygem-*
 

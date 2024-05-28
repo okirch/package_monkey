@@ -307,6 +307,12 @@ class GitWorkingCopy(GitObject):
 	def add(self, name):
 		self.run(f"git add '{name}'")
 
+	def rm(self, name, recursive = False):
+		if recursive:
+			self.run(f"git rm -rf '{name}'")
+		else:
+			self.run(f"git rm -f '{name}'")
+
 	def push(self):
 		self.run("git push")
 
@@ -346,8 +352,28 @@ class GitWorkingCopy(GitObject):
 
 		# FIXME: create a "git package" object?
 
+	def removePackage(self, name):
+		sm = self.getSubmodule(name)
+		if sm is not None:
+			raise Exception(f"Unable to remove submodule {name}: not yet supported")
+
+		if os.path.isdir(f"{self.path}/{name}"):
+			infomsg(f"Removing package {name} in git working copy")
+			self.rm(name, recursive = True)
+
+			self._changes.append(self.Change('remove', 'package', name))
+
+		return True
+
 	@property
-	def submodules(self):
+	def subdirectories(self):
+		result = []
+		for de in os.scandir(self.path):
+			if not de.name.startswith('.') and de.is_dir():
+				result.append(de.name)
+		return result
+
+	def refreshSubmodules(self):
 		if self._submodules is None:
 			self._submodules = {}
 			with self.popen(f"git submodule") as f:
@@ -355,9 +381,15 @@ class GitWorkingCopy(GitObject):
 					w = line.split()
 					sm = GitSubmodule(self, w[1], w[0])
 					self._submodules[sm.name] = sm
+
+	@property
+	def submodules(self):
+		self.refreshSubmodules()
 		return sorted(self._submodules.values(), key = str)
 
 	def addSubmodule(self, gitUrl, name = None):
+		self.refreshSubmodules()
+
 		if name is None:
 			# try to guess the name
 			name = gitUrl
@@ -380,6 +412,7 @@ class GitWorkingCopy(GitObject):
 		return sm
 
 	def getSubmodule(self, name):
+		self.refreshSubmodules()
 		return self._submodules.get(name)
 
 class GitSubmodule(GitWorkingCopy):

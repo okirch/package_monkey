@@ -171,6 +171,12 @@ groups:
  - name: PythonDevel
    requires:
 
+ - name: "@PythonDocumentation"
+   sourceproject: Python
+   requires:
+    - "@PythonDocumentation311"
+   binaries:
+    - python-six-doc
 
 templates:
  - name: DefineSystemPythonLabel
@@ -235,6 +241,17 @@ templates:
        - "@CoreServices+systemd"
       binaries:
        - pythonXXX-psutil
+
+    - name: "@PythonDocumentationXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonXXX"
+      packages:
+       - pythonXXX:doc
+      binaries:
+       - pythonXXX-doc
+       - pythonXXX-doc-devhelp
 
     - name: "@PythonEssentialsXXX"
       sourceproject: Python

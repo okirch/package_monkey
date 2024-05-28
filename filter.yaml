@@ -42,6 +42,8 @@ options:
    - doxygen
    - unzip
    - glib2
+   - python-six
+   - python311
 
 autoflavors:
  - name: perl

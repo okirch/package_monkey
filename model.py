@@ -32,8 +32,11 @@ class ProjectSettingsMixin(object):
 		self.bootstrapRepository = None
 		self.bootstrapStrategy = None
 		self.projectConfigSnippet = None
+		self.gitPackageUrl = None
 		self.gitProjectUrl = None
 		self.buildConfigStrategy = None
+		self.workbench = None
+		self.buildRequires = set()
 
 	@property
 	def bootstrapSelf(self):
@@ -78,6 +81,7 @@ class ProjectMapping(ProjectSettingsMixin):
 
 		self.name = name
 		self.componentNames = None
+		self.extraPackages = None
 
 	def __str__(self):
 		return self.name
@@ -159,10 +163,9 @@ class ComponentModelMapping(object):
 
 		cm = ComponentModelMapping(data['name'], data['type'])
 
-		source = cm.source
-		source.obsRepositoryName = klass.getYamlString(data, 'source_repository')
-		source.gitProjectUrl = klass.getYamlString(data, 'source_git_project_url', default = None)
-		source.gitPackageUrl = klass.getYamlString(data, 'source_git_package_url', default = None)
+		cd = data.get('source')
+		if cd is not None:
+			cm.processLocation(cm.source, cd)
 
 		cm.targetProjectBase = klass.getYamlString(data, 'target_project_base')
 		cm.gitBaseUrl = klass.getYamlString(data, 'git_base_url', default = None)
@@ -200,6 +203,11 @@ class ComponentModelMapping(object):
 			project = ProjectMapping(name)
 			cm.processProject(project, cd)
 
+			wb = cd.get('workbench')
+			if wb is not None:
+				project.workbench = ProjectMapping("{name}:workbench")
+				cm.processProject(project.workbench, wb, parentProject = project)
+
 			cm.addProject(project)
 
 		wb = klass.getYamlDict(data, 'workbench', default = None)
@@ -212,7 +220,21 @@ class ComponentModelMapping(object):
 
 		return cm
 
-	def processProjectSettings(self, component, cd):
+	def processLocation(self, location, cd, prefix = None):
+		name = location.name
+		cmDefaults = self.defaultComponent
+
+		location.obsRepositoryName = self.getYamlString(cd, 'repository', default = None)
+
+		git_url = self.getYamlString(cd, 'git_project_url', default = None)
+		if git_url is not None:
+			location.gitProjectUrl = self.processGitUrl(name, git_url, cmDefaults.gitProjectUrl)
+
+		git_url = self.getYamlString(cd, 'git_package_url', default = None)
+		if git_url is not None:
+			location.gitPackageUrl = self.processGitUrl(name, git_url, cmDefaults.gitPackageUrl)
+
+	def processProjectSettings(self, component, cd, parentProject = None):
 		cmDefaults = self.defaultComponent
 
 		mode = cd.get('bootstrap')
@@ -223,6 +245,7 @@ class ComponentModelMapping(object):
 		git_project = self.getYamlString(cd, 'git_project_url', default = None)
 		git_package = self.getYamlString(cd, 'git_package_url', default = None)
 		build_config = self.getYamlString(cd, 'build_config', default = 'model')
+		build_requires = self.getYamlStringList(cd, 'build_requires', default = [])
 
 		if mode is not None:
 			if mode is True:
@@ -233,6 +256,14 @@ class ComponentModelMapping(object):
 				mode = Model.COMPONENT_MODE_BOOTSTRAP_SELF
 			else:
 				raise Exception(f"Invalid setting bootstrap='{mode}' in definition of component {component}")
+
+		if parentProject is not None:
+			if mode is None:
+				mode = parentProject.mode
+			if generation is None:
+				generation = parentProject.generation
+			if bootstrap_repository is None:
+				bootstrap_repository = parentProject.bootstrapRepository
 
 		if component is not cmDefaults:
 			if mode is None:
@@ -274,6 +305,7 @@ class ComponentModelMapping(object):
 		component.gitProjectUrl = git_project
 		component.gitPackageUrl = git_package
 		component.buildConfigStrategy = build_config
+		component.buildRequires = set(build_requires)
 
 		# print(f"Define {component} mode={mode} generation={generation} bsr={component.bootstrapRepository} bss={component.bootstrapStrategy} bcs={component.buildConfigStrategy} git={component.gitProjectUrl}")
 		return component
@@ -289,11 +321,14 @@ class ComponentModelMapping(object):
 					assert(type(topic) is str)
 					export.add(topic)
 
-	def processProject(self, project, cd):
-		self.processProjectSettings(project, cd)
+	def processProject(self, project, cd, **kwargs):
+		self.processProjectSettings(project, cd, **kwargs)
 
 		componentNames = self.getYamlStringList(cd, 'components')
 		project.componentNames = componentNames.copy()
+
+		names = self.getYamlStringList(cd, 'extra_packages', default = [])
+		project.extraPackages = names.copy()
 
 	def processGitUrl(self, component, git_url, default_url):
 		if git_url is None:

@@ -271,7 +271,88 @@ class AbstractModel(object):
 
 		# This is where it gets tricky. We have a list of RPMs now, and we need to
 		# find the corresponding OBS builds
-		abstractExport = AbstractArtefactCollection(labelScope = labelScope)
+		return self.createExportForRPMs(workbenchRPMs, labelScope = labelScope)
+
+	class RequirementsTracking(object):
+		def __init__(self):
+			self._map = {}
+
+		def add(self, rpm, names):
+			if rpm.name not in self._map:
+				self._map[rpm.name] = set()
+			self._map[rpm.name].update(names)
+
+		def addBuild(self, buildSpec, required):
+			ultimatelyRequiredBy = set([buildSpec.name])
+			for dep in required:
+				self.add(dep, ultimatelyRequiredBy)
+
+		def addDependencies(self, rpm, required):
+			ultimatelyRequiredBy = self._map[rpm.name]
+			for dep in required:
+				self.add(dep, ultimatelyRequiredBy)
+
+		def __iter__(self):
+			for name, ultimatelyRequiredBy in sorted(self._map.items()):
+				yield name, ' '.join(ultimatelyRequiredBy)
+
+	def identifyWorkbenchPackagesAuto(self, abstractComponents):
+		visibleLabels = Classification.createLabelSet()
+		obsBuilds = set()
+		for abstractComponent in abstractComponents:
+			componentLabel = abstractComponent.componentLabel
+			visibleLabels.update(self.getTopicClosure(componentLabel))
+
+		visibleRPMs = set()
+		for topic in visibleLabels:
+			m = self.classification.packageMembership(topic)
+			visibleRPMs.update(m.packages)
+
+		requirementsTracking = self.RequirementsTracking()
+
+		workbenchRPMs = set()
+		for abstractComponent in abstractComponents:
+			m = self.classification.projectMembership(abstractComponent.componentLabel)
+
+			for buildSpec in m.builds:
+				inversions = buildSpec.buildRequires.difference(visibleRPMs)
+				if not inversions:
+					continue
+
+				infomsg(f"   {buildSpec.name:22} {len(inversions)} build inversions")
+				for rpm in inversions:
+					infomsg(f"       {rpm}")
+
+				requirementsTracking.addBuild(buildSpec, inversions)
+
+				workbenchRPMs.update(inversions)
+
+		buildInversions = workbenchRPMs.copy()
+
+		queue = list(workbenchRPMs)
+		while queue:
+			rpm = queue.pop(0)
+
+			requires = set(rpm.enumerateRequiredRpms())
+			requires = requires.difference(visibleRPMs)
+			if not requires:
+				continue
+
+			requirementsTracking.addDependencies(rpm, requires)
+
+			requires = requires.difference(workbenchRPMs)
+			if requires:
+				workbenchRPMs.update(requires)
+				queue += list(requires)
+
+		infomsg(f"workbench RPMs and why they are included:")
+		for rpmName, requiredBy in requirementsTracking:
+			infomsg(f"   {rpmName:20} {requiredBy}")
+
+		return self.createExportForRPMs(workbenchRPMs)
+
+	def createExportForRPMs(self, workbenchRPMs, **kwargs):
+		abstractExport = AbstractArtefactCollection(**kwargs)
 		for componentLabel, buildSpec in self.classification.enumerateBuilds():
 			artefacts = set(buildSpec.binaries).intersection(workbenchRPMs)
 			if not artefacts:
@@ -734,8 +815,10 @@ class ConcreteModel(ConcreteOBSObject):
 
 	def publishPackages(self, projectsToPublish, dryRun = False):
 		for concreteProject in sorted(projectsToPublish, key = str):
-			concreteProject.publishPackages()
-			concreteProject.cleanupPackages()
+			infomsg(f"Publishing packages for {concreteProject}")
+			with loggingFacade.temporaryIndent():
+				concreteProject.publishPackages()
+				concreteProject.cleanupPackages()
 
 		return True
 
@@ -755,6 +838,10 @@ class ConcretePackageStorage(object):
 	@property
 	def componentName(self):
 		return self.project.componentName
+
+	@property
+	def obsProjectName(self):
+		return self.project.obsProjectName
 
 	@property
 	def obsScmSyncUrl(self):
@@ -807,9 +894,16 @@ class ConcretePackageStorageREST(ConcretePackageStorage):
 
 		return self.obs.linkpac(sourceProjectName, packageName, targetProjectName, **kwargs)
 
+	def createAggregate(self, obsAggregate, **kwargs):
+		infomsg(f"create aggregate {self.obsProjectName} {obsAggregate.targetPackageName}")
+		return self.obs.createAggregate(self.obsProjectName, obsAggregate)
+
 	def updatePackage(self, packageName, files, **kwargs):
 		targetProjectName = self.obsProjectName
 		return self.obs.updatePackage(targetProjectName, packageName, files, **kwargs)
+
+	def deletepac(self, packageName, **kwargs):
+		return self.obs.deletepac(self.obsProjectName, packageName, **kwargs)
 
 	def commit(self):
 		return
@@ -824,7 +918,7 @@ class ConcretePackageStorageGit(ConcretePackageStorage):
 
 	@property
 	def obsScmSyncUrl(self):
-		url = f"{self.gitUrl}?enforce_bcntsynctag=1#main"
+		url = f"{self.gitUrl}#main"
 		return self.git.makeUrlAnonymous(url)
 		if url.startswith("git@"):
 			url = "https://" + url[3:]
@@ -850,25 +944,26 @@ class ConcretePackageStorageGit(ConcretePackageStorage):
 	def getsources(self):
 		gh = self.workingCopy
 
-		# FIXME: shouldn't we rather loop over all subdirs and report those?
-		# submodules are just one type of packages we can have
-		found = []
-		for sm in gh.submodules:
-			found.append(sm.name)
-
-		return found
+		return list(gh.subdirectories)
 
 	def getObsoletePackages(self, expectedState):
-		revmap = {}
-		for name in expectedState:
-			mapped = self.manglePackageName(name)
-			revmap[mapped] = name
+		mangledNames = set(map(self.manglePackageName, expectedState))
+		return self._existingPackageNames.difference(mangledNames)
 
-		delta = self._existingPackageNames.difference(set(revmap.keys()))
-		if delta:
-			delta = set(revmap[name] for name in delta)
+	def createAggregate(self, obsAggregate, **kwargs):
+		# This is a bit of a hack
+		from obsclnt import OBSSchema
+		import xmltree
 
-		return delta
+		# Create an in-memory XML document from the obsAggregate
+		# FIXME: what about obsAggregate.toXML and obsAggregate.toString?
+		infomsg(f"create aggregate {self.gitUrl} {obsAggregate.targetPackageName}")
+
+		xmldoc = OBSSchema().createAggregateDocFromObject(obsAggregate)
+
+		files = {}
+		files['_aggregate'] = xmltree.toString(xmldoc)
+		return self.updatePackage(obsAggregate.targetPackageName, files)
 
 	def linkpac(self, sourceProject, packageName, targetProject, **kwargs):
 		infomsg(f"linkpac({sourceProject.gitPackageUrl}, {packageName})")
@@ -895,7 +990,12 @@ class ConcretePackageStorageGit(ConcretePackageStorage):
 		gh = self.workingCopy
 		gh.addPackage(packageName, files, **kwargs)
 		gh.commit()
+		return True
 
+	def deletepac(self, packageName, **kwargs):
+		gh = self.workingCopy
+		gh.removePackage(packageName, **kwargs)
+		gh.commit()
 		return True
 
 	def commit(self):
@@ -935,6 +1035,7 @@ class ConcreteProject(ConcreteOBSObject):
 		self.gitPackageUrl = None
 		self.gitProjectUrl = None
 		self.gitProjectCheckout = None
+		self.workbenchProject = None
 
 		self._packageStorage = None
 
@@ -1247,13 +1348,13 @@ class ConcreteProject(ConcreteOBSObject):
 		return self.packageStorage.commit()
 
 	def createAggregate(self, obsAggregate, **kwargs):
-		infomsg(f"create aggregate {self.obsProjectName} {obsAggregate.targetPackageName}")
-		success = self.obs.createAggregate(self.obsProjectName, obsAggregate)
-
+		success = self.packageStorage.createAggregate(obsAggregate, **kwargs)
 		self.recordPackageCreationResult(obsAggregate.targetPackageName, success)
 		return success
 
+	# FIXME: is this still used, at all?
 	def aggregatepac(self, sourceProject, packageName, **kwargs):
+		please_dont_use_this_any_longer
 		sourceProjectName = sourceProject.obsProjectName
 		targetProjectName = self.obsProjectName
 
@@ -1267,7 +1368,7 @@ class ConcreteProject(ConcreteOBSObject):
 		return self.packageStorage.updatePackage(packageName, files, **kwargs)
 
 	def deletepac(self, packageName, **kwargs):
-		return self.obs.deletepac(self.obsProjectName, packageName, **kwargs)
+		return self.packageStorage.deletepac(packageName, **kwargs)
 
 class ConcreteRepository(ConcreteOBSObject):
 	def __init__(self, concreteProject, name):
@@ -1546,6 +1647,8 @@ class PackagePublicationStrategy(object):
 			updates.append(packageGenerator)
 
 		if not updates:
+			infomsg(f"Nothing to publish, project seems to have packages we want")
+			infomsg(f"  expected state has {len(self.expectedState)} packages")
 			return
 
 		progressMeter = ThatsProgress(len(updates), withETA = True)
@@ -2121,6 +2224,16 @@ class ComponentCentricMediator(Mediator):
 		return self.createBootstrapProject('Workbench', componentSettings, **kwargs)
 
 	def createBootstrapProject(self, projectBaseName, componentSettings, **kwargs):
+		obsProjectName = f"{self.settings.targetProjectBase}:bootstrap:{projectBaseName}"
+
+		self.getBootstrapProjectArguments(obsProjectName, componentSettings, kwargs)
+
+		return self.createBootstrapProjectWork(obsProjectName, projectBaseName,
+					title = f"Bootstrap component {projectBaseName}",
+					**kwargs)
+
+	# identify how the user wants us to bootstrap this project, and update **kwargs accordingly
+	def getBootstrapProjectArguments(self, obsProjectName, componentSettings, kwargs):
 		if componentSettings.bootstrapRepository is not None:
 			bootstrapRepository = self.model.resolveRepositoryReference(componentSettings.bootstrapRepository)
 		else:
@@ -2139,18 +2252,18 @@ class ComponentCentricMediator(Mediator):
 
 		description = f"Bootstrapped with packages from {bootstrapRepository}"
 
-		obsProjectName = f"{self.settings.targetProjectBase}:bootstrap:{projectBaseName}"
+		kwargs['bootstrapRepository'] = bootstrapRepository
+		kwargs['publishingStrategy'] = strategy
+		kwargs['description'] = description
+
+	def createBootstrapProjectWork(self, obsProjectName, projectBaseName, **kwargs):
 		concreteProject = self.createProject(obsProjectName,
-					publishingStrategy = strategy,
 					componentName = projectBaseName,
 					generation = 'bootstrap',
-					title = f"Bootstrap component {projectBaseName}",
-					description = description,
-					bootstrapRepository = bootstrapRepository,
 					**kwargs)
 
 		# Create a minimal prjconf that makes sure the project builds
-		concreteProject.config = self.createMainProjectConfig(concreteProject)
+		concreteProject.config = self.createAggregationProjectConfig(concreteProject)
 
 		if concreteProject.standard is None:
 			concreteProject.createRepository('standard')
@@ -2170,7 +2283,32 @@ class ComponentCentricMediator(Mediator):
 					description = description)
 
 		concreteProject.configureGitAccess(projectUrl = projectSettings.gitProjectUrl, packageUrl = projectSettings.gitPackageUrl)
+
+		if projectSettings.workbench:
+			infomsg(f"Configuring {concreteProject} to use workbench project: git={projectSettings.workbench.gitPackageUrl}")
+			concreteProject.workbenchProject = self.createWorkbenchForProject(concreteProject, projectSettings.workbench,
+				title = f"Workbench for component {concreteProject.componentName}")
+
+			infomsg(f"obsProjectName = {concreteProject.workbenchProject.obsProjectName}")
+			infomsg(f"bootstrapRepository = {concreteProject.workbenchProject.bootstrapRepository}")
+			infomsg(f"publishingStrategy = {concreteProject.workbenchProject._packagePublicationStrategy}")
+
 		return concreteProject
+
+	def createWorkbenchForProject(self, concreteProject, projectSettings, **kwargs):
+		# for now, we'll only deal with workbench definitions that use "bootstrap: yes"
+		assert(projectSettings.bootstrapOnly)
+
+		self.getBootstrapProjectArguments(f"{concreteProject} workbench", projectSettings, kwargs)
+
+		workbenchProject = concreteProject.createSubProject("workbench", **kwargs)
+		workbenchProject.configureGitAccess(projectUrl = projectSettings.gitProjectUrl, packageUrl = projectSettings.gitPackageUrl)
+		workbenchProject.createRepository('standard')
+
+		if workbenchProject.config is None:
+			workbenchProject.config = self.createAggregationProjectConfig(workbenchProject)
+
+		return workbenchProject
 
 	def mapExportedTopic(self, abstractComponent, abstractTopic, repoName = 'standard'):
 		publishedRepository = abstractTopic.concretePublishingLocation
@@ -2416,7 +2554,6 @@ class ComponentCentricMediator(Mediator):
 				targetRepository.usePackage(concretePackage)
 				result.append(concretePackage)
 
-		infomsg(f"{concreteProject} bootstrapPackages {len(result)} pkgs")
 		return result
 
 	def createMainProjectConfig(self, concreteProject, verbatimSnippet = None):
@@ -2687,6 +2824,33 @@ class ProjectCentricMediator(ComponentCentricMediator):
 			if projectSettings.buildConfigStrategy == Model.BUILD_CONFIG_SINGLE:
 				self.addPackagesToProjectConfig(concreteProject.config, concreteProject.standard.packages)
 
+			if projectSettings.workbench:
+				if not concreteProject.workbenchProject:
+					raise Exception(f"{projectSettings}: configuration defines build_requires but does not define workbench project location")
+
+				infomsg(f"Setting up workbench for {projectSettings}")
+
+				abstractExport = abstractModel.identifyWorkbenchPackagesAuto(abstractComponentList)
+
+				workbenchProject = concreteProject.workbenchProject
+				workbenchRepository = workbenchProject.standard
+
+				if False:
+					infomsg(f"{workbenchProject} uses:")
+					for abstractPackage, abstractArtefacts in sorted(abstractExport.enumerate(), key = lambda pair: str(pair[0])):
+						name = str(abstractPackage)
+						for rpm in abstractArtefacts:
+							infomsg(f"    {name:35} {rpm.name}")
+							name = ""
+
+				for abstractPackage, abstractArtefacts in abstractExport.enumerate():
+					concretePackage = ConcretePackage(workbenchProject.bootstrapRepository, abstractPackage.name)
+					workbenchRepository.usePackage(concretePackage, artefacts = set(rpm.name for rpm in abstractArtefacts))
+
+				for packageName in projectSettings.workbench.extraPackages:
+					concretePackage = ConcretePackage(workbenchProject.bootstrapRepository, packageName)
+					workbenchRepository.usePackage(concretePackage)
+
 		for name in targetProjects:
 			concreteProject = self._projects.get(name)
 			if concreteProject is None:
@@ -2796,6 +2960,9 @@ class ProjectCentricMediator(ComponentCentricMediator):
 		# append that bootstrap snapshot at the very end
 		if concreteProject.bootstrapSelfFrom:
 			repositoryBuildRequires.appendRepository(concreteProject.bootstrapSelfFrom)
+
+		if concreteProject.workbenchProject:
+			repositoryBuildRequires.appendRepository(concreteProject.workbenchProject.standard)
 
 		concreteRepository.repositoriesUsedForBuild.update(repositoryBuildRequires.repositories)
 		infomsg(f"{concreteRepository.repositoriesUsedForBuild}")

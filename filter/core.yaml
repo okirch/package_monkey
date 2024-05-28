@@ -749,10 +749,13 @@ groups:
     - libpython311
    purposes:
     - name: doc
+      description: |
+       These packages should move to @PythonDocumentation once we have split off the
+       doc parts properly
       binaries:
-       - python311-doc
-       - python-six-doc
-       - python311-doc-devhelp
+#      - python311-doc
+#      - python311-doc-devhelp
+#      - python-six-doc
    buildflavors:
     - name: tcl
       requires:

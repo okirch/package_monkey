@@ -141,7 +141,7 @@ class StandardWriter(BaseWriter):
 		print(f"== {label.type} group {label} ==")
 
 	def writePackagesForGroup(self, label, packages):
-		for pkg in sorted(packages, key = lambda p: p.name):
+		for pkg in sorted(packages, key = lambda p: (p.name, p.arch)):
 			print(f"  {pkg}")
 
 	def writeBuild(self, label, buildInfo):
@@ -352,8 +352,7 @@ class XmlWriterCommon(BaseWriter):
 
 		if requiredPackages is not None:
 			reqNode = compNode.addChild('commonbuild')
-			for pkg in sorted(requiredPackages, key = lambda rpm: rpm.name):
-				self.writeRPM(reqNode, pkg)
+			self.writeRPMList(reqNode, requiredPackages)
 
 	def writeRequiredTopics(self, parentNode, xmlTag, topicList, inversions = None):
 		reqListNode = parentNode.addChild(xmlTag)
@@ -407,8 +406,7 @@ class XmlWriter(XmlWriterCommon):
 	def writePackagesForGroup(self, label, packages):
 		labelNode = self._labels[label.name]
 
-		for rpm in sorted(packages, key = lambda p: p.name):
-			rpmNode = self.writeRPM(labelNode, rpm)
+		self.writeRPMList(labelNode, packages)
 
 	def writeBuild(self, label, buildInfo):
 		buildNode = self.xmltree.root.addChild('build')
@@ -422,8 +420,7 @@ class XmlWriter(XmlWriterCommon):
 		if buildConfig is not None:
 			buildNode.addField('buildconfig', buildConfig.name)
 
-		for rpm in buildInfo.sources:
-			self.writeRPM(buildNode, rpm)
+		self.writeRPMList(buildNode, buildInfo.sources)
 
 		for rpm in buildInfo.binaries:
 			rpmNode = self.writeRPM(buildNode, rpm)
@@ -433,13 +430,18 @@ class XmlWriter(XmlWriterCommon):
 			bdepNode = buildNode.addChild('buildrequires')
 			if buildInfo.commonBuildRef:
 				bdepNode.setAttribute('common', str(buildInfo.commonBuildRef))
-			for rpm in buildInfo.buildRequires:
-				self.writeRPM(bdepNode, rpm)
+			self.writeRPMList(bdepNode, buildInfo.buildRequires)
 
 	def writeCommonBuildRequires(self, parentNode, requiredPackages):
 		reqNode = parentNode.addChild('commonbuild')
-		for pkg in sorted(requiredPackages or [], key = lambda rpm: rpm.name):
-			self.writeRPM(reqNode, pkg)
+		self.writeRPMList(reqNode, requiredPackages)
+
+	def writeRPMList(self, parentNode, packages):
+		if not packages:
+			return
+
+		for rpm in sorted(packages, key = lambda p: p.shortname):
+			self.writeRPM(parentNode, rpm)
 
 	def writeRPM(self, parent, rpm):
 		rpmNode = parent.addChild('rpm')

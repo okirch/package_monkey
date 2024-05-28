@@ -2,9 +2,6 @@
 
 name:                   Testing
 git_base_url:           gitea@src.suse.de:okir
-methods:
-        default:        auto
-        linkpac:        git
 type:                   "project-centric"
 #source_repository:      "SUSE:ALP:Source:Standard:1.0/standard"
 source_repository:      "SUSE:SLFO:Main/standard"

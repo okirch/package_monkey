@@ -25,30 +25,6 @@ class Model:
 		BUILD_CONFIG_SINGLE,
 	)
 
-	METHOD_AUTO			= 'auto'
-	METHOD_REST_API			= 'rest'
-	METHOD_GIT			= 'git'
-
-class Methods(object):
-	def __init__(self, defaultProtocol = 'rest'):
-		self.defaultProtocol = self.parse(defaultProtocol)
-		self.protocols = {}
-
-	@classmethod
-	def parse(klass, protocol):
-		if protocol in (Model.METHOD_REST_API, Model.METHOD_GIT, Model.METHOD_AUTO):
-			return protocol
-		raise Exception(f"Invalid protocol {protocol}")
-
-	def set(self, method, protocol):
-		if method == 'default':
-			self.defaultProtocol = self.parse(protocol)
-		else:
-			self.protocols[method] = self.parse(protocol)
-
-	def get(self, method):
-		return self.protocols.get(method, self.defaultProtocol)
-
 class ProjectSettingsMixin(object):
 	def __init__(self):
 		self.mode = None
@@ -135,7 +111,6 @@ class ComponentModelMapping(object):
 		self.projects = []
 		self.workingDir = None
 		self.gitBaseUrl = None
-		self.accessMethods = Methods()
 
 		# TBD
 		self.exportsSubProjectName = 'exports'
@@ -226,11 +201,6 @@ class ComponentModelMapping(object):
 			cm.processProject(project, cd)
 
 			cm.addProject(project)
-
-		cd = data.get('methods')
-		if cd is not None:
-			for method, protocol in cd.items():
-				cm.setAccessMethod(method, protocol)
 
 		wb = klass.getYamlDict(data, 'workbench', default = None)
 		if wb is not None:
@@ -341,14 +311,6 @@ class ComponentModelMapping(object):
 			git_url = f"{base_url}/{git_url}"
 
 		return git_url
-
-	def getAccessMethod(self, method):
-		return self.accessMethods.get(method)
-
-	def setAccessMethod(self, method, protocol):
-		# FIXME: validate there are no spelling errors in the
-		# method name
-		self.accessMethods.set(method, protocol)
 
 	NODEFAULT = type(None)
 

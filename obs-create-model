@@ -4,12 +4,13 @@ from packages import Product, Resolver, ResolverWorker, PackageCollection
 from filter import PackageFilter, Classification
 from solver import PotentialClassification
 from options import OBSClientApplication
-from util import ExecTimer, ThatsProgress, UniqueList
+from util import ExecTimer, ThatsProgress, UniqueList, BatchedUpdate
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from writers import XmlReader
 from obsclnt import OBSError, OBSProject, OBSProjectMeta, OBSAggregate
 from model import Model
 from ordered import Cone, ConvexSet, PartiallyOrderedSet
+from git import Git
 
 projectLogger = loggingFacade.getLogger('project')
 projectDebug = projectLogger.debug
@@ -469,7 +470,7 @@ class OBSClientWrapper(object):
 class ConcreteOBSObject(object):
 	def __init__(self, obs):
 		self.obs = obs
-		self.git = GitClient()
+		self.git = Git("./obsgit")
 
 class ConcreteProjectFactory(ConcreteOBSObject):
 	def __init__(self, obs, settings):
@@ -530,9 +531,8 @@ class ConcreteProjectFactory(ConcreteOBSObject):
 		return referencedRepository
 
 	def configureAccessMethods(self, concreteProject):
-		for method in ['linkpac', ]:
-			protocol = self.settings.getAccessMethod(method)
-			concreteProject.configureAccessMethod(method, protocol)
+		# FIXME
+		pass
 
 ##################################################################
 # ConcreteModel - this is what the component model actually
@@ -742,6 +742,167 @@ class ConcreteModel(ConcreteOBSObject):
 	def reportProblem(self, msg):
 		self.problems.append(msg)
 
+class ConcretePackageStorage(object):
+	def __init__(self, concreteProject):
+		self.project = concreteProject
+
+		# The ConcreteProject.connect() method is totally misnamed
+		self.obsProject = concreteProject.connect()
+
+		# This is the list of package names that OBS knows about
+		self._existingPackageNames = None
+
+	@property
+	def componentName(self):
+		return self.project.componentName
+
+	@property
+	def obsScmSyncUrl(self):
+		return None
+
+	# default implementation w/o name mangling
+	def manglePackageName(self, packageName):
+		return packageName
+
+	def fetchExistingPackages(self):
+		if self._existingPackageNames is None:
+			found = self.getsources()
+			if found is None:
+				# there was an error. The most straighforward explanation is that
+				# the project is empty/does not exist. ignore silently for now.
+				found = []
+			self._existingPackageNames = set(found)
+
+		return self._existingPackageNames
+
+	def packageExists(self, packageName):
+		assert(self._existingPackageNames is not None)
+		mangledName = self.manglePackageName(packageName)
+		return mangledName in self._existingPackageNames
+
+	# default implementation w/o name mangling
+	def getObsoletePackages(self, expectedState):
+		return self._existingPackageNames.difference(expectedState)
+
+	# called after we've added a package to OBS
+	def addPackage(self, packageName):
+		self.obsProject.addPackage(packageName)
+
+		if self._existingPackageNames is not None:
+			mangledName = self.manglePackageName(packageName)
+			self._existingPackageNames.add(mangledName)
+
+class ConcretePackageStorageREST(ConcretePackageStorage):
+	def __init__(self, concreteProject):
+		super().__init__(concreteProject)
+
+		self.obs = concreteProject.obs
+	
+	def getsources(self):
+		return self.obs.querySourcePackages(self.obsProject)
+
+	def linkpac(self, sourceProject, packageName, targetProject, **kwargs):
+		sourceProjectName = sourceProject.obsProjectName
+		targetProjectName = targetProject.obsProjectName
+
+		return self.obs.linkpac(sourceProjectName, packageName, targetProjectName, **kwargs)
+
+	def updatePackage(self, packageName, files, **kwargs):
+		targetProjectName = self.obsProjectName
+		return self.obs.updatePackage(targetProjectName, packageName, files, **kwargs)
+
+	def commit(self):
+		return
+
+class ConcretePackageStorageGit(ConcretePackageStorage):
+	def __init__(self, concreteProject):
+		super().__init__(concreteProject)
+
+		self.git = concreteProject.git
+		self.gitUrl = concreteProject.gitPackageUrl
+		self._workingCopy = None
+
+	@property
+	def obsScmSyncUrl(self):
+		url = f"{self.gitUrl}?enforce_bcntsynctag=1#main"
+		return self.git.makeUrlAnonymous(url)
+		if url.startswith("git@"):
+			url = "https://" + url[3:]
+		elif url.startswith("gitea@"):
+			url = "https://" + url[6:]
+		return url
+
+	def manglePackageName(self, packageName):
+		# The OBS git integration seems to map certain characters to underscore
+		packageName = packageName.replace("+", "_")
+		return packageName
+
+	@property
+	def workingCopy(self):
+		if self._workingCopy is None:
+			infomsg(f"Checking out {self.componentName} packages from {self.gitUrl}")
+			if self.gitUrl is None:
+				raise Exception(f"Misconfiguration for {self.project}: git package url is not set")
+			self._workingCopy = self.git.clone(f"{self.componentName}/pool", self.gitUrl)
+
+		return self._workingCopy
+
+	def getsources(self):
+		gh = self.workingCopy
+
+		# FIXME: shouldn't we rather loop over all subdirs and report those?
+		# submodules are just one type of packages we can have
+		found = []
+		for sm in gh.submodules:
+			found.append(sm.name)
+
+		return found
+
+	def getObsoletePackages(self, expectedState):
+		revmap = {}
+		for name in expectedState:
+			mapped = self.manglePackageName(name)
+			revmap[mapped] = name
+
+		delta = self._existingPackageNames.difference(set(revmap.keys()))
+		if delta:
+			delta = set(revmap[name] for name in delta)
+
+		return delta
+
+	def linkpac(self, sourceProject, packageName, targetProject, **kwargs):
+		infomsg(f"linkpac({sourceProject.gitPackageUrl}, {packageName})")
+		assert(sourceProject.gitPackageUrl)
+
+		packageName = self.manglePackageName(packageName)
+
+		# FIXME: try to use relative URLs where possible?
+		sourceGitUrl = sourceProject.gitPackageUrl
+		if sourceGitUrl.endswith(".git"):
+			sourceGitUrl = sourceGitUrl[:-4]
+		packageGitUrl = f"{sourceGitUrl}/{packageName}"
+
+		gh = self.workingCopy
+		sm = gh.addSubmodule(packageGitUrl, name = packageName)
+
+		if not sm:
+			return False
+
+		gh.commit()
+		return True
+
+	def updatePackage(self, packageName, files, title = None, **kwargs):
+		gh = self.workingCopy
+		gh.addPackage(packageName, files, **kwargs)
+		gh.commit()
+
+		return True
+
+	def commit(self):
+		gh = self.workingCopy
+		if gh.hasPendingChanges():
+			gh.commit()
+		gh.push()
 
 class ConcreteProject(ConcreteOBSObject):
 	AUTO_INDEX = 1000
@@ -773,6 +934,9 @@ class ConcreteProject(ConcreteOBSObject):
 		self.bootstrapRepository = bootstrapRepository
 		self.gitPackageUrl = None
 		self.gitProjectUrl = None
+		self.gitProjectCheckout = None
+
+		self._packageStorage = None
 
 		if labelScope is not None:
 			assert(isinstance(labelScope, LabelScope))
@@ -813,9 +977,6 @@ class ConcreteProject(ConcreteOBSObject):
 		# This is a dict of generated packages (usually 000component)
 		self._generatedPackages = {}
 
-		# This is the list of package names that OBS knows about
-		self._existingPackageNames = None
-
 		# This is the list of package names that the component model
 		# knows about
 		self._knownPackageNames = set()
@@ -841,7 +1002,7 @@ class ConcreteProject(ConcreteOBSObject):
 			self.labelScope = labelScope
 		else:
 			self.labelScope.update(labelScope)
-	
+
 	def configureGitAccess(self, packageUrl = None, projectUrl = None):
 		self.gitPackageUrl = packageUrl
 		self.gitProjectUrl = projectUrl
@@ -923,23 +1084,6 @@ class ConcreteProject(ConcreteOBSObject):
 
 		return self.obsProject
 
-	def initAccessMethods(self):
-		if self.ACCESS_METHODS is None:
-			self.ACCESS_METHODS = {
-				'linkpac/auto'	: self.linkpacAuto,
-				'linkpac/rest'	: self.linkpacREST,
-				'linkpac/git'	: self.linkpacGit,
-			}
-
-	def configureAccessMethod(self, method, protocol):
-		self.initAccessMethods()
-
-		memberFunction = self.ACCESS_METHODS.get(f"{method}/{protocol}")
-		if memberFunction is None:
-			raise Exception(f"Unsupported access method {method}={protocol}")
-
-		setattr(self, method, memberFunction)
-
 	# When we're creating one or more fresh component projects, we need to provide an
 	# initial _meta document. This should define all repositories, but without referencing
 	# all required repos (OBS rejects _meta documents that reference a repo that doesn't
@@ -971,6 +1115,10 @@ class ConcreteProject(ConcreteOBSObject):
 		if True:
 			projectMeta.updateTitle(self.title)
 			projectMeta.updateDescription(self.description)
+
+		syncUrl = self.packageStorage.obsScmSyncUrl
+		if syncUrl is not None:
+			projectMeta.updateScmSync(syncUrl)
 
 		existingRepos = set(projectMeta.repositories)
 
@@ -1041,32 +1189,27 @@ class ConcreteProject(ConcreteOBSObject):
 	def updateComponentInfo(self):
 		pass
 
-	def fetchExistingPackages(self):
-		if self._existingPackageNames is None:
-			obsProject = self.connect()
-
-			found = self.obs.querySourcePackages(obsProject)
-			if found is None:
-				# there was an error. The most straighforward explanation is that
-				# the project is empty/does not exist. ignore silently for now.
-				found = []
-			self._existingPackageNames = set(found)
-
-		return self._existingPackageNames
+	@property
+	def packageStorage(self):
+		if self._packageStorage is None:
+			if self.gitPackageUrl is None:
+				self._packageStorage = ConcretePackageStorageREST(self)
+			else:
+				self._packageStorage = ConcretePackageStorageGit(self)
+		return self._packageStorage
 
 	def packageExists(self, packageName):
-		assert(self._existingPackageNames is not None)
-		return packageName in self._existingPackageNames
+		return self.packageStorage.packageExists(packageName)
 
 	def getObsoletePackages(self, expectedState):
-		return self._existingPackageNames.difference(expectedState)
+		return self.packageStorage.getObsoletePackages(expectedState)
 
 	def filterMissingPackages(self, concretePackages):
 		result = set()
 		for package in concretePackages:
 			if package.isMultiBuild:
 				continue
-			if package.baseName not in self._existingPackageNames:
+			if not self.packageStorage.packageExists(package.baseName):
 				result.add(package)
 			self._knownPackageNames.add(package.baseName)
 
@@ -1074,13 +1217,11 @@ class ConcreteProject(ConcreteOBSObject):
 
 	@property
 	def obsoletePackageNames(self):
-		return self._existingPackageNames.difference(self._knownPackageNames)
+		return self.packageStorage.getObsoletePackages(self._knownPackageNames)
 
 	def recordPackageCreationResult(self, packageName, success):
 		if success:
-			self.obsProject.addPackage(packageName)
-			if self._existingPackageNames is not None:
-				self._existingPackageNames.add(packageName)
+			self.packageStorage.addPackage(packageName)
 
 		self._knownPackageNames.add(packageName)
 
@@ -1088,7 +1229,7 @@ class ConcreteProject(ConcreteOBSObject):
 		if not self._packagePublicationStrategy:
 			raise Exception(f"{self}: cannot publish packages; no strategy defined")
 
-		self.fetchExistingPackages()
+		self.packageStorage.fetchExistingPackages()
 		self._packagePublicationStrategy.publish(self)
 
 	def cleanupPackages(self):
@@ -1097,23 +1238,13 @@ class ConcreteProject(ConcreteOBSObject):
 
 		self._packagePublicationStrategy.cleanup(self)
 
-	def linkpacAuto(self, *args, **kwargs):
-		if self.gitPackageUrl is None:
-			return self.linkpacREST(*args, **kwargs)
-		return self.linkpacGit(*args, **kwargs)
-
-	def linkpacREST(self, sourceProject, packageName, **kwargs):
-		sourceProjectName = sourceProject.obsProjectName
-		targetProjectName = self.obsProjectName
-
-		success = self.obs.linkpac(sourceProjectName, packageName, targetProjectName, **kwargs)
-
+	def linkpac(self, sourceProject, packageName, **kwargs):
+		success = self.packageStorage.linkpac(sourceProject, packageName, self, **kwargs)
 		self.recordPackageCreationResult(packageName, success)
 		return success
 
-	def linkpacGit(self, sourceProject, packageName, **kwargs):
-		infomsg(f"linkpacGit({sourceProject.gitPackageUrl}, {packageName})")
-		xx
+	def commit(self):
+		return self.packageStorage.commit()
 
 	def createAggregate(self, obsAggregate, **kwargs):
 		infomsg(f"create aggregate {self.obsProjectName} {obsAggregate.targetPackageName}")
@@ -1133,8 +1264,7 @@ class ConcreteProject(ConcreteOBSObject):
 		return success
 
 	def updatePackage(self, packageName, files, **kwargs):
-		targetProjectName = self.obsProjectName
-		return self.obs.updatePackage(targetProjectName, packageName, files, **kwargs)
+		return self.packageStorage.updatePackage(packageName, files, **kwargs)
 
 	def deletepac(self, packageName, **kwargs):
 		return self.obs.deletepac(self.obsProjectName, packageName, **kwargs)
@@ -1201,11 +1331,12 @@ class ConcreteRepository(ConcreteOBSObject):
 		return targetProject.createAggregate(obsAggregate)
 
 class ConcretePackage(ConcreteOBSObject):
-	def __init__(self, concreteRepository, name, artefactNames = None):
+	def __init__(self, concreteRepository, name, artefactNames = None, gitHandle = None):
 		super().__init__(concreteRepository.obs)
 
 		self.parent = concreteRepository
 		self.name = name
+		self.gitHandle = gitHandle
 
 		# For multibuilds like frobnicator:test, baseName is 'frobnicator'
 		if ':' in name:
@@ -1327,7 +1458,7 @@ class ConcreteExport(ConcreteOBSObject):
 		self.inversions = None
 
 		assert(topicLabels is None or isinstance(topicLabels, LabelScope))
-	
+
 	def __str__(self):
 		return self.name
 
@@ -1429,6 +1560,7 @@ class PackagePublicationStrategy(object):
 					infomsg(f"[{progressMeter} {progressMeter.eta}] {link}: {self.VERB} from {self.sourceProject}")
 					self.publishOne(link, targetProject)
 				progressMeter.tick()
+			targetProject.commit()
 
 	def cleanup(self, targetProject):
 		obsoletePackages = targetProject.getObsoletePackages(self.expectedState)
@@ -1899,6 +2031,11 @@ class ComponentCentricMediator(Mediator):
 
 			self.linkPackages(abstractComponent, concreteProject, self.model.sourceRepository)
 
+			if concreteProject.bootstrapSelfFrom:
+				self.bootstrapPackages(concreteProject.bootstrapSelfFrom.parent, abstractComponent)
+		else:
+			self.bootstrapPackages(concreteProject, abstractComponent)
+
 	def mapComponent(self, abstractComponent, componentSettings, **kwargs):
 		concreteProject = abstractComponent.concreteProject
 		if concreteProject is None:
@@ -1962,7 +2099,7 @@ class ComponentCentricMediator(Mediator):
 					description = description,
 					labelScope = actualTopics)
 
-		concreteProject.configureGitAccess(projectUrl = settings.gitProjectUrl, packageUrl = settings.packageProjectUrl)
+		concreteProject.configureGitAccess(projectUrl = settings.gitProjectUrl, packageUrl = settings.gitPackageUrl)
 		abstractComponent.concreteProject = concreteProject
 
 		self.createSubProjects(abstractComponent)
@@ -2031,6 +2168,8 @@ class ComponentCentricMediator(Mediator):
 					componentName = projectBaseName,
 					generation = generation,
 					description = description)
+
+		concreteProject.configureGitAccess(projectUrl = projectSettings.gitProjectUrl, packageUrl = projectSettings.gitPackageUrl)
 		return concreteProject
 
 	def mapExportedTopic(self, abstractComponent, abstractTopic, repoName = 'standard'):
@@ -2277,6 +2416,7 @@ class ComponentCentricMediator(Mediator):
 				targetRepository.usePackage(concretePackage)
 				result.append(concretePackage)
 
+		infomsg(f"{concreteProject} bootstrapPackages {len(result)} pkgs")
 		return result
 
 	def createMainProjectConfig(self, concreteProject, verbatimSnippet = None):

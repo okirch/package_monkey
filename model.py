@@ -25,6 +25,7 @@ class Model:
 		BUILD_CONFIG_SINGLE,
 	)
 
+	METHOD_AUTO			= 'auto'
 	METHOD_REST_API			= 'rest'
 	METHOD_GIT			= 'git'
 
@@ -35,7 +36,7 @@ class Methods(object):
 
 	@classmethod
 	def parse(klass, protocol):
-		if protocol in (Model.METHOD_REST_API, Model.METHOD_GIT):
+		if protocol in (Model.METHOD_REST_API, Model.METHOD_GIT, Model.METHOD_AUTO):
 			return protocol
 		raise Exception(f"Invalid protocol {protocol}")
 

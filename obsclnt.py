@@ -6,7 +6,7 @@ import time
 import xml.etree.ElementTree as ET
 
 from packages import Package, PackageInfo, PackageInfoFactory, UniquePackageInfoFactory
-from util import ChunkingQueue, ThatsProgress
+from util import ThatsProgress
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
 obsLogger = loggingFacade.getLogger('obs')
@@ -306,6 +306,9 @@ class OBSSchema(object):
 			elif child.tag == "description":
 				if child.text is not None:
 					result.description = child.text.strip()
+			elif child.tag == "scmsync":
+				if child.text is not None:
+					result.scmsync = child.text.strip()
 			elif child.tag == "build":
 				for buildNode in child:
 					name = buildNode.attrib.get('repository')
@@ -336,6 +339,9 @@ class OBSSchema(object):
 		root.setAttribute('name', prjconf.name)
 		root.addField('title', prjconf.title or prjconf.name)
 		root.addField('description', prjconf.description or "...")
+
+		if prjconf.scmsync is not None:
+			root.addField('scmsync', prjconf.scmsync)
 
 		if not prjconf.persons:
 			raise Exception(f"Cannot generate XML document for prjconf {prjconf}: no users and roles")
@@ -1216,6 +1222,7 @@ class OBSProjectMeta:
 		self.description = None
 		self.repositories = []
 		self.persons = []
+		self.scmsync = None
 
 		# keep the build enable/disable info separate from the list of repos
 		# so that we can recreate the list of repos without losing this information
@@ -1242,6 +1249,11 @@ class OBSProjectMeta:
 	def updateDescription(self, value):
 		if self.description != value:
 			self.description = value
+			self.modified = True
+
+	def updateScmSync(self, value):
+		if self.scmsync != value:
+			self.scmsync = value
 			self.modified = True
 
 	def clearAllRepositories(self):

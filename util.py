@@ -10,24 +10,29 @@ import fnmatch
 # and you do not want to lose all progress when you hit a bug during
 # development.
 ##################################################################
-class ChunkingQueue:
-	def __init__(self, processingFunction, chunkSize = 20):
+class BatchedUpdate:
+	def __init__(self, processingFunction = None, commitFunction = None, chunkSize = 20):
 		self.processingFunction = processingFunction
+		self.commitFunction = commitFunction
 		self.chunkSize = chunkSize
-		self.processed = []
+		self.deferred = []
 
 	def __del__(self):
 		self.flush()
 
-	def add(self, object):
-		self.processed.append(object)
-		if len(self.processed) >= self.chunkSize:
+	def processedOne(self, object = None):
+		self.deferred.append(object)
+		if len(self.deferred) >= self.chunkSize:
 			self.flush()
 
 	def flush(self):
-		if self.processed:
-			self.processingFunction(self.processed)
-			self.processed = []
+		if self.deferred:
+			if self.processingFunction is not None:
+				self.processingFunction(self.deferred)
+
+			if self.commitFunction is not None:
+				self.commitFunction()
+			self.deferred = []
 
 ##################################################################
 # Simple tool to detect cycles in a graph

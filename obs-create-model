@@ -274,33 +274,107 @@ class AbstractModel(object):
 		return self.createExportForRPMs(workbenchRPMs, labelScope = labelScope)
 
 	class RequirementsTracking(object):
-		def __init__(self):
-			self._map = {}
+		class SimpleForest(object):
+			class Node(object):
+				def __init__(self, name):
+					self.name = name
+					self.refs = set()
+					self.internal = False
 
-		def add(self, rpm, names):
-			if rpm.name not in self._map:
-				self._map[rpm.name] = set()
-			self._map[rpm.name].update(names)
+					self._value = None
 
-		def addBuild(self, buildSpec, required):
-			ultimatelyRequiredBy = set([buildSpec.name])
-			for dep in required:
-				self.add(dep, ultimatelyRequiredBy)
+			def __init__(self):
+				self._nodes = {}
 
-		def addDependencies(self, rpm, required):
-			ultimatelyRequiredBy = self._map[rpm.name]
-			for dep in required:
-				self.add(dep, ultimatelyRequiredBy)
+			def createNode(self, name):
+				if name not in self._nodes:
+					self._nodes[name] = self.Node(name)
+				return self._nodes[name]
 
-		def __iter__(self):
-			for name, ultimatelyRequiredBy in sorted(self._map.items()):
-				yield name, ' '.join(ultimatelyRequiredBy)
+			def __iter__(self):
+				return iter(self._nodes.items())
+
+		def __init__(self, allBuilds, visibleRPMs):
+			self._graph = self.SimpleForest()
+			self.visibleRPMs = visibleRPMs
+			self.missingRPMs = set()
+			self._inversions = {}
+
+			for buildSpec in allBuilds:
+				self.addBuild(buildSpec)
+			self.finalize()
+
+		def addBuild(self, buildSpec):
+			inversions = buildSpec.buildRequires.difference(self.visibleRPMs)
+			if not inversions:
+				return
+
+			# Track for later reporting
+			self._inversions[buildSpec.name] = inversions
+
+			self.add(buildSpec.name, inversions)
+			self.missingRPMs.update(inversions)
+
+		def finalize(self):
+			# Recursively chase all dependencies
+			queue = list(self.missingRPMs)
+			while queue:
+				rpm = queue.pop(0)
+
+				requires = set(rpm.enumerateRequiredRpms())
+				requires = requires.difference(self.visibleRPMs)
+				if not requires:
+					continue
+
+				self.add(rpm.name, requires)
+
+				requires = requires.difference(self.missingRPMs)
+				if requires:
+					self.missingRPMs.update(requires)
+					queue += list(requires)
+
+		def add(self, requiringName, requiredRpms):
+			requiringNode = self._graph.createNode(requiringName)
+			requiringNode.internal = True
+
+			if not requiredRpms:
+				return
+
+			for rpm in requiredRpms:
+				if rpm.name == requiringName:
+					continue
+
+				requiredNode = self._graph.createNode(rpm.name)
+				requiredNode.refs.add(requiringNode)
+
+		def inversions(self):
+			for name, inversions in sorted(self._inversions.items()):
+				yield name, inversions
+
+		def requirementsAndCulprits(self):
+			def culprits(node):
+				if node._value is None:
+					node._value = set()
+					for ref in node.refs:
+						c = culprits(ref)
+						if c:
+							# This ref represents a binary RPM
+							node._value.update(c)
+						else:
+							# This ref represents a build
+							node._value.add(ref.name)
+				return node._value
+
+			for name, node in sorted(self._graph):
+				ultimatelyRequiredBy = culprits(node)
+				if ultimatelyRequiredBy:
+					yield name, ' '.join(ultimatelyRequiredBy)
 
 	def identifyWorkbenchPackagesAuto(self, abstractComponents):
+		componentLabels = Classification.createLabelSet(ac.componentLabel for ac in abstractComponents)
+
 		visibleLabels = Classification.createLabelSet()
-		obsBuilds = set()
-		for abstractComponent in abstractComponents:
-			componentLabel = abstractComponent.componentLabel
+		for componentLabel in componentLabels:
 			visibleLabels.update(self.getTopicClosure(componentLabel))
 
 		visibleRPMs = set()
@@ -308,48 +382,18 @@ class AbstractModel(object):
 			m = self.classification.packageMembership(topic)
 			visibleRPMs.update(m.packages)
 
-		requirementsTracking = self.RequirementsTracking()
+		allBuilds = []
+		for componentLabel in componentLabels:
+			m = self.classification.projectMembership(componentLabel)
+			allBuilds += list(m.builds)
 
-		workbenchRPMs = set()
-		for abstractComponent in abstractComponents:
-			m = self.classification.projectMembership(abstractComponent.componentLabel)
-
-			for buildSpec in m.builds:
-				inversions = buildSpec.buildRequires.difference(visibleRPMs)
-				if not inversions:
-					continue
-
-				infomsg(f"   {buildSpec.name:22} {len(inversions)} build inversions")
-				for rpm in inversions:
-					infomsg(f"       {rpm}")
-
-				requirementsTracking.addBuild(buildSpec, inversions)
-
-				workbenchRPMs.update(inversions)
-
-		buildInversions = workbenchRPMs.copy()
-
-		queue = list(workbenchRPMs)
-		while queue:
-			rpm = queue.pop(0)
-
-			requires = set(rpm.enumerateRequiredRpms())
-			requires = requires.difference(visibleRPMs)
-			if not requires:
-				continue
-
-			requirementsTracking.addDependencies(rpm, requires)
-
-			requires = requires.difference(workbenchRPMs)
-			if requires:
-				workbenchRPMs.update(requires)
-				queue += list(requires)
+		requirementsTracking = self.RequirementsTracking(allBuilds, visibleRPMs)
 
 		infomsg(f"workbench RPMs and why they are included:")
-		for rpmName, requiredBy in requirementsTracking:
+		for rpmName, requiredBy in requirementsTracking.requirementsAndCulprits():
 			infomsg(f"   {rpmName:20} {requiredBy}")
 
-		return self.createExportForRPMs(workbenchRPMs)
+		return requirementsTracking
 
 	def createExportForRPMs(self, workbenchRPMs, **kwargs):
 		abstractExport = AbstractArtefactCollection(**kwargs)
@@ -1872,12 +1916,45 @@ class ComponentInfoPackageGenerator(PackageGenerator):
 	def addComponent(self, componentLabel):
 		self.modelXML.addComponentLabel(componentLabel)
 
+class WorkbenchInfoPackageGenerator(PackageGenerator):
+	def __init__(self, name, requirementsTracking):
+		super().__init__(name)
+
+		self.title = f"Workbench information package"
+
+		file = TrivialFileGenerator("inversions.txt")
+		file.append(f"Build inversions:")
+		file.append("")
+		for buildName, inversions in requirementsTracking.inversions():
+			file.append(f"   {buildName:22} {len(inversions)} build inversions")
+			for rpmName in sorted(map(str, inversions)):
+				file.append(f"       {rpmName}")
+		self.addFile(file)
+
+		file = TrivialFileGenerator("requirements.txt")
+		file.append(f"Workbench RPMs and why they are included:")
+		file.append("")
+		for rpmName, requiredBy in requirementsTracking.requirementsAndCulprits():
+			file.append(f"   {rpmName:20} {requiredBy}")
+		self.addFile(file)
+
 class FileGenerator(object):
 	def __init__(self, name):
 		self.name = name
 
 	def generateContent(self):
 		raise Exception(f"{self.__class__.__name__}.generateContent() not implemented")
+
+class TrivialFileGenerator(FileGenerator):
+	def __init__(self, name):
+		super().__init__(name)
+		self.lines = []
+
+	def append(self, line):
+		self.lines.append(line)
+
+	def generateContent(self):
+		return "\n".join(self.lines)
 
 class ComponentXmlGenerator(FileGenerator):
 	def __init__(self, name, classification):
@@ -1916,6 +1993,7 @@ class Mediator(object):
 
 		self.allInversionsName = 'all'
 		self.componentInfoPackageName = "000component"
+		self.workbenchInfoPackageName = "000workbench"
 
 		self.model = ConcreteModel(self.obs, self.settings)
 
@@ -1937,12 +2015,21 @@ class Mediator(object):
 	def getExportProject(self, label):
 		return self._exportsTable.get(label)
 
-	def createComponentInfoPackage(self, abstractModel, concreteProject):
+	def createComponentInfoPackage(self, concreteProject, classification):
 		packageName = self.componentInfoPackageName
 
 		infoGenerator = concreteProject.getGeneratedPackage(packageName)
 		if infoGenerator is None:
-			infoGenerator = ComponentInfoPackageGenerator(packageName, abstractModel.classification)
+			infoGenerator = ComponentInfoPackageGenerator(packageName, classification)
+			concreteProject.addGeneratedPackage(infoGenerator)
+		return infoGenerator
+
+	def createWorkbenchInfoPackage(self, concreteProject, requirementsTracking):
+		packageName = self.workbenchInfoPackageName
+
+		infoGenerator = concreteProject.getGeneratedPackage(packageName)
+		if infoGenerator is None:
+			infoGenerator = WorkbenchInfoPackageGenerator(packageName, requirementsTracking)
 			concreteProject.addGeneratedPackage(infoGenerator)
 		return infoGenerator
 
@@ -1988,7 +2075,7 @@ class ComponentCentricMediator(Mediator):
 		for abstractComponent in abstractModel.components:
 			concreteProject = abstractComponent.concreteProject
 
-			infoPackage = self.createComponentInfoPackage(abstractModel, concreteProject)
+			infoPackage = self.createComponentInfoPackage(concreteProject, abstractModel.classification)
 			infoPackage.addComponent(abstractComponent.componentLabel)
 
 			if concreteProject.generation == 'bootstrap':
@@ -2830,7 +2917,8 @@ class ProjectCentricMediator(ComponentCentricMediator):
 
 				infomsg(f"Setting up workbench for {projectSettings}")
 
-				abstractExport = abstractModel.identifyWorkbenchPackagesAuto(abstractComponentList)
+				requirementsTracking = abstractModel.identifyWorkbenchPackagesAuto(abstractComponentList)
+				abstractExport = abstractModel.createExportForRPMs(requirementsTracking.missingRPMs)
 
 				workbenchProject = concreteProject.workbenchProject
 				workbenchRepository = workbenchProject.standard
@@ -2842,6 +2930,8 @@ class ProjectCentricMediator(ComponentCentricMediator):
 						for rpm in abstractArtefacts:
 							infomsg(f"    {name:35} {rpm.name}")
 							name = ""
+
+				self.createWorkbenchInfoPackage(workbenchProject, requirementsTracking)
 
 				for abstractPackage, abstractArtefacts in abstractExport.enumerate():
 					concretePackage = ConcretePackage(workbenchProject.bootstrapRepository, abstractPackage.name)
@@ -2910,7 +3000,7 @@ class ProjectCentricMediator(ComponentCentricMediator):
 		return self.model
 
 	def setupInfoPackage(self, abstractModel, concreteProject, abstractComponentList):
-		infoPackage = self.createComponentInfoPackage(abstractModel, concreteProject)
+		infoPackage = self.createComponentInfoPackage(concreteProject, abstractModel.classification)
 		for abstractComponent in abstractComponentList:
 			infoPackage.addComponent(abstractComponent.componentLabel)
 		

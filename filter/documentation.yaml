@@ -1,0 +1,40 @@
+# vi: ai et
+# Definition of Documentation component
+
+components:
+ - name: Documentation
+   globals:
+    devel: DocDevel
+   requires:
+    - CorePlus
+    - Systemd
+    - Multimedia
+    - Typesetting
+    - KernelPlus
+    - LLVM
+
+build_configs:
+ - name: Documentation/standard
+
+groups:
+ - name: "@X11Documentation"
+   sourceproject: Documentation
+   binaries:
+    - xorgproto-doc
+
+ - name: "@KernelDocumentation"
+   sourceproject: Documentation
+   binaries:
+    - kernel-docs
+    - kernel-docs-html
+
+ - name: "@CoreDocumentation"
+   sourceproject: Documentation
+   requires:
+    - "@Security+doc"
+   binaries:
+# unfortunately, the PAM doc packages are built together with pam-extra so we can't
+# just place them here
+#   - pam-doc
+#   - pam-manpages
+    - bash-completion-doc

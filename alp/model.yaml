@@ -12,13 +12,7 @@ source:
 target_architectures:
         - "x86_64"
 always_build_requires:
-        - "SUSE:ALP:Source:Standard:Core:1.0:Build/ports order=first"
-#       - "Development"
-#       - "GCC"
-#       # we should inject kernel-obs-build into our workbench
-#       # and drop KernelPlus
-#       - "KernelPlus"
-#       - Workbench
+        - "SUSE:SLFO:Main:Build/ports order=first"
 exportsSubProjectName:  'exports'
 use_fallback:           False
 ignore_packages:

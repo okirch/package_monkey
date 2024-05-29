@@ -387,13 +387,7 @@ class AbstractModel(object):
 			m = self.classification.projectMembership(componentLabel)
 			allBuilds += list(m.builds)
 
-		requirementsTracking = self.RequirementsTracking(allBuilds, visibleRPMs)
-
-		infomsg(f"workbench RPMs and why they are included:")
-		for rpmName, requiredBy in requirementsTracking.requirementsAndCulprits():
-			infomsg(f"   {rpmName:20} {requiredBy}")
-
-		return requirementsTracking
+		return self.RequirementsTracking(allBuilds, visibleRPMs)
 
 	def createExportForRPMs(self, workbenchRPMs, **kwargs):
 		abstractExport = AbstractArtefactCollection(**kwargs)
@@ -2923,13 +2917,7 @@ class ProjectCentricMediator(ComponentCentricMediator):
 				workbenchProject = concreteProject.workbenchProject
 				workbenchRepository = workbenchProject.standard
 
-				if False:
-					infomsg(f"{workbenchProject} uses:")
-					for abstractPackage, abstractArtefacts in sorted(abstractExport.enumerate(), key = lambda pair: str(pair[0])):
-						name = str(abstractPackage)
-						for rpm in abstractArtefacts:
-							infomsg(f"    {name:35} {rpm.name}")
-							name = ""
+				infomsg(f"{workbenchProject} contains {len(requirementsTracking.missingRPMs)} RPMs")
 
 				self.createWorkbenchInfoPackage(workbenchProject, requirementsTracking)
 
@@ -2947,55 +2935,6 @@ class ProjectCentricMediator(ComponentCentricMediator):
 				raise Exception(f"Don't know how to publish unknown project {name}")
 
 			self.markProjectToPublish(concreteProject)
-
-		return self.model
-		y
-
-		xxx
-		for abstractComponent in abstractModel.components:
-			componentSettings = self.settings.getComponent(abstractComponent.name)
-			self.mapComponent(abstractComponent, componentSettings)
-
-		for abstractComponent in abstractModel.components:
-			concreteProject = abstractComponent.concreteProject
-
-			if concreteProject.generation == 'bootstrap':
-				continue
-
-			fredProject = self.createPrjConfSubProject(abstractComponent)
-			fredProject.config = self.createPackageProjectConfig(concreteProject)
-
-			repositories = []
-			for abstractBuildConfig in abstractComponent.buildConfigs:
-				concreteRepository = self.mapBuildConfig(abstractComponent, abstractBuildConfig)
-				repositories.append(concreteRepository)
-
-		alwaysBuildRequires = self.mapCommonRequirements()
-		for abstractComponent in abstractModel.components:
-			concreteProject = abstractComponent.concreteProject
-			if concreteProject.generation == 'bootstrap':
-				continue
-
-			componentRequires = self.mapComponentRequirements(abstractComponent, alwaysBuildRequires)
-
-			infomsg(f"Creating buildconfigs for {abstractComponent}")
-			if loggingFacade.isDebugEnabled('project'):
-				projectDebug(f"   Common setup:")
-				for concreteRepository in componentRequires.repositories:
-					projectDebug(f"    - {concreteRepository}")
-
-			for abstractBuildConfig in abstractComponent.buildConfigs:
-				concreteRepository = abstractBuildConfig.concreteRepository
-				if concreteRepository is None:
-					raise Exception(f"{abstractBuildConfig} has not been mapped to a repository")
-
-				with loggingFacade.temporaryIndent():
-					projectDebug(f"Resolving requirements for {abstractBuildConfig}")
-					self.mapBuildConfigRequirements(abstractBuildConfig, concreteRepository, componentRequires)
-
-		for abstractComponent in abstractModel.components:
-			if abstractComponent.name in targetComponents:
-				self.populateSubProjects(abstractComponent)
 
 		return self.model
 
@@ -3020,24 +2959,6 @@ class ProjectCentricMediator(ComponentCentricMediator):
 
 		concreteProject.buildRequirements = projectBuildRequires
 		return
-
-		for abstractComponent in abstractModel.components:
-			componentRequires = self.mapComponentRequirements(abstractComponent, alwaysBuildRequires)
-
-			infomsg(f"Creating buildconfigs for {abstractComponent}")
-			if loggingFacade.isDebugEnabled('project'):
-				projectDebug(f"   Common setup:")
-				for concreteRepository in componentRequires.repositories:
-					projectDebug(f"    - {concreteRepository}")
-
-			for abstractBuildConfig in abstractComponent.buildConfigs:
-				concreteRepository = abstractBuildConfig.concreteRepository
-				if concreteRepository is None:
-					raise Exception(f"{abstractBuildConfig} has not been mapped to a repository")
-
-				with loggingFacade.temporaryIndent():
-					projectDebug(f"Resolving requirements for {abstractBuildConfig}")
-					self.mapBuildConfigRequirements(abstractBuildConfig, concreteRepository, componentRequires)
 
 	def mapBuildConfigRequirements(self, concreteRepository, componentBuildRequires):
 		concreteProject = concreteRepository.parent

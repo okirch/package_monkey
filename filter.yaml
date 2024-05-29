@@ -14,36 +14,46 @@ options:
  #  - systemtap, where we have a separate systemtap-headers build (which was
  #    presumably created in order to avoid a long build dependency cycle)
  split_multibuilds:
+   - autoconf
+   - bash-completion
    - boost
+   - cmake
+   - coreutils
+   - doxygen
    - dpkg
+   - dwz
    - elfutils
-   - file
    - fftw3
+   - file
    - freetype2
+   - gcc13
+   - glib2
+   - glibc
    - gsl
    - hdf5
+   - ibutils
+   - kernel-source
    - libcap-ng
+   - libdb-4_8
+   - libeconf
    - libseccomp
    - libselinux
+   - libxml2
    - metis
    - openblas
    - openblas
    - openssh
+   - pam
+   - python311
    - python-numpy
    - python-scipy
+   - python-six
    - superlu
    - systemtap
    - timezone
-   - libdb-4_8
-   - gcc13
-   - glibc
-   - ibutils
-   - cmake
-   - doxygen
    - unzip
-   - glib2
-   - python-six
-   - python311
+   - util-linux
+   - xorgproto
 
 autoflavors:
  - name: perl
@@ -219,6 +229,7 @@ include:
  - filter/cloud.yaml
  - filter/applications.yaml
  - filter/product.yaml
+ - filter/documentation.yaml
 
 build_configs:
 

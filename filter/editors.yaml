@@ -75,6 +75,7 @@ groups:
    binaries:
     - emacs
     - emacs-nox
+    - autoconf-el
    buildflavors:
     - name: x11
       requires:

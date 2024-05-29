@@ -58,6 +58,12 @@ projects:
     workbench:
       git_package_url: sle16_foundations_workbench
       bootstrap: yes
+      # HACK to cope with recent pkg renames in SLFO:Main
+      extra_packages:
+       - obs-service-tar_scm
+       - obs-service-recompress
+       - obs-service-common
+       - obs-service-set_version
       components:
        - "@Graphviz"
        - "@MinimalCDevelopment"

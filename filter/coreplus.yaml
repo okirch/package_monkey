@@ -350,6 +350,16 @@ groups:
     - elfutils-debuginfod
     - debuginfod-client
 
+ - name: "@CoreTestSuites"
+   description: |
+     These live in CorePlus for lack of better ideas.
+   sourceproject: CorePlus
+   requires:
+    - "@Core0"
+   binaries:
+    - coreutils-testsuite
+    - dwz-testsuite
+
  - name: "@PlusUtilities"
    sourceproject: CorePlus
    requires:
@@ -585,7 +595,9 @@ groups:
    requires:
     - "@Core0"
     - "@Perl"
-    - "@CoreLibraries+python"
+    - "@CoreLibraries"
+    - "@SystemPythonCoreBindings"
+    - "@XMLLibraries"
     - "@MinimalCDevelopment"
    binaries:
     - intltool

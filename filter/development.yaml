@@ -254,6 +254,7 @@ groups:
     - memory-constraints
     - post-build-checks
     - python-rpm-packaging
+    - rpmlint-mini
     # OBS wants to install it everywhere
     - rzsz
 
@@ -291,13 +292,6 @@ groups:
     - valgrind
     - valgrind-devel
     - valgrind-client-headers
-
- - name: "@CoreWorkbenchUnused"
-   sourceproject: CoreWorkbench
-   requires:
-    - "@MinimalCDevelopment"
-   binaries:
-    - autoconf-el
 
  - name: "@Meson"
    sourceproject: Development
@@ -391,7 +385,6 @@ groups:
    binaries:
     - python${systemPythonVersion}-pyenchant
     - rpmlint
-    - rpmlint-mini
     - rpmlint-strict
     - dash
     - dash-sh

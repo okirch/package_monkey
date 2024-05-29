@@ -498,9 +498,9 @@ groups:
       requires:
        - "@SystemPython"
       binaries:
-       - python${systemPythonVersion}-libxml2
-       - python${systemPythonVersion}-libeconf
-       - python${systemPythonVersion}-libmount
+#      - python${systemPythonVersion}-libxml2
+#      - python${systemPythonVersion}-libeconf
+#      - python${systemPythonVersion}-libmount
        - python3-pwquality
 
  - name: "@ConfigFileLibraries"
@@ -643,7 +643,7 @@ groups:
     - mozilla-nss-tools
     - mtools
     - pam
-    - pam-*
+#   - pam-*
     - pam_*
     - prctl
     - psmisc
@@ -684,22 +684,12 @@ groups:
       requires:
        - "@SystemdLibraries"
       binaries:
-       - pam-extra
        - coreutils-systemd
     - name: syspython
       requires:
        - "@SystemPython"
       binaries:
-#      - python${systemPythonVersion}-magic
        - python${systemPythonVersion}-rpm
-    - name: test
-      autoselect: no
-      binaries:
-       - coreutils-testsuite
-   purposes:
-    - name: doc
-      binaries:
-       - bash-completion-doc
 
  - name: "@OpenLDAP"
    sourceproject: Core
@@ -1039,7 +1029,6 @@ groups:
     - libXss1
     - libXt6
     - xorgproto
-    - xorgproto-doc purpose=doc
 
    buildflavors:
     - name: fonts

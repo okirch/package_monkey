@@ -86,7 +86,7 @@ groups:
    api: "@VirtAPI"
    sourceproject: Virtualization
    requires:
-    - "@CoreLibraries+python"
+    - "@CoreLibraries"
     - "@LibVirt"
     - "@AudioLibraries"
     - "@Gnome"
@@ -110,6 +110,7 @@ groups:
     - "@Glib2Networking"
     - "@NetworkAnalysis+systemd"
     - "@USBLibraries+glib"
+    - "@SystemPythonCoreBindings"
     # for the wireshark plugin
     - "@Wireshark"
     - "@GnomeVTE"

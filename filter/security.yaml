@@ -43,6 +43,16 @@ groups:
       binaries:
        - python3-capng
        - python3-seccomp
+    - name: systemdlibs
+      requires:
+       - "@SystemdLibraries"
+      binaries:
+       - pam-extra
+   purposes:
+    - name: doc
+      binaries:
+       - pam-doc
+       - pam-manpages
 
  - name: "@OATH"
    sourceproject: Security

@@ -20,6 +20,7 @@ components:
     # needed by fde-tools. Instead, we should consider moving fde-tools
     # to HostStorage or sth like that
     - "@PlatformCryptoLibraries"
+    - "@InstallerL10nData"
 
 build_configs:
  - name: KernelPlus/standard
@@ -342,12 +343,6 @@ groups:
       binaries:
        - dtc
 
-   purposes:
-    - name: doc
-      binaries:
-       - kernel-docs
-       - kernel-docs-html
-
  - name: "@KernelDebugging"
    sourceproject: KernelPlus
    requires:
@@ -493,9 +488,10 @@ groups:
     - "@NetworkCore"
     - "@KernelNetworkUtils"
     - "@Boot"
+    # inversion:
+    - "@InstallerL10nData"
    binaries:
     - jeos-firstboot
     - fde-firstboot
-    - live-langset-data
 
 

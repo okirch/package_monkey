@@ -485,8 +485,8 @@ groups:
     # for audit:
     - "@Security"
     - "@DefaultPythonGobject"
-    # needs python311-libxml2
-    - "@CoreLibraries+python"
+    - "@SystemPythonCoreBindings"
+    - "@SystemPythonStandard"
     - "@Core0+syspython"
     - "@DesktopCore"
     - "@DesktopFiles"
@@ -502,4 +502,12 @@ groups:
    binaries:
     - ibutils-ui
 
+ - name: "@InstallerL10nData"
+   description: |
+     This lives in the Management module purely due to its hideous build dependencies
+   sourceproject: Management
+   requires:
+    - "@MinimalSystemd"
+   binaries:
+    - live-langset-data
 

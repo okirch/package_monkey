@@ -54,10 +54,6 @@ groups:
     - libstdc++-devel
     - libstdc++-build-devel
     - libstdc++6-devel-gcc13
-   buildflavors:
-    - name: test
-      binaries:
-       - dwz-testsuite
 
  - name: "@GCCDevel"
    is_api: True

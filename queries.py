@@ -525,3 +525,65 @@ class QuerySubjectComponentOrTopic(QuerySubject):
 			self.binaryLabels = Classification.createLabelSet([label])
 		else:
 			raise Exception(f"Invalid argument to query {self.queryName}: {label} is neither a topic nor a component label")
+
+##################################################################
+# Generic base classes for queries and results rendering
+##################################################################
+class GenericRenderer(object):
+	def __init__(self, context):
+		self.context = context
+
+	@staticmethod
+	def renderLabelSet(msg, labelSet):
+		if not labelSet:
+			return
+
+		print(msg)
+		for label in sorted(labelSet, key = str):
+			print(f"     {label}")
+
+class GenericQuery(object):
+	def __init__(self, context, renderer = None):
+		self.context = context
+		self.renderer = renderer
+
+##################################################################
+# Mixin class for InversionsQuery and BuildInversionsQuery
+##################################################################
+class InversionsQueryMixin(object):
+	def __init__(self, context, ignore):
+		opts = context.application.opts
+
+		topicOrder = context.labelOrder
+		componentOrder = context.componentOrder
+
+		visibleComponents = Classification.createLabelSet()
+		for componentLabel in context.enumerateLabelsForQuery(opts.components):
+			if componentLabel.type is Classification.TYPE_BINARY:
+				assert(componentLabel.sourceProject is not None)
+				componentLabel = componentLabel.sourceProject
+			visibleComponents.update(componentOrder.downwardClosureFor(componentLabel))
+
+		visibleTopics = Classification.createLabelSet()
+		for componentLabel in visibleComponents:
+			topics = context.getLabelsForComponent(componentLabel)
+			visibleTopics.update(topics)
+
+		ignoredTopics = Classification.createLabelSet()
+		for labelName in ignore:
+			ignoreLabel = context.getLabel('--ignore label', labelName, Classification.TYPE_BINARY)
+			ignoredTopics.add(ignoreLabel)
+			for purpose in ignoreLabel.objectPurposes:
+				ignoredTopics.add(purpose)
+
+		ignoredTopics = topicOrder.downwardClosureForSet(ignoredTopics).difference(visibleTopics)
+		if ignoredTopics:
+			print(f"The following topic labels are considered \"good\" in this query:")
+			for topic in sorted(ignoredTopics, key = str):
+				print(f" - {topic.componentName}:{topic}")
+			print()
+
+		visibleTopics.update(ignoredTopics)
+
+		self.inversionLabels = context.allBinaryLabels.difference(visibleTopics)
+

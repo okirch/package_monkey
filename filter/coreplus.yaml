@@ -127,7 +127,9 @@ groups:
     - libproxy1-config-gnome3
     - perl-Net-Libproxy
    buildflavors:
-    - name: python
+    - name: syspython
+      requires:
+       - "@SystemPythonCore"
       binaries:
        - python3-libproxy
     - name: systemd
@@ -149,7 +151,7 @@ groups:
    autoselect: no
    requires:
     - "@Glib2NoDBus"
-    - "@DBusService"
+#   - "@DBusService"
     - "@Glib2Networking"
     - "@Glib2Core+syspython"
 
@@ -495,6 +497,9 @@ groups:
        - libgraphene-1*
        - typelib-1_0-Graphene-1_0
     - name: opengl
+      description: |
+       We need to put libwebp-tools into a separate package
+      disposition: ignore
       requires:
        - "@OpenGL"
       binaries:
@@ -625,6 +630,11 @@ groups:
        - "@PlusLibraries+kernel"
       binaries:
        - tbb-devel
+    - name: syspython
+      requires:
+       - "@SystemPythonCore"
+      binaries:
+       - python${systemPythonVersion}-tbb
 
  - name: "@SIMDLibraries"
    api: "@PlusAPI"
@@ -796,8 +806,7 @@ groups:
    api: "@DrawingAPI"
    sourceproject: CorePlus
    requires:
-    - "@FontLibraries"
-    - "@Fonts"
+    - "@CoreLibraries"
    packages:
     - plotutils
    binaries:
@@ -808,10 +817,23 @@ groups:
       requires:
        - "@EssentialGraphicsLibraries"
        - "@CoreX11Libraries"
+       - "@PerlCore"
       binaries:
        - libgd3
        - plotutils
        - libplotter2
+
+ - name: "@SystemPythonCoreBindings"
+   # we do not accept any autoflavors:
+   compatibility: none
+   sourceproject: CorePlus
+   requires:
+    - "@SystemPythonCore"
+    - "@CoreLibraries"
+   binaries:
+    - python${systemPythonVersion}-libxml2
+    - python${systemPythonVersion}-libeconf
+    - python${systemPythonVersion}-libmount
 
  - name: "@InfoReader"
    sourceproject: CorePlus

@@ -128,8 +128,9 @@ groups:
     - libsodium*
     - rpcgen purpose=devel
    buildflavors:
-    - name: python
+    - name: syspython
       requires:
+       - "@SystemPythonCore"
        - "@CoreXMLLibraries"
       binaries:
        - libunbound8
@@ -202,14 +203,14 @@ groups:
        - "@Samba"
        - "@DefaultPython"
        - "@NetworkAnalysis+systemd"
-       - "@NetworkLibraries+python"
+       - "@NetworkLibraries+syspython"
       binaries:
        - postfix-mysql
        - postfix-postgresql
        - bind-modules-mysql
-    - name: python
+    - name: syspython
       requires:
-       - "@NetworkLibraries+python"
+       - "@NetworkLibraries+syspython"
        - "@NetworkAnalysis+systemd"
       binaries:
        - unbound

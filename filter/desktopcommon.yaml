@@ -96,6 +96,7 @@ groups:
     - "@CoreNetworkLibraries"
     - "@Glib2"
     - "@SystemdServices"
+    - "@SystemdLibraries"
     - "@UdevLibraries"
     - "@Sound"
    binaries:

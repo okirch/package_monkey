@@ -80,6 +80,7 @@ groups:
    sourceproject: Gtk
    requires:
     - "@Glib2"
+    - "@UdevLibraries"
     - "@EssentialGraphicsLibraries"
     - "@FontLibraries+x11"
     - "@PlusLibraries"

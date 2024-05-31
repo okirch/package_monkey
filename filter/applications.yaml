@@ -196,7 +196,7 @@ groups:
     - "@PerlCore"
     - "@SambaLibraries"
     - "@CommonDatabaseLibraries"
-    - "@NetworkLibraries+python"
+    - "@NetworkLibraries+syspython"
     - "@NetworkAnalysis+systemd"
    packages:
     - freeradius-server

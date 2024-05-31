@@ -246,9 +246,8 @@ groups:
        - wpa_supplicant-gui
     - name: nvme
       requires:
-       - "@KernelNetworkLibraries+python"
-       - "@UdevLibraries+python"
-       - "@MinimalSystemd+python"
+       - "@KernelNetworkLibraries+syspython"
+       - "@UdevLibraries+syspython"
        - "@Avahi"
       binaries:
        - nvme-stas

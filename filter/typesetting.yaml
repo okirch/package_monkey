@@ -71,7 +71,7 @@ groups:
     - "@Core0"
     - "@PlusLibraries"
     # harfbuzz requires glib2
-    - "@Glib2NoDBus"
+    - "@Glib2Core"
    packages:
     - m17n-lib
     - libotf
@@ -91,6 +91,7 @@ groups:
        - "@CoreX11Libraries+fonts"
        - "@EssentialGraphicsLibraries+x11"
        - "@DrawingLibraries+x11"
+       - "@Glib2NoDBus"
       binaries:
        - libcairomm-1*
        - libcairo2

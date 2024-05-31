@@ -958,6 +958,7 @@ groups:
     - libXpm-devel
     - libXrender-devel
     - libXt-devel
+    - libXtst-devel
     - xorgproto-devel
     - util-macros-devel
     - xcb-proto-devel
@@ -1028,6 +1029,7 @@ groups:
     - libXrender1
     - libXss1
     - libXt6
+    - libXtst6
     - xorgproto
 
    buildflavors:

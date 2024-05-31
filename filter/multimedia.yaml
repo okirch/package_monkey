@@ -52,6 +52,8 @@ groups:
    requires:
     - "@MultimediaCore"
     - "@EssentialGraphicsLibraries"
+    # libcaca0 still wants libutempter:
+    - "@ConsoleLibraries"
     - "@ArchivingLibraries"
     - "@SIMDLibraries"
    packages:
@@ -238,6 +240,14 @@ groups:
 #   - libcdr
 #   - libcdda
 #   - libcddb2
+
+ - name: "@CameraAPI"
+   sourceproject: Multimedia
+   requires:
+    - "@Camera"
+    - "@CoreAPI"
+   binaries:
+    - libcamera-devel
 
  - name: "@Camera"
    sourceproject: Multimedia

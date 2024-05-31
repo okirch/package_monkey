@@ -42,6 +42,7 @@ groups:
     - "@NetworkManager"
     - "@PolicyKitLibraries"
     - "@InputDeviceLibraries"
+    - "@Glib2Notify"
    binaries:
     - mutter
     - icewm
@@ -535,6 +536,7 @@ groups:
     - "@BluetoothServices"
     - "@PulseAudio"
     - "@USBLibraries+typelib"
+    - "@Glib2Notify"
     - "@Apple"
    packages:
    binaries:
@@ -660,6 +662,7 @@ groups:
     - "@Bubblewrap"
     - "@Webkit"
     - "@CoreXMLLibraries"
+    - "@Glib2Notify"
    binaries:
     - libwx_gtk2u*
     - libwx_gtk3u*

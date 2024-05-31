@@ -415,3 +415,76 @@ groups:
     - libwireshark1?
     - libwiretap1?
     - libwsutil1?
+
+ - name: "@HTMLAPI"
+   sourceproject: Applications
+   requires:
+    - "@CoreAPI"
+    - "@HTMLLibraries"
+   binaries:
+   buildflavors:
+    - name: obsonly
+      binaries:
+       - netsurf-buildsystem
+
+ - name: "@HTMLLibraries"
+   api: "@HTMLAPI"
+   sourceproject: Applications
+   requires:
+    - "@XMLLibraries"
+   packages:
+    - libcss
+    - libhubbub
+    - libsass
+   binaries:
+    - libdom0
+    - libcss0
+    - libhubbub0
+    - libsass-3*
+
+ - name: "@HTML"
+   sourceproject: Applications
+   requires:
+    - "@Core0"
+    - "@HTMLLibraries"
+   packages:
+    - sassc
+   binaries:
+    - sassc
+
+ - name: "@BrowserAPI"
+   sourceproject: Applications
+   requires:
+    - "@BrowsersConsole"
+    - "@CoreAPI"
+   binaries:
+    - mujs-devel
+
+ - name: "@BrowsersConsole"
+   api: "@BrowserAPI"
+   sourceproject: Applications
+   requires:
+    - "@Core"
+    - "@Console"
+    - "@HTMLLibraries"
+   binaries:
+    - w3m
+   buildflavors:
+    - name: x11
+      requires:
+       - "@X11Libraries"
+       - "@EssentialVideoLibraries"
+       - "@GraphicsLibraries"
+       - "@X11Libraries+multimedia"
+      binaries:
+       - w3m-inline-image
+    - name: ruby
+      requires:
+       - "@Ruby"
+       - "@PlusLibraries"
+       - "@KerberosLibraries"
+       - "@CoreXMLLibraries"
+       - "@LUARuntime"
+      binaries:
+       - elinks
+       - mujs

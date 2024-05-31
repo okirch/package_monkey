@@ -48,7 +48,6 @@ groups:
     - libXinerama-devel
     - libXrandr-devel
     - libXt-devel
-    - libXtst-devel
     - libxkbcommon-devel
     - libfontenc-devel
     - wayland-devel
@@ -151,7 +150,6 @@ groups:
     - libXrandr2
     - libxshmfence1
     - libXt
-    - libXtst6
     - libXv1
     - libXxf86vm1
     - libXprintUtil1
@@ -205,6 +203,8 @@ groups:
    requires:
     - "@X11Libraries"
     - "@X11StandardUtils"
+    # xinit, xterm: still want libutempter0
+    - "@ConsoleLibraries"
    binaries:
     - mkfontdir
     - mkfontscale

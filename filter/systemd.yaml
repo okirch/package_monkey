@@ -183,6 +183,42 @@ groups:
       binaries:
        - dbus-1-x11
 
+ - name: "@Glib2Networking"
+   api: "@SystemdAPI"
+   sourceproject: Systemd
+   requires:
+    - "@Glib2Core"
+    - "@GdkPixbuf"
+    - "@PerlCore"
+   packages:
+    - libproxy
+    - libproxy:plugins
+   binaries:
+    - gsettings-desktop-schemas
+    - glib-networking
+    - libproxy1
+    - libproxy1-config-gnome3
+    - perl-Net-Libproxy
+   buildflavors:
+    - name: syspython
+      requires:
+       - "@SystemPythonCore"
+      binaries:
+       - python3-libproxy
+    - name: systemd
+      requires:
+       - "@SystemdLibraries"
+       - "@Core1"
+      binaries:
+       - libproxy1-config-pacrunner
+       - libproxy1-pacrunner-duktape
+       - libproxy1-networkmanager
+    - name: webkit
+      requires:
+       - "@Webkit"
+      binaries:
+       - libproxy1-pacrunner-webkit
+
  - name: "@SystemdServices"
    sourceproject: Systemd
    requires:
@@ -319,6 +355,7 @@ groups:
     - "@NetworkManager"
     - "@KernelNetworkUtils+python"
     - "@DefaultPythonGobject"
+    - "@Glib2Notify"
    binaries:
     - firewalld
     - python3-firewall

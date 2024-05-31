@@ -491,6 +491,7 @@ groups:
     - "@Core0+syspython"
     - "@DesktopCore"
     - "@DesktopFiles"
+    - "@Glib2Notify"
    binaries:
     - setroubleshoot
     - setroubleshoot-server

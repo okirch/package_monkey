@@ -7,7 +7,7 @@ components:
     devel: NetworkDevel
    requires:
     - CorePlus
-    - Python
+#   - Python
 
 build_configs:
  - name: Network/standard
@@ -26,17 +26,6 @@ build_configs:
     - "@CoreHardwareAPI"
     - "@SystemdOnlyForOBS"
     - "@Graphviz"
- - name: Network/browser
-   buildrequires:
-    - "@HTMLAPI+obsonly"
- - name: "Network/build:elinks"
-   packages:
-    - elinks
-   buildrequires:
-    - "@RubyAPI"
-    - "@HTMLAPI"
-    - "@CorePlusAPI"
-    - "@BrowserAPI"
  - name: Network/xmlrpc
    buildrequires:
     - "@XMLRPCAPI"
@@ -382,44 +371,6 @@ groups:
     - "@NetworkServices"
    binaries:
     - cups
-
-
- - name: "@BrowserAPI"
-   sourceproject: Network
-   requires:
-    - "@BrowsersConsole"
-    - "@CoreAPI"
-   binaries:
-    - mujs-devel
-
- - name: "@BrowsersConsole"
-   api: "@BrowserAPI"
-   sourceproject: Network
-   requires:
-    - "@Core"
-    - "@Console"
-    - "@HTMLLibraries"
-   binaries:
-    - w3m
-   buildflavors:
-    - name: x11
-      requires:
-       - "@X11Libraries"
-       - "@EssentialVideoLibraries"
-       - "@GraphicsLibraries"
-       - "@X11Libraries+multimedia"
-      binaries:
-       - w3m-inline-image
-    - name: ruby
-      requires:
-       - "@Ruby"
-       - "@PlusLibraries"
-       - "@KerberosLibraries"
-       - "@CoreXMLLibraries"
-       - "@LUARuntime"
-      binaries:
-       - elinks
-       - mujs
 
  - name: "@NetworkMisc"
    sourceproject: Network

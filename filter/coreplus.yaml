@@ -66,7 +66,7 @@ groups:
    sourceproject: CorePlus
    requires:
     - "@Glib2"
-    - "@Glib2+notify"
+    - "@Glib2Notify"
     - "@CoreAPI"
     - "@GCC"
     # glib2-devel ships with a python script
@@ -97,54 +97,19 @@ groups:
       requires:
        - "@GdkPixbuf"
       binaries:
-       - libnotify4
-       - libnotify-tools
+#      - libnotify4
+#      - libnotify-tools
 
  - name: "@Glib2Notify"
    api: "@Glib2API"
    sourceproject: CorePlus
    requires:
-    - "@Glib2NoDBus"
+    - "@Glib2Core"
     - "@GdkPixbuf"
    binaries:
     - libnotify4
     - libnotify-tools
-
- - name: "@Glib2Networking"
-   api: "@Glib2API"
-   sourceproject: CorePlus
-   requires:
-    - "@Glib2NoDBus"
-    - "@GdkPixbuf"
-    - "@PerlCore"
-   packages:
-    - libproxy
-    - libproxy:plugins
-   binaries:
-    - gsettings-desktop-schemas
-    - glib-networking
-    - libproxy1
-    - libproxy1-config-gnome3
-    - perl-Net-Libproxy
-   buildflavors:
-    - name: syspython
-      requires:
-       - "@SystemPythonCore"
-      binaries:
-       - python3-libproxy
-    - name: systemd
-      requires:
-       - "@SystemdLibraries"
-       - "@Core1"
-      binaries:
-       - libproxy1-config-pacrunner
-       - libproxy1-pacrunner-duktape
-       - libproxy1-networkmanager
-    - name: webkit
-      requires:
-       - "@Webkit"
-      binaries:
-       - libproxy1-pacrunner-webkit
+    - typelib-1_0-Notify-*
 
  - name: "@Glib2"
    sourceproject: CorePlus
@@ -156,7 +121,7 @@ groups:
     - "@Glib2Core+syspython"
 
  - name: "@ConsoleAPI"
-   sourceproject: CorePlus
+   sourceproject: Systemd
    requires:
     - "@ConsoleLibraries"
     - "@CoreAPI"
@@ -171,7 +136,7 @@ groups:
 
  - name: "@ConsoleLibraries"
    api: "@ConsoleAPI"
-   sourceproject: CorePlus
+   sourceproject: Systemd
    requires:
     - "@CoreLibraries"
     - "@Permissions"
@@ -182,7 +147,7 @@ groups:
     - libutempter0
 
  - name: "@Console"
-   sourceproject: CorePlus
+   sourceproject: Systemd
    requires:
     - "@Core"
     - "@ConsoleLibraries"
@@ -221,7 +186,7 @@ groups:
    requires:
     - "@CoreLibraries"
     - "@CoreXMLLibraries"
-    - "@Glib2NoDBus"
+    - "@Glib2Core"
    packages:
     - libxmlb
     - snowball
@@ -232,6 +197,7 @@ groups:
     - libexslt0
     - libxmlb2
     - libxslt-tools
+    - typelib-1_0-Xmlb-*
 
  - name: "@XMLPlus"
    sourceproject: CorePlus
@@ -257,42 +223,6 @@ groups:
     - name: doc
       binaries:
        - opensp-doc
-
- - name: "@HTMLAPI"
-   sourceproject: CorePlus
-   requires:
-    - "@CoreAPI"
-    - "@HTMLLibraries"
-   binaries:
-   buildflavors:
-    - name: obsonly
-      binaries:
-       - netsurf-buildsystem
-
- - name: "@HTMLLibraries"
-   api: "@HTMLAPI"
-   sourceproject: CorePlus
-   requires:
-    - "@XMLLibraries"
-   packages:
-    - libcss
-    - libhubbub
-    - libsass
-   binaries:
-    - libdom0
-    - libcss0
-    - libhubbub0
-    - libsass-3*
-
- - name: "@HTML"
-   sourceproject: CorePlus
-   requires:
-    - "@Core0"
-    - "@HTMLLibraries"
-   packages:
-    - sassc
-   binaries:
-    - sassc
 
  - name: "@GuileAPI"
    sourceproject: Core
@@ -379,9 +309,9 @@ groups:
    sourceproject: CorePlus
    requires:
     - "@Core0"
-    - "@Glib2NoDBus"
+    - "@Glib2Core"
     - "@PlusLibraries"
-    - "@InfoReader"
+#   - "@InfoReader"
    packages:
     - aspell
    binaries:
@@ -464,7 +394,6 @@ groups:
    api: "@EssentialGraphicsAPI"
    requires:
     - "@CoreFontLibraries"
-    - "@ConsoleLibraries"
    packages:
     - pixman
     - libjpeg-turbo
@@ -492,7 +421,7 @@ groups:
        - netpbm
     - name: glib
       requires:
-       - "@Glib2NoDBus"
+       - "@Glib2Core"
       binaries:
        - libgraphene-1*
        - typelib-1_0-Graphene-1_0
@@ -509,7 +438,6 @@ groups:
    sourceproject: CorePlus
    requires:
     - "@EssentialGraphicsLibraries"
-    - "@Glib2API"
     - "@CoreAPI"
    binaries:
     - libjpeg8-devel
@@ -539,7 +467,7 @@ groups:
    sourceproject: CorePlus
    requires:
     - "@GdkPixbuf"
-    - "@Glib2API"
+#   - "@Glib2API"
     - "@CoreAPI"
     - "@EssentialGraphicsAPI"
    buildflavors:
@@ -558,12 +486,14 @@ groups:
     - "@CoreX11Libraries"
     - "@EssentialGraphicsLibraries"
     - "@EssentialVideoLibraries"
-    - "@Glib2NoDBus"
+    - "@Glib2Core"
    binaries:
     - libgdk_pixbuf-2*
     - libgdk_pixbuf_xlib-2*
     - liblqr-1*
     - gdk-pixbuf-query-loaders
+    - typelib-1_0-GdkPixbuf-*
+    - typelib-1_0-GdkPixdata-*
    buildflavors:
     - name: useless
       binaries:
@@ -630,11 +560,6 @@ groups:
        - "@PlusLibraries+kernel"
       binaries:
        - tbb-devel
-    - name: syspython
-      requires:
-       - "@SystemPythonCore"
-      binaries:
-       - python${systemPythonVersion}-tbb
 
  - name: "@SIMDLibraries"
    api: "@PlusAPI"
@@ -721,6 +646,11 @@ groups:
        - "@KernelLibraries"
       binaries:
        - libtbbbind_2*
+    - name: syspython
+      requires:
+       - "@SystemPythonCore"
+      binaries:
+       - python${systemPythonVersion}-tbb
 
  - name: "@BoostAPI"
    sourceproject: CorePlus

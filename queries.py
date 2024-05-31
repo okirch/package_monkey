@@ -1,5 +1,6 @@
 from filter import Classification, PackageFilter
 from util import ANSITreeFormatter
+from util import errormsg, infomsg
 
 class QueryContext(object):
 	QUASI_INFINITE = 4242 
@@ -10,6 +11,7 @@ class QueryContext(object):
 		classification = application.loadClassification(classificationScheme)
 
 		self._store = None
+		self._model = None
 		self.classificationScheme = classificationScheme
 		self.classification = classification
 		self.labelOrder = classificationScheme.defaultOrder()
@@ -37,7 +39,23 @@ class QueryContext(object):
 				yield component
 		else:
 			for name in requestedNames:
+				if name.startswith('='):
+					for componentLabel in self.enumerateProjectComponents(name[1:]):
+						yield componentLabel
+					continue
+
 				yield self.getLabel('component or topic', name)
+
+	def enumerateProjectComponents(self, name):
+		if self._model is None:
+			self._model = self.application.loadModelMapping()
+
+		projectDefinition = self._model.getProject(name)
+		if projectDefinition is None:
+			raise Exception(f"No project named \"{name}\" in model definition")
+
+		for labelName in projectDefinition.componentNames:
+			yield self.getLabel(f"project {name} component", labelName, Classification.TYPE_SOURCE)
 
 	def getAPIs(self, componentList = None):
 		if componentList is None:
@@ -533,6 +551,9 @@ class GenericRenderer(object):
 	def __init__(self, context):
 		self.context = context
 
+	def renderPreamble(self, query):
+		pass
+
 	@staticmethod
 	def renderLabelSet(msg, labelSet):
 		if not labelSet:
@@ -564,24 +585,25 @@ class InversionsQueryMixin(object):
 				componentLabel = componentLabel.sourceProject
 			visibleComponents.update(componentOrder.downwardClosureFor(componentLabel))
 
-		visibleTopics = Classification.createLabelSet()
-		for componentLabel in visibleComponents:
-			topics = context.getLabelsForComponent(componentLabel)
-			visibleTopics.update(topics)
-
 		ignoredTopics = Classification.createLabelSet()
 		for labelName in ignore:
+			if labelName.startswith('='):
+				for componentLabel in context.enumerateProjectComponents(labelName[1:]):
+					visibleComponents.add(componentLabel)
+				continue
+
 			ignoreLabel = context.getLabel('--ignore label', labelName, Classification.TYPE_BINARY)
 			ignoredTopics.add(ignoreLabel)
 			for purpose in ignoreLabel.objectPurposes:
 				ignoredTopics.add(purpose)
 
+		visibleTopics = Classification.createLabelSet()
+		for componentLabel in visibleComponents:
+			topics = context.getLabelsForComponent(componentLabel)
+			visibleTopics.update(topics)
+
 		ignoredTopics = topicOrder.downwardClosureForSet(ignoredTopics).difference(visibleTopics)
-		if ignoredTopics:
-			print(f"The following topic labels are considered \"good\" in this query:")
-			for topic in sorted(ignoredTopics, key = str):
-				print(f" - {topic.componentName}:{topic}")
-			print()
+		self.ignoredTopics = ignoredTopics
 
 		visibleTopics.update(ignoredTopics)
 

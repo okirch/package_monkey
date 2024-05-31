@@ -145,6 +145,12 @@ class ComponentModelMapping(object):
 	def addProject(self, project):
 		self.projects.append(project)
 
+	def getProject(self, name):
+		for projectDefinition in self.projects:
+			if projectDefinition.name == name:
+				return projectDefinition
+		return None
+
 	@property
 	def bootstrapRepository(self):
 		if self._defaultComponent is not None:

@@ -68,8 +68,10 @@ class QueryApplication(Application):
 		if len(actions) != 1:
 			raise Exception(f"Expected exactly one action argument")
 
+		for ac in actions:
+			ac.renderer.renderPreamble(ac)
+
 		for label in context.enumerateLabelsForQuery(self.opts.components):
-			# print(f"Inspecting {label}")
 			for ac in actions:
 				ac(label)
 

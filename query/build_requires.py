@@ -214,6 +214,13 @@ class BuildInversionsQuery(GenericQuery, InversionsQueryMixin):
 		return result
 
 class BuildInversionsRenderer(WhatBuildRequiresRenderer):
+	def renderPreamble(self, query):
+		if query.ignoredTopics:
+			print(f"The following topic labels are considered \"good\" in this query:")
+			for topic in sorted(query.ignoredTopics, key = str):
+				print(f" - {topic.componentName}:{topic}")
+			print()
+
 	def renderRequirementsReport(self, component, requirementsReport):
 		if not requirementsReport:
 			print(f"   {component}: no build inversions")

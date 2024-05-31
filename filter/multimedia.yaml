@@ -250,6 +250,7 @@ groups:
     - libcamera-devel
 
  - name: "@Camera"
+   api: "@CameraAPI"
    sourceproject: Multimedia
    requires:
     - "@GraphicsLibraries"

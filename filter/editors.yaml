@@ -36,6 +36,8 @@ groups:
    requires:
     - "@Vim"
     - "@Emacs"
+   binaries:
+    - mailutils-devel
 
 # why do all editors have to have such messy dependencies?
  - name: "@Vim"
@@ -71,11 +73,14 @@ groups:
     - "@GraphicsLibraries"
     - "@GCC"
     - "@Console"
-    - "@MailClient+cups"
+    - "@PrintServer"
+    - "@Guile"
    binaries:
     - emacs
     - emacs-nox
     - autoconf-el
+    - mailutils
+    - mailutils-*
    buildflavors:
     - name: x11
       requires:

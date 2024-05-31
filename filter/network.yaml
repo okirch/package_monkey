@@ -29,10 +29,6 @@ build_configs:
  - name: Network/xmlrpc
    buildrequires:
     - "@XMLRPCAPI"
- - name: Network/database
-   # For some weird reasons, mailutils wants mariadb (not mariadb-devel) for building
-   buildrequires:
-    - "@SystemDatabaseServices"
 
 groups:
  - name: "@NetworkUtils"
@@ -319,15 +315,6 @@ groups:
        - "@KerberosLibraries"
       binaries:
        - mailx
-    - name: cups
-      requires:
-       - "@DefaultPython"
-       - "@Guile"
-       # FIXME: mailutils requires cups. *shrug*
-       - "@PrintServer"
-      binaries:
-       - mailutils
-       - mailutils-*
 
  - name: "@PrintingAPI"
    sourceproject: Network

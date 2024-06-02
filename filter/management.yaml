@@ -456,6 +456,7 @@ groups:
    requires:
     - "@Core0"
     - "@SystemdLibraries"
+    - "@NetworkLibraries"
     - "@CoreCrypto+systemd"
     - "@Perl"
     - "@SystemDatabaseLibraries"
@@ -465,6 +466,8 @@ groups:
     - "@Busybox"
     - "@PrintingLibraries"
     - "@HardwareMonitoring"
+    # for postfix and rpcbind:
+    - "@NetworkServices"
    binaries:
     - monitoring-plugins-*
     - nagios-rpm-macros purpose=devel

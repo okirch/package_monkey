@@ -262,6 +262,25 @@ groups:
       binaries:
        - strongswan-mysql
 
+ - name: "@VPNAPI"
+   sourceproject: Applications
+   requires:
+    - "@VPN"
+    - "@CoreAPI"
+   binaries:
+    - openvpn-devel
+
+ - name: "@VPN"
+   api: "@VPNAPI"
+   sourceproject: Applications
+   requires:
+    - "@CoreLibraries"
+    - "@PlusLibraries"
+    - "@SystemdLibraries"
+    - "@KernelNetworkUtils"
+   binaries:
+    - openvpn*
+
  # Maybe we should call this PacketSwitching or something along those lines
  - name: "@OpenVSwitchAPI"
    sourceproject: Applications

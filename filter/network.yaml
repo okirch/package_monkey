@@ -169,7 +169,6 @@ groups:
     - ypserv
 #   - tcpd
     - freeradius-client
-    - openvpn
    buildflavors:
     - name: database
       requires:

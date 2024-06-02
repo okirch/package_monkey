@@ -209,7 +209,7 @@ groups:
    api: "@PrintingAPI"
    sourceproject: Workstation
    requires:
-    - "@NetworkServices"
+    - "@AvahiLibraries"
     # for libusb:
     - "@CoreHardware"
    binaries:

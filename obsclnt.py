@@ -1752,9 +1752,10 @@ class OBSProject:
 		for f in binaryList:
 			filename = f.filename
 
-			if filename == "_statistics":
-				buildTime = int(f.mtime)
-				continue
+			if f.mtime is not None:
+				fileBuildTime = int(f.mtime)
+				if buildTime is None or fileBuildTime > buildTime:
+					buildTime = fileBuildTime
 
 			buildArch = self.buildArch
 			if filename.startswith("::"):

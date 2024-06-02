@@ -271,6 +271,7 @@ groups:
     - "@InfinibandAPI"
     - "@SystemdAPI"
     - "@DefaultPythonAPI"
+    - "@PacketCaptureAPI"
    binaries:
     - dpdk-devel
 

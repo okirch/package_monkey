@@ -55,12 +55,7 @@ groups:
    buildflavors:
     - name: systemd
       requires:
-       - "@SystemdLibraries"
-       - "@PlusLibraries"
-       - "@LUARuntime"
-      binaries:
-       - libpcap1
-       - nmap
+       - "@PacketCapture"
 
  - name: "@NetworkAPI"
    sourceproject: Network
@@ -74,7 +69,6 @@ groups:
     - rpcsvc-proto-devel
     - libsodium-devel
     - zeromq-devel
-
    buildflavors:
     - name: systemd
       requires:

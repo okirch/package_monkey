@@ -219,6 +219,28 @@ groups:
       binaries:
        - libproxy1-pacrunner-webkit
 
+ - name: "@PacketCaptureAPI"
+   sourceproject: Systemd
+   requires:
+    - "@PacketCapture"
+    - "@MinimalSystemdAPI"
+   binaries:
+    - libpcap-devel
+
+ - name: "@PacketCapture"
+   api: "@PacketCaptureAPI"
+   sourceproject: Systemd
+   requires:
+    - "@CoreNetworkLibraries"
+    - "@SystemdLibraries"
+    - "@PlusLibraries"
+    - "@LUARuntime"
+   binaries:
+    - libpcap1
+    - nmap
+    - ncat
+    - nping
+
  - name: "@SystemdServices"
    sourceproject: Systemd
    requires:

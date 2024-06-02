@@ -76,7 +76,7 @@ groups:
     - "@Console"
     - "@PolicyKit"
     - "@Kernel"         # for openvswitch
-    - "@NetworkAnalysis+systemd"
+    - "@PacketCapture"  # currently for ppp only
     - "@InputDeviceLibraries"
    packages:
     - NetworkManager

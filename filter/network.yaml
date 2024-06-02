@@ -41,7 +41,6 @@ groups:
    binaries:
     - hostinfo
     - rsync
-    - tcpdump
     - traceroute
     - whois
     - telnet
@@ -104,7 +103,6 @@ groups:
     - libprotobuf-lite3_21*
     - libdaemon0
     - libfstrm0
-    - libldns3
     - freeradius-client-libs
     - libsrtp1
     - libtirpc3
@@ -118,8 +116,6 @@ groups:
        - "@SystemPythonCore"
        - "@CoreXMLLibraries"
       binaries:
-       - libunbound8
-       - unbound-anchor
        - python${systemPythonVersion}-protobuf
     - name: java
       requires:
@@ -188,21 +184,11 @@ groups:
        - "@SystemDatabaseLibraries"
        - "@Samba"
        - "@DefaultPython"
-       - "@NetworkAnalysis+systemd"
        - "@NetworkLibraries+syspython"
       binaries:
        - postfix-mysql
        - postfix-postgresql
        - bind-modules-mysql
-    - name: syspython
-      requires:
-       - "@NetworkLibraries+syspython"
-       - "@NetworkAnalysis+systemd"
-      binaries:
-       - unbound
-       - unbound-munin
-       - python3-unbound
-       - ldns
 
  - name: "@SNMPAPI"
    sourceproject: Network

@@ -190,14 +190,39 @@ groups:
       binaries:
        - libostree-grub2
 
+ - name: "@DNSResolverAPI"
+   sourceproject: Applications
+   requires:
+    - "@DNSResolverServices"
+    - "@SystemPythonAPI"
+    - "@CoreAPI"
+   binaries:
+    - ldns-devel
+    - unbound-devel
+
+ - name: "@DNSResolverServices"
+   api: "@DNSResolverAPI"
+   sourceproject: Applications
+   requires:
+    - "@NetworkLibraries+syspython"
+    - "@NetworkAnalysis+systemd"
+   binaries:
+    - libldns3
+    - ldns
+    - libunbound8
+    - unbound
+    - unbound-munin
+    - python3-unbound
+    - unbound-anchor
+
  - name: "@RADIUSServer"
    sourceproject: Applications
    requires:
     - "@PerlCore"
     - "@SambaLibraries"
     - "@CommonDatabaseLibraries"
-    - "@NetworkLibraries+syspython"
     - "@NetworkAnalysis+systemd"
+    - "@DNSResolverServices"
    packages:
     - freeradius-server
    binaries:
@@ -262,6 +287,7 @@ groups:
     - "@Infiniband"
     - "@DefaultPythonStandard"
     - "@NetworkLibraries+python"
+    - "@DNSResolverServices"
    packages:
     - openvswitch
    binaries:

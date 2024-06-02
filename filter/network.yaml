@@ -170,8 +170,6 @@ groups:
 #   - tcpd
     - freeradius-client
     - openvpn
-    - OpenIPMI
-    - libOpenIPMI0
    buildflavors:
     - name: database
       requires:

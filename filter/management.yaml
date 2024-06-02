@@ -404,8 +404,10 @@ groups:
    sourceproject: Management
    requires:
     - "@IPMI"
+    - "@CoreAPI"
    binaries:
     - freeipmi-devel
+    - OpenIPMI-devel
 
  - name: "@IPMI"
    api: "@IPMIAPI"
@@ -416,9 +418,13 @@ groups:
     - "@MinimalManagement"
     - "@UpdateStack"
     - "@InfoReader"
+    - "@SNMPLibraries"
    binaries:
     - freeipmi
     - ipmitool
+    - OpenIPMI
+    - libOpenIPMI0
+    - libOpenIPMIui1
 
  - name: "@Management"
    sourceproject: Management

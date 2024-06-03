@@ -131,7 +131,7 @@ groups:
        - "@SystemPython"
       binaries:
        - python3-libbytesize
-    - name: glibc
+    - name: glib
       requires:
        - "@Glib2NoDBus"
       binaries:

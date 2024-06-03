@@ -98,7 +98,7 @@ groups:
     - "@HostStorage"
     - "@NetworkStorage"
     - "@ManagementLibraries"
-    - "@Rados"
+    - "@RadosLibraries"
     - "@Kernel"
     - "@Boot+xen"
     - "@Console"

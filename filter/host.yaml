@@ -63,7 +63,7 @@ groups:
    sourceproject: Host
    requires:
     - "@CoreAPI"
-    - "@SystemdAPI"
+    - "@MinimalSystemdAPI"
     - "@HostStorage"
     - "@NetworkStorage"
     - "@KernelAPI+udev"
@@ -77,7 +77,6 @@ groups:
    requires:
     - "@Core"
     - "@Core+glib"
-    - "@SystemdServices"
     - "@KernelCore"
     - "@Filesystems"
     - "@ArchivingLibraries"
@@ -118,7 +117,7 @@ groups:
    sourceproject: Host
    requires:
     - "@HostWorkloads"
-    - "@Glib2API"
+    - "@CoreAPI"
    binaries:
     - libslirp-devel
 
@@ -127,7 +126,7 @@ groups:
    sourceproject: Host
    requires:
     - "@Core"
-    - "@Glib2" # required by slirp
+    - "@Glib2Core" # required by slirp
    binaries:
     - libslirp0
     - slirp4netns
@@ -177,14 +176,29 @@ groups:
     - "@CoreAPI"
     - "@StorageAPI"
 
+ # unfortunately, libvirt unconditionally pulls in Rados
+ - name: "@RadosLibraries"
+   api: "@RadosAPI"
+   sourceproject: Host
+   requires:
+    - "@CoreLibraries"
+    - "@Glib2Core"
+    - "@PlusLibraries"
+    - "@UdevLibraries"
+    - "@Core0+kernellibs"
+    - "@Infiniband"
+   binaries:
+    - librados2
+    - librbd1
+    - liblttng-ust1
+
  - name: "@Rados"
    api: "@RadosAPI"
    sourceproject: Host
    requires:
-    - "@Infiniband"
+    - "@RadosLibraries"
     - "@HostStorage"
     - "@HostNetworking"
-    # FIXME: System->Default
     - "@SystemPythonModules"
     - "@SystemPythonSecurity"
     - "@SystemPythonWebApplication"
@@ -198,6 +212,7 @@ groups:
     - "@Filesystems"
     - "@LUARuntime"
    packages:
+    - lttng-ust
     - ceph
    binaries:
     - ceph

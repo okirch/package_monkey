@@ -65,7 +65,7 @@ groups:
  - name: "@Glib2API"
    sourceproject: CorePlus
    requires:
-    - "@Glib2"
+    - "@Glib2NoDBus"
     - "@Glib2Notify"
     - "@CoreAPI"
     - "@GCC"
@@ -467,7 +467,6 @@ groups:
    sourceproject: CorePlus
    requires:
     - "@GdkPixbuf"
-#   - "@Glib2API"
     - "@CoreAPI"
     - "@EssentialGraphicsAPI"
    buildflavors:

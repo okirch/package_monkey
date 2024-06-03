@@ -10,9 +10,9 @@ architectures:
  - x86_64
 buildservice:
  source:
-  - SUSE:ALP:Source:Standard:$VERSION
+  - SUSE:SLFO:Main
  build:
-  - SUSE:ALP:Source:Standard:Core:$VERSION:Build
+  - SUSE:SLFO:Main:Build
 
 products:
  - name:        ALPCore
@@ -30,9 +30,6 @@ resolverhints:
    - name: policy-default-privs
      ignore:
       - policy
-   - name: gio-branding-SLE
-     # This requirement creates a loop, break it
-     ignore: libgio-2_0-0
    - name: libgio-2_0-0
      # This is not an API requirement, it's just "I want dbus"
      ignore:
@@ -47,16 +44,8 @@ resolverhints:
    - name: fuse-devel
      # A devel package should not pull in -doc packages
      ignore: fuse-doc
-   - name: glib2-tools
-     ignore: dbus-1-x11
    - name: emacs
      ignore: emacs-x11
-   - name: libecpg6
-     ignore:
-      - postgresql15-devel-mini
-   - name: postgresql15
-     ignore:
-      - postgresql15-devel-mini
    # We need to build flatpak without pipewire support
    - name: xdg-desktop-portal
      warning: "we need to remove pipewire support from xdg-desktop-portal"
@@ -75,16 +64,12 @@ resolverhints:
      warning: "gdm should not depend on the gdm branding package"
      ignore:
       - gdm-branding-SLE
-   - name: plymouth
-     warning: "plymouth should not depend on the plymouth branding package"
-     ignore:
-      - gdm-branding-SLE
    - name: cockpit-ws
      warning: "cockpit-ws should not depend on the wallpaper branding package"
      ignore:
       - wallpaper-branding-SLE
    - name: desktop-data-SLE
-     warning: "cockpit-ws should not depend on the wallpaper branding package"
+     warning: "desktop-data-SLE should not depend on the wallpaper branding package"
      ignore:
       - wallpaper-branding-SLE
 
@@ -500,16 +485,18 @@ resolverhints:
        alias: coreutils-single
      - collapse: postgresql15-devel
        alias: postgresql15-devel-mini
+     - collapse: postgresql15
+       alias: postgresql15-devel-mini
      - collapse: MozillaFirefox-branding-openSUSE
        alias: MozillaFirefox-branding-upstream
-     - collapse: NetworkManager-branding-SLE
-       alias: NetworkManager-branding-upstream
-     - collapse: gdm-branding-SLE
-       alias: gdm-branding-upstream
-     - collapse: gio-branding-SLE
-       alias: gio-branding-upstream
-     - collapse: plymouth-branding-SLE
-       alias: plymouth-branding-upstream
+     - collapse: NetworkManager-branding-upstream
+       alias: NetworkManager-branding-SLE
+     - collapse: gdm-branding-upstream
+       alias: gdm-branding-SLE
+     - collapse: gio-branding-upstream
+       alias: gio-branding-SLE
+     - collapse: plymouth-branding-upstream
+       alias: plymouth-branding-SLE
      - collapse: libcontainers-openSUSE-policy
        alias: libcontainers-default-policy
      - collapse: pulseaudio

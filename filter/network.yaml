@@ -144,9 +144,6 @@ groups:
     - "@KernelNetworkUtils"
     - "@SNMPLibraries"
     - "@CoreServices"
-    - "@SystemdServices"
-    # FIXME!
-    - "@AvahiLibraries"
     - "@PerlCore"
     # postfix uses icu
     - "@PlusLibraries"

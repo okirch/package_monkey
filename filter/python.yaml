@@ -134,6 +134,7 @@ groups:
    requires:
     - "@Glib2API"
     - "@CairoAPI"
+    - "@CoreAPI+syspython"
    binaries:
     - python-gobject-common-devel
     - python-pycairo-common-devel

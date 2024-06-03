@@ -1,5 +1,5 @@
 from filter import Classification
-from queries import GenericQuery, GenericRenderer, InversionsQueryMixin
+from queries import GenericQuery, GenericRenderer, InversionsQueryMixin, RequiresQueryMixin
 from queries import PackageRequiresLabelsPredicate, RequirementsReport
 from queries import QueryContext, QuerySubjectComponent, QuerySubjectComponentOrTopic
 
@@ -94,12 +94,14 @@ class WhatRequiresRenderer(GenericRenderer):
 		for rpm in pkgs:
 			print(f"       - {rpm}")
 
-class WhatRequiresQuery(GenericQuery):
-	def __init__(self, context, what_requires, renderer = None):
+class WhatRequiresQuery(GenericQuery, RequiresQueryMixin):
+	def __init__(self, context, what_requires, renderer = None, ignore = []):
 		if renderer is None:
 			renderer = WhatRequiresRenderer(context)
 		super().__init__(context, renderer)
 		self.what_requires = what_requires
+
+		RequiresQueryMixin.__init__(self, context, ignore)
 
 	def __call__(self, queryTargetLabel):
 		renderer = self.renderer
@@ -117,6 +119,7 @@ class WhatRequiresQuery(GenericQuery):
 			else:
 				raise Exception(f"{self.__class__.__name__}: label type {topic.type} not supported")
 
+			inspectLabelSet = inspectLabelSet.intersection(self.relevantQueryScope)
 			report = self.getTopicsRequiringLabelSet(querySubject, inspectLabelSet)
 
 			renderer.renderRequirementsReport(queryTargetLabel, report, topic)
@@ -200,7 +203,7 @@ class InversionsQuery(WhatRequiresQuery, InversionsQueryMixin):
 
 		querySubject = QuerySubjectComponentOrTopic("inversions", context, queryTargetLabel)
 
-		report = self.getTopicsRequiringLabelSet(querySubject, self.inversionLabels)
+		report = self.getTopicsRequiringLabelSet(querySubject, self.relevantQueryScope)
 		renderer.renderRequirementsReport(queryTargetLabel, report)
 
 class InversionRenderer(GenericRenderer):

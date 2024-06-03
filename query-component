@@ -49,9 +49,9 @@ class QueryApplication(Application):
 		if self.opts.requires:
 			actions.append(RequiresQuery(context))
 		if self.opts.what_requires:
-			actions.append(WhatRequiresQuery(context, self.opts.what_requires))
+			actions.append(WhatRequiresQuery(context, self.opts.what_requires, ignore = self.opts.ignore))
 		if self.opts.what_build_requires:
-			actions.append(WhatBuildRequiresQuery(context, self.opts.what_build_requires))
+			actions.append(WhatBuildRequiresQuery(context, self.opts.what_build_requires, ignore = self.opts.ignore))
 		if self.opts.imports:
 			actions.append(ImportedLabelsQuery(context))
 		if self.opts.unclassified:

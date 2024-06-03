@@ -569,9 +569,10 @@ class GenericQuery(object):
 		self.renderer = renderer
 
 ##################################################################
-# Mixin class for InversionsQuery and BuildInversionsQuery
+# Mixin classes for What{,Build}RequiresQuery and
+# {,Build}InversionsQuery
 ##################################################################
-class InversionsQueryMixin(object):
+class VisibilityQueryMixin(object):
 	def __init__(self, context, ignore):
 		opts = context.application.opts
 
@@ -597,15 +598,21 @@ class InversionsQueryMixin(object):
 			for purpose in ignoreLabel.objectPurposes:
 				ignoredTopics.add(purpose)
 
-		visibleTopics = Classification.createLabelSet()
+		self.visibleTopics = Classification.createLabelSet()
 		for componentLabel in visibleComponents:
 			topics = context.getLabelsForComponent(componentLabel)
-			visibleTopics.update(topics)
+			self.visibleTopics.update(topics)
 
-		ignoredTopics = topicOrder.downwardClosureForSet(ignoredTopics).difference(visibleTopics)
-		self.ignoredTopics = ignoredTopics
+		self.ignoredTopics = topicOrder.downwardClosureForSet(ignoredTopics).difference(self.visibleTopics)
 
-		visibleTopics.update(ignoredTopics)
+class InversionsQueryMixin(VisibilityQueryMixin):
+	def __init__(self, context, ignore):
+		super().__init__(context, ignore)
 
-		self.inversionLabels = context.allBinaryLabels.difference(visibleTopics)
+		self.relevantQueryScope = context.allBinaryLabels.difference(self.visibleTopics).difference(self.ignoredTopics)
 
+class RequiresQueryMixin(VisibilityQueryMixin):
+	def __init__(self, context, ignore):
+		super().__init__(context, ignore)
+
+		self.relevantQueryScope = self.visibleTopics.difference(self.ignoredTopics)

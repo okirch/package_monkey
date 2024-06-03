@@ -209,6 +209,7 @@ class OBSSchema(object):
 		result.recommends_ext = []
 		result.suggests_ext = []
 		result.conflicts_ext = []
+		result.supplements_ext = []
 
 		for child in xmlnode:
 			value = None
@@ -218,7 +219,7 @@ class OBSSchema(object):
 			key = child.tag
 			if key in ('provides', 'requires', 'recommends', 'suggests', 'conflicts', 'supplements', 'enhances'):
 				getattr(result, key).append(value)
-			elif key in ('provides_ext', 'requires_ext', 'recommends_ext', 'suggests_ext', 'conflicts_ext'):
+			elif key in ('provides_ext', 'requires_ext', 'recommends_ext', 'suggests_ext', 'conflicts_ext', 'supplements_ext'):
 				dep = OBSDependency(expression = child.attrib['dep'], type = key[:-4])
 
 				member = getattr(result, key)

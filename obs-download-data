@@ -54,7 +54,9 @@ action = application.opts.action
 
 if action in (None, 'download'):
 	application.beginChapter(f"Updating package data for all {application.productFamily} projects")
-	for project in projects:
+	# assume projects are sorted with older versions preceding more recent versions
+	# Process them in more-recent-first order
+	for project in reversed(projects):
 		project.updateEverything(obs, store,
 				onlyPackages = nameMatcher)
 

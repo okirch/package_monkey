@@ -1369,11 +1369,14 @@ class DependencyWorker:
 			debugOBS(f"  -> {build.name} not known yet")
 		elif nameMatcher:
 			shouldInspect = nameMatcher.match(build.name)
-		elif storedBuild.buildTime != build.buildTime:
-			debugOBS(f"  -> {build.name} has been rebuilt")
-		else:
+		elif storedBuild.buildTime == build.buildTime:
 			# debugOBS(f"  -> {build.name} unchanged")
 			shouldInspect = False
+		elif build.buildTime is not None and storedBuild.buildTime is not None and storedBuild.buildTime > build.buildTime:
+			debugOBS(f"  -> ignoring older build of {build.name} ")
+			shouldInspect = False
+		else:
+			debugOBS(f"  -> {build.name} has been rebuilt")
 
 		if shouldInspect:
 			self.queue.append(build)

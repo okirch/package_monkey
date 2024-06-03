@@ -670,6 +670,11 @@ class OBSClient(object):
 					error = self._schema.processStatusDocument(tree.getroot())
 					if error is not None:
 						logXML("OBS status document", tree.getroot())
+
+						# could be an incomplete maintenance incident
+						if 'no source uploaded' in error.summary:
+							return None
+
 						error.request = f"{method} {path}"
 						error.document = extra_args.get('data')
 						raise error
@@ -811,14 +816,20 @@ class OBSClient(object):
 
 	def getBuildEnvironment(self, project, repository, package, arch, **kwargs):
 		res = self.apiCallXML("build", project, repository, arch, package, "_buildenv", **kwargs)
+		if res is None:
+			return None
 		return self._schema.processBuildInfo(res)
 
 	def getBuildInfo(self, project, repository, package, arch, **kwargs):
 		res = self.apiCallXML("build", project, repository, arch, package, "_buildinfo", **kwargs)
+		if res is None:
+			return None
 		return self._schema.processBuildInfo(res)
 
 	def getFileInfoExt(self, project, repository, package, arch, filename, infoFactory = None, **kwargs):
 		res = self.apiCallXML("build", project, repository, arch, package, filename, view = 'fileinfo_ext', **kwargs)
+		if res is None:
+			return None
 		return self._schema.processFileInfo(res, infoFactory)
 
 	def putSourcePackageXML(self, project, package, file, body):
@@ -1841,7 +1852,13 @@ class OBSProject:
 		updatedListing = client.queryPackageBuild(self.name, self.buildRepository, obsPackage.name, self.buildArch, cachingOff = True)
 		self.updateBuildFromBinaryList(obsPackage, updatedListing)
 
-		return self.tryRetrieveBuildExtendedInfo(client, obsPackage)
+		try:
+			return self.tryRetrieveBuildExtendedInfo(client, obsPackage)
+		except Exception as e:
+			errormsg(f"Exception while trying to get depdency info for {obsPackage}: {e}")
+
+		# FIXME: flag this package as failed
+		return []
 
 	def tryRetrieveBuildExtendedInfo(self, client, obsPackage):
 		result = []

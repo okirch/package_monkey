@@ -242,9 +242,37 @@ class StandardWriter(BaseWriter):
 class TableWriter(BaseWriter):
 	def __init__(self, filename = None):
 		super().__init__()
-		self.csv = CSVWriter(filename, fields = ['component', 'topic', 'package'])
+		self.csv = CSVWriter(filename, fields = ['component', 'topic', 'package', 'src'])
 
 		infomsg(f"Writing results to {filename}")
+
+	# FIXME rename to writeClassificationResult
+	def write(self, result):
+		self.beginWrite()
+
+		buildMap = {}
+		for label, buildInfo in result.enumerateBuilds():
+			if label is not None and label.name in self._excluded:
+				continue
+
+			for rpm in buildInfo.binaries:
+				buildMap[rpm] = buildInfo.name
+
+		for label, members in result.enumeratePackages():
+			if label.name in self._excluded:
+				continue
+
+			if not members and not label.defined and not self._writeEmptyGroups:
+				continue
+
+			component = label.componentName
+			topic = label.name
+
+			for rpm in sorted(members, key = lambda p: p.name):
+				buildName = buildMap.get(rpm, '')
+				self.csv.write([component, topic, rpm.shortname, buildName])
+
+		self.flush()
 
 	def writeLabelDescription(self, label, runtimeRequires, inversions):
 		pass

@@ -56,9 +56,20 @@ if action in (None, 'download'):
 	application.beginChapter(f"Updating package data for all {application.productFamily} projects")
 	# assume projects are sorted with older versions preceding more recent versions
 	# Process them in more-recent-first order
-	for project in reversed(projects):
-		project.updateEverything(obs, store,
-				onlyPackages = nameMatcher)
+
+	from obsclnt import PackageUpdateJob
+
+	job = PackageUpdateJob(obs, onlyPackages = nameMatcher)
+	for project in projects:
+		job.addProject(project)
+
+	job.processUpdates(store)
+
+	if nameMatcher is not None:
+		badNames = nameMatcher.reportUnmatched()
+		if badNames:
+			errormsg(f"Bad package name(s) given on command line: {' '.join(badNames)}")
+			raise Exception(f"Package names not found")
 
 if action in (None, 'postproc'):
 	# Close the DB and reopen it. This ensures that the DB object starts out with no

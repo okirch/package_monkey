@@ -6,7 +6,7 @@ import time
 import xml.etree.ElementTree as ET
 
 from packages import Package, PackageInfo, PackageInfoFactory, UniquePackageInfoFactory
-from util import ThatsProgress
+from util import ThatsProgress, SimpleQueue
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
 obsLogger = loggingFacade.getLogger('obs')
@@ -233,6 +233,8 @@ class OBSSchema(object):
 					pinfo = infoFactory(**a)
 
 					dep.packages.add(pinfo)
+
+				# infomsg(f" NEW  {dep.type} {dep.expression}: {' '.join(map(str, dep.packages))}")
 			else:
 				if getattr(result, key, None) is not None:
 					oldValue = getattr(result, key)
@@ -1342,13 +1344,13 @@ class OBSAggregate(object):
 		return None
 
 class DependencyWorker:
-	def __init__(self, project, client, backingStore):
-		self.project = project
+	def __init__(self, client, backingStore):
+		self.project = None
 		self.client = client
 		self.backingStore = backingStore
 
-		self.resolverHints = project.resolverHints
-		self.product = project.product
+		# self.resolverHints = project.resolverHints
+		# self.product = project.product
 
 		self.knownPackages = {}
 		for storedBuild in backingStore.enumerateOBSPackages():
@@ -1366,7 +1368,7 @@ class DependencyWorker:
 
 		storedBuild = self.knownPackages.get(build.name)
 		if storedBuild is None:
-			debugOBS(f"  -> {build.name} not known yet")
+			debugOBS(f"  -> {build.name} never seen before")
 		elif nameMatcher:
 			shouldInspect = nameMatcher.match(build.name)
 		elif storedBuild.buildTime == build.buildTime:
@@ -1466,7 +1468,7 @@ class DependencyWorker:
 
 		self.backingStore.addPackageObject(rpm, **kwargs)
 
-	def resolvePackageInfo(self, pinfoList):
+	def resolvePackageInfo(self, product, pinfoList):
 		result = set()
 
 		if not pinfoList:
@@ -1476,10 +1478,10 @@ class DependencyWorker:
 			if self.ignorePackage(pinfo):
 				continue
 
-			dependent = self.product.findPackage(pinfo.name, pinfo.version, pinfo.release, pinfo.arch)
+			dependent = product.findPackage(pinfo.name, pinfo.version, pinfo.release, pinfo.arch)
 			if dependent is None:
 				dependent = Package.fromPackageInfo(pinfo)
-				self.product.addPackage(dependent)
+				product.addPackage(dependent)
 
 			self.rpmToBackingStore(dependent)
 
@@ -1488,7 +1490,7 @@ class DependencyWorker:
 
 		return result
 
-	def updateDependencies(self, disambiguationContext, rpm, info):
+	def updateDependencies(self, product, rpm, info):
 		self.rpmToBackingStore(rpm)
 
 		assert(info.requires_ext is not None)
@@ -1498,6 +1500,7 @@ class DependencyWorker:
 			rpms = set()
 			for pinfo in dep.packages:
 				requiredRpm = Package.fromPackageInfo(pinfo)
+				requiredRpm.productId = product.productId
 				self.rpmToBackingStore(requiredRpm)
 				rpms.add(requiredRpm)
 			dep.packages = rpms
@@ -1515,7 +1518,7 @@ class DependencyWorker:
 		for dep in info.provides_ext:
 			requiredby += dep.packages
 
-		requiredby = self.resolvePackageInfo(requiredby)
+		requiredby = self.resolvePackageInfo(product, requiredby)
 
 		rpm.updateResolvedProvides(requiredby)
 
@@ -1528,6 +1531,256 @@ class DependencyWorker:
 
 		return False
 
+class PackageUpdateJob(object):
+	class PackageProxy(object):
+		def __init__(self, project, build):
+			self.project = project
+			self.build = build
+			self.name = build.name
+			self.previousBuild = None
+
+			self.isMaintenance = self.project.name.endswith(':Update')
+
+		def __str__(self):
+			return f"{self.project.name}/{self.build.name}"
+
+		@property
+		def buildTime(self):
+			return self.build.buildTime
+
+		# Given a maintenance update, try to guess the "true" package name
+		# from the maintenance build.
+		# This is a bit fuzzy. We have proper package names like go1.22,
+		# and we have maintenance updates named poppler.31251:qt5...
+		# The approach we take here:
+		#  1. make sure that we process projects and packages in order
+		#      a) :GA is processed before :Update
+		#      b) builds are processed in the order given in $project/_result
+		#  2. split the build name as baseName.$incidentId:$mbuildFlavor
+		#     and check whether we've seen a package named baseName before
+		def guessTrueName(self, nameOracle):
+			name = self.build.name
+			if not self.isMaintenance or '.' not in name:
+				return False
+
+			mbuildFlavor = None
+			if ':' in name:
+				name, mbuildFlavor = name.rsplit(':', maxsplit = 1)
+
+			if '.' not in name:
+				return False
+
+			baseName, incidentId = name.rsplit('.', maxsplit = 1)
+			if not incidentId.isdigit():
+				return False
+
+			if baseName == 'patchinfo':
+				pass
+			elif not nameOracle.isKnownOBSPackage(baseName):
+				return False
+
+			name = baseName
+			if mbuildFlavor is not None:
+				name = f"{name}:{mbuildFlavor}"
+
+				if not nameOracle.isKnownOBSPackage(name):
+					infomsg(f"{self} introduces new mbuild flavor {name}")
+
+			self.name = name
+			return name
+
+		@property
+		def isValidBuild(self):
+			return bool(self.build.buildTime) and bool(self.build.binaries)
+
+		def isMoreRecentThan(self, otherProxy):
+			otherBuild = otherProxy.build
+
+			# a build without binaries is considered a failed build, and can never be
+			# "more recent" than anything we have
+			if not otherProxy.isValidBuild:
+				debugOBS(f"  -> {otherProxy} does not look like a successful build (mtime={otherBuild.buildTime}, {len(otherBuild.binaries)} rpms)")
+				return True
+
+			if self.build.buildTime is None:
+				return False
+
+			if self.build.buildTime == otherBuild.buildTime:
+				return True
+
+			if self.build.buildTime > otherBuild.buildTime:
+				debugOBS(f"  -> {self} is a more recent build of {otherProxy}")
+				return True
+
+			return False
+
+	def __init__(self, client, onlyPackages = None):
+		self.client = client
+		self.onlyPackages = onlyPackages
+
+		self.online = True
+		if client.cachePolicy == 'exclusive':
+			infomsg(f"Skipping download of data from OBS - cache policy is {client.cachePolicy}")
+			self.online = False
+
+		self._validPackageNames = set()
+		self._proxies = {}
+
+		self.queue = None
+
+	# naming oracle callback used by PackageProxy.guessTrueName()
+	def isKnownOBSPackage(self, tentativeName):
+		return tentativeName in self._validPackageNames
+
+	def addProject(self, obsProject):
+		if not self.online:
+			return
+
+		for obsBuild in obsProject.updateBinaryList(self.client):
+			proxy = self.PackageProxy(obsProject, obsBuild)
+
+			shouldInspect = True
+
+			existingProxy = self._proxies.get(obsBuild.name)
+			if existingProxy is None:
+				if proxy.guessTrueName(self):
+					if proxy.name == 'patchinfo':
+						debugOBS(f"  -> {obsBuild.name} is a patchinfo - ignore")
+						continue
+
+					# infomsg(f"::: {obsBuild.name} -> {proxy.name}")
+					existingProxy = self._proxies.get(proxy.name)
+
+			if existingProxy is None:
+				debugOBS(f"  -> {proxy} not known yet")
+				self._validPackageNames.add(proxy.name)
+			elif proxy.isValidBuild:
+				if existingProxy.isValidBuild:
+					self.verifyRPMs(existingProxy, proxy)
+
+				shouldInspect = proxy.isMoreRecentThan(existingProxy)
+			else:
+				shouldInspect = False
+
+			if shouldInspect:
+				assert(proxy)
+				self._proxies[proxy.name] = proxy
+
+	def processUpdates(self, backingStore):
+		infomsg(f"Processing {len(self._proxies)} OBS builds")
+
+		worker = DependencyWorker(self.client, backingStore)
+		self.queue = SimpleQueue(len(self._proxies))
+
+		for proxy in self._proxies.values():
+			if self.shouldUpdate(proxy, worker):
+				infomsg(f"  {proxy.name:30} {proxy}")
+				self.queue.append(proxy)
+
+		for proxy in self.queue:
+			with loggingFacade.temporaryIndent(3):
+				with backingStore.deferCommit():
+					if not proxy.isValidBuild:
+						infomsg(f"{proxy} is not a valid build; skipped")
+						continue
+
+					obsPackage = proxy.build
+					obsProject = proxy.project
+
+					infomsg(f"Updating {obsPackage} from {proxy}")
+
+					for rpm in proxy.build.binaries:
+						infomsg(f" # {rpm}")
+						id = backingStore.latest.allocateIdForRpm(rpm)
+
+					# obsProject.updateOnePackageFromOBS(self.client, worker, obsPackage, backingStore)
+					self.updateOnePackageFromOBS(worker, proxy, backingStore)
+
+	def shouldUpdate(self, proxy, worker):
+		obsBuild = proxy.build
+
+		if not proxy.isValidBuild:
+			debugOBS(f"{proxy} is not a valid build; skipped")
+			return False
+
+		storedBuild = worker.knownPackages.get(obsBuild.name)
+		if storedBuild is None:
+			debugOBS(f"  -> {obsBuild.name} never seen before")
+			return True
+
+		proxy.previousBuild == storedBuild
+
+		if self.onlyPackages:
+			return self.onlyPackages.match(obsBuild.name)
+
+		if storedBuild.buildTime == obsBuild.buildTime:
+			# debugOBS(f"  -> {obsBuild.name} unchanged")
+			return False
+
+		debugOBS(f"  -> {obsBuild.name} has been rebuilt")
+		return True
+
+	def updateOnePackageFromOBS(self, worker, proxy, backingStore):
+		obsProject = proxy.project
+		obsPackage = proxy.build
+
+		worker.buildToBackingStore(obsPackage)
+
+		# ensure we have a backing store ID for the source
+		# Not all builds will have a source package; such as those
+		# that merely import packages from a different buildarch
+		# (eg glibc:686)
+		src = obsPackage.sourcePackage
+		if src is not None:
+			assert(src.backingStoreId is not None)
+			# worker.rpmToBackingStore(src, updateLatest = True)
+
+		for rpm, info in obsProject.retrieveBuildExtendedInfo(self.client, obsPackage):
+			rpm.product = obsProject.product
+
+			# make sure we've set the source ID
+			if not rpm.isSourcePackage and src is not None:
+				rpm.setSourcePackage(src)
+
+			if rpm.buildArch != obsProject.buildArch:
+				infomsg(f"{rpm}: do not update dependencies, as it has been imported from a different build arch")
+				worker.rpmToBackingStore(rpm)
+				continue
+
+			# debugOBS(f"{obsPackage}: updating dependencies for {rpm}")
+			worker.updateDependencies(obsProject.product, rpm, info)
+
+		backingStore.updateOBSPackage(obsPackage, obsPackage.binaries, updateTimestamp = True)
+
+	# Compare list of RPMs between two builds of the same OBS package and mbuild flavor.
+	# This is currently just for logging purposes
+	def verifyRPMs(self, oldProxy, newProxy):
+		oldNames = set(rpm.shortname for rpm in oldProxy.build.binaries)
+		newNames = set(rpm.shortname for rpm in newProxy.build.binaries)
+
+		if oldNames == newNames:
+			return
+
+		removed = oldNames.difference(newNames)
+		added = newNames.difference(oldNames)
+
+		w = []
+		if removed:
+			if removed == oldNames:
+				w.append("all old rpms removed")
+			else:
+				w.append(f"{' '.join(removed)} removed")
+
+		if added:
+			if added == newNames:
+				w.append("all rpms are NEW")
+			else:
+				w.append(f"{' '.join(added)} added")
+		elif not newNames:
+			w.append("no RPMs left")
+
+		detail = "; ".join(w)
+		debugOBS(f"RPM change {oldProxy} -> {newProxy}: {detail}")
 
 class OBSProject:
 	def __init__(self, name, product = None):
@@ -1568,6 +1821,7 @@ class OBSProject:
 		return self._projectMeta
 
 	def updateEverything(self, client, backingStore, onlyPackages = None):
+		broken
 		if client.cachePolicy == 'exclusive':
 			infomsg(f"Skipping download of data from OBS - cache policy is {client.cachePolicy}")
 			return
@@ -1582,17 +1836,12 @@ class OBSProject:
 			if obsPackage.buildTime is not None:
 				worker.maybeQueueForInspection(obsPackage, onlyPackages)
 
-		if onlyPackages is not None:
-			badNames = onlyPackages.reportUnmatched()
-			if badNames:
-				errormsg(f"Bad package name(s) given on command line: {' '.join(badNames)}")
-				raise Exception(f"Package names not found")
-
 		worker.startProgressMeter(numTotal)
 
 		packages = self.updatePackagesFromOBS(client, worker, backingStore)
 		infomsg(f"{len(packages)} out of {numTotal} packages were updated")
 
+	# Part of post-processing
 	def processDependencies(self, backingStore, onlyPackages = None):
 		with backingStore.deferCommit():
 			self.processDependenciesWork(backingStore, onlyPackages)
@@ -1602,16 +1851,20 @@ class OBSProject:
 	# packages, but in many cases, this redundancy needs to be hidden (eg. OBS expands
 	# requirements on the perl interpreter as "perl" and "perl-32bit".
 	def processDependenciesWork(self, backingStore, onlyPackages):
+		infomsg(f"Postprocessing packages for {self.name}")
+
 		# for rpm in backingStore.enumerateLatestPackages():
 		if self.resolverHints is None:
 			raise Exception("Unable to post-process package dependencies: no resolver hints")
 
-		worker = DependencyWorker(self, None, backingStore)
+		worker = DependencyWorker(None, backingStore)
 
 		unresolvableAmbiguities = 0
 		for obsPackage in backingStore.enumerateOBSPackages():
 			if onlyPackages and not onlyPackages.match(obsPackage.name):
 				continue
+
+			infomsg(f" - {obsPackage}")
 
 			disambiguationContext = self.resolverHints.createDisambiguationContext(obsPackage)
 			src = obsPackage.sourcePackage
@@ -1621,6 +1874,7 @@ class OBSProject:
 
 				requires = backingStore.retrieveForwardDependenciesFullTree(rpm)
 
+				infomsg(f"    - {rpm}")
 				result = disambiguationContext.inspect(rpm, requires)
 				if result.ambiguous:
 					errormsg(f"{rpm}: unable to resolve ambiguous dependency")
@@ -1747,16 +2001,15 @@ class OBSProject:
 		debugOBS(f"Getting build results for {self.name}")
 		resList = self.queryBuildResults(client)
 
+		result = []
 		for st in resList[0].status_list:
 			pkg = self.addPackage(st.package)
 			pkg.setBuildStatus(st.code)
+			result.append(pkg)
 
-		result = set()
 		for p in resList[0].binary_list:
 			pkg = self.addPackage(p.package)
-
 			self.updateBuildFromBinaryList(pkg, p.files)
-			result.add(pkg)
 
 		return result
 
@@ -1836,13 +2089,42 @@ class OBSProject:
 							continue
 
 						# debugOBS(f"{obsPackage}: updating dependencies for {rpm}")
-						worker.updateDependencies(context, rpm, info)
+						worker.updateDependencies(self.product, rpm, info)
 
 					backingStore.updateOBSPackage(obsPackage, obsPackage.binaries, updateTimestamp = True)
 
 			result.append(obsPackage)
 
 		return result
+
+	def updateOnePackageFromOBS(self, client, worker, obsPackage, backingStore):
+		worker.buildToBackingStore(obsPackage)
+
+		# ensure we have a backing store ID for the source
+		# Not all builds will have a source package; such as those
+		# that merely import packages from a different buildarch
+		# (eg glibc:686)
+		src = obsPackage.sourcePackage
+		if src is not None:
+			assert(src.backingStoreId is not None)
+			# worker.rpmToBackingStore(src, updateLatest = True)
+
+		for rpm, info in self.retrieveBuildExtendedInfo(client, obsPackage):
+			rpm.product = self.product
+
+			# make sure we've set the source ID
+			if not rpm.isSourcePackage and src is not None:
+				rpm.setSourcePackage(src)
+
+			if rpm.buildArch != self.buildArch:
+				infomsg(f"{rpm}: do not update dependencies, as it has been imported from a different build arch")
+				worker.rpmToBackingStore(rpm)
+				continue
+
+			# debugOBS(f"{obsPackage}: updating dependencies for {rpm}")
+			worker.updateDependencies(self.product, rpm, info)
+
+		backingStore.updateOBSPackage(obsPackage, obsPackage.binaries, updateTimestamp = True)
 
 	def retrieveBuildExtendedInfo(self, client, obsPackage):
 		try:

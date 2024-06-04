@@ -773,6 +773,7 @@ class LatestPackageTable(NamedTable):
 
 			# data changed, invalidate the cached list of current package ids
 			self._latestIds = None
+		return b
 
 	@property
 	def currentPackageIds(self):
@@ -802,6 +803,14 @@ class LatestPackageTable(NamedTable):
 			b = self.Latest(name)
 			pkgDict[name] = b
 		return b
+
+	def allocateIdForRpm(self, rpm):
+		b = self.getBucket(rpm.name, rpm.arch)
+		if b is None:
+			unversionedRpm = PackageInfo(name = rpm.name, version = 'any', release = 'any', arch = rpm.arch, epoch = None, backingStoreId = -1)
+			b = self.update(unversionedRpm)
+
+		return b.id
 
 	def getIdForRpm(self, rpm):
 		b = self.getBucket(rpm.name, rpm.arch)

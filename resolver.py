@@ -96,6 +96,12 @@ class Disambiguation(object):
 #				return None
 
 			result = Disambiguation.RpmContext(rpm.shortname, requires_ext)
+
+			if False:
+				infomsg(f"### {rpm}: ambig={result.ambiguous}")
+				for dep in requires_ext:
+					infomsg(f"  {dep.type} {dep.expression}: {' '.join(map(str, dep.packages))}")
+
 			if result.ambiguous:
 				self.ruleSet.disambiguate(result, self.preferred)
 

@@ -93,11 +93,6 @@ groups:
        - "@DrawingLibraries+x11"
        - "@Glib2NoDBus"
       binaries:
-       - libcairomm-1*
-       - libcairo2
-       - libcairo-gobject2
-       - cairo-tools
-       - libcairo-script-interpreter2
        - libharfbuzz-cairo0
        - libpango-1*
        - libpangomm-1*
@@ -199,18 +194,6 @@ groups:
        - harfbuzz-devel
        - graphite2-devel
        - libthai-devel
-
- - name: "@CairoAPI"
-   is_api: True
-   sourceproject: Typesetting
-   requires:
-    - "@FontLibsAPI"
-    - "@X11API"
-    - "@FontLibraries+x11"
-    - "@CorePlusAPI"
-   binaries:
-    - cairo-devel
-    - cairomm*-devel priority=0
 
  - name: TypesettingDevel
    requires:

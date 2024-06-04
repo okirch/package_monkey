@@ -74,7 +74,6 @@ groups:
    sourceproject: Security
    requires:
     - "@CoreAPI"
-    - "@Glib2API"
     - "@Smartcards"
    binaries:
     - pcsc-lite-devel
@@ -198,7 +197,6 @@ groups:
    sourceproject: Security
    requires:
     - "@CoreCryptoAPI"
-    - "@Glib2API"
     - "@PGPLibraries"
    binaries:
     - libgpgme-devel

@@ -55,10 +55,10 @@ groups:
  - name: "@CorePlusAPI"
    sourceproject: CorePlus
    requires:
-    - "@Glib2API"
     - "@I18nAPI"
     - "@NumericAPI"
     - "@PlusAPI"
+    - "@EssentialGraphicsLibraries"
    binaries:
     - libpixman-*-devel priority=0
 
@@ -410,6 +410,7 @@ groups:
     - libwebp7
     - libimagequant0
     - libmng2
+    - libpixman-1*
    buildflavors:
     - name: x11
       requires:
@@ -731,6 +732,18 @@ groups:
       binaries:
        - gd-devel
 
+ - name: "@CairoAPI"
+   is_api: True
+   sourceproject: CorePlus
+   requires:
+    - "@FontLibsAPI"
+    - "@X11API"
+    - "@FontLibraries+x11"
+    - "@CorePlusAPI"
+   binaries:
+    - cairo-devel
+    - cairomm*-devel priority=0
+
  - name: "@DrawingLibraries"
    api: "@DrawingAPI"
    sourceproject: CorePlus
@@ -738,6 +751,7 @@ groups:
     - "@CoreLibraries"
    packages:
     - plotutils
+    - cairo
    binaries:
     - libEMF1
     - libxmi0
@@ -751,6 +765,11 @@ groups:
        - libgd3
        - plotutils
        - libplotter2
+       - libcairo2
+       - libcairo-gobject2
+       - cairo-tools
+       - libcairo-script-interpreter2
+       - libcairomm-1*
 
  - name: "@SystemPythonCoreBindings"
    # we do not accept any autoflavors:

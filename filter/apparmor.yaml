@@ -27,7 +27,7 @@ groups:
    buildflavors:
     - name: utils
       requires:
-       - "@DefaultPythonGobject"
+       - "@DefaultPythonDBus"
        - "@DefaultPythonOS"
        - "@PerlCore"
        - "@CoreServices"

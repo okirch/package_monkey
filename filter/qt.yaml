@@ -360,7 +360,7 @@ groups:
     - "@PythonQt"
     - "@DefaultPythonAPI"
     - "@Qt5ExtendedAPI"
-    - "@DefaultPythonGobjectAPI"
+    - "@DefaultPythonDBusAPI"
    binaries:
     - python${defaultPythonVersion}-qt5-devel
 
@@ -371,6 +371,7 @@ groups:
     - "@Qt"
     - "@DefaultPythonStandard"
     - "@DBus"
+    - "@DefaultPythonDBus"
     - "@QtSpeechLibraries"
     - "@Qt5StickyLumpOfLibraries"
    binaries:

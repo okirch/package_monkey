@@ -783,6 +783,53 @@ groups:
     - python${systemPythonVersion}-libeconf
     - python${systemPythonVersion}-libmount
 
+ - name: "@PythonGObjectCommonAPI"
+   is_api: True
+   sourceproject: CorePlus
+   requires:
+    - "@CoreAPI+syspython"
+    - "@CairoAPI"
+   binaries:
+    - python-gobject-common-devel
+    - python-pycairo-common-devel
+
+ - name: "@PythonGobjectAPI${systemPythonVersion}"
+   sourceproject: CorePlus
+   requires:
+    - "@PythonGobject${systemPythonVersion}"
+    - "@PythonAPI${systemPythonVersion}"
+    - "@PythonGObjectCommonAPI"
+    - "@PythonCommonBuildDependencies+systemd"
+   binaries:
+    - python${systemPythonVersion}-pycairo-devel
+   buildflavors:
+    - name: gtk
+      requires:
+       - "@PythonGobject${systemPythonVersion}+gtk"
+      binaries:
+       - python${systemPythonVersion}-gobject-devel
+
+ - name: "@PythonGobject${systemPythonVersion}"
+   api: "@PythonGobjectAPI${systemPythonVersion}"
+   sourceproject: CorePlus
+   requires:
+    - "@PythonCore${systemPythonVersion}"
+    - "@DrawingLibraries+x11"
+   binaries:
+    - python${systemPythonVersion}-gobject
+    - python${systemPythonVersion}-gobject-*
+    - python${systemPythonVersion}-pycairo
+   buildflavors:
+    - name: gtk
+      requires:
+       - "@GdkPixbuf"
+       # This is an inversion
+       - "@FontLibraries+x11"
+       - "@AccessibilityLibraries"
+       - "@GtkAllVersions"
+      binaries:
+       - python${systemPythonVersion}-gobject-Gdk
+
  - name: "@InfoReader"
    sourceproject: CorePlus
    requires:

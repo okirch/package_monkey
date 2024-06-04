@@ -53,11 +53,13 @@ groups:
  - instantiate: DefineDefaultPythonLabel:WebApplication
  - instantiate: DefineDefaultPythonLabel:Jaraco
  - instantiate: DefineDefaultPythonLabel:Gobject
+ - instantiate: DefineDefaultPythonLabel:DBus
  - instantiate: DefineDefaultPythonLabel:Graphics
  - instantiate: DefineDefaultPythonLabel:Desktop
  - instantiate: DefineDefaultPythonLabel:Standard
  - instantiate: DefineDefaultPythonLabel:Modules
  - instantiate: DefineDefaultPythonAPI:GobjectAPI
+ - instantiate: DefineDefaultPythonAPI:DBusAPI
  - instantiate: DefineDefaultPythonAPI:StandardAPI
 
  # FIXME: nuke
@@ -116,17 +118,6 @@ groups:
    binaries:
     - python3-gi-docgen
     - waf
-
- - name: "@PythonGObjectCommonAPI"
-   is_api: True
-   sourceproject: Python
-   requires:
-    - "@Glib2API"
-    - "@CairoAPI"
-    - "@CoreAPI+syspython"
-   binaries:
-    - python-gobject-common-devel
-    - python-pycairo-common-devel
 
  - name: "@SystemCython"
    # we do not accept any autoflavors:
@@ -471,30 +462,25 @@ templates:
        - pythonXXX-testscenarios
        - pythonXXX-testtools
 
-    - name: "@PythonGobjectAPIXXX"
+    - name: "@PythonDBusAPIXXX"
+      sourceproject: Python
+      compatibility: pythonXXX
+      requires:
+       - "@PythonGobjectAPIXXX"
+       - "@PythonDBusXXX"
+       - "@SystemdAPI"
+      binaries:
+       - pythonXXX-dbus-python-devel
+
+    - name: "@PythonDBusXXX"
+      api: "@PythonDBusAPIXXX"
       sourceproject: Python
       compatibility: pythonXXX
       requires:
        - "@PythonGobjectXXX"
-       - "@PythonAPIXXX"
-       - "@PythonDesktopXXX"
-       - "@PythonGObjectCommonAPI"
-       - "@PythonCommonBuildDependencies+systemd"
-       - "@SystemdAPI"
-      binaries:
-       - pythonXXX-gobject-devel
-       - pythonXXX-dbus-python-devel
-
-    - name: "@PythonGobjectXXX"
-      api: "@PythonGobjectAPIXXX"
-      sourceproject: Python
-      compatibility: pythonXXX
-      requires:
-       - "@PythonCoreXXX"
        - "@Glib2NoDBus"
        - "@DBus"
       binaries:
-       - pythonXXX-gobject
        - pythonXXX-dasbus
        - pythonXXX-dbus-python
        - pythonXXX-notify2
@@ -507,21 +493,19 @@ templates:
        - "@PythonGraphicsXXX"
        - "@PythonGobjectAPIXXX"
       binaries:
-       - pythonXXX-pycairo-devel
 
     - name: "@PythonGraphicsXXX"
       api: "@PythonGrapicsAPIXXX"
       sourceproject: Python
       compatibility: pythonXXX
       requires:
-       - "@PythonCoreXXX"
+       - "@PythonGobjectXXX"
        - "@Glib2+python"
        - "@GraphicsLibraries+x11"
        - "@FontLibraries+x11"
        - "@PythonCoreXXX+tcl"
        - "@TclCore+x11"
       binaries:
-       - pythonXXX-pycairo
        - pythonXXX-cairocffi
        - pythonXXX-CairoSVG
        - pythonXXX-Pillow
@@ -548,10 +532,9 @@ templates:
        - "@Glib2+python"
        - "@GtkAllVersions"
        - "@PythonGraphicsXXX"
-       - "@PythonGobjectXXX"
+       - "@PythonDBusXXX"
        - "@PythonEssentialsXXX+desktop"
       binaries:
-       - pythonXXX-gobject-*
        - pythonXXX-Send2Trash
        - pythonXXX-atspi
 
@@ -648,6 +631,11 @@ templates:
          binaries:
           - pythonXXX-pyperclip
           - pythonXXX-hatch
+       - name: dbus
+         requires:
+          - "@PythonDBusXXX"
+         binaries:
+          - pythonXXX-slip-dbus
        - name: obsonly
          requires:
           - "@PythonStandardXXX+dbus"

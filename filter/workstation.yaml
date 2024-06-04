@@ -39,7 +39,7 @@ groups:
     - "@NetworkCore"
     - "@NetworkManager"
     - "@KernelNetworkUtils+python"
-    - "@DefaultPythonGobject"
+    - "@DefaultPythonDBus"
     - "@Glib2Notify"
    binaries:
     - firewalld

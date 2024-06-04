@@ -277,6 +277,7 @@ groups:
     - "@StorageServices"
     - "@NetworkStorage"
     - "@SystemPythonModules"
+    - "@DefaultPythonDBus"
     - "@UpdateStack"
     - "@PolicyKit"
     - "@Container"
@@ -494,7 +495,7 @@ groups:
     - "@Gtk3"
     # for audit:
     - "@Security"
-    - "@DefaultPythonGobject"
+    - "@DefaultPythonDBus"
     - "@SystemPythonCoreBindings"
     - "@SystemPythonStandard"
     - "@Core0+syspython"

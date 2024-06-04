@@ -263,6 +263,7 @@ groups:
       requires:
        - "@KernelNetworkLibraries+syspython"
        - "@UdevLibraries+syspython"
+       - "@DefaultPythonDBus"
        - "@Avahi"
       binaries:
        - nvme-stas

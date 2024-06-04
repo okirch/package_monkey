@@ -175,11 +175,6 @@ groups:
     - libhowl0
     - python${systemPythonVersion}-avahi
    buildflavors:
-    - name: python310
-      requires:
-       - "@PythonStandard310+dbus"
-      binaries:
-       - python310-avahi
     - name: gtk
       requires:
        - "@AvahiLibraries+gtk"

@@ -8,9 +8,7 @@ components:
    requires:
     - CorePlus
    exports:
-    - "@PythonStandard310"
     - "@PythonStandard311"
-    - "@PythonModules310"
     - "@PythonModules311"
 
 build_configs:
@@ -20,15 +18,11 @@ build_configs:
     - "@Rust"
     - "@Rust+python"
  - name: Python/docbuild
- - name: Python/python310
-   buildrequires:
-    - "@Graphviz"
  - name: Python/python311
    buildrequires:
     - "@DevelopmentEssentials"
 
 groups:
- - instantiate: PythonGroups:310
  - instantiate: PythonGroups:311
 
  # define labels @SystemPythonBlah, which is essentially a wrapper around
@@ -74,7 +68,6 @@ groups:
      This is where we would add future python versions
    sourceproject: Python
    requires:
-    - "@PythonCore310"
     - "@PythonCore311"
 
  # FIXME: nuke
@@ -83,7 +76,6 @@ groups:
    compatibility: none
    sourceproject: Python
    requires:
-    - "@PythonCore310"
     - "@PythonCore311"
 
  - name: "@PythonData"
@@ -99,12 +91,10 @@ groups:
    compatibility: none
    sourceproject: Python
    requires:
-    - "@PythonStandard310"
     - "@PythonStandard311"
    buildflavors:
     - name: desktop
       requires:
-       - "@PythonStandard310+desktop"
        - "@PythonStandard311+desktop"
 
  # FIXME: nuke
@@ -114,7 +104,6 @@ groups:
    sourceproject: Python
    requires:
     - "@PythonStandard"
-    - "@PythonModules310"
     - "@PythonModules311"
 
  - name: "@SystemPythonBuildSupport"
@@ -153,7 +142,6 @@ groups:
  - name: "@Cython"
    sourceproject: Python
    requires:
-    - "@Cython310"
     - "@Cython311"
 
  - name: "@PythonCommonBuildDependencies"

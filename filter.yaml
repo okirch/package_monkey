@@ -81,21 +81,21 @@ autoflavors:
     - "@PythonStandard311"
    binaries:
     - python311-*
- - name: python310
-   disposition: maybe_merge
-   compatibility: python310
-   # placing packages through this autoflavor can be overridden by
-   # explicit placement in some @Topic (which has a default priority of 5)
-   priority: 10
-   # place python packages in @PythonModules by default, unless they
-   # are constrained in some other way
-   defaultlabels:
-    - "@PythonStandard310"
-    - "@PythonModules310"
-   requires:
-    - "@PythonStandard310"
-   binaries:
-    - python310-*
+#- name: python310
+#  disposition: maybe_merge
+#  compatibility: python310
+#  # placing packages through this autoflavor can be overridden by
+#  # explicit placement in some @Topic (which has a default priority of 5)
+#  priority: 10
+#  # place python packages in @PythonModules by default, unless they
+#  # are constrained in some other way
+#  defaultlabels:
+#   - "@PythonStandard310"
+#   - "@PythonModules310"
+#  requires:
+#   - "@PythonStandard310"
+#  binaries:
+#   - python310-*
  - name: ruby
    requires:
     - "@Ruby"

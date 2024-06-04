@@ -145,9 +145,13 @@ groups:
    sourceproject: Systemd
    requires:
     - "@Core1"
-    - "@CoreServices"
+    - "@CoreServices+systemd"
     - "@SystemdLibraries"
     - "@SystemPython"
+    - "@KernelCore"
+   binaries:
+    # procps should move here, and maybe util-linux:systemd
+
 
  - name: "@DBusService"
    sourceproject: Systemd

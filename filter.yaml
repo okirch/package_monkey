@@ -177,7 +177,9 @@ purposes:
    packagesuffixes:
     - x86-64-v3
  - name: 32bit
-   priority: 0
+   # We want -devel-32bit packages to be matched by autoflavor "devel" rather
+   # than "32bit"; hence we use prio 5 here and prio 4 for devel
+   priority: 5
    autoselect: no
    packagesuffixes:
     - 32bit

@@ -124,6 +124,7 @@ groups:
     - "@Container"
     - "@OpticalMedia+tcl"
     - "@NetworkManager"
+    - "@Snapper"
    binaries:
     - elemental
     - elemental-*

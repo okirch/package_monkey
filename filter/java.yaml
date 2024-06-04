@@ -206,6 +206,7 @@ groups:
     - google-errorprone-annotations-javadoc purpose=doc
     - rhino
     - bouncycastle*
+    - javadoc-parser
    buildflavors:
     - name: obsonly
       requires:
@@ -315,6 +316,7 @@ groups:
     - plexus-sec-dispatcher
     - plexus-utils
     - plexus-velocity
+    - plexus-xml
 #   - plexus-containers:plexus-component-metadata
 #   - plexus-containers:plexus-metadata-generator
 

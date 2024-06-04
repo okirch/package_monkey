@@ -136,7 +136,7 @@ groups:
    sourceproject: Webserver
    requires:
     - "@Core"
-    - "@DrawingLibraries"
+    - "@DrawingLibraries+x11"
     # does it make sense to ship php without datatbase support?
     - "@Databases"
     - "@Spelling"

@@ -662,7 +662,6 @@ groups:
     - unzip
     - util-linux*
     - which
-    - wtmpdb
     - xz
     - zip
     - zsh
@@ -685,6 +684,7 @@ groups:
        - "@SystemdLibraries"
       binaries:
        - coreutils-systemd
+       - wtmpdb
     - name: syspython
       requires:
        - "@SystemPython"

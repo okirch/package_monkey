@@ -592,6 +592,8 @@ templates:
        - "@NumericLibraries"
        - "@PlusLibraries"
        - "@LUARuntime"
+       # for python-systemd:
+       - "@SystemdLibraries"
       binaries:
        - pythonXXX-invocations
 

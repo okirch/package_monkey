@@ -333,6 +333,12 @@ resolverhints:
          - llvm14-libclang13
          - llvm15-libclang13
          - llvm16-libclang13
+         - llvm17-libclang13
+     - acceptable:
+         - libclang13
+         - llvm14-libclang13
+         - llvm15-libclang13
+         - llvm16-libclang13
      - acceptable:
          - strongswan
          - strongswan-ipsec
@@ -576,6 +582,12 @@ resolverhints:
      - collapse: llvm16-libc++abi1
        alias: libc++abi1
      - collapse: llvm16-libc++abi-devel
+       alias: libc++abi-devel
+     - collapse: llvm17-libc++1
+       alias: libc++1
+     - collapse: llvm17-libc++abi1
+       alias: libc++abi1
+     - collapse: llvm17-libc++abi-devel
        alias: libc++abi-devel
      - collapse: libpcp-devel
        alias: pcp-devel

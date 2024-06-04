@@ -715,7 +715,7 @@ groups:
     # boost:base will not be placed at all.
     # This seems to be an issue with boost-license1 being required by something that
     # doesn't have @Boost in its list of requirements
-    - libboost_thread1_82_0
+    - libboost_thread1_8?_0
 
  - name: "@DrawingAPI"
    sourceproject: CorePlus

@@ -242,6 +242,57 @@ class ThatsProgress:
 	def tick(self):
 		self.count += 1
 
+class SimpleQueue(object):
+	def __init__(self, totalCount):
+		self.totalCount = totalCount
+		self.progressMeter = None
+		self.inProgress = None
+		self._queue = []
+
+	def __del__(self):
+		self.done()
+
+	def append(self, item):
+		self._queue.append(item)
+
+	def __len__(self):
+		return len(self._queue)
+
+	def __bool__(self):
+		return bool(self._queue)
+
+	def __iter__(self):
+		if self.progressMeter is None:
+			self.progressMeter = ThatsProgress(len(self), withETA = True)
+
+		while self._queue:
+			yield self.next()
+
+		self.done()
+
+	def next(self):
+		if self.inProgress:
+			self.done()
+
+		if not self._queue:
+			return None
+
+		item = self._queue.pop(0)
+		self.inProgress = item
+		return item
+
+	def done(self):
+		if not self.inProgress:
+			return
+
+		self.progressMeter.tick()
+		self.inProgress = None
+
+		if len(self) == 0:
+			infomsg("Completed.")
+		else:
+			infomsg(f"{self.progressMeter} complete, {self.progressMeter.eta} remaining")
+
 ##################################################################
 #
 # A simple name matches
@@ -267,7 +318,7 @@ class NameMatcher:
 	def __init__(self, names = []):
 		self.matches = []
 		for name in names:
-			if '*' in name or '?' in name:
+			if '*' in name or '?' in name or '[' in name:
 				m = self.ShellMatch(name)
 			else:
 				m = self.ExactMatch(name)

@@ -1980,12 +1980,17 @@ class BackingStoreDB(DB):
 
 		return self.retrieveOBSPackageByBuildId(buildId)
 
-	def insertOBSPackage(self, obsPackage):
-		id = self.builds.update(obsPackage.name, None)
-		if id is None:
-			raise Exception(f"Unable to update table {self.builds.name} for OBS package {obsPackage.name}")
+	def insertOBSPackage(self, obsBuild):
+		# We use .canonicalName rather than .name here. The build's original name may be
+		# foo.12345 or foo.12345:flavor. We want the DB to reflect the "true" name of
+		# the build, such as "foo" or "foo:flavoe"
+		canonicalName = obsBuild.canonicalName
 
-		obsPackage.backingStoreId = id
+		id = self.builds.update(canonicalName, None)
+		if id is None:
+			raise Exception(f"Unable to update table {self.builds.name} for OBS package {canonicalName}")
+
+		obsBuild.backingStoreId = id
 
 	def updateOBSPackage(self, build, rpms, updateTimestamp = False):
 		self.obsPackageCache.drop(build)

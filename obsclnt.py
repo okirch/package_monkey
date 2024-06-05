@@ -1063,14 +1063,38 @@ class OBSDependency(object):
 		self.backingStoreId = backingStoreId
 		self.packages = set()
 
+# This should really be called OBSBuild, for several reasons
+#  - multibuilds. One source package foo may give rise to several builds,
+#    named foo, foo:flavor1, foo:flavor2, etc
+#  - maintenance. When foo gets built in a maintenance project (*:Update),
+#    the first build will be called foo, but subsequent rebuilds will have
+#    the maintenance incident attached (as in foo.12345)
+#  - maintenance updates of multibuilds are currently built as
+#    foo.12345:flavor1 etc
+#
+# Naming related members of OBSPackage objects:
+#  name:	This is the name of the build, such as foo.12345:flavor1
+#  canonicalName:
+#		name, with maintenance incident removed, ie
+#		foo.12345 -> foo
+#		foo.12345:flavor1 -> foo:flavor1
+#  basePackageName:
+#		source package name, ie "foo"
+#  multibuildFlavor:
+#		"flavor1", or None
+#  maintenanceIncident:
+#		12345, or 0
 class OBSPackage:
 	STATUS_SUCCEEDED = 1
 	STATUS_FAILED = 2
 	STATUS_EXCLUDED = 3
 	STATUS_UNKNOWN = 4
 
-	def __init__(self, name):
+	def __init__(self, name, canonicalName = None, maintenanceIncident = 0):
 		self.name = name
+
+		self.updateCanonicalName(canonicalName or name, maintenanceIncident)
+
 		self.buildStatus = None
 		self._buildStatusString = None
 		self.backingStoreId = None
@@ -1085,10 +1109,6 @@ class OBSPackage:
 		self.config = None
 		self.trace = False
 
-		if ':' in name:
-			self._basePackageName = name.split(':')[0]
-		else:
-			self._basePackageName = None
 
 		self.requires = None
 
@@ -1098,9 +1118,19 @@ class OBSPackage:
 	def addBinary(self, pinfo):
 		self._binaries.append(pinfo)
 
-	@property
-	def basePackageName(self):
-		return self._basePackageName
+	def updateCanonicalName(self, canonicalName, maintenanceIncident):
+		self.canonicalName = canonicalName
+		self.maintenanceIncident = maintenanceIncident
+
+		self.basePackageName = None
+		self.multibuildFlavor = None
+
+		if ':' in canonicalName:
+			name, flavor = canonicalName.rsplit(':', maxsplit = 1)
+			assert('.' not in flavor)
+
+			self.basePackageName = name
+			self.multibuildFlavor = flavor
 
 	@property
 	def sourceVersion(self):
@@ -1587,7 +1617,13 @@ class PackageUpdateJob(object):
 					infomsg(f"{self} introduces new mbuild flavor {name}")
 
 			self.name = name
-			return name
+
+			# We need to update the OBSBuild to reflect the actual mbuild name
+			# Otherwise we populate the DB with names that contain incident IDs,
+			# which is not what we want.
+			self.build.updateCanonicalName(name, int(incidentId))
+
+			return True
 
 		@property
 		def isValidBuild(self):
@@ -1687,7 +1723,7 @@ class PackageUpdateJob(object):
 					obsPackage = proxy.build
 					obsProject = proxy.project
 
-					infomsg(f"Updating {obsPackage} from {proxy}")
+					infomsg(f"Updating {obsPackage.canonicalName} from {proxy}")
 
 					for rpm in proxy.build.binaries:
 						infomsg(f" # {rpm}")
@@ -1703,7 +1739,7 @@ class PackageUpdateJob(object):
 			debugOBS(f"{proxy} is not a valid build; skipped")
 			return False
 
-		storedBuild = worker.knownPackages.get(obsBuild.name)
+		storedBuild = worker.knownPackages.get(obsBuild.canonicalName)
 		if storedBuild is None:
 			debugOBS(f"  -> {obsBuild.name} never seen before")
 			return True
@@ -1711,7 +1747,7 @@ class PackageUpdateJob(object):
 		proxy.previousBuild == storedBuild
 
 		if self.onlyPackages:
-			return self.onlyPackages.match(obsBuild.name)
+			return self.onlyPackages.match(obsBuild.canonicalName)
 
 		if storedBuild.buildTime == obsBuild.buildTime:
 			# debugOBS(f"  -> {obsBuild.name} unchanged")

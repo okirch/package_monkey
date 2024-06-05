@@ -781,9 +781,6 @@ class LatestPackageTable(NamedTable):
 			self._latestIds = set(bucket.pinfo.backingStoreId for bucket in self._binaries.values())
 		return self._latestIds
 
-	def xxx_packageIsLatest(self, pinfo):
-		return pinfo.backingStoreId in self.currentPackageIds
-
 	def getBucket(self, name, arch):
 		if isSourceArchitecture(arch):
 			pkgDict = self._sources
@@ -1728,60 +1725,6 @@ class BackingStoreDB(DB):
 
 		defer.commit()
 		return success
-
-	def updateBuilds(self, obsPackageList):
-		defer = self.deferCommit()
-
-		# Update build dependencies, first
-		edges = set()
-		for obsPackage in obsPackageList:
-			for rpm in obsPackage.buildRequires:
-				edges.add((obsPackage.backingStoreId, rpm.backingStoreId))
-
-		for source, target in edges:
-			self.buildDep.addEdge(requiringPkgId = source, requiredPkgId = target)
-
-		updated = []
-		for obsPackage in sorted(obsPackageList, key = lambda p: p.name):
-			if not all(rpm.backingStoreId for rpm in obsPackage.binaries):
-				errormsg(f"Refusing to update table {self.builds.name} for OBS package {obsPackage.name}: not all rpms are in the database yet")
-				continue
-
-			id = self.builds.update(obsPackage.name, obsPackage.buildTime)
-			if id is None:
-				errormsg(f"Unable to update table {self.builds.name} for OBS package {obsPackage.name}")
-				continue
-
-			obsPackage.backingStoreId = id
-			updated.append(obsPackage)
-
-		# remove all entries from the build->package relation table for the builds we're updating
-		updatedBuildIds = list(map(lambda obp: obp.backingStoreId, updated))
-		self.buildPkgRelation.removePackagesForList(updatedBuildIds)
-
-		for obsPackage in updated:
-			for rpm in obsPackage.binaries:
-				self.buildPkgRelation.addPackage(buildId = obsPackage.backingStoreId, pkgId = rpm.backingStoreId)
-
-		defer.commit()
-		return updated
-
-	def xxx_updateBuildDependencies(self, obsPackageList):
-		defer = self.deferCommit()
-
-		for obsPackage in obsPackageList:
-			requiringPackage = obsPackage.sourcePackage
-			if requiringPackage.backingStoreId is None:
-				warnmsg(f"obs package {obsPackage.name} refers to {requiringPackage.fullname()} which has no DB ID")
-
-			for used in obsPackage._usedForBuild:
-				requiredPackage = used.sourcePackage
-				self.addBuildDependency(requiringPackage, requiredPackage)
-
-			# then update build times
-			self.builds.update(obsPackage.name, obsPackage.buildTime)
-
-		defer.commit()
 
 	def addBuildDependency(self, requiringPkg, requiredPkg):
 		# infomsg(f"build of {requiringPkg.name} uses {requiredPkg.name}")

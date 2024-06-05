@@ -1587,11 +1587,19 @@ class PackageUpdateJob(object):
 	def isKnownOBSPackage(self, tentativeName):
 		return tentativeName in self._validPackageNames
 
+	# Note: the caller should invoke this in the order in which projects are layered,
+	# ie in the case of SLE, the sequence should be
+	# SLE-15:GA SLE-15:Update SLE-15-SP1:GA SLE-15-SP1:Update etc
 	def addProject(self, obsProject):
 		if not self.online:
 			return
 
-		for obsBuild in obsProject.updateBinaryList(self.client):
+		infomsg(f"Inspecting builds in {obsProject.name}")
+		with loggingFacade.temporaryIndent(3):
+			self.addProjectWork(obsProject)
+
+	def addProjectWork(self, obsProject):
+		for obsBuild in sorted(obsProject.updateBinaryList(self.client), key = lambda b: b.buildTime):
 			proxy = self.PackageProxy(obsProject, obsBuild)
 
 			shouldInspect = True
@@ -1600,20 +1608,20 @@ class PackageUpdateJob(object):
 			if existingProxy is None:
 				if proxy.guessTrueName(self):
 					if proxy.name == 'patchinfo':
-						debugOBS(f"  -> {obsBuild.name} is a patchinfo - ignore")
+						# debugOBS(f"  -> {obsBuild.name} is a patchinfo - ignore")
 						continue
 
 					# infomsg(f"::: {obsBuild.name} -> {proxy.name}")
 					existingProxy = self._proxies.get(proxy.name)
 
 			if existingProxy is None:
-				debugOBS(f"  -> {proxy} not known yet")
+				# debugOBS(f"  -> {proxy} not known yet")
 				self._validPackageNames.add(proxy.name)
 			elif proxy.isValidBuild:
 				if existingProxy.isValidBuild:
 					self.verifyRPMs(existingProxy, proxy)
 
-				shouldInspect = proxy.isMoreRecentThan(existingProxy)
+				shouldInspect = True
 			else:
 				shouldInspect = False
 
@@ -1949,14 +1957,14 @@ class OBSProject:
 
 	def updateBuildFromBinaryList(self, build, binaryList):
 		binaries = []
-		buildTime = None
+		buildTime = 0
 
 		for f in binaryList:
 			filename = f.filename
 
 			if f.mtime is not None:
 				fileBuildTime = int(f.mtime)
-				if buildTime is None or fileBuildTime > buildTime:
+				if fileBuildTime > buildTime:
 					buildTime = fileBuildTime
 
 			buildArch = self.buildArch

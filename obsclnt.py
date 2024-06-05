@@ -1386,89 +1386,8 @@ class DependencyWorker:
 		for storedBuild in backingStore.enumerateOBSPackages():
 			self.knownPackages[storedBuild.name] = storedBuild
 
-		self.progressMeter = None
-
-		self.previousIncarnation = {}
-
-		self.inProgress = None
-		self.queue = []
-
-	def maybeQueueForInspection(self, build, nameMatcher):
-		shouldInspect = True
-
-		storedBuild = self.knownPackages.get(build.name)
-		if storedBuild is None:
-			debugOBS(f"  -> {build.name} never seen before")
-		elif nameMatcher:
-			shouldInspect = nameMatcher.match(build.name)
-		elif storedBuild.buildTime == build.buildTime:
-			# debugOBS(f"  -> {build.name} unchanged")
-			shouldInspect = False
-		elif build.buildTime is not None and storedBuild.buildTime is not None and storedBuild.buildTime > build.buildTime:
-			debugOBS(f"  -> ignoring older build of {build.name} ")
-			shouldInspect = False
-		else:
-			debugOBS(f"  -> {build.name} has been rebuilt")
-
-		if shouldInspect:
-			self.queue.append(build)
-
-		if storedBuild is not None:
-			self.previousIncarnation[build] = storedBuild
-			build.backingStoreId = storedBuild.backingStoreId
-		else:
-			# fixme add the build to the DB
-			pass
-
-		for rpm in build.binaries:
-			if not rpm.isSourcePackage:
-				storedRpm = self.backingStore.recoverLatestPackageByName(rpm.name)
-				if storedRpm is not None:
-					self.previousIncarnation[rpm] = storedRpm
-
 	def __bool__(self):
-		return bool(self.queue)
-
-	def startProgressMeter(self, numTotal):
-		if self.progressMeter is not None:
-			return
-
-		numRebuilt = len(self.queue)
-		infomsg(f"{numRebuilt}/{numTotal} packages have been rebuilt")
-		self.progressMeter = ThatsProgress(numRebuilt, withETA = True)
-
-	def next(self):
-		if self.progressMeter is not None:
-			self.done()
-
-		if not self.queue:
-			return None
-
-		obsPackage = self.queue.pop(0)
-
-		storedBuild = self.previousIncarnation.get(obsPackage)
-
-		if storedBuild is None:
-			versionInfo = f"NEW {obsPackage.sourceVersion}"
-		else:
-			versionInfo = f"{storedBuild.sourceVersion} -> {obsPackage.sourceVersion}"
-
-		infomsg(f"Inspecting {obsPackage} {versionInfo} (status={obsPackage.buildStatusString})")
-
-		self.inProgress = obsPackage
-		return obsPackage
-
-	def done(self):
-		if self.inProgress is None:
-			return
-
-		self.progressMeter.tick()
-		self.inProgress = None
-
-		if len(self.queue) == 0:
-			infomsg("Completed.")
-		else:
-			infomsg(f"{self.progressMeter} complete, {self.progressMeter.eta} remaining")
+		return False
 
 	def buildToBackingStore(self, obsPackage):
 		for rpm in obsPackage.binaries:
@@ -1856,27 +1775,6 @@ class OBSProject:
 			self._projectMeta = OBSProjectMeta(self.name)
 		return self._projectMeta
 
-	def updateEverything(self, client, backingStore, onlyPackages = None):
-		broken
-		if client.cachePolicy == 'exclusive':
-			infomsg(f"Skipping download of data from OBS - cache policy is {client.cachePolicy}")
-			return
-
-		packages = self.updateBinaryList(client)
-
-		numTotal = len(packages)
-
-		worker = DependencyWorker(self, client, backingStore)
-
-		for obsPackage in packages:
-			if obsPackage.buildTime is not None:
-				worker.maybeQueueForInspection(obsPackage, onlyPackages)
-
-		worker.startProgressMeter(numTotal)
-
-		packages = self.updatePackagesFromOBS(client, worker, backingStore)
-		infomsg(f"{len(packages)} out of {numTotal} packages were updated")
-
 	# Part of post-processing
 	def processDependencies(self, backingStore, onlyPackages = None):
 		with backingStore.deferCommit():
@@ -2090,77 +1988,6 @@ class OBSProject:
 		build.buildTime = buildTime
 		build._binaries = binaries
 		build._source = None
-
-	def updatePackagesFromOBS(self, client, worker, backingStore):
-
-		result = []
-		while worker:
-			obsPackage = worker.next()
-
-			with loggingFacade.temporaryIndent(3):
-				with backingStore.deferCommit():
-					worker.buildToBackingStore(obsPackage)
-
-					# ensure we have a backing store ID for the source
-					# Not all builds will have a source package; such as those
-					# that merely import packages from a different buildarch
-					# (eg glibc:686)
-					src = obsPackage.sourcePackage
-					if src is not None:
-						assert(src.backingStoreId is not None)
-						# worker.rpmToBackingStore(src, updateLatest = True)
-
-					context = None
-					if self.resolverHints is not None:
-						context = self.resolverHints.createDisambiguationContext(obsPackage)
-
-					for rpm, info in self.retrieveBuildExtendedInfo(client, obsPackage):
-						# make sure we've set the source ID
-						if not rpm.isSourcePackage and src is not None:
-							rpm.setSourcePackage(src)
-
-						if rpm.buildArch != self.buildArch:
-							infomsg(f"{rpm}: do not update dependencies, as it has been imported from a different build arch")
-							worker.rpmToBackingStore(rpm)
-							continue
-
-						# debugOBS(f"{obsPackage}: updating dependencies for {rpm}")
-						worker.updateDependencies(self.product, rpm, info)
-
-					backingStore.updateOBSPackage(obsPackage, obsPackage.binaries, updateTimestamp = True)
-
-			result.append(obsPackage)
-
-		return result
-
-	def updateOnePackageFromOBS(self, client, worker, obsPackage, backingStore):
-		worker.buildToBackingStore(obsPackage)
-
-		# ensure we have a backing store ID for the source
-		# Not all builds will have a source package; such as those
-		# that merely import packages from a different buildarch
-		# (eg glibc:686)
-		src = obsPackage.sourcePackage
-		if src is not None:
-			assert(src.backingStoreId is not None)
-			# worker.rpmToBackingStore(src, updateLatest = True)
-
-		for rpm, info in self.retrieveBuildExtendedInfo(client, obsPackage):
-			rpm.product = self.product
-
-			# make sure we've set the source ID
-			if not rpm.isSourcePackage and src is not None:
-				rpm.setSourcePackage(src)
-
-			if rpm.buildArch != self.buildArch:
-				infomsg(f"{rpm}: do not update dependencies, as it has been imported from a different build arch")
-				worker.rpmToBackingStore(rpm)
-				continue
-
-			# debugOBS(f"{obsPackage}: updating dependencies for {rpm}")
-			worker.updateDependencies(self.product, rpm, info)
-
-		backingStore.updateOBSPackage(obsPackage, obsPackage.binaries, updateTimestamp = True)
 
 	def retrieveBuildExtendedInfo(self, client, obsPackage):
 		try:

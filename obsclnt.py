@@ -6,7 +6,8 @@ import time
 import xml.etree.ElementTree as ET
 
 from packages import Package, PackageInfo, PackageInfoFactory, UniquePackageInfoFactory
-from util import ThatsProgress, SimpleQueue
+from evolution import PackageEvolutionLog, Genealogy
+from util import ThatsProgress, SimpleQueue, TimedExecutionBlock
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
 obsLogger = loggingFacade.getLogger('obs')
@@ -1572,6 +1573,7 @@ class PackageUpdateJob(object):
 	def __init__(self, client, onlyPackages = None):
 		self.client = client
 		self.onlyPackages = onlyPackages
+		self.evolutionLog = PackageEvolutionLog()
 
 		self.online = True
 		if client.cachePolicy == 'exclusive':
@@ -1582,6 +1584,9 @@ class PackageUpdateJob(object):
 		self._proxies = {}
 
 		self.queue = None
+
+		self.unresolved = Package('__unresolved__', "1.0", "0", "noarch")
+		self.unresolved.productId = 0
 
 	# naming oracle callback used by PackageProxy.guessTrueName()
 	def isKnownOBSPackage(self, tentativeName):
@@ -1614,6 +1619,10 @@ class PackageUpdateJob(object):
 					# infomsg(f"::: {obsBuild.name} -> {proxy.name}")
 					existingProxy = self._proxies.get(proxy.name)
 
+			# FIXME: for a complete package genealogy, we also need to
+			# record the first successful build of each package, along with
+			# the RPMs it contained.
+
 			if existingProxy is None:
 				# debugOBS(f"  -> {proxy} not known yet")
 				self._validPackageNames.add(proxy.name)
@@ -1634,6 +1643,8 @@ class PackageUpdateJob(object):
 
 		worker = DependencyWorker(self.client, backingStore)
 		self.queue = SimpleQueue(len(self._proxies))
+
+		worker.rpmToBackingStore(self.unresolved, updateLatest = True)
 
 		for proxy in self._proxies.values():
 			if self.shouldUpdate(proxy, worker):
@@ -1727,6 +1738,10 @@ class PackageUpdateJob(object):
 		removed = oldNames.difference(newNames)
 		added = newNames.difference(oldNames)
 
+		hop = self.evolutionLog.add(newProxy.name, str(newProxy))
+		hop.added = list(added)
+		hop.removed = list(removed)
+
 		w = []
 		if removed:
 			if removed == oldNames:
@@ -1744,6 +1759,313 @@ class PackageUpdateJob(object):
 
 		detail = "; ".join(w)
 		debugOBS(f"RPM change {oldProxy} -> {newProxy}: {detail}")
+
+class PostprocessingJob(object):
+	def __init__(self, productFamily, onlyPackages = None, evolutionLog = None):
+		self.name = productFamily.name
+		self.resolverHints = productFamily.resolverHints
+		self.onlyPackages = onlyPackages
+
+		if self.resolverHints is None:
+			raise Exception("Unable to post-process package dependencies: no resolver hints")
+
+		self.genealogy = None
+		if evolutionLog is not None and os.path.exists(evolutionLog):
+			with TimedExecutionBlock(f"Loading genealogy data for {productFamily}"):
+				self.genealogy = Genealogy.loadFromEvolutionLog(evolutionLog)
+
+	def processDependencies(self, backingStore):
+		with backingStore.deferCommit():
+			self.processDependenciesWork(backingStore)
+
+	# In OBS fileinfo_ext data, resolved requirements are represented showing all possible
+	# candidates. In a few cases, it is important to retain this ambiguity when labelling
+	# packages, but in many cases, this redundancy needs to be hidden (eg. OBS expands
+	# requirements on the perl interpreter as "perl" and "perl-32bit".
+	def processDependenciesWork(self, backingStore):
+		infomsg(f"Postprocessing packages for {self.name}")
+
+		unresolved = backingStore.recoverLatestPackageByName('__unresolved__', arch = "noarch")
+		assert(unresolved)
+
+		# FIXME: turn this into a report object that that caller can investigate
+		# and, if necessary, fail on
+		unresolvableAmbiguities = 0
+		unresolvableDependencies = 0
+		buildsWithFailedDependencies = set()
+
+		allBuilds = list(backingStore.enumerateOBSPackages())
+		if self.onlyPackages is not None:
+			queue = SimpleQueue(len(allBuilds))
+			for obsPackage in allBuilds:
+				if self.onlyPackages.match(obsPackage.name):
+					queue.append(obsPackage)
+		else:
+			queue = SimpleQueue(allBuilds)
+
+		for obsPackage in queue:
+			if self.onlyPackages and not self.onlyPackages.match(obsPackage.name):
+				continue
+
+			infomsg(f" - {obsPackage}")
+
+			disambiguationContext = self.resolverHints.createDisambiguationContext(obsPackage)
+			src = obsPackage.sourcePackage
+			for rpm in obsPackage.binaries:
+				if rpm.sourcePackage is None and not rpm.isSourcePackage:
+					rpm.sourcePackage = src
+
+				requires = backingStore.retrieveForwardDependenciesFullTree(rpm)
+
+				infomsg(f"    - {rpm}")
+				result = disambiguationContext.inspect(rpm, requires)
+				if result.ambiguous:
+					errormsg(f"{rpm}: unable to resolve ambiguous dependency")
+					for req in result.ambiguous:
+						names = sorted(req.names)
+						errormsg(f"     {req.name:30} {names[0]}")
+						for other in names[1:]:
+							errormsg(f"     {' ':30} {other}")
+
+					unresolvableAmbiguities += 1
+					continue
+
+				requires = result.createUpdatedDependencies()
+
+				try:
+					backingStore.updateSimplifiedDependencies(rpm, requires)
+					continue
+				except Exception as e:
+					infomsg(f"   While updating dependencies for {rpm}: {e}")
+					savedException = e
+
+				hardFail = False
+				for dep, missing in backingStore.getStaleDependencies(rpm, requires):
+					with loggingFacade.temporaryIndent():
+						infomsg(f"Missing dependencies for requires={dep.expression}: {' '.join(map(str, missing))}")
+						packages = set(dep.packages)
+						for missingRpm in missing:
+							if missingRpm.name.endswith('-debuginfo'):
+								infomsg(f"   Hiding debuginfo dependency {missingRpm}")
+								packages.remove(missingRpm)
+								continue
+
+							replacementRpm = self.getEvolvedRPM(backingStore, missingRpm, dep.expression)
+							if replacementRpm is None:
+								errormsg(f"stale dependency {missingRpm} and no idea what it may have evolved into")
+								if unresolved is None:
+									hardFail = True
+									continue
+								replacementRpm = unresolved
+
+							packages.remove(missingRpm)
+							packages.add(replacementRpm)
+							infomsg(f"   Evolved {missingRpm} -> {replacementRpm}")
+
+						dep.packages = packages
+
+				if hardFail:
+					buildsWithFailedDependencies.add(obsPackage)
+					unresolvableDependencies += 1
+					continue
+
+				# Try once more - this time around, we should succeed
+				backingStore.updateSimplifiedDependencies(rpm, requires)
+
+		if buildsWithFailedDependencies:
+			infomsg(f"The following builds had packages with stale dependencies:")
+			for buildName in sorted(map(str, buildsWithFailedDependencies)):
+				infomsg(f" - {buildName}")
+
+		if unresolvableAmbiguities or unresolvableDependencies:
+			problems = []
+
+			if unresolvableAmbiguities:
+				problems.append(f"{unresolvableAmbiguities} unresolvable ambiguities")
+			if unresolvableDependencies:
+				problems.append(f"{unresolvableDependencies} unresolvable dependencies")
+
+			raise Exception(f"Uncorrected problems while post-processing dependencies: {' '.join(problems)}")
+
+	PackageRenames = {
+		'libdebuginfod1-dummy':  'libdebuginfod1',
+		'libglue2':              'cluster-glue-libs',
+		'libgnome-desktop-3-12': 'libgnome-desktop-3-20',
+		'systemd-sysvinit':      'systemd-sysvcompat',
+		'dbus-1-glib':           'libdbus-glib-1-2',
+
+		'libsmbclient0':         'samba-client-libs',
+		'libdcerpc0':            'samba-client-libs',
+		'libdcerpc-binding0':    'samba-client-libs',
+		'libndr0':               'samba-client-libs',
+		'libndr-krb5pac0':       'samba-client-libs',
+		'libndr-nbt0':           'samba-client-libs',
+		'libndr-standard0':      'samba-client-libs',
+		'libnetapi0':            'samba-client-libs',
+		'libsamba-credentials0': 'samba-client-libs',
+		'libsamba-errors0':      'samba-client-libs',
+		'libsamba-hostconfig0':  'samba-client-libs',
+		'libsamba-passdb0':      'samba-client-libs',
+		'libsamba-util0':        'samba-client-libs',
+		'libsamdb0':             'samba-client-libs',
+		'libsmbconf0':           'samba-client-libs',
+		'libsmbldap2':           'samba-client-libs',
+		'libtevent-util0':       'samba-client-libs',
+		'libwbclient0':          'samba-client-libs',
+		'libsmbclient-devel':	 'samba-devel',
+		'kmod-compat':           'kmod',
+		'hamcrest-core':         'hamcrest',
+		'ImageMagick-config-7-upstream':
+					 'ImageMagick-config-7-upstream-open',
+		'libgnomekbd':           'libgnomekbd8',
+		'texlive-pstools-bin':   'texlive-ps2eps-bin',
+		'pipewire-modules':      'pipewire-modules_0_3',
+		'libpacemaker3':         'pacemaker-libs',
+		'libpacemaker-devel':	 'pacemaker-devel',
+		'libSDL2-devel':	 'SDL2-devel',
+		'libpolkit0':		 'libpolkit-agent-1-0',
+		'libglslang-suse9':	 'libglslang14',
+
+		'Mesa-libGLESv1_CM1':	 'libglvnd',
+		'Mesa-libGLESv2-2':	 'libglvnd',
+		'libwayland-egl-devel':	 'libglvnd-devel',
+		'libwayland-egl-devel-32bit':
+					 'libglvnd-devel-32bit',
+
+		'libicu60_2':		 'libicu-suse65_1',
+		'libudev-devel':	 'systemd-devel',
+		'libudev-devel-32bit':	 'systemd-devel-32bit',
+
+		'bind-devel':		 'bind',
+		'libbind9-160':		 'bind',
+		'libdns169':		 'bind',
+		'libirs160':		 'bind',
+		'libisc166':		 'bind',
+		'libisccc160':		 'bind',
+		'libisccfg160':		 'bind',
+		'liblwres160':		 'bind',
+		'bind-devel-32bit':	 'bind',
+		'libbind9-160-32bit':	 'bind',
+		'libdns169-32bit':	 'bind',
+		'libirs160-32bit':	 'bind',
+		'libisc166-32bit':	 'bind',
+		'libisccc160-32bit':	 'bind',
+		'libisccfg160-32bit':	 'bind',
+		'liblwres160-32bit':	 'bind',
+		'libbind9-1600':	 'bind',
+		'libdns1605':		 'bind',
+		'libirs1601':		 'bind',
+		'libisc1606':		 'bind',
+		'libisccc1600':		 'bind',
+		'libisccfg1600':	 'bind',
+		'liblvm2app2_2':	 'bind',
+		'libns1604':		 'bind',
+
+		'libnm-glib4':		 'NetworkManager',
+		'libnm-glib-vpn1':	 'NetworkManager',
+		'libnm-util2':		 'NetworkManager',
+
+		# Pretend:
+		'texlive-pstools':	 'texlive-scripts',
+		'texlive-ifluatex':	 'texlive-scripts',
+		'texlive-ifxetex':	 'texlive-scripts',
+		'texlive-tetex-bin':	 'texlive-scripts',
+		'texlive-tetex':	 'texlive-scripts',
+		'texlive-texconfig-bin': 'texlive-scripts',
+		'texlive-texconfig':	 'texlive-scripts',
+
+		'libmysqld19':		 'libmariadbd19',
+		'libmysqld-devel':	 'libmariadbd-devel',
+
+		'rust-std':		 'rust',
+
+		'libpmemobj++-devel':	 'pmdk-devel',
+		'libwicked-0-6':	 'wicked',
+		'openblas-devel':	 'openblas-common-devel',
+		'openblas-devel-headers':'openblas-common-devel',
+
+		# the update that renames libgrpc8 provides two new libraries
+		# named librpc, unfortunately.
+		'libgrpc8':		 'libgrpc1_60',
+
+		# this actually got split in two, but finding one is enough
+		'libiptc0':		 'libip6tc2',
+
+		'libwebrtc_audio_processing1':
+					 'libwebrtc-audio-processing-1-3',
+
+		'xerces-j2-xml-apis':	 'xerces-j2-javadoc',
+		'yast2-theme-SLE':	 'yast2-theme',
+		'gcr-data':		 'libgcr-4-4',
+		'gcr-prompter':		 'libgcr-4-4',
+
+		'python-contextlib2':	 'python3-contextlib2',
+		'sysprof-devel-static':	 'sysprof-devel',
+
+	}
+
+
+	def getEvolvedRPM(self, backingStore, missingRpm, depString):
+		# if we have a depString, look at other packages that use the same depString
+		# and check what OBS evolved it to
+		if depString:
+			pass # not yet
+
+		found = None
+
+		# We need to check our explicit rules first because the
+		# genealogy checks cannot catch all package renames etc.
+		# In that case, it returns the verdict "dropped", which we
+		# consider final
+		tryName = self.PackageRenames.get(missingRpm.name)
+		if tryName is not None:
+			found = backingStore.recoverLatestPackageByName(tryName, arch = missingRpm.arch)
+
+		rpmName = missingRpm.name
+		if found is None and rpmName.startswith('python3-'):
+			found = backingStore.recoverLatestPackageByName('python311-' + rpmName[8:], arch = missingRpm.arch)
+
+		# SLE15 has some packages that are still built with python2 (lua-lmod is an example)
+		# Pretend that we would be able to rebuild these packages with python3.x
+		if found is None and rpmName.startswith('python2-'):
+			found = backingStore.recoverLatestPackageByName('python311-' + rpmName[8:], arch = missingRpm.arch)
+
+		if found is None and rpmName.startswith('python-'):
+			found = backingStore.recoverLatestPackageByName('python311-' + rpmName[7:], arch = missingRpm.arch)
+
+		if found is not None:
+			return found
+
+		latest = None
+		if self.genealogy:
+			# The getLatestDescendant interface is not optimal.
+			# We should probably have Genealogy generate a dict mapping of
+			# older rpm shortnames to the final names.
+			latest = self.genealogy.getLatestDescendant(missingRpm.shortname, None)
+
+			if latest is None and "openmpi_" in missingRpm.name:
+				# HPC hack. The package name is eg openmpi4, but the rpm
+				# name is libopenmpi_4_x_y-blafasel-gnu-hpc
+				i = missingRpm.name.index("openmpi_")
+				majorVersion = missingRpm.name[i + 8]
+				if majorVersion.isdigit():
+					buildName = "openmpi" + majorVersion
+					latest = self.genealogy.getLatestDescendant(missingRpm.shortname, buildName)
+
+			if latest is not None:
+				if not latest.valid:
+					errormsg(f"Unable to evolve {missingRpm}: package was dropped from distribution")
+					return None
+
+				# FIXME: how do we ensure we get a package with the right arch?
+				found = backingStore.recoverLatestPackageByName(latest.name, arch = latest.arch)
+				if found is not None:
+					return found
+
+		return None
+
+	def purgeStale(self, backingStore):
+		pass
 
 class OBSProject:
 	def __init__(self, name, product = None):
@@ -1782,62 +2104,6 @@ class OBSProject:
 		if self._projectMeta is None:
 			self._projectMeta = OBSProjectMeta(self.name)
 		return self._projectMeta
-
-	# Part of post-processing
-	def processDependencies(self, backingStore, onlyPackages = None):
-		with backingStore.deferCommit():
-			self.processDependenciesWork(backingStore, onlyPackages)
-
-	# In OBS fileinfo_ext data, resolved requirements are represented showing all possible
-	# candidates. In a few cases, it is important to retain this ambiguity when labelling
-	# packages, but in many cases, this redundancy needs to be hidden (eg. OBS expands
-	# requirements on the perl interpreter as "perl" and "perl-32bit".
-	def processDependenciesWork(self, backingStore, onlyPackages):
-		infomsg(f"Postprocessing packages for {self.name}")
-
-		# for rpm in backingStore.enumerateLatestPackages():
-		if self.resolverHints is None:
-			raise Exception("Unable to post-process package dependencies: no resolver hints")
-
-		worker = DependencyWorker(None, backingStore)
-
-		unresolvableAmbiguities = 0
-		for obsPackage in backingStore.enumerateOBSPackages():
-			if onlyPackages and not onlyPackages.match(obsPackage.name):
-				continue
-
-			infomsg(f" - {obsPackage}")
-
-			disambiguationContext = self.resolverHints.createDisambiguationContext(obsPackage)
-			src = obsPackage.sourcePackage
-			for rpm in obsPackage.binaries:
-				if rpm.sourcePackage is None and not rpm.isSourcePackage:
-					rpm.sourcePackage = src
-
-				requires = backingStore.retrieveForwardDependenciesFullTree(rpm)
-
-				infomsg(f"    - {rpm}")
-				result = disambiguationContext.inspect(rpm, requires)
-				if result.ambiguous:
-					errormsg(f"{rpm}: unable to resolve ambiguous dependency")
-					for req in result.ambiguous:
-						names = sorted(req.names)
-						errormsg(f"     {req.name:30} {names[0]}")
-						for other in names[1:]:
-							errormsg(f"     {' ':30} {other}")
-
-					unresolvableAmbiguities += 1
-					continue
-
-				requires = result.createUpdatedDependencies()
-
-				backingStore.updateSimplifiedDependencies(rpm, requires)
-
-		if unresolvableAmbiguities:
-			raise Exception(f"Detected {unresolvableAmbiguities} unresolvable ambiguities while post-processing dependencies")
-
-	def purgeStale(self, backingStore):
-		pass
 
 	def ignorePackage(self, pinfo):
 		name = pinfo.name

@@ -8,6 +8,7 @@ forceRefresh = True
 
 from options import OBSClientApplication
 from obsclnt import OBSClient, OBSProject
+from obsclnt import PackageUpdateJob, PostprocessingJob
 from util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from util import NameMatcher
 
@@ -49,6 +50,8 @@ application.catalog.updateBackingStore(store)
 store.putProperty("arch", application.architecture)
 
 obs = application.obsClient
+productFamily = application.productFamily
+evolutionLogPath = application.getOutputPath("evolution.log")
 
 projects = OBSProjectCollection(application.getCachePath(f"obs/{obs.hostname}"))
 for release in application.enumerateProducts():
@@ -71,11 +74,10 @@ if action in (None, 'download'):
 	# assume projects are sorted with older versions preceding more recent versions
 	# Process them in more-recent-first order
 
-	from obsclnt import PackageUpdateJob
-
 	job = PackageUpdateJob(obs, onlyPackages = nameMatcher)
 	for project in projects:
 		job.addProject(project)
+	job.evolutionLog.write(evolutionLogPath)
 
 	job.processUpdates(store)
 
@@ -93,7 +95,8 @@ if action in (None, 'postproc'):
 			sourceLookups = True)
 
 	application.beginChapter(f"Postprocessing package data for all {application.productFamily} projects")
-	for project in projects:
-		project.processDependencies(store,
-			onlyPackages = nameMatcher)
-		project.purgeStale(store)
+
+	job = PostprocessingJob(productFamily, onlyPackages = nameMatcher, evolutionLog = evolutionLogPath)
+
+	job.processDependencies(store)
+	job.purgeStale(store)

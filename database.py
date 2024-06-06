@@ -1491,6 +1491,18 @@ class BackingStoreDB(DB):
 			for requiredId in map(self.latest.getIdForRpm, dep.packages):
 				self.tree.insert(dependencyId = dep.backingStoreId, requiringPkgId = rpmLatestId, requiredPkgId = requiredId)
 
+	def getStaleDependencies(self, rpmObj, dependencyList):
+		for dep in dependencyList:
+			missing = []
+			for requiredRpm in dep.packages:
+				try:
+					self.latest.getIdForRpm(requiredRpm)
+				except:
+					missing.append(requiredRpm)
+
+			if missing:
+				yield dep, missing
+
 	@classmethod
 	def updateForwardDependenciesWork(klass, tree, requiringRpm, requiredObjs):
 		assert(requiringRpm.backingStoreId)
@@ -1741,7 +1753,7 @@ class BackingStoreDB(DB):
 					rpm.sourcePackage = src
 				yield rpm
 
-	def recoverLatestPackageByName(self, name):
+	def recoverLatestPackageByName(self, name, arch = None):
 		pinfo = self.latest.getBinaryPackageByName(name)
 		if pinfo is None:
 			return None

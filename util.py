@@ -243,14 +243,20 @@ class ThatsProgress:
 		self.count += 1
 
 class SimpleQueue(object):
-	def __init__(self, totalCount):
-		self.totalCount = totalCount
+	def __init__(self, arg):
+		self.totalCount = 0
 		self.progressMeter = None
 		self.inProgress = None
 		self._queue = []
 
-	def __del__(self):
-		self.done()
+		if type(arg) is int:
+			self.totalCount = arg
+		else:
+			if type(arg) is list:
+				self._queue = arg.copy()
+			else:
+				self._queue = list(arg)
+			self.totalCount = len(self._queue)
 
 	def append(self, item):
 		self._queue.append(item)

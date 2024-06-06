@@ -189,7 +189,7 @@ class Disambiguation(object):
 			# Of course it makes no sense for libomp16-devel to pull in libomp17-devel, so pretend
 			# they didn't say that.
 			if rpmContext.name in req.names:
-				req.names = set(rpmContext.name)
+				req.names = set([rpmContext.name])
 				rpmContext.unambiguous.append(req)
 				continue
 

@@ -110,28 +110,70 @@ class Disambiguation(object):
 
 			return result
 
-	class CollapseRule:
-		def __init__(self, target, collapsible):
+	# If a dependency was expanded to <target, alias1, alias2, ..>
+	# replace it with <target>.
+	# All aliases must be present in the expansion
+	class CollapseRule(object):
+		def __init__(self, target, aliases):
 			self.target = target
-			self.collapsible = collapsible
+			self.aliases = set(aliases)
+			self.aliases.add(target)
+
+		def apply(self, names):
+			if not self.aliases.issubset(names):
+				return False
+
+			names.difference_update(self.aliases)
+			names.add(self.target)
+			return True
+
+	# If a dependency was expanded to <target, aliasM, aliasN, ..>
+	# replace it with <target>.
+	# At least one alias must be present in the expansion
+	class CollapseRuleAny(object):
+		def __init__(self, target, aliases):
+			self.target = target
+			self.aliases = set(aliases)
+			self.aliases.discard(target)
+
+		def apply(self, names):
+			if self.target not in names or not names.intersection(self.aliases):
+				return False
+			names.difference_update(self.aliases)
+			return True
 
 	class AcceptRule:
 		def __init__(self, acceptable):
 			self.acceptable = acceptable
 
+	class HideRule(object):
+		def __init__(self, names):
+			self.names = names
+
+		def apply(self, names):
+			n = len(names)
+			names.difference_update(self.names)
+			# return True if we did hide one or more names
+			return len(names) < n
 
 	def __init__(self):
+		self.hide = []
 		self.accept = []
 		self.collapse = []
 
 	def addAcceptableRule(self, *names):
 		self.accept.append(self.AcceptRule(set(names)))
 
-	def addCollapsingRule(self, target, aliases):
-		collapsible = set(aliases)
-		collapsible.add(target)
+	def addCollapsingRule(self, target, aliases, anyAlias = True):
+		if anyAlias:
+			newRule = self.CollapseRuleAny(target, aliases)
+		else:
+			newRule = self.CollapseRule(target, aliases)
+		self.collapse.append(newRule)
+		return newRule
 
-		self.collapse.append(self.CollapseRule(target, collapsible))
+	def addHideRule(self, names):
+		self.hide.append(self.HideRule(names))
 
 	def begin(self, obsPackage):
 		return Disambiguation.BuildContext(self, obsPackage)
@@ -162,10 +204,26 @@ class Disambiguation(object):
 				req.names = common
 
 			for rule in self.collapse:
-				if rule.collapsible.issubset(req.names):
-					req.names.difference_update(rule.collapsible)
-					req.names.add(rule.target)
+				if rule.apply(req.names):
 					modified = True
+
+			for rule in self.hide:
+				if rule.apply(req.names):
+					modified = True
+
+			# if we failed, see if we can catch [foo, foo-32bit] ambiguities
+			if len(req.names) > 1:
+				rules = []
+
+				for name in req.names:
+					if name + '-32bit' in req.names:
+						debugResolver(f"Auto-added new collapsing rule for {name} vs {name}-32bit")
+						rules.append(self.addCollapsingRule(name, [name + '-32bit']))
+
+				if rules:
+					for rule in rules:
+						if rule.apply(req.names):
+							modified = True
 
 			if modified:
 				if len(req.names) <= 1:
@@ -235,8 +293,11 @@ class ResolverHints:
 	def addAcceptableRule(self, nameList):
 		self.disambiguation.addAcceptableRule(*nameList)
 
-	def addCollapsingRule(self, target, aliases):
-		self.disambiguation.addCollapsingRule(target, aliases)
+	def addHideRule(self, nameList):
+		self.disambiguation.addHideRule(nameList)
+
+	def addCollapsingRule(self, target, aliases, **kwargs):
+		self.disambiguation.addCollapsingRule(target, aliases, **kwargs)
 
 	def createDisambiguationContext(self, obsPackage):
 		return self.disambiguation.begin(obsPackage)

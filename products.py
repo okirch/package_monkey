@@ -281,13 +281,14 @@ class ProductFamily:
 
 			acceptData = ruleData.get('acceptable')
 			collapseData = ruleData.get('collapse')
+			hideData = ruleData.get('hide')
 
 			n = 0
-			for data in (acceptData, collapseData):
+			for data in (acceptData, collapseData, hideData):
 				if data:
 					n += 1
 			if n != 1:
-				raise Exception(f"Invalid rule #{pos} in disambiguation resolver hints: expect exactly one of: accept, collape")
+				raise Exception(f"Invalid rule #{pos} in disambiguation resolver hints: expect exactly one of: accept, collapse, hide")
 
 			if acceptData:
 				if type(acceptData) is not list:
@@ -300,6 +301,7 @@ class ProductFamily:
 					raise Exception(f"Invalid rule #{pos} in disambiguation resolver hints: collapse should be a string")
 				target = collapseData
 				aliases = []
+				anyAlias = False
 
 				aliasData = ruleData.get('alias')
 				if aliasData is not None:
@@ -307,8 +309,18 @@ class ProductFamily:
 				aliasData = ruleData.get('aliases')
 				if aliasData is not None:
 					aliases += aliasData
+				aliasData = ruleData.get('anyalias')
+				if aliasData is not None:
+					aliases += aliasData
+					anyAlias = True
 
-				rule = self.resolverHints.addCollapsingRule(target, aliases)
+				rule = self.resolverHints.addCollapsingRule(target, aliases, anyAlias = anyAlias)
+
+			if hideData:
+				if type(hideData) is not list:
+					raise Exception(f"Invalid rule #{pos} in disambiguation resolver hints: hide should be a list of strings")
+
+				rule = self.resolverHints.addHideRule(hideData)
 
 			rpmData = ruleData.get('context')
 			if rpmData:

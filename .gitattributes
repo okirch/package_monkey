@@ -1,1 +1,2 @@
 /alp/product.db filter=lfs diff=lfs merge=lfs -text
+/sle15/product.db filter=lfs diff=lfs merge=lfs -text

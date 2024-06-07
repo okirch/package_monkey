@@ -1,0 +1,1346 @@
+# vi: ai et
+
+baseurl: http://updates.suse.de/SUSE/
+alternateurls:
+ - http://download.suse.de/ibs/SUSE/
+repositories:
+ - Products/$OBSNAME/$VERSION/$ARCH/product
+ - Products/$OBSNAME/$VERSION/$ARCH/product_source
+ - Updates/$OBSNAME/$VERSION/$ARCH/update/SUSE:Updates:$OBSNAME:$VERSION:$ARCH.repo
+versions:
+ - name: "15"
+ - name: 15-SP1
+ - name: 15-SP2
+ - name: 15-SP3
+ - name: 15-SP4
+ - name: 15-SP5
+ - name: 15-SP6
+architectures:
+ - x86_64
+#- s390x
+#- ppc64
+buildservice:
+ source:
+   - SUSE:SLE-15:GA
+   - SUSE:SLE-15:Update
+   - SUSE:SLE-15-SP1:GA
+   - SUSE:SLE-15-SP1:Update
+   - SUSE:SLE-15-SP2:GA
+   - SUSE:SLE-15-SP2:Update
+   - SUSE:SLE-15-SP3:GA
+   - SUSE:SLE-15-SP3:Update
+   - SUSE:SLE-15-SP4:GA
+   - SUSE:SLE-15-SP4:Update
+   - SUSE:SLE-15-SP5:GA
+   - SUSE:SLE-15-SP5:Update
+   - SUSE:SLE-15-SP6:GA
+   - SUSE:SLE-15-SP6:Update
+ build:
+   - SUSE:SLE-15:GA
+   - SUSE:SLE-15:Update
+   - SUSE:SLE-15-SP1:GA
+   - SUSE:SLE-15-SP1:Update
+   - SUSE:SLE-15-SP2:GA
+   - SUSE:SLE-15-SP2:Update
+   - SUSE:SLE-15-SP3:GA
+   - SUSE:SLE-15-SP3:Update
+   - SUSE:SLE-15-SP4:GA
+   - SUSE:SLE-15-SP4:Update
+   - SUSE:SLE-15-SP5:GA
+   - SUSE:SLE-15-SP5:Update
+   - SUSE:SLE-15-SP6:GA
+   - SUSE:SLE-15-SP6:Update
+
+products:
+ - name:        Server
+   nickname:    sles
+   obsname:     SLE-Product-SLES
+
+ - name:        SLES for SAP
+   nickname:    sles-sap
+   obsname:     SLE-SAP
+
+ - name:        Basesystem Module
+   nickname:    basesystem
+   obsname:     SLE-Module-Basesystem
+
+ - name:        Server Application Module
+   nickname:    applications
+   obsname:     SLE-Module-Server-Applications
+
+ - name:        SLE Certifications Module
+   nickname:    certifications
+   obsname:     SLE-Module-Certifications
+   versions:
+    - 15-SP3
+    - 15-SP4
+    - 15-SP5
+
+ - name:        SLE Legacy
+   nickname:    legacy
+   obsname:     SLE-Module-Legacy
+
+ - name:        SLE Python2
+   nickname:    python2
+   obsname:     SLE-Module-Python2
+
+ - name:        SLE Python3
+   nickname:    python3
+   obsname:     SLE-Module-Python3
+
+ - name:        SLE Scripting
+   nickname:    scripting
+   obsname:     SLE-Module-Web-Scripting
+
+ - name:        SLE Development Tools
+   nickname:    devtools
+   obsname:     SLE-Module-Development-Tools
+
+ - name:        SLE Transactional Server
+   nickname:    transactional
+   obsname:     SLE-Module-Transactional-Server
+
+ - name:        SAP Applications
+   nickname:    sap-applications
+   obsname:     SLE-Module-SAP-Applications
+
+ - name:        SLE Containers
+   nickname:    containers
+   obsname:     SLE-Module-Containers
+
+ - name:        SLE Public Cloud
+   nickname:    public Cloud
+   obsname:     SLE-Module-Public-Cloud
+
+resolverhints:
+  fake:
+   - environment_with_systemd
+   - environment_with_udev
+   - environment_with_polkit
+  packages:
+   - name: e2fsprogs-scrub
+     ignore: postfix
+   - name: policy-default-privs
+     ignore:
+      - policy
+   - name: libgio-2_0-0
+     # This is not an API requirement, it's just "I want dbus"
+     ignore:
+      - dbus-1
+      - dbus-1-x11
+   - name: fftw3-mpi-devel
+     # This hard dependency on openmpi4 looks wrong to me
+     ignore: openmpi4-devel
+   - name: libboost_mpi1_82_0-devel
+     # This hard dependency on openmpi4 looks wrong to me
+     ignore: openmpi4-devel
+   - name: fuse-devel
+     # A devel package should not pull in -doc packages
+     ignore: fuse-doc
+   - name: emacs
+     ignore: emacs-x11
+   # We need to build flatpak without pipewire support
+   - name: xdg-desktop-portal
+     warning: "we need to remove pipewire support from xdg-desktop-portal"
+     ignore:
+      - libpipewire-0_3-0
+   # We need to build imlib2 without libheif support
+   - name: imlib2-loaders
+     warning: "we need to remove HEIF support from imlib2"
+     ignore:
+      - libheif1
+   - name: gdm-branding-SLE
+     warning: "the gdm branding package should not depend on gdm"
+     ignore:
+      - gdm
+   - name: gdm
+     warning: "gdm should not depend on the gdm branding package"
+     ignore:
+      - gdm-branding-SLE
+   - name: cockpit-ws
+     warning: "cockpit-ws should not depend on the wallpaper branding package"
+     ignore:
+      - wallpaper-branding-SLE
+   - name: desktop-data-SLE
+     warning: "desktop-data-SLE should not depend on the wallpaper branding package"
+     ignore:
+      - wallpaper-branding-SLE
+
+   - name: fuse-devel
+     warning: "fuse-devel should probably just recommend fuse-doc, not require it"
+     ignore:
+      - fuse-doc
+   - name: wireshark-devel
+     warning: "wireshark-devel should probably just recommend wireshark, not require it"
+     ignore:
+      - wireshark
+   - name: libgstreamer-1_0-0
+     warning: "libgstreamer dependency on gstreamer is a problem for build dependencies"
+     ignore:
+      - gstreamer
+   - name: libgstallocators-1_0-0
+     warning: "libgstallocators dependency on gstreamer-plugins-base is a problem for build dependencies"
+     ignore:
+      - gstreamer
+   - name: gstreamer-plugins-base
+     warning: "gstreamer-plugins-base has too many dependencies"
+     ignore:
+      - gstreamer
+      - libgstallocators-1_0-0
+      - libgstapp-1_0-0
+      - libgstaudio-1_0-0
+      - libgstvideo-1_0-0
+      - libgstgl-1_0-0
+      - libgstpbutils-1_0-0
+      - libgstriff-1_0-0
+      - libgsttag-1_0-0
+   - name: dbus-1-devel
+     warning: "dbus-1-devel should not depend on dbus-1"
+     ignore:
+      - dbus-1
+   - name: gettext-tools
+     ignore: info
+   - name: autoconf
+     ignore: info
+   - name: automake
+     ignore: info
+   - name: aspell
+     ignore: info
+   - name: dejagnu
+     ignore: info
+   - name: libgpg-error-devel
+     ignore: info
+
+  ignore:
+    # we want to place these somewhere in Core, but dont want to pollute Core
+    # with any systemd dependencies.
+    # Maybe we should have a core package that specifies a systemd unit file version
+    # boost dependencies are a mess. Quite a few devel packages from boost-defaults require packages from boost:extra
+    # (and it's not clear why the python bindings are in boost:extra, for instance)
+    - "libboost_python3-devel -> libboost_python-py3-1_82_0-devel"
+    - "libboost_mpi_python3-devel -> libboost_mpi_python-py3-1_82_0-devel"
+    - "libboost_graph_parallel-devel -> libboost_graph_parallel1_82_0-devel"
+    - "libboost_mpi-devel -> libboost_mpi1_82_0-devel"
+    - "libboost_numpy3-devel -> libboost_numpy-py3-1_82_0-devel"
+  rewrite:
+   - "systemd -> environment_with_systemd"
+   - "systemd-mini -> environment_with_systemd"
+   - "udev -> environment_with_udev"
+   - "udev-mini -> environment_with_udev"
+   - "polkit -> environment_with_polkit"
+  disambiguate:
+     - acceptable:
+         - geronimo-jta-1_0_1B-api
+         - geronimo-jta-1_1-api
+     - acceptable:
+         - protobuf-devel
+         - protobuf21-devel
+     - acceptable:
+         - colord-gtk
+         - libcolord-gtk1
+     # FIXME: this is not yet right.
+     # We should choose:
+     #  java-foo over java-foo-devel
+     #  java-foo over java-foo-bootstrap
+     #  java-foo-headless over java-foo
+     - acceptable:
+         - java-10-openjdk
+         - java-10-openjdk-devel
+         - java-10-openjdk-headless
+         - java-11-openjdk
+         - java-11-openjdk-devel
+         - java-11-openjdk-headless
+         - java-1_7_0-bootstrap
+         - java-1_7_0-bootstrap-headless
+         - java-17-openjdk
+         - java-17-openjdk-devel
+         - java-17-openjdk-headless
+         - java-1_8_0-ibm
+         - java-1_8_0-ibm-devel
+         - java-1_8_0-ibm-headless
+         - java-1_8_0-openj9
+         - java-1_8_0-openj9-devel
+         - java-1_8_0-openj9-headless
+         - java-1_8_0-openjdk
+         - java-1_8_0-openjdk-devel
+         - java-1_8_0-openjdk-headless
+         - java-21-openjdk
+         - java-21-openjdk-devel
+         - java-21-openjdk-headless
+         - java-9-openjdk
+         - java-9-openjdk-devel
+         - java-9-openjdk-headless
+
+     - collapse: java-1_8_0-ibm
+       alias: java-1_8_0-ibm-devel
+     - acceptable:
+         - kernel-debug
+         - kernel-default
+         - kernel-kvmsmall
+         - kernel-rt
+         - kernel-rt_debug
+     - acceptable:
+         - apache2-event
+         - apache2-prefork
+         - apache2-worker
+     - acceptable:
+         - yast2-schema
+         - yast2-schema-default
+         - yast2-schema-micro
+     - acceptable:
+         - openmpi
+         - openmpi2
+         - openmpi3
+         - openmpi4
+     - acceptable:
+         - openmpi-devel
+         - openmpi2-devel
+         - openmpi3-devel
+         - openmpi4-devel
+     - acceptable:
+         - openmpi3-libs
+         - openmpi4-libs
+     - acceptable:
+         - selinux-policy-minimum
+         - selinux-policy-mls
+         - selinux-policy-targeted
+     - acceptable:
+         - cracklib-dict-full
+         - cracklib-dict-small
+     - acceptable:
+         - system-group-hardware
+         - system-user-lp
+     - acceptable:
+         - docker
+         - podman-docker
+     - acceptable:
+         - product-builder-plugin-ALP
+         - product-builder-plugin-SLE_15
+     - acceptable:
+         - kernel-default
+         - kernel-default-base
+     - acceptable:
+         - dbus-1
+         - dbus-1-x11
+     - acceptable:
+         - mozilla-nss-certs
+         - p11-kit-nss-trust
+     - acceptable:
+         - lua51
+         - lua53
+         - lua54
+     - acceptable:
+         - go
+         - go1.16
+         - go1.17
+         - go1.18
+         - go1.18-openssl
+         - go1.19
+         - go1.20
+         - go1.21
+         - go1.22
+     - acceptable:
+         - libgnome-desktop-3-20
+         - libgnome-desktop-4-2
+     - acceptable:
+         - enchant-2-backend-aspell
+         - enchant-2-backend-hunspell
+         - enchant-2-backend-nuspell
+         - enchant-2-backend-voikko
+     - acceptable:
+         - health-checker-plugins-MicroOS
+         - health-checker-plugins-caasp
+         - health-checker-plugins-kubic
+     - acceptable:
+         - regionServiceClientConfigAzure
+         - regionServiceClientConfigEC2
+         - regionServiceClientConfigGCE
+     - acceptable:
+         - libjpeg62-devel
+         - libjpeg8-devel
+     - acceptable:
+         - typelib-1_0-Gtk-2_0
+         - typelib-1_0-Gtk-3_0
+         - typelib-1_0-Gtk-4_0
+     - acceptable:
+         - man
+         - mandoc
+     - acceptable:
+         - openmpi-config
+         - openmpi1-config
+         - openmpi2-config
+         - openmpi3-config
+         - openmpi4-config
+     - acceptable:
+         - glibmm2-devel
+         - glibmm2_4-devel
+     - acceptable:
+         - cyrus-sasl-bdb-devel
+         - cyrus-sasl-devel
+     - acceptable:
+         - libgtop
+         - libgtop-2_0-11
+     - acceptable:
+         - texlive-hyphen-base
+         - texlive-lambda
+     - acceptable:
+         - python311-Cython
+         - python311-Cython0
+     - acceptable:
+         - python310-tornado
+         - python310-tornado6
+     - acceptable:
+         - python311-tornado
+         - python311-tornado6
+     - acceptable:
+         - python310-jupyter-client
+         - python310-jupyter-client7
+     - acceptable:
+         - python311-jupyter-client
+         - python311-jupyter-client7
+     - acceptable:
+         - python310-jupyter-client
+         - python310-jupyter-client7
+         - python311-jupyter-client
+         - python311-jupyter-client7
+     - acceptable:
+         - python310-sip-devel
+         - python310-sip6-devel
+     - acceptable:
+         - python311-sip-devel
+         - python311-sip6-devel
+     - acceptable:
+         - python310-SQLAlchemy
+         - python310-SQLAlchemy1
+     - acceptable:
+         - python311-SQLAlchemy
+         - python311-SQLAlchemy1
+     - acceptable:
+         - python310-urllib3
+         - python310-urllib3_1
+     - acceptable:
+         - python311-urllib3
+         - python311-urllib3_1
+     - acceptable:
+         - systemd-default-settings-branding-SLE
+         - systemd-default-settings-branding-SLE-Micro
+         - systemd-default-settings-branding-openSUSE
+     - acceptable:
+         - systemd-presets-branding-ALP-transactional
+         - systemd-presets-branding-Elemental
+     - acceptable:
+         - busybox-sendmail
+         - postfix
+         - postfix-bdb
+     - acceptable:
+         - gzip
+         - zstd-gzip
+     - acceptable:
+         - libyui-ncurses-pkg16
+         - libyui-qt-pkg16
+     - acceptable:
+         - libopenblas_openmp0
+         - libopenblas_pthreads0
+         - libopenblas_serial0
+     - acceptable:
+         - tomcat-el-3_0-api
+         - tomcat10-el-5_0-api
+     - acceptable:
+         - tomcat-servlet-4_0-api
+         - tomcat10-servlet-6_0-api
+     - acceptable:
+         - monitoring-plugins-dbi-mysql
+         - monitoring-plugins-dbi-pgsql
+         - monitoring-plugins-dbi-sqlite3
+     - acceptable:
+         - libclang13
+         - llvm14-libclang13
+         - llvm15-libclang13
+         - llvm16-libclang13
+         - llvm17-libclang13
+     - acceptable:
+         - libclang13
+         - llvm14-libclang13
+         - llvm15-libclang13
+         - llvm16-libclang13
+     - acceptable:
+         - strongswan
+         - strongswan-ipsec
+     - acceptable:
+         - geronimo-servlet-2_4-api
+         - geronimo-servlet-2_5-api
+         - servletapi4
+         - servletapi5
+         - tomcat-servlet-4_0-api
+         - tomcat10-servlet-6_0-api
+     - collapse: gcc-build
+       alias: gcc
+     - collapse: gcc-build-c++
+       alias: gcc-c++
+     - collapse: python3
+       alias: python
+
+     # we want to avoid pulling in all HPC compiles of libhdf5 and friends
+     - collapse: libhdf5-101
+       aliases:
+         - libhdf5-101-openmpi
+         - libhdf5-101-mvapich2
+     - collapse: libhdf5-200
+       aliases:
+         - libhdf5-200-mvapich2
+         - libhdf5-200-openmpi4
+     - collapse: libhdf5-103
+       anyalias:
+         - libhdf5-103-mvapich2
+         - libhdf5-103-openmpi
+         - libhdf5-103-openmpi2
+         - libhdf5-103-openmpi3
+         - libhdf5-103-openmpi4
+     - collapse: libhdf5_hl100
+       anyalias:
+         - libhdf5_hl100-mvapich2
+         - libhdf5_hl100-openmpi
+         - libhdf5_hl100-openmpi2
+         - libhdf5_hl100-openmpi3
+         - libhdf5_hl100-openmpi4
+     - collapse: libhdf5_hl200
+       anyalias:
+         - libhdf5_hl200-mvapich2
+         - libhdf5_hl200-openmpi
+         - libhdf5_hl200-openmpi2
+         - libhdf5_hl200-openmpi3
+         - libhdf5_hl200-openmpi4
+     - collapse: libhdf5_fortran200
+       aliases:
+         - libhdf5_fortran200-mvapich2
+         - libhdf5_fortran200-openmpi4
+
+     - acceptable:
+         - mpich
+         - mpich-ofi
+         - mvapich2
+         - mvapich2-psm
+         - mvapich2-psm2
+         - openmpi-libs
+     # cri-runtime
+     - acceptable:
+        - containerd
+        - docker-kubic
+     - collapse: libbz2-devel
+       alias: libbz2-devel-32bit
+     - collapse: ncurses-devel
+       alias: ncurses-devel-32bit
+     - collapse: xz-devel
+       alias: xz-devel-32bit
+     - collapse: libzstd-devel
+       alias: libzstd-devel-32bit
+     - collapse: zlib-devel
+       alias: zlib-devel-32bit
+     - collapse: popt-devel
+       alias: popt-devel-32bit
+     - collapse: libuuid-devel
+       alias: libuuid-devel-32bit
+     - collapse: gmp-devel
+       alias: gmp-devel-32bit
+     - collapse: libblkid-devel
+       alias: libblkid-devel-32bit
+     - collapse: libelf-devel
+       alias: libelf-devel-32bit
+     - collapse: libexpat-devel
+       alias: libexpat-devel-32bit
+     - collapse: libffi-devel
+       alias: libffi-devel-32bit
+     - collapse: libgcrypt-devel
+       alias: libgcrypt-devel-32bit
+     - collapse: libgpg-error-devel
+       alias: libgpg-error-devel-32bit
+     - collapse: libmount-devel
+       alias: libmount-devel-32bit
+     - collapse: libopenssl-3-devel
+       alias: libopenssl-3-devel-32bit
+     - collapse: libuuid-devel
+       alias: libuuid-devel-32bit
+     - collapse: libX11-devel
+       alias: libX11-devel-32bit
+     - collapse: libXau-devel
+       alias: libXau-devel-32bit
+     - collapse: libXext-devel
+       alias: libXext-devel-32bit
+     - collapse: libXp-devel
+       alias: libXp-devel-32bit
+     - collapse: libXprintUtil-devel
+       alias: libXprintUtil-devel-32bit
+     - collapse: libXt-devel
+       alias: libXt-devel-32bit
+     - collapse: mpfr-devel
+       alias: mpfr-devel-32bit
+     - collapse: readline-devel
+       alias: readline-devel-32bit
+     - collapse: dbus-1-devel
+       alias: dbus-1-devel-32bit
+     - collapse: libqt5-qtconnectivity-devel
+       alias: libqt5-qtconnectivity-devel-32bit
+     - collapse: libqt5-qttools-devel
+       alias: libqt5-qttools-devel-32bit
+     - collapse: libqt5-qttools-devel
+       alias: libqt5-qttools-devel-32bit
+     - collapse: libqt5-qtlocation-devel
+       alias: libqt5-qtlocation-devel-32bit
+     - collapse: libqt5-qtmultimedia-devel
+       alias: libqt5-qtmultimedia-devel-32bit
+     - collapse: libqt5-qtmultimedia-devel
+       alias: libqt5-qtmultimedia-devel-32bit
+     - collapse: libqt5-qtconnectivity-devel
+       alias: libqt5-qtconnectivity-devel-32bit
+     - collapse: libqt5-qtlocation-devel
+       alias: libqt5-qtlocation-devel-32bit
+     - collapse: libqt5-qtdeclarative-devel
+       alias: libqt5-qtdeclarative-devel-32bit
+     - collapse: libqt5-qtdeclarative-devel
+       alias: libqt5-qtdeclarative-devel-32bit
+     - collapse: libqt5-qtdeclarative-devel
+       alias: libqt5-qtdeclarative-devel-32bit
+     - collapse: libqt5-qtserialport-devel
+       alias: libqt5-qtserialport-devel-32bit
+     - collapse: libqt5-qtsvg-devel
+       alias: libqt5-qtsvg-devel-32bit
+     - collapse: libqt5-qtspeech-devel
+       alias: libqt5-qtspeech-devel-32bit
+     - collapse: libqt5-qttools-devel
+       alias: libqt5-qttools-devel-32bit
+     - collapse: libqt5-qtwebchannel-devel
+       alias: libqt5-qtwebchannel-devel-32bit
+     - collapse: libqt5-qtwebsockets-devel
+       alias: libqt5-qtwebsockets-devel-32bit
+     - collapse: libqt5-qtx11extras-devel
+       alias: libqt5-qtx11extras-devel-32bit
+     - collapse: libqt5-qtxmlpatterns-devel
+       alias: libqt5-qtxmlpatterns-devel-32bit
+     - collapse: libqt5-qtremoteobjects-devel
+       alias: libqt5-qtremoteobjects-devel-32bit
+     - collapse: systemd
+       alias: systemd-mini
+     - collapse: systemd-devel
+       alias: systemd-mini-devel
+     - collapse: systemd-container
+       alias: systemd-mini-container
+     - collapse: libsystemd0
+       alias: libsystemd0-mini
+     - collapse: libudev1
+       alias: libudev-mini1
+     - collapse: udev
+       alias: udev-mini
+     - collapse: krb5
+       alias: krb5-mini
+     - collapse: krb5-devel
+       alias: krb5-mini-devel
+     - collapse: ghostscript
+       alias: ghostscript-mini
+     - collapse: gettext-runtime
+       alias: gettext-runtime-mini
+     - collapse: gettext-tools
+       alias: gettext-tools-mini
+     - collapse: coreutils
+       alias: coreutils-single
+     - collapse: postgresql15-devel
+       alias: postgresql15-devel-mini
+     - collapse: postgresql15
+       alias: postgresql15-devel-mini
+     - collapse: MozillaFirefox-branding-openSUSE
+       alias: MozillaFirefox-branding-upstream
+     - collapse: NetworkManager-branding-upstream
+       alias: NetworkManager-branding-SLE
+     - collapse: gdm-branding-upstream
+       alias: gdm-branding-SLE
+     - collapse: gio-branding-upstream
+       alias: gio-branding-SLE
+     - collapse: plymouth-branding-upstream
+       alias: plymouth-branding-SLE
+     - collapse: libcontainers-openSUSE-policy
+       alias: libcontainers-default-policy
+     - collapse: pulseaudio
+       alias: pipewire-pulseaudio
+     - collapse: libOpenIPMI0
+       alias: OpenIPMI
+     - collapse: libgspell-1-2
+       alias: gspell
+     - collapse: chrony-pool-suse
+       aliases:
+         - chrony-pool-empty
+         - chrony-pool-openSUSE
+     - collapse: ImageMagick-config-7-SUSE
+       aliases:
+         - ImageMagick-config-7-upstream-limited
+         - ImageMagick-config-7-upstream-open
+         - ImageMagick-config-7-upstream-secure
+         - ImageMagick-config-7-upstream-websafe
+     - collapse: libpq5
+       anyalias:
+        - postgresql13-devel-mini
+        - postgresql14-devel-mini
+        - postgresql15-devel-mini
+        - postgresql16-devel-mini
+     - collapse: libecpg6
+       anyalias:
+        - postgresql13-devel-mini
+        - postgresql14-devel-mini
+        - postgresql15-devel-mini
+        - postgresql16-devel-mini
+     - collapse: postgresql16
+       anyalias:
+        - postgresql10
+        - postgresql12
+        - postgresql13
+        - postgresql14
+        - postgresql15
+        - postgresql16
+     - collapse: postgresql16-pltcl
+       anyalias:
+        - postgresql10-pltcl
+        - postgresql12-pltcl
+        - postgresql13-pltcl
+        - postgresql14-pltcl
+        - postgresql15-pltcl
+        - postgresql16-pltcl
+     - collapse: postgresql16-plperl
+       anyalias:
+        - postgresql10-plperl
+        - postgresql12-plperl
+        - postgresql13-plperl
+        - postgresql14-plperl
+        - postgresql15-plperl
+        - postgresql16-plperl
+     - collapse: postgresql16-plpython
+       anyalias:
+        - postgresql10-plpython
+        - postgresql12-plpython
+        - postgresql13-plpython
+        - postgresql14-plpython
+        - postgresql15-plpython
+        - postgresql16-plpython
+     - collapse: postgresql16-server
+       anyalias:
+        - postgresql10-server
+        - postgresql12-server
+        - postgresql13-server
+        - postgresql14-server
+        - postgresql15-server
+        - postgresql16-server
+     - collapse: postgresql16-server-devel
+       anyalias:
+        - postgresql10-server-devel
+        - postgresql12-server-devel
+        - postgresql13-server-devel
+        - postgresql14-server-devel
+        - postgresql15-server-devel
+        - postgresql16-server-devel
+        # for some odd reason this shows up in some OBS resolved deps
+        - postgresql10-devel
+     - collapse: postgresql16-devel
+       anyalias:
+        - postgresql10-devel
+        - postgresql12-devel
+        - postgresql13-devel
+        - postgresql13-devel-mini
+        - postgresql14-devel
+        - postgresql14-devel-mini
+        - postgresql15-devel
+        - postgresql16-devel
+        - postgresql16-devel-mini
+     - collapse: postgresql16-test
+       anyalias:
+        - postgresql10-test
+        - postgresql12-test
+        - postgresql13-test
+        - postgresql14-test
+        - postgresql15-test
+        - postgresql16-test
+     - collapse: postgresql16-llvmjit-devel
+       anyalias:
+        - postgresql10-llvmjit-devel
+        - postgresql12-llvmjit-devel
+        - postgresql13-llvmjit-devel
+        - postgresql14-llvmjit-devel
+        - postgresql15-llvmjit-devel
+        - postgresql16-llvmjit-devel
+     - collapse: postgresql16-llvmjit
+       anyalias:
+        - postgresql10-llvmjit
+        - postgresql12-llvmjit
+        - postgresql13-llvmjit
+        - postgresql14-llvmjit
+        - postgresql15-llvmjit
+        - postgresql16-llvmjit
+     - collapse: postgresql16-docs
+       anyalias:
+        - postgresql10-docs
+        - postgresql12-docs
+        - postgresql13-docs
+        - postgresql14-docs
+        - postgresql15-docs
+        - postgresql16-docs
+     - collapse: postgresql16-contrib
+       anyalias:
+        - postgresql10-contrib
+        - postgresql12-contrib
+        - postgresql13-contrib
+        - postgresql14-contrib
+        - postgresql15-contrib
+        - postgresql16-contrib
+     - collapse: java-1_8_0-openjdk-headless
+       alias: java-1_8_0-openjdk-devel
+     - collapse: java-1_8_0-openj9-headless
+       alias: java-1_8_0-openj9-devel
+     - collapse: libjack0
+       alias: pipewire-libjack-0_3
+     - collapse: libjackserver0
+       alias: pipewire-libjack-0_3
+     - collapse: libjack0
+       alias: pipewire-libjack-0_3
+     - collapse: libjack-devel
+       alias: pipewire-libjack-0_3-devel
+     - collapse: geronimo-jaf-1_0_2-api
+       alias: geronimo-j2ee-1_4-apis
+     - collapse: geronimo-servlet-2_4-api
+       alias: geronimo-j2ee-1_4-apis
+     - collapse: geronimo-jta-1_0_1B-api
+       alias: geronimo-j2ee-1_4-apis
+     - collapse: geronimo-jta-1_1-api
+       alias: geronimo-specs-poms
+     - collapse: geronimo-jpa-3_0-api
+       alias: geronimo-specs-poms
+     - collapse: libmca_common_dstore1
+       alias: openmpi4-libs
+     - collapse: typelib-1_0-Gst-1_0-32bit
+       alias: typelib-1_0-Gst-1_0
+     - collapse: geronimo-ejb-2_1-api
+       alias: geronimo-j2ee-1_4-apis
+     - collapse: container-build-checks-vendor-openSUSE
+       alias: container-build-checks-vendor-SUSE
+     - collapse: libdebuginfod1-dummy
+       alias: libdebuginfod1
+     - collapse: debuginfod-dummy-client
+       alias: debuginfod-client
+     - collapse: libpq5
+       alias: postgresql15-devel-mini
+     - collapse: ocaml-compiler-libs
+       alias: ocaml-compiler-libs-devel
+     - collapse: ocaml-runtime
+       alias: ocaml
+     - collapse: nodejs-default
+       alias: nodejs20
+     - collapse: npm-default
+       alias: npm20
+     - collapse: icewm
+       alias: mutter
+     - collapse: icewm-lite
+       alias: icewm-default
+     - collapse: libXaw7
+       alias: xaw3dd
+     - collapse: emacs-nox
+       alias: emacs-x11
+     - collapse: health-checker-plugins-kubic
+       alias: health-checker-testing
+     - collapse: regionServiceClientConfigAzure
+       alias: cloud-regionsrv-client-generic-config
+     - collapse: systemd-default-settings-branding-openSUSE
+       alias: systemd-default-settings-branding-upstream
+     - collapse: llvm16-libc++1
+       alias: libc++1
+     - collapse: llvm16-libc++abi1
+       alias: libc++abi1
+     - collapse: llvm16-libc++abi-devel
+       alias: libc++abi-devel
+     - collapse: llvm17-libc++1
+       alias: libc++1
+     - collapse: llvm17-libc++abi1
+       alias: libc++abi1
+     - collapse: llvm17-libc++abi-devel
+       alias: libc++abi-devel
+     - collapse: libpcp-devel
+       alias: pcp-devel
+     - collapse: elemental-plugin-dummy
+       alias: elemental-plugin-toolkit
+     - collapse: libnetcdf19
+       alias: libnetcdf19-openmpi4
+     - collapse: gnu-compilers-hpc
+       alias: gnu13-compilers-hpc
+     - collapse: gnu-compilers-hpc-devel
+       alias: gnu13-compilers-hpc-devel
+     - collapse: libopenssl-devel
+       anyalias:
+        - libopenssl-1_0_0-devel
+        - libopenssl-1_0_0-devel-32bit
+        - libopenssl-1_1-devel-32bit
+        - libopenssl-1_1-devel
+        - libopenssl-3-devel
+     - collapse: libopenssl1_1-hmac
+       alias: libopenssl1_1
+     - collapse: libcryptsetup12
+       alias: libcryptsetup12-hmac
+     - collapse: libopenssl-devel
+       alias: libopenssl-3-devel
+     - collapse: libpsm_infinipath1
+       alias: libpsm2-compat
+     - collapse: perl
+       anyalias:
+        - perl-Pod-Usage
+        - perl-ExtUtils-MakeMaker
+        - perl-File-Path
+        - perl-32bit
+        - perl-Test-Simple
+     - collapse: cmake-full
+       alias: cmake-mini
+     - collapse: xerces-j2-xml-apis
+       anyalias:
+        - xml-commons-jaxp-1.1-apis
+        - xml-commons-jaxp-1.2-apis
+        - xml-commons-jaxp-1.3-apis
+        - xml-commons-jaxp-1.4-apis
+     - collapse: xml-commons-apis
+       anyalias:
+        - xml-commons-apis
+        - xml-commons-apis-bootstrap
+        - xerces-j2-xml-apis
+        - xml-commons-jaxp-1.1-apis
+        - xml-commons-jaxp-1.2-apis
+        - xml-commons-jaxp-1.3-apis
+        - xml-commons-jaxp-1.4-apis
+        - xml-commons
+        - xml-commons-apis-bootstrap
+     - collapse: xalan-j2
+       anyalias:
+        - saxon8
+        - saxon9
+        - saxon10
+     - collapse: texlive-scripts
+       alias: texlive-tetex
+     - collapse: texlive-accents
+       alias: texlive-bezos
+     - collapse: texlive-soulpos
+       alias: texlive-bezos
+     - collapse: texlive-genmisc
+       alias: texlive-nth
+     - collapse: texlive-mathalfa
+       alias: texlive-mathalpha
+     - collapse: texlive-random
+       anyalias:
+        - texlive-genmisc
+        - texlive-nth
+     - collapse: texlive-iftex
+       anyalias:
+        - texlive-ifluatex
+        - texlive-ifxetex
+        - texlive-ifetex
+     - collapse: xml-commons-resolver
+       alias: xml-commons-resolver-bootstrap
+     - collapse: maven-compiler-plugin
+       alias: maven-compiler-plugin-bootstrap
+     - collapse: maven-jar-plugin
+       alias: maven-jar-plugin-bootstrap
+     - collapse: maven-surefire-plugin
+       alias: maven-surefire-plugin-bootstrap
+     - collapse: stringtemplate4
+       alias: stringtemplate4-bootstrap
+     - collapse: groovy-lib
+       alias: groovy-bootstrap
+     - collapse: jgit
+       alias: jgit-bootstrap
+     - collapse: eclipse-jdt
+       alias: eclipse-jdt-bootstrap
+     - collapse: eclipse-emf-core
+       alias: eclipse-emf-core-bootstrap
+     - collapse: eclipse-equinox-osgi
+       anyalias:
+        - eclipse-equinox-osgi-bootstrap
+        - tycho-bootstrap
+     - collapse: tycho
+       alias: tycho-bootstrap
+     - collapse: java-1_7_0-bootstrap-headless
+       alias: java-1_7_0-bootstrap-devel
+     - collapse: eclipse-ecf-core
+       alias: eclipse-ecf-core-bootstrap
+     - collapse: java-cup
+       alias: java-cup-bootstrap
+     - collapse: javacc
+       alias: javacc-bootstrap
+     - collapse: scala
+       alias: scala-bootstrap
+     - collapse: unzip
+       alias: unzip-rcc
+     - collapse: maven-resources-plugin
+       alias: maven-resources-plugin-bootstrap
+     - collapse: maven-javadoc-plugin
+       alias: maven-javadoc-plugin-bootstrap
+     - collapse: libwebp-devel
+       alias: libwebp-devel-32bit
+     - collapse: libjpeg8-devel
+       alias: libjpeg8-devel-32bit
+     - collapse: libjpeg62-devel
+       alias: libjpeg62-devel-32bit
+     - collapse: glib2-devel
+       alias: glib2-devel-32bit
+     - collapse: libxml2-devel
+       alias: libxml2-devel-32bit
+     - collapse: cairo-devel
+       alias: cairo-devel32bit
+     - collapse: libquadmath0
+       anyalias:
+        - libquadmath0-gcc7
+     - collapse: libstdc++6
+       anyalias:
+        - libstdc++6-gcc7
+        - libstdc++6-gcc8
+        - libstdc++6-gcc10
+        - libstdc++6-gcc12
+     - collapse: libgcc_s1
+       anyalias:
+        - libgcc_s1-gcc7
+        - libgcc_s1-gcc8
+        - libgcc_s1-gcc10
+        - libgcc_s1-gcc12
+     - collapse: libatomic1
+       anyalias:
+        - libatomic1-gcc7
+        - libatomic1-gcc8
+        - libatomic1-gcc10
+        - libatomic1-gcc12
+     - collapse: libgomp1
+       anyalias:
+        - libgomp1-gcc7
+        - libgomp1-gcc8
+        - libgomp1-gcc10
+        - libgomp1-gcc12
+     - collapse: libgfortran5
+       anyalias:
+        - libgfortran5-gcc7
+        - libgfortran5-gcc8
+        - libgfortran5-gcc10
+        - libgfortran5-gcc12
+     - collapse: libobjc4
+       anyalias:
+        - libobjc4-gcc7
+        - libobjc4-gcc8
+        - libobjc4-gcc10
+        - libobjc4-gcc12
+     - collapse: libcurl4-mini
+       anyalias:
+        - libcurl4
+        - libreoffice
+     - collapse: curl-mini
+       alias: curl
+     - collapse: libcurl-mini-devel
+       anyalias:
+        - libcurl-devel
+        - libcurl-devel-32bit
+     - collapse: google-noto-serif-kr-fonts
+       alias: noto-serif-kr-fonts
+     - collapse: google-noto-sans-kr-fonts
+       alias: noto-sans-kr-fonts
+     # scalable-font-ko:
+     - collapse: noto-sans-kr-fonts
+       anyaliases:
+        - alee-fonts
+        - baekmuk-ttf-fonts
+        - google-noto-sans-kr-fonts
+        - google-noto-serif-kr-fonts
+        - noto-sans-kr-fonts
+        - noto-serif-kr-fonts
+        - un-fonts
+     - collapse: libdbus-glib-1-2
+       alias: dbus-1-glib
+     - collapse: rpm
+       alias: rpm-ndb
+     - collapse: libpolkit-gobject-1-0
+       alias: libpolkit0
+     - collapse: libpolkit-agent-1-0
+       alias: libpolkit0
+     - collapse: typelib-1_0-Clutter-1_0
+       alias: mutter
+     - collapse: samba-client-libs
+       anyalias:
+        - libsmbclient0
+        - sssd-wbclient
+        - libndr-nbt0
+        - libndr-krb5pac0
+        - libwbclient0
+     - collapse: libdebuginfod1
+       alias: libdebuginfod1-dummy
+     - collapse: systemd-presets-branding-SLE
+       alias: systemd-presets-branding-CAASP
+     - collapse: libicu73_2
+       anyalias:
+        - libicu69
+        - libicu60_2
+        - libicu-suse65_1
+     - collapse: libicu-devel
+       anyalias:
+        - icu.691-devel
+        - libicu73_2-devel
+        - libicu73_2-devel-32bit
+     - collapse: kmod
+       alias: kmod-compat
+     - collapse: sles-release
+       anyalias:
+        - SLES_BCL-release
+        - SLES_SAP-release
+        - SLE_HPC-release
+        - SLE_HPC-ESPOS-release
+        - SLE_RT-release
+        - SUSE-Manager-Proxy-release
+        - SUSE-Manager-Retail-Branch-Server-release
+        - SUSE-Manager-Server-release
+        - dummy-release
+        - sled-release
+        - unified-installer-release
+     - collapse: kernel-default
+       anyalias:
+        - kernel-azure
+        - kernel-azure-base
+        - kernel-debug
+        - kernel-debug-base
+        - kernel-default-base
+        - kernel-kvmsmall
+        - kernel-kvmsmall-base
+        - kernel-preempt
+        - kernel-rt
+        - kernel-rt-base
+        - kernel-rt_debug
+        - kernel-rt_debug-base
+        - kernel-vanilla
+        - kernel-vanilla-base
+     # rt-base removed in SP1
+     - collapse: kernel-rt
+       alias: kernel-rt-base
+     # azure-base removed in SP1
+     - collapse: kernel-azure
+       alias: kernel-azure-base
+     - collapse: libudev-mini-devel
+       anyalias:
+        - libudev-devel
+        - libudev-devel-32bit
+        - systemd-devel
+        - libudev-devel-32bit
+     - collapse: cluster-glue-libs
+       alias: libglue2
+     - collapse: python3-pycairo
+       alias: python3-cairo
+     - collapse: typelib-1_0-Vte-2_91
+       alias: typelib-1_0-Vte-2.91
+     - collapse: typelib-1_0-GtkSource-5
+       anyalias:
+        - typelib-1_0-GtkSource-4
+        - typelib-1_0-GtkSource-3_0
+        - typelib-1_0-GtkSource-300
+     - collapse: at-spi2-atk-devel
+       anyalias:
+        - atk-devel
+        - atk-devel-32bit
+        - at-spi2-core-devel
+        - at-spi2-core-devel-32bit
+        - at-spi2-atk-devel
+        - at-spi2-atk-devel-32bit
+     - collapse: at-spi2-core-devel
+       anyalias:
+        - atk-devel
+        - atk-devel-32bit
+     - collapse: libyui-ncurses-pkg15
+       anyalias:
+        - libyui-ncurses-pkg11
+        - libyui-ncurses-pkg9
+        - libyui-ncurses-pkg8
+     - collapse: libyui-qt-pkg15
+       anyalias:
+        - libyui-qt-pkg11
+        - libyui-qt-pkg9
+        - libyui-qt-pkg8
+     - collapse: libyui-ncurses-pkg16
+       anyalias:
+        - libyui-ncurses-pkg16
+        - libyui-ncurses-pkg15
+        - libyui-ncurses-pkg11
+     - collapse: libyui-qt-pkg16
+       anyalias:
+        - libyui-qt-pkg16
+        - libyui-qt-pkg15
+        - libyui-qt-pkg11
+     - collapse: libyui-ncurses16
+       anyalias:
+        - libyui-ncurses16
+        - libyui-ncurses15
+        - libyui-ncurses11
+        - libyui-ncurses9
+        - libyui-ncurses8
+     - collapse: libyui-qt16
+       anyalias:
+        - libyui-qt16
+        - libyui-qt15
+        - libyui-qt11
+        - libyui-qt9
+        - libyui-qt8
+     - acceptable:
+        - libyui-ncurses-pkg16 
+        - libyui-ncurses-pkg15
+        - libyui-qt-pkg16 
+        - libyui-qt-pkg15
+     - collapse: libgnome-desktop-3-20
+       alias: gnome-version
+     - collapse: libunbound2
+       alias: libunbound-devel-mini
+     - collapse: openvswitch3
+       alias: openvswitch
+     - collapse: openssl
+       anyalias:
+        - openssl-1_0_0
+        - openssl-1_1
+     - collapse: openssl-1_1
+       alias: openssl-1_0_0
+     - collapse: xwayland
+       alias: xorg-x11-server-wayland
+     - collapse: hardlink
+       alias: util-linux
+     - collapse: python3-alsa
+       alias: pyalsa
+     - collapse: rmt-server-config
+       alias: rmt-server-pubcloud
+     - collapse: google-compute-engine-init
+       alias: google-guest-agent
+     - collapse: google-compute-engine-oslogin
+       alias: google-guest-oslogin
+     - collapse: python3-azuremetadata
+       alias: azuremetadata
+     - collapse: python3-gobject2-devel
+       alias: python-gobject2-devel
+     - collapse: libwinpr2-2
+       alias: libwinpr2
+     - collapse: libfreerdp2-2
+       alias: libfreerdp2
+     - collapse: libpng16-compat-devel
+       alias: libpng12-compat-devel
+     - collapse: PackageKit-backend-zypp
+       alias: PackageKit-backend-dnf
+     - collapse: wayland-devel
+       anyalias:
+        - libwayland-egl-devel
+        - libwayland-egl-devel-32bit
+     - collapse: pacemaker-libs
+       alias: libpacemaker3
+     - collapse: python3-Sphinx 
+       alias: python3-Sphinx_4_2_0
+     - collapse: perl-base
+       anyalias:
+        - perl-File-Temp
+        - perl-File-Path
+        - perl-Scalar-List-Utils
+        - perl-base-32bit
+     - collapse: mariadb
+       alias: mariadb104
+     - collapse: php8
+       anyalias:
+        - php7
+        - php7-json
+     - collapse: php8-curl
+       alias: php7-curl
+     - collapse: php8-mbstring
+       alias: php7-mbstring
+     - collapse: php8-openssl
+       alias: php7-openssl
+     - collapse: php8-phar
+       alias: php7-phar
+     - collapse: php8-zip
+       alias: php7-zip
+     - collapse: php8-zlib
+       alias: php7-zlib
+     - collapse: javamail
+       anyalias:
+        - javamail
+        - classpathx-mail
+        - geronimo-j2ee-1_4-apis
+     - collapse: apache-commons-net
+       alias: jakarta-commons-net
+     - collapse: apache-commons-digester
+       alias: jakarta-commons-digester
+     - collapse: xml-commons-resolver
+       alias: xml-commons
+     - collapse: python3-pytest5
+       anyalias:
+        - python3-pytest
+        - python3-pytest4
+        - python3-pytest5
+     - collapse: python2-pytest4
+       anyalias:
+        - python2-pytest
+     - collapse: postfix
+       anyalias:
+        - busybox-sendmail
+        - postfix
+        - postfix-bdb
+        - sendmail
+     - collapse: hamcrest
+       alias: hamcrest-core
+     - collapse: bsh2
+       alias: bsh
+     - collapse: erlang
+       anyalias:
+        - erlang26
+     - collapse: erlang-epmd
+       anyalias:
+        - erlang-epmd26
+     - collapse: libfido2-1_0_0
+       alias: libfido2-1
+     - collapse: libboost_filesystem1_66_0
+       alias: libboost_filesystem_legacy
+     - collapse: libboost_thread1_66_0
+       alias: libboost_thread_legacy
+     - collapse: libboost_system1_66_0
+       alias: libboost_system_legacy
+     - collapse: libboost_regex1_66_0
+       alias: libboost_regex_legacy
+     - collapse: python2-configparser
+       alias: python-configparser
+     - collapse: ocaml-oasis
+       alias: ocaml-oasis-devel
+     - collapse: libwx_baseu-suse5_0_0
+       anyalias:
+        - libwx_baseu-suse-nostl3
+        - libwx_baseu-suse-nostl3_0_5
+        - libwx_baseu-suse-nostl5_0_0
+        - libwx_baseu-suse3
+        - libwx_baseu-suse3_0_5
+     - collapse: erlang-epmd
+       alias: erlang26-epmd
+     - collapse: libpmemobj-cpp-devel
+       alias: libpmemobj++-devel
+     - acceptable:
+        - alee-fonts
+        - baekmuk-ttf-fonts
+        - google-noto-sans-kr-fonts
+        - google-noto-serif-kr-fonts
+        - noto-sans-kr-fonts
+        - noto-serif-kr-fonts
+        - un-fonts
+
+     - acceptable:
+        - libffi_3_4-devel
+        - libffi-devel
+     - acceptable:
+        - docker
+        - podman-docker
+        - docker-kubic
+      
+     - hide:
+        - perl-debuginfo
+        - perl-base-debuginfo
+        - python-pycairo-common-devel
+        # pytho2 only:
+        - python-subprocess32
+        # removed
+        - yast2-trans-en
+        - yast2-trans-en_US
+        # not sure:
+        - Mesa-libGLESv1_CM1
+        # these disappeared
+        - libcryptsetup12-hmac
+        - libgcrypt20-hmac
+
+

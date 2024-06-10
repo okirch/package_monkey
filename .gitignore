@@ -11,3 +11,6 @@ model.xml
 packages.xml
 hierarchy.xml
 functions
+components.gv
+components.pdf
+obsgit

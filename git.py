@@ -321,6 +321,7 @@ class GitWorkingCopy(GitObject):
 
 	# regular packages as subdirs
 	def addPackage(self, name, files):
+		packageExisted = True
 		somethingChanged = False
 
 		sm = self.getSubmodule(name)
@@ -331,6 +332,7 @@ class GitWorkingCopy(GitObject):
 		if not os.path.isdir(path):
 			os.makedirs(path, 0o755)
 			somethingChanged = True
+			packageExisted = False
 
 		infomsg(f"Updating package {name} in git working copy")
 		for fname, content in files.items():
@@ -345,9 +347,23 @@ class GitWorkingCopy(GitObject):
 			self.add(f"{name}/{fname}")
 			somethingChanged = True
 
-		# FIXME: remove old files
+		# find old files
+		allFiles = set()
+		with os.scandir(path) as it:
+			for entry in it:
+				if entry.is_file():
+					allFiles.add(entry.name)
+
+		oldFiles = allFiles.difference(set(files.keys()))
+		if oldFiles:
+			for fname in oldFiles:
+				self.rm(f"{name}/{fname}")
+			somethingChanged = True
 
 		if somethingChanged:
+			verb = 'add'
+			if packageExisted:
+				verb = 'update'
 			self._changes.append(self.Change('add', 'package', name))
 
 		# FIXME: create a "git package" object?

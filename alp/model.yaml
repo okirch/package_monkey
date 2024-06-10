@@ -26,6 +26,10 @@ ignore_packages:
         - "gcc13:cross-hppa-gcc13-bootstrap"
         - "dwz:testsuite"
 
+product:
+        name:                   sle16
+        git_project_url:        sle16
+
 defaults:
         generation:             "2024.1"
         bootstrap:              yes
@@ -41,6 +45,9 @@ projects:
     git_project_url: sle16_foundations
     build_config: single
     bootstrap: self
+    imports:
+     - "@UdevLibraries"
+     - "@SystemdLibraries"
     components:
      - Core
      - KernelPlus
@@ -78,6 +85,28 @@ projects:
        - "@Docbook"
        - "@I18nTools"
        - "@SystemdOnlyForOBS"
+  FirstFloor:
+    git_package_url: sle16_firstfloor_pool
+    git_project_url: sle16_firstfloor
+    build_config: single
+    bootstrap: self
+    requires:
+     - Foundations
+    imports:
+     - "@HardwareMonitoringLibraries"
+     - "@HardwareMonitoringLibraries-doc"
+    components:
+     - Host
+     - Network
+     - Security
+     # we should split CorePlus
+     - CorePlus
+     - Systemd
+    workbench:
+      git_package_url: sle16_firstfloor_workbench
+      bootstrap: yes
+      components:
+       - none
 
 workbench:
   include:

@@ -19,7 +19,7 @@ application = OBSClientApplication('obs-create-model')
 application.addArgument('--initialize', action = 'store_true', default = True)
 application.addArgument('--no-initialize', dest = 'initialize', action = 'store_false')
 application.addArgument('--dry-run', action = 'store_true', default = False)
-application.addArgument(dest = 'action', metavar = 'ACTION', nargs = 1, help = 'one of validate, initialize, populate, prune')
+application.addArgument(dest = 'action', metavar = 'ACTION', nargs = 1, help = 'one of validate, initialize, populate, prune, publish-product')
 application.addArgument(dest = 'components', metavar = 'COMPONENTS', nargs = '*', help = 'list of components to publish')
 application.parseArguments()
 
@@ -697,6 +697,13 @@ class ConcreteModel(ConcreteOBSObject):
 	def getProject(self, obsProjectName):
 		return self._projectFactory.getProject(obsProjectName)
 
+	def createProjectStorage(self, product, gitProjectUrl):
+		if gitProjectUrl is None:
+			raise Exeption(f"Unable to configure product storage without a git URL")
+
+		infomsg(f"Creating project storage for product {product.name} using {gitProjectUrl}")
+		return ConcreteProjectStorageGit(product.name, self.git, gitProjectUrl)
+
 	@property
 	def projects(self):
 		return self._projectFactory.projects
@@ -860,6 +867,16 @@ class ConcreteModel(ConcreteOBSObject):
 
 		return True
 
+	def publishProductInformation(self, dryRun = False):
+		if self.product is None:
+			infomsg(f"No product information present; not creating product definition")
+			return
+
+		self.product.require000PackageGroups()
+		self.product.updateGroupsData()
+
+		return True
+
 	def reportProblem(self, msg):
 		self.problems.append(msg)
 
@@ -922,7 +939,7 @@ class ConcretePackageStorageREST(ConcretePackageStorage):
 		super().__init__(concreteProject)
 
 		self.obs = concreteProject.obs
-	
+
 	def getsources(self):
 		return self.obs.querySourcePackages(self.obsProject)
 
@@ -1042,6 +1059,142 @@ class ConcretePackageStorageGit(ConcretePackageStorage):
 			gh.commit()
 		gh.push()
 
+class ConcreteProjectStorage(object):
+	def __init__(self, name):
+		self.name = name
+
+class ConcreteProjectStorageGit(ConcreteProjectStorage):
+	def __init__(self, name, git, gitUrl):
+		super().__init__(name)
+
+		if gitUrl is None:
+			raise Exception(f"Misconfiguration for {self.name}: git package url is not set")
+
+		self.git = git
+		self.gitUrl = gitUrl
+		self._workingCopy = None
+
+	@property
+	def obsScmSyncUrl(self):
+		url = f"{self.gitUrl}#main"
+		return self.git.makeUrlAnonymous(url)
+		if url.startswith("git@"):
+			url = "https://" + url[3:]
+		elif url.startswith("gitea@"):
+			url = "https://" + url[6:]
+		return url
+
+	@property
+	def workingCopy(self):
+		if self._workingCopy is None:
+			infomsg(f"Checking out {self.name} project from {self.gitUrl}")
+			self._workingCopy = self.git.clone(f"{self.name}/project", self.gitUrl)
+
+		return self._workingCopy
+
+	def updatePackage(self, packageName, files, title = None, **kwargs):
+		gh = self.workingCopy
+		gh.addPackage(packageName, files, **kwargs)
+		gh.commit()
+		return True
+
+	def deletepac(self, packageName, **kwargs):
+		gh = self.workingCopy
+		gh.removePackage(packageName, **kwargs)
+		gh.commit()
+		return True
+
+	def commit(self):
+		gh = self.workingCopy
+		if gh.hasPendingChanges():
+			gh.commit()
+		gh.push()
+
+class ConcretePackageGroups(object):
+	class Key(object):
+		def __init__(self, name, type):
+			self.name = name
+			self.type = type
+
+			if type is not None:
+				self.name = f"{name}_{type}"
+
+		def __str__(self):
+			return self.name
+
+	class Group(object):
+		def __init__(self, name, type):
+			self.name = name
+			self.type = type
+			self.topics = Classification.createLabelSet()
+			self.artefacts = set()
+
+		def __str__(self):
+			return self.name
+
+		def update(self, topic, artefacts):
+			self.topics.add(topic)
+			self.artefacts.update(artefacts)
+
+	def __init__(self):
+		self.map = {}
+		self.topicMap = {}
+		self.types = set()
+
+	def topicToKey(self, topic):
+		name = topic.componentName
+
+		type = None
+		if topic.isAPI:
+			type = "api"
+		if type is None:
+			type = topic.purposeName
+
+		return self.Key(name, type)
+
+	def add(self, topic, artefacts):
+		key = self.topicToKey(topic)
+
+		group = self.map.get(key.name)
+		if group is None:
+			group = self.Group(key.name, key.type)
+			self.map[key.name] = group
+
+		group.update(topic, artefacts)
+
+		self.topicMap[topic] = set((group,))
+		self.types.add(key.type)
+
+	def finalize(self):
+		for group in self:
+			requiredTopics = Classification.createLabelSet()
+			for topic in group.topics:
+				requiredTopics.update(topic.runtimeRequires)
+
+			# The group should not require itself
+			requiredTopics.difference_update(group.topics)
+
+			requiredGroups = self.resolveRequiredGroups(requiredTopics)
+			requiredGroups.discard(group)
+
+			# projectDebug(f"{group} requires {' '.join(sorted(map(str, requiredGroups)))}")
+			group.requires = requiredGroups
+
+	def resolveRequiredGroups(self, topicList):
+		result = set()
+
+		for topic in topicList:
+			requiredGroups = self.topicMap.get(topic)
+			if requiredGroups is None:
+				requiredGroups = self.resolveRequiredGroups(topic.runtimeRequires)
+				self.topicMap[topic] = requiredGroups
+			result.update(requiredGroups)
+
+		return result
+
+	def __iter__(self):
+		return iter(self.map.values())
+
 class ConcreteProject(ConcreteOBSObject):
 	AUTO_INDEX = 1000
 
@@ -1080,6 +1233,7 @@ class ConcreteProject(ConcreteOBSObject):
 		if labelScope is not None:
 			assert(isinstance(labelScope, LabelScope))
 		self.labelScope = labelScope
+		self.componentLabels = Classification.createLabelSet()
 
 		if publishingStrategy is None:
 			publishingStrategy = NoPublicationStrategy()
@@ -1125,7 +1279,10 @@ class ConcreteProject(ConcreteOBSObject):
 
 		self.index = self.autoIndex()
 
-		self.ACCESS_METHODS = None
+		# set of topic labels that are outside our scope,
+		# but which we allow packages to use nevertheless.
+		# A different name for this may have been "acceptable inversions"
+		self.imports = Classification.createLabelSet()
 
 	def __str__(self):
 		return self.obsProjectName
@@ -1135,6 +1292,9 @@ class ConcreteProject(ConcreteOBSObject):
 		if self.labelScope is None:
 			return None
 		return self.labelScope.members
+
+	def addComponentLabel(self, componentLabel):
+		self.componentLabels.add(componentLabel)
 
 	def updateLabelScope(self, labelScope):
 		if self.labelScope is None:
@@ -1588,6 +1748,108 @@ class ConcreteAggregate(ConcreteOBSObject):
 		return packageInfo
 
 ##################################################################
+# Base class for handling product builder input
+##################################################################
+class ConcreteProduct(object):
+	def __init__(self, name):
+		self.name = name
+
+		# package groups (will be stored in groups.yml to be processed
+		# by ProductComposer et al)
+		self.packageGroups = ConcretePackageGroups()
+
+		self.storage = None
+		self.creators = []
+
+	def __str__(self):
+		return self.name
+
+	def require000PackageGroups(self):
+		self.addCreator(TripleZeroPackageGroupsPublisher(self))
+
+	def addCreator(self, creator):
+		self.creators.append(creator)
+
+	def updateGroupsData(self):
+		if not self.storage:
+			infomsg(f"Product {self.name}: not updating any data because no storage has been configured")
+			return
+
+		for creator in self.creators:
+			packageGenerator = creator.generatePackage()
+
+			files = dict(packageGenerator.generateFiles())
+			self.storage.updatePackage(packageGenerator.name, files)
+
+		self.storage.commit()
+
+class ProductDataPublisher(object):
+	def __init__(self, product):
+		assert(isinstance(product, ConcreteProduct))
+
+		self.name = product.name
+		self.product = product
+
+class TripleZeroPackageGroupsPublisher(ProductDataPublisher):
+	def __init__(self, product):
+		super().__init__(product)
+		self.packageGroups = product.packageGroups
+
+	def generatePackage(self):
+		packageGenerator = PackageGenerator("000package-groups")
+		packageGenerator.addFile(self.generateGroupsYaml(self.packageGroups))
+		packageGenerator.addFile(self.generateProductGroupsYaml(self.packageGroups))
+		return packageGenerator
+
+	def generateGroupsYaml(self, packageGroups):
+		generator = YamlFileGenerator("groups.yml")
+
+		for group in self.sortGroups(packageGroups):
+			d = generator.addList(group.name)
+			for name in sorted(rpm.name for rpm in group.artefacts):
+				d.add(name)
+			d.addSpacing()
+
+		return generator
+
+	def generateProductGroupsYaml(self, packageGroups):
+		generator = YamlFileGenerator(f"groups-{self.name}.yml")
+
+		types = packageGroups.types
+
+		byType = dict((type, set()) for type in types)
+		for group in packageGroups:
+			byType[group.type].add(group)
+
+		outputNode = generator.addList("OUTPUT")
+
+		self.generateProductYaml(outputNode, self.name, None, byType[None])
+		for type in sorted(filter(bool, types)):
+			if type is None:
+				continue
+			self.generateProductYaml(outputNode, f"{self.name}_{type}", type, byType[type])
+
+		return generator
+
+	def generateProductYaml(self, outputNode, name, type, groups):
+		productNode = outputNode.addDict(name)
+		productNode.addString("default-support", "l3")
+
+		includeNode = productNode.addList("includes")
+		for group in self.sortGroups(groups):
+			includeNode.add(group.name)
+
+		if name != self.name:
+			excludeNode = productNode.addList("excludes")
+			excludeNode.add(self.name)
+
+		outputNode.addSpacing()
+
+	def sortGroups(self, groups):
+		for group in sorted(groups, key = lambda g: (len(g.artefacts), g.name)):
+			yield group
+
+##################################################################
 ##################################################################
 class ConcreteExport(ConcreteOBSObject):
 	def __init__(self, name, topicLabels = None):
@@ -1950,6 +2212,65 @@ class TrivialFileGenerator(FileGenerator):
 	def generateContent(self):
 		return "\n".join(self.lines)
 
+class YamlFileGenerator(FileGenerator):
+	class Element(object):
+		def __init__(self, indent, output):
+			self.indent = indent
+			self.output = output
+
+		def write(self, msg):
+			self.output.append(self.indent + self.prefix + msg)
+
+		def addSpacing(self):
+			self.output.append("")
+
+		def createDict(self):
+			return YamlFileGenerator.Dict(self.indent + "   ", self.output)
+
+		def createList(self):
+			return YamlFileGenerator.List(self.indent + "   ", self.output)
+
+		def addDict(self, name):
+			self.write(f"{name}:")
+			return self.createDict()
+
+		def addString(self, name, value):
+			self.write(f"{name}: {value}")
+
+	class List(Element):
+		def __init__(self, *args):
+			super().__init__(*args)
+			self.prefix = " - "
+
+		def add(self, item):
+			self.write(item)
+
+	class Dict(Element):
+		def __init__(self, *args):
+			super().__init__(*args)
+			self.prefix = ""
+
+		def addList(self, name):
+			self.write(f"{name}:")
+			return self.createList()
+
+	def __init__(self, name):
+		super().__init__(name)
+		self.actualFile = TrivialFileGenerator(name)
+		self.root = self.Dict("", self.actualFile)
+
+	def addDict(self, name):
+		return self.root.addDict(name)
+
+	def addList(self, name):
+		return self.root.addList(name)
+
+	def addSpacing(self):
+		return self.root.addSpacing()
+
+	def generateContent(self):
+		return self.actualFile.generateContent()
+
 class ComponentXmlGenerator(FileGenerator):
 	def __init__(self, name, classification):
 		super().__init__(name)
@@ -2196,6 +2517,7 @@ class ComponentCentricMediator(Mediator):
 		actualTopics = self._abstractModel.getComponentTopics(abstractComponent.componentLabel)
 		concreteProject.updateLabelScope(actualTopics)
 
+		concreteProject.addComponentLabel(abstractComponent.componentLabel)
 		abstractComponent.concreteProject = concreteProject
 
 		if concreteProject.generation != "bootstrap":
@@ -2254,6 +2576,13 @@ class ComponentCentricMediator(Mediator):
 				concreteProject.bootstrapSelfFrom = bootstrapProject.standard
 
 		concreteProject.config = self.createMainProjectConfig(concreteProject, projectSettings.projectConfigSnippet)
+
+		classificationScheme = self._abstractModel.classificationScheme
+		for labelName in projectSettings.imports:
+			label = classificationScheme.getLabel(labelName)
+			if label is None or label.type is not Classification.TYPE_BINARY:
+				raise Exception(f"{name} imports {labelName}, which is not a valid topic label")
+			concreteProject.imports.add(label)
 
 		self._projects[name] = concreteProject
 		return concreteProject
@@ -2929,6 +3258,23 @@ class ProjectCentricMediator(ComponentCentricMediator):
 					concretePackage = ConcretePackage(workbenchProject.bootstrapRepository, packageName)
 					workbenchRepository.usePackage(concretePackage)
 
+
+		if self.settings.product is not None:
+			concreteProduct = self.setupProduct(self.settings.product)
+
+			packageGroups = concreteProduct.packageGroups
+
+			for concreteProject in self._primaryProject.values():
+				infomsg(f"{concreteProject}: updating package groups")
+				with loggingFacade.temporaryIndent():
+					self.updatePackageGroups(packageGroups, concreteProject)
+
+			packageGroups.finalize()
+
+			if False:
+				for group in packageGroups:
+					infomsg(f"{group.key}: {len(group.topics)} topics and {len(group.artefacts)} rpms")
+
 		for name in targetProjects:
 			concreteProject = self._projects.get(name)
 			if concreteProject is None:
@@ -2942,7 +3288,7 @@ class ProjectCentricMediator(ComponentCentricMediator):
 		infoPackage = self.createComponentInfoPackage(concreteProject, abstractModel.classification)
 		for abstractComponent in abstractComponentList:
 			infoPackage.addComponent(abstractComponent.componentLabel)
-		
+
 		return infoPackage
 
 	def setupProjectBuildRequirements(self, concreteProject, projectSettings, abstractComponentList):
@@ -2978,6 +3324,92 @@ class ProjectCentricMediator(ComponentCentricMediator):
 		concreteRepository.repositoriesUsedForBuild.update(repositoryBuildRequires.repositories)
 		infomsg(f"{concreteRepository.repositoriesUsedForBuild}")
 		assert(concreteRepository.repositoriesUsedForBuild)
+
+	def updatePackageGroups(self, packageGroups, concreteProject):
+		# Create the PackageGroups that will later be turned into the project's groups.yml
+		inversionFreeBase = self.getInversionFreeLabels(concreteProject)
+
+		for label, members in abstractModel.classification.enumeratePackages():
+			if not members:
+				continue
+
+			# FIXME: we should also consider labels from subordinate projects,
+			# which were excluded because they had inversions relative to their
+			# own project
+			if label.componentLabel not in concreteProject.componentLabels:
+				continue
+
+			if label not in inversionFreeBase:
+				if label.flavorName is None:
+					projectDebug(f"exclude {label} because it has inversions ({len(members)} RPMs)")
+				continue
+
+			# infomsg(f"{concreteProject} add {label}")
+			packageGroups.add(label, members)
+
+	def enumerateProjectDependents(self, concreteProject):
+		queue = [concreteProject]
+		seen = set()
+
+		while queue:
+			concreteProject = queue.pop(0)
+
+			yield concreteProject
+
+			# get all subordinate projects
+			projectSettings = self.settings.getProject(concreteProject.componentName)
+			if projectSettings is None:
+				if concreteProject is self.workbenchProject:
+					continue
+				raise Exception(f"Cannot find project settings for {concreteProject.componentName}")
+			for reqName in projectSettings.requiresNames:
+				requiredProject = self._primaryProject.get(reqName)
+				if requiredProject is None:
+					raise Exception(f"{concreteProject} requires unknown project {reqName}")
+				if requiredProject not in seen:
+					queue.append(requiredProject)
+
+	def getInversionFreeLabels(self, concreteProject):
+		projectLabels = Classification.createLabelSet()
+		for concreteProject in self.enumerateProjectDependents(concreteProject):
+			projectLabels.update(concreteProject.labelScope.members)
+			projectLabels.update(concreteProject.imports)
+
+		topicOrder = self._abstractModel.topicOrder
+		closure = topicOrder.downwardClosureForSet(projectLabels)
+
+		inversions = closure.difference(projectLabels)
+		topicsWithInversions = topicOrder.upwardClosureForSet(inversions)
+
+		result = projectLabels.difference(topicsWithInversions)
+
+		if False:
+			for s in sorted(map(str, projectLabels.intersection(topicsWithInversions))):
+				infomsg(f"  {s} has inversions")
+
+		inspectLabels = []
+		# inspectLabels = ["@CairoAPI", "@SNMPLibraries", "@NetworkServices-doc", "@SNMPAPI"]
+		for name in inspectLabels:
+			label = self._abstractModel.classificationScheme.getLabel(name)
+			if label not in projectLabels:
+				continue
+
+			bad = topicOrder.downwardClosureFor(label).intersection(inversions)
+			if bad:
+				infomsg(f"   {label} has inversions because it depends on {' '.join(map(str, bad))}")
+			else:
+				infomsg(f"   {label} has no inversions")
+
+		return result
+
+	def setupProduct(self, productDefinition):
+		product = ConcreteProduct(productDefinition.name)
+
+		if productDefinition.gitProjectUrl is not None:
+			product.storage = self.model.createProjectStorage(product, productDefinition.gitProjectUrl)
+
+		self.model.product = product
+		return product
 
 class ProjectConfigBuilder(object):
 	def __init__(self):
@@ -3026,7 +3458,13 @@ class ActionPrune(Action):
 	def perform(self, concreteModel):
 		return concreteModel.pruneProjects(dryRun = self.dryRun)
 
-actions = [ActionValidate, ActionInitialize, ActionPublish, ActionPrune]
+class ActionPublishProduct(Action):
+	names = ('publish-product', )
+
+	def perform(self, concreteModel):
+		return concreteModel.publishProductInformation(dryRun = self.dryRun)
+
+actions = [ActionValidate, ActionInitialize, ActionPublish, ActionPrune, ActionPublishProduct]
 
 mapping = application.loadModelMapping()
 

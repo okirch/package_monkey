@@ -83,6 +83,10 @@ class ProjectMapping(ProjectSettingsMixin):
 		self.componentNames = None
 		self.extraPackages = None
 
+		self.imports = []
+		self.requires = []
+		self.requiresNames = []
+
 	def __str__(self):
 		return self.name
 
@@ -98,6 +102,10 @@ class GenericProjectLocation(object):
 		self.obsRepositoryName = None
 		self.gitProjectUrl = None
 		self.gitPackageUrl = None
+
+class ProductDefinition(GenericProjectLocation):
+	def __init__(self, name):
+		super().__init__(name)
 
 class ComponentModelMapping(object):
 	def __init__(self, name, type):
@@ -115,6 +123,8 @@ class ComponentModelMapping(object):
 		self.projects = []
 		self.workingDir = None
 		self.gitBaseUrl = None
+
+		self.product = None
 
 		# TBD
 		self.exportsSubProjectName = 'exports'
@@ -216,6 +226,13 @@ class ComponentModelMapping(object):
 
 			cm.addProject(project)
 
+		for project in cm.projects:
+			for name in project.requiresNames:
+				reqProject = cm.getProject(name)
+				if reqProject is None:
+					raise Exception(f"Project {project.name} requires unknown project {name}")
+				project.requires.append(reqProject)
+
 		wb = klass.getYamlDict(data, 'workbench', default = None)
 		if wb is not None:
 			workbench = WorkbenchDefinition()
@@ -223,6 +240,10 @@ class ComponentModelMapping(object):
 			workbench.includeNames = set(klass.getYamlStringList(wb, 'include', default= []))
 			workbench.excludeNames = set(klass.getYamlStringList(wb, 'exclude', default= []))
 			cm.workbench = workbench
+
+		pd = data.get('product')
+		if pd is not None:
+			cm.processProductDefinition(pd)
 
 		return cm
 
@@ -239,6 +260,12 @@ class ComponentModelMapping(object):
 		git_url = self.getYamlString(cd, 'git_package_url', default = None)
 		if git_url is not None:
 			location.gitPackageUrl = self.processGitUrl(name, git_url, cmDefaults.gitPackageUrl)
+
+	def processProductDefinition(self, cd):
+		productName = self.getYamlString(cd, 'name')
+		self.product = ProductDefinition(productName)
+
+		self.processLocation(self.product, cd)
 
 	def processProjectSettings(self, component, cd, parentProject = None):
 		cmDefaults = self.defaultComponent
@@ -335,6 +362,9 @@ class ComponentModelMapping(object):
 
 		names = self.getYamlStringList(cd, 'extra_packages', default = [])
 		project.extraPackages = names.copy()
+
+		project.imports = self.getYamlStringList(cd, 'imports', default = [])
+		project.requiresNames = self.getYamlStringList(cd, 'requires', default = [])
 
 	def processGitUrl(self, component, git_url, default_url):
 		if git_url is None:

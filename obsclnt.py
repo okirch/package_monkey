@@ -1128,7 +1128,8 @@ class OBSPackage:
 
 		if ':' in canonicalName:
 			name, flavor = canonicalName.rsplit(':', maxsplit = 1)
-			assert('.' not in flavor)
+			if '.' in flavor:
+				warnmsg(f"Space oddities: strange multibuild name {canonicalName}")
 
 			self.basePackageName = name
 			self.multibuildFlavor = flavor

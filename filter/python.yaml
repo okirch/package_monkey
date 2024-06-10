@@ -27,7 +27,6 @@ groups:
 
  # define labels @SystemPythonBlah, which is essentially a wrapper around
  # PythonBlah${systemPythonVersion}
- - instantiate: DefineSystemPythonAPI:API
  - instantiate: DefineSystemPythonLabel:Essentials
  - instantiate: DefineSystemPythonLabel:Modules
  - instantiate: DefineSystemPythonLabel:HTML
@@ -166,17 +165,6 @@ templates:
       sourceproject: Python
       compatibility: none
       inherit_all_flavors: yes
-      requires:
-       - "@PythonNAME${systemPythonVersion}"
-
- - name: DefineSystemPythonAPI
-   substitute: NAME
-   document:
-    - name: "@SystemPythonNAME"
-      sourceproject: Python
-      compatibility: none
-      inherit_all_flavors: yes
-      is_api: true
       requires:
        - "@PythonNAME${systemPythonVersion}"
 
@@ -469,6 +457,7 @@ templates:
        - "@PythonGobjectAPIXXX"
        - "@PythonDBusXXX"
        - "@SystemdAPI"
+       - "@PythonCommonBuildDependencies+system"
       binaries:
        - pythonXXX-dbus-python-devel
 

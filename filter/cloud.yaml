@@ -39,8 +39,9 @@ groups:
     - "@ManDoc"
    binaries:
     - cloud-init
-    - python3-ec2*
-    - python3-azure*
+    - python311-ec2*
+    - python311-azure*
+    - python311-google-cloud*
     - python-azure-agent
     - azure-cli*
     - aws-cli*
@@ -52,11 +53,13 @@ groups:
     - google-cloud*
     - cloud-regionsrv-*
     - afterburn
+    - regionServiceClientConfigAzure
+    - regionServiceClientConfigEC2
 
  - name: "@Alibaba"
    sourceproject: PublicCloud
    requires:
     - "@PublicCloud"
    binaries:
-    - python-aliyun-*
+    - python311-aliyun-*
 

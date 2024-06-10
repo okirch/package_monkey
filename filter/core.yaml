@@ -812,6 +812,14 @@ groups:
    requires:
     - "@PythonCore${systemPythonVersion}"
 
+ - name: "@SystemPythonAPI"
+   sourceproject: Core
+   compatibility: none
+   inherit_all_flavors: yes
+   is_api: true
+   requires:
+    - "@PythonAPI${systemPythonVersion}"
+
  - name: "@DefaultPython"
    sourceproject: Core
    requires:

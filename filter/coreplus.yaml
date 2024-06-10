@@ -736,9 +736,9 @@ groups:
    is_api: True
    sourceproject: CorePlus
    requires:
-    - "@FontLibsAPI"
-    - "@X11API"
-    - "@FontLibraries+x11"
+    - "@CoreX11API"
+    - "@CoreFontAPI"
+    - "@DrawingLibraries+x11"
     - "@CorePlusAPI"
    binaries:
     - cairo-devel
@@ -799,7 +799,7 @@ groups:
     - "@PythonGobject${systemPythonVersion}"
     - "@PythonAPI${systemPythonVersion}"
     - "@PythonGObjectCommonAPI"
-    - "@PythonCommonBuildDependencies+systemd"
+#   - "@PythonCommonBuildDependencies+systemd"
    binaries:
     - python${systemPythonVersion}-pycairo-devel
    buildflavors:

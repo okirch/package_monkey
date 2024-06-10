@@ -79,6 +79,7 @@ groups:
     - "@HardwareMonitoringLibraries"
     - "@RRDSupportLibraries"
     - "@TclCore"
+    # really?
     - "@Fonts"
    binaries:
     - rrdtool

@@ -36,18 +36,14 @@ groups:
    binaries:
     - busybox
     - busybox-*
+    # prevent busybox-man from being tagged as a manpage package
+    - busybox-man
    sources:
     # all packages built from busybox-links (like busybox-{attr,coreutils,...}) go here by default, except
     # for the busybox-links binary rpm itself, which requires all the others.
     - busybox-links
-   purposes:
-    - name: man
-      binaries:
-       - busybox-man
    buildflavors:
     - name: all
-      requires:
-       - "@Busybox-man"
       binaries:
        - busybox-links
 

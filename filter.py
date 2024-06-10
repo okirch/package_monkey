@@ -1754,10 +1754,10 @@ class PackageLabelling(object):
 			m = matches.pop(0)
 
 			if trace:
-				infomsg(f"{name}: {m.label} matched by {m.type} filter {m.pattern}")
+				infomsg(f"{name}: {m.label} matched by {m.type} filter {m.pattern}; precedence {m.precedence}")
 				infomsg(f"   {len(matches)} lower priority matches were ignored:")
 				for other in matches:
-					infomsg(f"      {other.label} {other.type} {other.pattern}")
+					infomsg(f"      prec {other.precedence} {other.label} {other.type} {other.pattern}")
 		else:
 			m = next(iter(matches))
 

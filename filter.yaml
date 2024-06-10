@@ -123,18 +123,18 @@ autoflavors:
     # Took me some time to figure out why the algorithm couldn't place it at all
     - system-user-man priority=0
 
+# Beware, the default priority for any group is 5
 purposes:
  - name: devel
    description: |
     This matches all -devel packages, inluding static libraries.
     For the time being, we also include architecture variants because
-    we have devel packages that happily mix 64bit and 32bit packages
-    (python-pycairo-common-devel for instance).
+    we have devel packages that happily mix 64bit and 32bit packages.
    disposition: component_wide
    # make sure that packages that end with *-devel are
    # recognized by this filter with a higher priority than
    # any prefix match.
-   priority: 4
+   priority: 3
    packagesuffixes:
     - devel
     - devel-static
@@ -179,7 +179,7 @@ purposes:
  - name: 32bit
    # We want -devel-32bit packages to be matched by autoflavor "devel" rather
    # than "32bit"; hence we use prio 5 here and prio 4 for devel
-   priority: 5
+   priority: 4
    autoselect: no
    packagesuffixes:
     - 32bit

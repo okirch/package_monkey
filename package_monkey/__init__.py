@@ -8,14 +8,11 @@ __names__ = ['PackageMonkey']
 class PackageInfoCommand(GenericSubcommand):
 	NAME = 'packageinfo'
 	ALIASES = ['pi', 'pinfo']
-	HELP = 'Display information on package(s)'
+	HELP = 'Display information on rpm(s)'
 
 	def registerArguments(self, args):
 		args.add_argument('--siblings', action = 'store_true', default = False,
 						help = 'display other rpms the originate from the same OBS build')
-		args.add_argument('--obs-package', action = 'store_true', default = False,
-						help = 'the PACKAGES argument(s) should be interpreted as an OBS build name, rather than an RPM name')
-#		args.add_argument('--builddeps', action = 'store_true', default = False)
 		args.add_argument('--requires-only', action = 'store_true', default = False,
 						help = 'only show required packages, hide list of required-by')
 		args.add_argument('--provides-only', action = 'store_true', default = False,
@@ -27,13 +24,41 @@ class PackageInfoCommand(GenericSubcommand):
 		args.add_argument('--verbose', action = 'store_true', default = False,
 						help = 'display additional information such as package descriptions')
 		args.add_argument(dest = 'packages', metavar = 'PACKAGES', nargs = '+',
-						help = 'list of packages to query')
+						help = 'list of rpms to query')
 
 
 	def createApplication(self, opts):
 		from package_monkey.cmd_pinfo import PackageInfoApplication
 
 		return PackageInfoApplication(self.NAME, opts)
+
+class BuildInfoCommand(GenericSubcommand):
+	NAME = 'buildinfo'
+	ALIASES = ['bi', 'binfo']
+	HELP = 'Display information on build(s)'
+
+	def registerArguments(self, args):
+		args.add_argument('--requires-only', action = 'store_true', default = False,
+						help = 'only show required packages, hide list of required-by')
+		args.add_argument('--provides-only', action = 'store_true', default = False,
+						help = 'only show required-by packages, hide list of required')
+		args.add_argument('--names-only', action = 'store_true', default = False,
+						help = 'only display the package name(s). Useful in displaying the list of rpms displayed by a specific build')
+		args.add_argument('--no-labels', action = 'store_true', default = False,
+						help = 'do not display any labels')
+		args.add_argument('--verbose', action = 'store_true', default = False,
+						help = 'display additional information such as package descriptions')
+		args.add_argument(dest = 'packages', metavar = 'PACKAGES', nargs = '+',
+						help = 'list of builds to query')
+
+
+	def createApplication(self, opts):
+		from package_monkey.cmd_pinfo import BuildInfoApplication
+
+		# We do not support the --siblings option, as we display all siblings in a build, anyway
+		opts.siblings = False
+
+		return BuildInfoApplication(self.NAME, opts)
 
 class PackageDiffCommand(GenericSubcommand):
 	NAME = 'packagediff'
@@ -318,6 +343,7 @@ subcommandRegistry.registerCommand(DownloadRpmsCommand())
 subcommandRegistry.registerCommand(ExtractRpmInfoCommand())
 subcommandRegistry.registerCommand(ProcessSolverCommand())
 subcommandRegistry.registerCommand(PackageInfoCommand())
+subcommandRegistry.registerCommand(BuildInfoCommand())
 subcommandRegistry.registerCommand(LabellingCommand())
 subcommandRegistry.registerCommand(ComposeCommand())
 subcommandRegistry.registerCommand(ExplainCommand())

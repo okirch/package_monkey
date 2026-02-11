@@ -6,7 +6,7 @@ from .postprocess import *
 
 loggingFacade.disableTimestamps()
 
-class PackageInfoApplication(ApplicationBase):
+class CommonInfoApplication(ApplicationBase):
 	def __init__(self, name, opts):
 		super().__init__(name, opts)
 
@@ -53,55 +53,7 @@ class PackageInfoApplication(ApplicationBase):
 
 		self.renderer = renderer
 
-		if self.opts.obs_package:
-			self.renderBuilds(self.db, self.opts.packages)
-		else:
-			self.renderRpms(self.db, self.opts.packages)
-
-	def renderRpms(self, db, nameList):
-		validArchitectures = ('src', 'nosrc', 'noarch', 'i686', 'x86_64', 'aarch64', 's390x', 'ppc64le', )
-		for packageName in nameList:
-			packageArch = None
-			if '.' in packageName:
-				baseName, arch = packageName.rsplit('.', maxsplit = 1)
-				if arch in validArchitectures:
-					packageName, packageArch = baseName, arch
-
-			matcher = NameMatcher([packageName])
-			rpmList = []
-			for rpm in db.rpms:
-				if matcher.match(rpm.name):
-					rpmList.append(rpm)
-
-			if not rpmList:
-				print(f"{packageName}: no match")
-				continue
-
-			for rpm in rpmList:
-				obsBuild = db.lookupBuildForRpm(rpm)
-				self.renderOneRpm(rpm, obsBuild)
-
-	def renderBuilds(self, db, nameList):
-		for buildName in nameList:
-			matcher = NameMatcher([buildName])
-			buildList = []
-			for build in db.builds:
-				if matcher.match(build.name):
-					buildList.append(build)
-
-			if not buildList:
-				print(f"{buildName}: not found")
-				continue
-
-			for build in buildList:
-				if not build.rpms:
-					print(f"{build}: no rpms for this package?!")
-					continue
-
-				print(f"Build {build} ({len(build.binaries)} rpms)")
-				for rpm in build.binaries:
-					self.renderOneRpm(rpm)
-				print("")
+		self.processQuery(self.db, self.opts.packages)
 
 	def renderOneRpm(self, rpm, obsBuild = None):
 		renderer = self.renderer
@@ -126,6 +78,53 @@ class PackageInfoApplication(ApplicationBase):
 
 		if not rpm.isSourcePackage:
 			renderer.renderPromises(rpm, self.db)
+
+class PackageInfoApplication(CommonInfoApplication):
+	def processQuery(self, db, nameList):
+		validArchitectures = ('src', 'nosrc', 'noarch', 'i686', 'x86_64', 'aarch64', 's390x', 'ppc64le', )
+		for packageName in nameList:
+			packageArch = None
+			if '.' in packageName:
+				baseName, arch = packageName.rsplit('.', maxsplit = 1)
+				if arch in validArchitectures:
+					packageName, packageArch = baseName, arch
+
+			matcher = NameMatcher([packageName])
+			rpmList = []
+			for rpm in db.rpms:
+				if matcher.match(rpm.name):
+					rpmList.append(rpm)
+
+			if not rpmList:
+				print(f"{packageName}: no match")
+				continue
+
+			for rpm in rpmList:
+				obsBuild = db.lookupBuildForRpm(rpm)
+				self.renderOneRpm(rpm, obsBuild)
+
+class BuildInfoApplication(CommonInfoApplication):
+	def processQuery(self, db, nameList):
+		for buildName in nameList:
+			matcher = NameMatcher([buildName])
+			buildList = []
+			for build in db.builds:
+				if matcher.match(build.name):
+					buildList.append(build)
+
+			if not buildList:
+				print(f"{buildName}: not found")
+				continue
+
+			for build in buildList:
+				if not build.rpms:
+					print(f"{build}: no rpms for this package?!")
+					continue
+
+				print(f"Build {build} ({len(build.binaries)} rpms)")
+				for rpm in build.binaries:
+					self.renderOneRpm(rpm)
+				print("")
 
 class TrivialStringRenderer(object):
 	def render(self, s):

@@ -904,10 +904,6 @@ class FilterLoader(MonkeyConfigLoader):
 		def addOBSPackageFilter(self, pattern):
 			self.packageFilter.addLateBuildFilterRuleBinding(pattern, self.labelHints)
 
-		def addArchConstaintsFilter(self, rpmName, options):
-			# self.packageFilter.addArchConstraintsFilter(rpmName, options)
-			pass
-
 	class LabelProcessor(LabelProcessorBase):
 		def __init__(self, labelHints, parent):
 			super().__init__(labelHints, parent)
@@ -1006,8 +1002,6 @@ class FilterLoader(MonkeyConfigLoader):
 				self.label.maintainerID = self.parsePersonOrTeam(key, value)
 			elif key == 'support':
 				self.label.supportID = self.context.asString(key, value)
-			elif key == 'arch_constraints':
-				self.processArchConstraints(self.context.stringListContext(key, value))
 			elif key == 'decisionlog':
 				self.processDecisionLog(self.context.asString(key, value))
 			elif key == 'implement_scenario':
@@ -1064,15 +1058,6 @@ class FilterLoader(MonkeyConfigLoader):
 		def processPackages(self, nameList):
 			for name in nameList:
 				self.addOBSPackageFilter(name)
-
-		def processArchConstraints(self, context):
-			for value in context:
-				w = value.split()
-				if len(w) < 2:
-					raise Exception(f"{context}: invalid item \"{value}\"")
-
-				rpmName = w.pop(0)
-				self.addArchConstaintsFilter(rpmName, w)
 
 		def processDecisionLog(self, values):
 			self.label.decisionLog.append(values)

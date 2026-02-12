@@ -935,8 +935,8 @@ class FilterLoader(MonkeyConfigLoader):
 
 	class TopicScopeProcessor(LabelProcessorBase):
 		def processKeyValue(self, key, value):
-			# FIXME: rename to 'builds'
-			if key == 'packages':
+			# TODO: drop support for 'packages' keyword
+			if key in ('packages', 'builds'):
 				self.processPackages(self.context.asStringList(key, value))
 			elif key == 'hints':
 				self.processHints(self.context.asStringList(key, value))

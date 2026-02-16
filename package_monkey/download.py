@@ -8,6 +8,7 @@ import os
 import struct
 import tempfile
 import re
+import time
 from .util import infomsg, warnmsg, errormsg
 
 class DownloadManager(object):
@@ -143,4 +144,26 @@ class DownloadQueue(object):
 
 			for filename in toRemove:
 				os.unlink(os.path.join(cacheDir, filename))
+
+class DownloadInfo(object):
+	def __init__(self):
+		self.timestamp = None
+
+	def setTimestampNow(self):
+		self.timestamp = time.strftime("%Y-%m-%d %H:%M %Z")
+
+	def save(self, path):
+		with open(path, "w") as f:
+			if self.timestamp is not None:
+				print(f"timestamp {self.timestamp}", file = f)
+	def load(self, path):
+		with open(path) as f:
+			for line in f.readlines():
+				w = line.strip().split()
+
+				kwd = w.pop(0)
+				if kwd == 'timestamp':
+					self.timestamp = ' '.join(w)
+				else:
+					raise Exception(f"{path}: unknown keyword {kwd}")
 

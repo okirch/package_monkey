@@ -78,6 +78,9 @@ class SolverApplication(ApplicationBase):
 		self.collapseResults(db)
 		# self.logResults(db)
 
+		info = self.codebaseData.loadDownloadInfo()
+		db.downloadTimestamp = info.timestamp
+
 		self.saveDB(db)
 
 		if self.errorReport:

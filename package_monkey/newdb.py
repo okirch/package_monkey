@@ -58,6 +58,7 @@ class NewDB(object):
 		self.architectures = ArchSet()
 
 		self.userVersion = None
+		self.downloadTimestamp = None
 
 		self._rpmToBuildCache = None
 		self._reverseDependencyCache = None
@@ -238,6 +239,9 @@ class NewDB(object):
 					write(f"  {pfx} {arch} {' '.join(sorted(map(str, delta)))}")
 
 		with open(path + ".tmp", "w") as dbf:
+			if self.downloadTimestamp is not None:
+				write(f"timestamp {self.downloadTimestamp}")
+
 			write(f"arch {' '.join(sorted(self.architectures))}")
 
 			syntheticTypes = set(RpmBase.VALID_TYPES)
@@ -288,7 +292,10 @@ class NewDB(object):
 			for line in dbf.readlines():
 				w = line.split()
 				cmd = w.pop(0)
-				if cmd == 'arch':
+
+				if cmd == 'timestamp':
+					self.downloadTimestamp = ' '.join(w)
+				elif cmd == 'arch':
 					self.architectures.update(ArchSet(w))
 				elif cmd == 'pkg':
 					name = w.pop(0)

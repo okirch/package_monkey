@@ -14,6 +14,7 @@ import shutil
 from .util import infomsg, errormsg, warnmsg
 from .newdb import *
 from .policy import Policy
+from .download import DownloadInfo
 from .writers import CsvPackageWriter
 from .csvio import CSVReader
 
@@ -52,6 +53,14 @@ class CodebaseLocation(object):
 
 	def getPath(self, basename):
 		return os.path.join(self.path, basename)
+
+	def saveDownloadInfo(self, info):
+		info.save(self.getPath("download.info"))
+
+	def loadDownloadInfo(self):
+		info = DownloadInfo()
+		info.load(self.getPath("download.info"))
+		return info
 
 	@property
 	def dbPath(self):

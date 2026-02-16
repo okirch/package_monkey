@@ -13,6 +13,7 @@ from .util import errormsg, warnmsg, infomsg
 from .util import ThatsProgress
 from .libsolv import *
 from .newdb import *
+from .download import DownloadInfo
 
 class SolverDownloadApplication(OBSApplicationBase):
 	def __init__(self, *args, **kwargs):
@@ -76,6 +77,11 @@ class SolverDownloadApplication(OBSApplicationBase):
 			db = NewDB()
 			self.queryBuildResults(db, client, obsProject, nameFilter = obsNameFilter)
 			repository.saveBuilds(db.builds)
+
+		info = DownloadInfo()
+		info.setTimestampNow()
+
+		self.codebaseData.saveDownloadInfo(info)
 
 	def queryBuildResults(self, db, client, project, nameFilter = None):
 		resList = project.queryBuildResults(client)

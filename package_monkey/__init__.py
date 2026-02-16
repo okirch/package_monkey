@@ -191,6 +191,8 @@ class ProductDiffCommand(GenericSubcommand):
 	def registerArguments(self, args):
 		args.add_argument('--release', default = None,
 				help = 'name of product(s) to compose')
+		args.add_argument('--ignore-product', action = 'append', default = [],
+				help = 'ignore the given product or extension')
 		args.add_argument(dest = 'srcfile', metavar = 'SRC-FILE', nargs = '?',
 				help = 'name of the original productcomposer file, or @SNAPSHOT',
 				default = '@latest')

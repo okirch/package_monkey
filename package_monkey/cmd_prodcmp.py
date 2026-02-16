@@ -175,8 +175,10 @@ class ProductDiffApplication(ApplicationBase):
 		return self.Composition(self.getComposerPath(arg))
 
 	def compositionDiff(self, src, dst):
-		srcNames = src.productNames
-		dstNames = dst.productNames
+		ignoreProducts = set(self.opts.ignore_product)
+
+		srcNames = src.productNames.difference(ignoreProducts)
+		dstNames = dst.productNames.difference(ignoreProducts)
 
 		for name in srcNames.difference(dstNames):
 			print(f"Product {name} REMOVED")

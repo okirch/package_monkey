@@ -64,6 +64,8 @@ class PackageDiffCommand(GenericSubcommand):
 	NAME = 'packagediff'
 	ALIASES = ['pd', 'pdiff']
 	HELP = 'display what has changed between two labelling runs'
+	LOG_USE_TIMESTAMPS = False
+	LOG_USE_LATE_STDOUT = True
 
 	def registerArguments(self, args):
 		args.add_argument('--added', dest = 'restrict', action = 'store_const', const = 'added',

@@ -30,6 +30,9 @@ class GenericSubcommand(object):
 	DESCRIPTION = None
 	SUBCOMMANDS = []
 
+	LOG_USE_TIMESTAMPS = True
+	LOG_USE_LATE_STDOUT = False
+
 	def __init__(self):
 		pass
 
@@ -67,7 +70,10 @@ class PackageMonkey(object):
 		self.args.add_argument('--codebase', default = None,
 					help = 'Name of the codebase to inspect (default: $MONKEY_CODEBASE or "slfo")')
 		self.args.add_argument('--version', default = 'latest')
-		self.args.add_argument('--quiet', action = 'store_true', default = False)
+		self.args.add_argument('--quiet', action = 'store_true', default = False,
+					help = 'Decrease verbosity (effect depends on the subcommand)')
+		self.args.add_argument('--verbose', action = 'store_true', default = False,
+					help = 'Increase verbosity (effect depends on the subcommand)')
 		self.args.add_argument('--debug', action = 'append', default = [])
 		self.args.add_argument('--trace', action = 'append', default = [])
 		self.args.add_argument('--logfile', action = 'store')
@@ -114,8 +120,6 @@ class PackageMonkey(object):
 		if self.opts.codebase is None:
 			self.opts.codebase = 'slfo'
 
-		self.initializeLogging()
-
 		name = self.opts.command
 		if name is None:
 			self.args.print_help()
@@ -136,17 +140,27 @@ class PackageMonkey(object):
 		if cmd is None:
 			raise NotImplementedError(f"Command {name} not implemented?")
 
+		self.initializeLogging(cmd)
+
 		application = cmd.createApplication(self.opts)
 		return application.run()
 
 
-	def initializeLogging(self):
-		if not self.opts.quiet:
+	def initializeLogging(self, cmd):
+		if cmd.LOG_USE_LATE_STDOUT:
+			useStdout = self.opts.verbose
+		else:
+			useStdout = not self.opts.quiet
+		if useStdout:
 			loggingFacade.enableStdout()
+
 		if self.opts.logfile:
 			loggingFacade.addLogfile(self.opts.logfile)
 
-		infomsg(f"Starting {self.name} (codebase {self.opts.codebase})")
+		if not cmd.LOG_USE_TIMESTAMPS:
+			loggingFacade.disableTimestamps()
+
+		infomsg(f"Starting {cmd.NAME} (codebase {self.opts.codebase})")
 
 		# --debug <facility> enables debugging for a specific facility
 		# default: log all messages logged through util.debugmsg()

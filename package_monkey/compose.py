@@ -43,6 +43,7 @@ class ProductComposition(object):
 		self.releaseEpic = None
 		self.releaseRpms = PackageCollection()
 		self.releaseScenario = None
+		self.reasoning = None
 
 		self.rpms = PackageCollection()
 
@@ -540,6 +541,10 @@ class Composer(object):
 
 		product.rpms.difference_update(excludeRpms)
 
+		if product.reasoning is not None:
+			for rpm in excludeRpms:
+				product.reasoning.overrideExclude(rpm)
+
 	def includeRpms(self, includeRpms, product, report):
 		if self.verbose:
 			infomsg(f"{product} override include:")
@@ -555,6 +560,10 @@ class Composer(object):
 
 		for rpm, archSet in includeRpms.rpmsWithArch():
 			product.rpms.add(rpm, archSet, overwriteArch = True)
+
+		if product.reasoning is not None:
+			for rpm, archSet in includeRpms.rpmsWithArch():
+				product.reasoning.overrideInclude(rpm, archSet)
 
 		availableRpms = product.rpms
 		if product.baseProduct is not None:

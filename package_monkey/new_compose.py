@@ -189,6 +189,7 @@ class ComposerReasoning(object):
 		def __init__(self, key, name, decision):
 			self.key = key
 			self.name = name
+			self.architectures = None
 			self.decision = decision
 			self.follow = []
 
@@ -226,6 +227,28 @@ class ComposerReasoning(object):
 				chain.follow.append((f"{justification}", chase))
 
 		return chain
+
+	def overrideInclude(self, rpmName, overrideArch):
+		key = f"rpm/{rpmName}"
+
+		oldChain = self._reason.get(key)
+		chain = self.ReasonChain(key, rpmName, "include override")
+		self._reason[key] = chain
+
+		if oldChain is not None:
+			chain.follow.append((f"was: {oldChain.name} ({oldChain.decision})", oldChain))
+		if overrideArch:
+			chain.architectures = overrideArch
+
+	def overrideExclude(self, rpmName):
+		key = f"rpm/{rpmName}"
+
+		oldChain = self._reason.get(key)
+		chain = self.ReasonChain(key, rpmName, "exclude override")
+		self._reason[key] = chain
+
+		if oldChain is not None:
+			chain.follow.append((f"was: {oldChain.name} ({oldChain.decision})", oldChain))
 
 	def getJustification(self, name, treeNode, verbose = False):
 		chain = self._reason.get(f"rpm/{name}")

@@ -11,7 +11,7 @@ from functools import reduce
 
 from .options import ApplicationBase
 from .csvio import CSVReader
-from .util import IndexFormatterTwoLevels, OptionalCaption
+from .util import IndexFormatter, OptionalCaption
 from .postprocess import *
 from .arch import *
 
@@ -337,7 +337,7 @@ class PackageDiffApplication(ApplicationBase):
 	def displayChangedPackages(self, listOfPairs):
 		print("Changed packages")
 
-		formatter = IndexFormatterTwoLevels(sort = True)
+		formatter = IndexFormatter(sort = True)
 		for old, new in listOfPairs:
 			oldEpic = old.epic or "(no epic)"
 			oldTopic = old.topic or "(no hints)"
@@ -359,5 +359,6 @@ class PackageDiffApplication(ApplicationBase):
 			else:
 				msg += " (no epic)"
 			formatter.next(str(oldEpic), oldTopic, msg)
-		print()
+
+		formatter.flush()
 

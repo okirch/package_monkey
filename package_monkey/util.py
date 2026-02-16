@@ -545,62 +545,59 @@ class DictOfSets(object):
 
 ##################################################################
 #
-# Format sorted triples of (tag1, tag2, message) so that
-# recurring tags are hidden
+# Format tuples of (tag1, .. tagN, message) so that
+# recurring tags are hidden, like a bibliographic index
 #
 ##################################################################
-class IndexFormatterBase(object):
+class IndexFormatter(object):
 	def __init__(self, msgfunc = print, sort = False):
 		self.print = msgfunc
 		self.sort = sort
 		self.queue = []
+		self.tags = []
 
 	def __del__(self):
-		if self.sort and self.queue:
-			self.sort = False
+		self.flush()
 
+	def flush(self):
+		if self.queue:
 			for entry in sorted(self.queue):
-				self.next(*entry)
-			self.queue = None
+				self.render(entry)
+			self.print("")
+			self.queue = []
 
-class IndexFormatterTwoLevels(IndexFormatterBase):
-	def __init__(self, *args, **kwargs):
-		super().__init__(*args, **kwargs)
-		self.lastTag1 = None
-		self.lastTag2 = None
-
-	def next(self, tag1, tag2, message):
+	def next(self, *entry):
+		entry = list(map(str, entry))
 		if self.sort:
-			self.queue.append((tag1, tag2, message))
+			self.queue.append(entry)
+		else:
+			self.render(entry)
+
+	def render(self, entry):
+		if not entry:
 			return
 
-		if self.lastTag1 != tag1:
-			self.print(f"   {tag1}")
-			self.lastTag1 = tag1
-			self.lastTag2 = None
+		message = entry[-1]
+		tags = entry[:-1]
 
-		if self.lastTag2 != tag2:
-			self.print(f"      {tag2}")
-			self.lastTag2 = tag2
+		i = 0
+		for a, b in zip(tags, self.tags):
+			if a != b:
+				break
+			i += 1
 
-		self.print(f"       - {message}")
+		indent = (i + 1) * "   "
+		for tag in tags[i:]:
+			self.print(f"{indent}{tag}")
+			indent += "   "
 
-class IndexFormatter(IndexFormatterBase):
-	def __init__(self, *args, **kwargs):
-		super().__init__(*args, **kwargs)
-		self.lastTag = None
+		self.print(f"{indent} - {message}")
+		self.tags = tags
 
-	def next(self, tag, message):
-		if self.sort:
-			self.queue.append((tag, message))
-			return
 
-		if self.lastTag != tag:
-			print(f"   {tag}")
-			self.lastTag = tag
-
-		print(f"    - {message}")
-
+##################################################################
+# Format a tree of objects
+##################################################################
 class TreeFormatter(object):
 	LINE_DOWN = ' |'
 	TEE_RIGHT = ' +->'

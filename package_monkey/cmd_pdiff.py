@@ -12,124 +12,8 @@ from functools import reduce
 from .options import ApplicationBase
 from .csvio import CSVReader
 from .util import IndexFormatterTwoLevels, OptionalCaption
+from .postprocess import *
 from .arch import *
-
-class Placement(object):
-	class Rpm(object):
-		def __init__(self, name, component, topic, type):
-			self.name = name
-			self.epic = component
-			self.topic = topic
-			self.type = type
-
-			if '.' in name:
-				name, suffix = os.path.splitext(name)
-				if suffix in ('.x86_64', '.s390x', '.ppc64le', '.aarch64', '.noarch',):
-					self.name = name
-
-			self.baseName = self.name
-
-		def __str__(self):
-			name = self.name
-			# FIXME: should really check for GenericRpm.TYPE_RERGULAR here
-			if self.type and self.type != 'rpm':
-				name = f"{self.name}[{self.type}]"
-			return f"{name} ({self.epic}/{self.topic})"
-
-		def getSortKey(self):
-			return (self.epic, self.topic, self.name)
-
-		def isLike(self, other):
-			return self.name == other.name and \
-				self.epic == other.epic and \
-				self.topic == other.topic
-
-	class Build(object):
-		def __init__(self, name, epic):
-			self.name = name
-			self.epic = epic
-
-			self._packages = {}
-
-		def __str__(self):
-			return self.name
-
-		def addRpm(self, rpm):
-			assert(rpm.name not in self._packages)
-			self._packages[rpm.name] = rpm
-
-		@property
-		def rpmNames(self):
-			return set(self._packages.keys())
-
-		@property
-		def rpms(self):
-			return set(self._packages.values())
-
-	def __init__(self):
-		self._packages = {}
-		self._builds = {}
-		self._rpmToBuild = {}
-		self._ignoredRpms = set()
-
-	@property
-	def names(self):
-		return set(self._packages.keys())
-
-	def createRpm(self, name, epic, topic, build = None, type = None):
-		assert(name not in self._packages)
-		rpm = self.Rpm(name, epic, topic, type)
-		self._packages[name] = rpm
-
-		if build is not None:
-			self._rpmToBuild[rpm.name] = build
-			build.addRpm(rpm)
-
-		return rpm
-
-	def getRpm(self, name):
-		return self._packages.get(name)
-
-	def addIgnoredRpm(self, name, epic, topic, type = None):
-		self._ignoredRpms.add(self.Rpm(name, epic, topic, type = type))
-
-	@property
-	def rpms(self):
-		return self._packages.values()
-
-	def createBuild(self, name, epic):
-		build = self._builds.get(name)
-		if build is None:
-			build = self.Build(name, epic)
-			self._builds[name] = build
-		elif build.epic != epic:
-			raise Exception(f"{build} changes epic from {build.epic} -> {epic}")
-
-		return build
-
-	def getBuild(self, name):
-		return self._builds.get(name)
-
-	@property
-	def builds(self):
-		return self._builds.values()
-
-	def getBuildForRpm(self, rpm):
-		return self._rpmToBuild.get(rpm.name)
-
-	def displayNameList(self, title, names):
-		if not names:
-			return
-
-		print(f"{title}:")
-
-		packages = map(self.getRpm, names)
-		packages = sorted(packages, key = self.Rpm.getSortKey)
-
-		formatter = IndexFormatterTwoLevels()
-		for pkg in packages:
-			formatter.next(pkg.epic, pkg.topic, f"{pkg.name}")
-		print()
 
 class Renames(object):
 	def __init__(self):
@@ -256,9 +140,31 @@ class PackageDiffApplication(ApplicationBase):
 
 		codebaseData = data.getCodebase(self.opts.codebase)
 
-		placement = Placement()
-		codebaseData.loadPackagesMinimal(placement)
-		return placement
+		db = codebaseData.loadDB()
+
+		labelFacade = TrivialLabelFacade(codebaseData.getPath("classification.db"))
+		labelFacade.policy = codebaseData.loadPolicy(labelFacade)
+
+		for build in db.builds:
+			build.rpmNames = set(rpm.name for rpm in build.binaries)
+
+		for rpm in db.rpms:
+			hints = labelFacade.getHintsForRpm(rpm)
+			if hints is None:
+				rpm.topic = None
+				rpm.epic = None
+				if rpm.new_build is not None:
+					rpm.epic = rpm.new_build.new_epic
+			else:
+				topic = hints.epic
+				if hints.choice is not None:
+					topic = hints.choice
+				rpm.topic = f"{topic}-{hints.klass}"
+				rpm.epic = hints.epic
+
+		db.names = set(rpm.name for rpm in db.rpms)
+
+		return db
 
 	def run(self):
 		old = self.load(self.opts.oldPath or "@latest")
@@ -280,13 +186,13 @@ class PackageDiffApplication(ApplicationBase):
 		same = oldNames.intersection(newNames)
 		changed = []
 		for name in same:
-			oldPkg = old.getRpm(name)
-			newPkg = new.getRpm(name)
-			if not oldPkg.isLike(newPkg):
+			oldPkg = old.lookupRpm(name)
+			newPkg = new.lookupRpm(name)
+			if oldPkg.topic != newPkg.topic:
 				changed.append((oldPkg, newPkg))
 
 		if changed:
-			changed = sorted(changed, key = lambda pair: pair[0].getSortKey())
+			changed = sorted(changed, key = lambda pair: str(pair[0]))
 			self.displayChangedPackages(changed)
 
 	def reportAdditionsRemovals(self, old, new, restrict):
@@ -305,15 +211,15 @@ class PackageDiffApplication(ApplicationBase):
 		for oldBuild in buildsWithRemovals:
 			bd = self.createBuildDelta(oldBuild)
 
-			newBuild = new.getBuild(oldBuild.name)
+			newBuild = new.lookupBuild(oldBuild.name)
 			if newBuild is None:
 				if oldBuild.rpmNames.issubset(removedNames):
 					bd.buildRemoved(oldBuild)
 				else:
 					for name in oldBuild.rpmNames.difference(removedNames):
-						oldRpm = old.getRpm(name)
-						newRpm = new.getRpm(name)
-						bd.rpmMoved(oldRpm, newRpm, new.getBuildForRpm(newRpm))
+						oldRpm = old.lookupRpm(name)
+						newRpm = new.lookupRpm(name)
+						bd.rpmMoved(oldRpm, newRpm, newRpm.new_build)
 				continue
 
 			rpmsRemovedFromThisBuild = oldBuild.rpms.intersection(removedRpms)
@@ -321,8 +227,8 @@ class PackageDiffApplication(ApplicationBase):
 			versionChange = self.identifyVersionChange(oldBuild, newBuild)
 			if versionChange is not None:
 				for oldName, newName in versionChange.changedRpms:
-					oldRpm = old.getRpm(oldName)
-					newRpm = new.getRpm(newName)
+					oldRpm = old.lookupRpm(oldName)
+					newRpm = new.lookupRpm(newName)
 					bd.rpmVersionChanged(oldRpm, newRpm)
 					rpmsRemovedFromThisBuild.discard(oldRpm)
 					addedRpms.discard(newRpm)
@@ -362,12 +268,12 @@ class PackageDiffApplication(ApplicationBase):
 			print()
 
 	def processChangedNames(self, placement, changedNames):
-		changedRpms = set(map(placement.getRpm, changedNames))
+		changedRpms = set(map(placement.lookupRpm, changedNames))
 		assert(None not in changedRpms)
 
 		changedRpms = set(filter(lambda rpm: not rpm.name.startswith('promise:'), changedRpms))
 
-		changedBuilds = set(map(placement.getBuildForRpm, changedRpms))
+		changedBuilds = set(rpm.new_build for rpm in changedRpms)
 		if None in changedBuilds:
 			for rpm in changedRpms:
 				if placement.getBuildForRpm(rpm) is None:
@@ -431,10 +337,10 @@ class PackageDiffApplication(ApplicationBase):
 	def displayChangedPackages(self, listOfPairs):
 		print("Changed packages")
 
-		formatter = IndexFormatterTwoLevels()
+		formatter = IndexFormatterTwoLevels(sort = True)
 		for old, new in listOfPairs:
 			oldEpic = old.epic or "(no epic)"
-			oldTopic = old.topic or "(no topic)"
+			oldTopic = old.topic or "(no hints)"
 
 			msg = f"{old.name} ->"
 			if old.name != new.name:
@@ -447,11 +353,11 @@ class PackageDiffApplication(ApplicationBase):
 				msg += ";"
 
 			if new.topic:
-				msg += f" {new.epic}/{new.topic}"
+				msg += f" {new.topic}"
 			elif new.epic:
 				msg += f" {new.epic} (no topic)"
 			else:
 				msg += " (no epic)"
-			formatter.next(oldEpic, oldTopic, msg)
+			formatter.next(str(oldEpic), oldTopic, msg)
 		print()
 

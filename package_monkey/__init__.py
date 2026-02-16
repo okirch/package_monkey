@@ -21,8 +21,6 @@ class PackageInfoCommand(GenericSubcommand):
 						help = 'only display the package name(s). Useful in displaying the list of rpms displayed by a specific build')
 		args.add_argument('--no-labels', action = 'store_true', default = False,
 						help = 'do not display any labels')
-		args.add_argument('--verbose', action = 'store_true', default = False,
-						help = 'display additional information such as package descriptions')
 		args.add_argument(dest = 'packages', metavar = 'PACKAGES', nargs = '+',
 						help = 'list of rpms to query')
 
@@ -46,8 +44,6 @@ class BuildInfoCommand(GenericSubcommand):
 						help = 'only display the package name(s). Useful in displaying the list of rpms displayed by a specific build')
 		args.add_argument('--no-labels', action = 'store_true', default = False,
 						help = 'do not display any labels')
-		args.add_argument('--verbose', action = 'store_true', default = False,
-						help = 'display additional information such as package descriptions')
 		args.add_argument(dest = 'packages', metavar = 'PACKAGES', nargs = '+',
 						help = 'list of builds to query')
 
@@ -137,13 +133,11 @@ class ProcessSolverCommand(GenericSubcommand):
 		return SolverApplication(self.NAME, opts)
 
 class LabellingCommand(GenericSubcommand):
-	NAME = 'label-groups'
+	NAME = 'classify'
 	ALIASES = ['label']
 	HELP = 'Use model description for the indicated codebase to label packages'
 
 	def registerArguments(self, args):
-		args.add_argument('--no-solve', action = 'store_true', default = None,
-				help = 'just write out the initial placement, do not solve')
 		args.add_argument('--trace', action = 'append', default = [],
 				help = 'Enable tracing for packages and/or labels. Specify multiple times or use comma to separate strings to trace for')
 
@@ -261,7 +255,6 @@ class EpicInfoCommand(GenericSubcommand):
 
 	def registerArguments(self, args):
 		args.add_argument('--terse', action = 'store_true', default = False)
-		args.add_argument('--verbose', action = 'store_true', default = False)
 
 	def createSubParser(self, subparsers):
 		return self.args.add_subparsers(dest = 'query', help = 'query command', metavar = 'QUERY')

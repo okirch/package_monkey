@@ -11,7 +11,7 @@ from functools import reduce
 
 from .options import ApplicationBase
 from .csvio import CSVReader
-from .util import IndexFormatter, OptionalCaption
+from .util import IndexFormatter, OptionalCaption, loggingFacade
 from .postprocess import *
 from .arch import *
 
@@ -171,6 +171,9 @@ class PackageDiffApplication(ApplicationBase):
 		new = self.load(self.opts.newPath)
 
 		restrict = self.opts.restrict
+
+		# Now that we've loaded everything (and avoided the debug chatter), enable logging to stdout:
+		loggingFacade.enableStdout()
 
 		self.reportAdditionsRemovals(old, new, restrict)
 		self.reportChangedPlacement(old, new, restrict)

@@ -2,7 +2,6 @@ import profile
 import argparse
 
 from .products import ProductCodebase, CacheLocation
-from .util import ExecTimer, loggingFacade
 from .util import debugmsg, infomsg, warnmsg, errormsg
 from .util import NameMatcher
 from .obsclnt import OBSClient
@@ -94,27 +93,6 @@ class ApplicationBase(object):
 
 	def getComposeOutputPath(self, basename):
 		return self.productData.getPath(basename)
-
-	def initializeLogging(self):
-		if not self.opts.quiet:
-			loggingFacade.enableStdout()
-		if self.opts.logfile:
-			loggingFacade.addLogfile(self.opts.logfile)
-
-		infomsg(f"Starting {self.name}")
-
-		# --debug <facility> enables debugging for a specific facility
-		# default: log all messages logged through util.debugmsg()
-		# all: log all messages logged through any logger's debug() method
-		for facility in self.opts.debug:
-			if ',' in facility:
-				for facility in facility.split(','):
-					loggingFacade.setLogLevel(facility, 'debug')
-			else:
-				loggingFacade.setLogLevel(facility, 'debug')
-
-		if loggingFacade.isDebugEnabled('obs'):
-			debugmsg("obs debugging enabled")
 
 	@property
 	def cacheRootPath(self):

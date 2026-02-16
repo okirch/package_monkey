@@ -586,10 +586,10 @@ class IndexFormatter(object):
 				break
 			i += 1
 
-		indent = (i + 1) * "   "
+		indent = i * "   "
 		for tag in tags[i:]:
-			self.print(f"{indent}{tag}")
 			indent += "   "
+			self.print(f"{indent}{tag}")
 
 		self.print(f"{indent} - {message}")
 		self.tags = tags

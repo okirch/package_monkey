@@ -303,24 +303,7 @@ class PackageDiffApplication(ApplicationBase):
 				buildChanges.append(buildChange)
 
 		if buildChanges:
-			self.displayChangedPackagesNew(buildChanges)
-		return
-
-		oldNames = old.names
-		newNames = new.names
-
-		# display changes
-		same = oldNames.intersection(newNames)
-		changed = []
-		for name in same:
-			oldPkg = old.lookupRpm(name)
-			newPkg = new.lookupRpm(name)
-			if oldPkg.topic != newPkg.topic:
-				changed.append((oldPkg, newPkg))
-
-		if changed:
-			changed = sorted(changed, key = lambda pair: str(pair[0]))
-			self.displayChangedPackages(changed)
+			self.displayChangedPackages(buildChanges)
 
 	def reportAdditionsRemovals(self, old, new, restrict):
 		if restrict not in (None, 'added', 'removed', 'changed'):
@@ -461,7 +444,7 @@ class PackageDiffApplication(ApplicationBase):
 			result.change[oldRpm] = addedLibs[id]
 		return result
 
-	def displayChangedPackagesNew(self, buildChanges):
+	def displayChangedPackages(self, buildChanges):
 		print("Changed packages")
 
 		formatter = IndexFormatter(sort = True)
@@ -469,33 +452,3 @@ class PackageDiffApplication(ApplicationBase):
 			buildRec.render(formatter)
 
 		formatter.flush()
-
-
-	def displayChangedPackages(self, listOfPairs):
-		print("Changed packages")
-
-		formatter = IndexFormatter(sort = True)
-		for old, new in listOfPairs:
-			oldEpic = old.epic or "(no epic)"
-			oldTopic = old.topic or "(no hints)"
-
-			msg = f"{old.name} ->"
-			if old.name != new.name:
-				msg += f" {new.name}"
-				if old.epic == new.epic and old.topic == new.topic:
-					# special case: change of arch
-					formatter.next(oldEpic, oldTopic, msg)
-					continue
-
-				msg += ";"
-
-			if new.topic:
-				msg += f" {new.topic}"
-			elif new.epic:
-				msg += f" {new.epic} (no topic)"
-			else:
-				msg += " (no epic)"
-			formatter.next(str(oldEpic), oldTopic, msg)
-
-		formatter.flush()
-

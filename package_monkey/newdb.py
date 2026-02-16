@@ -823,6 +823,18 @@ class GenericBuild(object):
 			if status not in ('succeeded', 'excluded'):
 				yield arch, status
 
+	@property
+	def commonBuildVersion(self):
+		versions = set()
+		for rpm in self.binaries:
+			rpmVersions = rpm.versions.common
+			if len(rpmVersions) != 1:
+				return None
+			versions.update(rpmVersions)
+		if len(versions) != 1:
+			return None
+		return next(iter(versions))
+
 class GenericScenarioClass(object):
 	def __init__(self, name, values, partiallyPresent = None):
 		self.name = name

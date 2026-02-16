@@ -13,11 +13,17 @@ class TrivialLabelFacade(object):
 	class FakeEpic(object):
 		def __init__(self, name):
 			self.name = name
+			self.layer = None
 			self.ownerID = None
 			self.lifecycleID = None
 
 		def __str__(self):
 			return self.name
+
+		def __eq__(self, other):
+			if other is None:
+				return False
+			return self.name == other.name
 
 	class FakeLabelHints(object):
 		def __init__(self, name, epic = None):

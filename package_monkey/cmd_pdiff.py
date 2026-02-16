@@ -147,12 +147,16 @@ class PackageDiffApplication(ApplicationBase):
 
 		for build in db.builds:
 			build.rpmNames = set(rpm.name for rpm in build.binaries)
+			epic = labelFacade.getEpicForBuild(build)
+			if epic is not None:
+				build.epic = epic
 
 		for rpm in db.rpms:
 			hints = labelFacade.getHintsForRpm(rpm)
 			if hints is None:
 				rpm.topic = None
 				rpm.epic = None
+				rpm.klass = 'default'
 				if rpm.new_build is not None:
 					rpm.epic = rpm.new_build.new_epic
 			else:
@@ -161,6 +165,8 @@ class PackageDiffApplication(ApplicationBase):
 					topic = hints.choice
 				rpm.topic = f"{topic}-{hints.klass}"
 				rpm.epic = hints.epic
+				rpm.klass = hints.klass
+				rpm.choice = hints.choice
 
 		db.names = set(rpm.name for rpm in db.rpms)
 
@@ -178,9 +184,127 @@ class PackageDiffApplication(ApplicationBase):
 		self.reportAdditionsRemovals(old, new, restrict)
 		self.reportChangedPlacement(old, new, restrict)
 
+	class LabelChangeRecord(object):
+		def __init__(self, labelType, oldValue, newValue):
+			self.labelType = labelType
+			self.oldValue = oldValue
+			self.newValue = newValue
+
+		def __str__(self):
+			return f"{self.labelType}: {self.oldValue} -> {self.newValue}"
+
+	class BuildChangeRecord(object):
+		def __init__(self, name, epic = None):
+			self.name = name
+			self.epic = epic
+			self.epicChange = None
+			self.rpmChanges = []
+
+		def __bool__(self):
+			return bool(self.epicChange or self.rpmChanges)
+
+		def render(self, formatter):
+			if self.epic is None:
+				epicTag = "- NO EPIC -"
+			else:
+				epicTag = str(self.epic)
+
+			assert(bool(self))
+
+			buildTag = f"build {self.name}"
+			if self.epicChange is not None:
+				buildTag += f" ({self.epicChange})"
+
+			if not self.rpmChanges:
+				formatter.next(epicTag, buildTag, "all rpms otherwise unchanged")
+			else:
+				for rpmChange in self.rpmChanges:
+					msg = str(rpmChange)
+					formatter.next(epicTag, buildTag, msg)
+
+		def noteEpicChange(self, record):
+			self.epicChange = record
+
+		def noteRpmChange(self, rpmRecord):
+			self.rpmChanges.append(rpmRecord)
+
+	class RpmChangeRecord(object):
+		def __init__(self, name):
+			self.name = name
+			self.classChange = None
+			self.labelChange = None
+			self.optionChange = None
+
+		def __bool__(self):
+			return bool(self.classChange or self.labelChange or self.optionChange)
+
+		def __str__(self):
+			msg = [self.name]
+			if self.classChange:
+				msg.append(f"{self.classChange}")
+			if self.labelChange:
+				msg.append(f"{self.labelChange}")
+			if self.optionChange:
+				msg.append(f"{self.optionChange}")
+			return "; ".join(msg)
+
 	def reportChangedPlacement(self, old, new, restrict):
 		if restrict not in (None, 'changed'):
 			return
+
+		buildChanges = []
+
+		def samePlacement(oldRpm, newRpm):
+			return oldRpm.topic == newRpm.topic
+
+		oldBuildNames = set(build.name for build in old.builds)
+		newBuildNames = set(build.name for build in new.builds)
+
+		processedRpmNames = set()
+
+		# loop over common builds and see if they moved between epics
+		for buildName in oldBuildNames.intersection(newBuildNames):
+			oldBuild = old.lookupBuild(buildName)
+			newBuild = new.lookupBuild(buildName)
+
+			buildChange = self.BuildChangeRecord(buildName, epic = newBuild.epic)
+
+			if oldBuild.epic != newBuild.epic:
+				buildChange.noteEpicChange(self.LabelChangeRecord('epic', oldBuild.epic, newBuild.epic))
+
+			commonRpmNames = oldBuild.rpmNames.intersection(newBuild.rpmNames)
+			for rpmName in commonRpmNames:
+				rpmChange = self.RpmChangeRecord(rpmName)
+
+				oldRpm = old.lookupRpm(rpmName)
+				newRpm = new.lookupRpm(rpmName)
+
+				# HACK: detect noship -> noship
+				if newRpm.topic is None and oldRpm.topic is None:
+					continue
+
+				if newRpm.topic is None:
+					# HACK: detect * -> noship
+					rpmChange.classChange = self.LabelChangeRecord('class', oldRpm.klass, "noship")
+				elif oldRpm.topic is None:
+					# HACK: detect noship -> *
+					rpmChange.classChange = self.LabelChangeRecord('class', "noship", newRpm.klass)
+				else:
+					if oldRpm.choice != newRpm.choice:
+						rpmChange.labelChange = self.LabelChangeRecord('choice', oldRpm.choice, newRpm.choice)
+					if oldRpm.klass != newRpm.klass:
+						rpmChange.classChange = self.LabelChangeRecord('class', oldRpm.klass, newRpm.klass)
+
+				if rpmChange:
+					buildChange.noteRpmChange(rpmChange)
+
+			processedRpmNames.update(commonRpmNames)
+			if buildChange:
+				buildChanges.append(buildChange)
+
+		if buildChanges:
+			self.displayChangedPackagesNew(buildChanges)
+		return
 
 		oldNames = old.names
 		newNames = new.names
@@ -336,6 +460,16 @@ class PackageDiffApplication(ApplicationBase):
 			oldRpm = removedLibs[id]
 			result.change[oldRpm] = addedLibs[id]
 		return result
+
+	def displayChangedPackagesNew(self, buildChanges):
+		print("Changed packages")
+
+		formatter = IndexFormatter(sort = True)
+		for buildRec in buildChanges:
+			buildRec.render(formatter)
+
+		formatter.flush()
+
 
 	def displayChangedPackages(self, listOfPairs):
 		print("Changed packages")

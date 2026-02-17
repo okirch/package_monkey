@@ -187,6 +187,8 @@ class ProductDiffCommand(GenericSubcommand):
 	NAME = 'productdiff'
 	ALIASES = ['cdiff']
 	HELP = 'Display changes in the set of available packages, and their labels, between two runs'
+	LOG_USE_TIMESTAMPS = False
+	LOG_USE_LATE_STDOUT = True
 
 	def registerArguments(self, args):
 		args.add_argument('--release', default = None,

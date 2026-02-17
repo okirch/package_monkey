@@ -1,12 +1,12 @@
 from .options import ApplicationBase
-from .writers import XmlPackageReader
 from .filter import Classification
 from .util import loggingFacade
+from .cmd_label import ClassificationGadget
 
 LEFT_BRACE = '{'
 
-class DotfileWriter:
-	class Graph:
+class DotfileWriter(object):
+	class Graph(object):
 		def __init__(self, writer, name, indent = ""):
 			self.writer = writer
 			self.name = name
@@ -71,6 +71,13 @@ class DotfileWriter:
 	def getNode(self, label):
 		return self.nodeIds.get(label)
 
+def loadClassificationScheme(application):
+	db = application.loadDBForSnapshot()
+
+	gadget = ClassificationGadget(db, application.modelDescription)
+	gadget.solve(application.productCodebase)
+
+	return gadget.classificationScheme
 
 # Not yet ready for production...
 def writeLabelGraph(output, labels, order):
@@ -97,11 +104,7 @@ def writeLabelGraph(output, labels, order):
 	graph.end()
 
 def writeComponentGraph(application):
-	classificationScheme = Classification.Scheme()
-
-	# load packages.xml and dump the result. We're only interested in
-	# the side effects of populating classificationScheme
-	application.loadClassification(classificationScheme)
+	classificationScheme = loadClassificationScheme(application)
 
 	order = classificationScheme.componentOrder()
 	labels = list(order.bottomUpTraversal())
@@ -112,11 +115,7 @@ def writeComponentGraph(application):
 	print(f"Please process output file using something like this: dot -Tpdf {output.filename}")
 
 def writeLayerGraph(application):
-	classificationScheme = Classification.Scheme()
-
-	# load packages.xml and dump the result. We're only interested in
-	# the side effects of populating classificationScheme
-	application.loadClassification(classificationScheme)
+	classificationScheme = loadClassificationScheme(application)
 
 	order = classificationScheme.layerOrder()
 	labels = list(order.bottomUpTraversal())

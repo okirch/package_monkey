@@ -111,12 +111,6 @@ class ApplicationBase(object):
 			self._cache = CacheLocation(self.opts.cache)
 		return self._cache
 
-	def loadClassification(self, classificationScheme = None):
-		if classificationScheme is None:
-			classificationScheme = Classification.Scheme()
-		classificationScheme.installLabelTracing(self.traceMatcher)
-		return self.codebaseData.loadPackagesFull(classificationScheme)
-
 	def loadDBForSnapshot(self, slug = None):
 		codebaseData = self.getCodebaseForSnapshot(slug)
 		return codebaseData.loadDB(traceMatcher = self.traceMatcher)

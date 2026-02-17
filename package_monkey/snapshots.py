@@ -15,7 +15,6 @@ from .util import infomsg, errormsg, warnmsg
 from .newdb import *
 from .policy import Policy
 from .download import DownloadInfo
-from .writers import CsvPackageWriter
 from .csvio import CSVReader
 
 __names__ = ['SnapshotFactory', 'Snapshot']
@@ -125,39 +124,6 @@ class CodebaseLocation(object):
 
 	def saveClassification(self, classificationResult):
 		classificationResult.save(self.getPath("classification.db"))
-
-	def savePackagesMinimal(self, classificationResult):
-		writer = CsvPackageWriter(self.getPath("packages.csv"))
-		writer.writeClassificationResult(classificationResult)
-
-	def loadPackagesMinimal(self, rpmFacade):
-		path = self.getPath("packages.csv")
-
-		infomsg(f"Loading {path}")
-		csv = CSVReader(path)
-		while True:
-			e = csv.readObject()
-			if e is None:
-				break
-
-			if not e.src:
-				if e.topic.endswith('-noship'):
-					# This seems to happen on and off...
-					rpmFacade.addIgnoredRpm(e.package, e.epic, e.topic, type = e.rpmtype)
-					continue
-				raise Exception(f"{e.package} has no build")
-
-			build = rpmFacade.createBuild(e.src, e.epic)
-			rpm = rpmFacade.createRpm(e.package, e.epic, e.topic, build = build, type = e.rpmtype)
-
-	def savePackagesFull(self, classificationResult):
-		raise Exception(f"implementation removed")
-
-	def loadPackagesFull(self, classificationScheme):
-		raise Exception(f"implementation removed")
-
-	def saveComponentModel(self, classificationResult):
-		raise Exception(f"implementation removed")
 
 ##################################################################
 # Provide access to all data in ~/.local/package_monkey/$product

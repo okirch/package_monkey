@@ -10,6 +10,27 @@ import os
 __names__ = ['TrivialLabelFacade']
 
 class TrivialLabelFacade(object):
+	class FakeLayer(object):
+		def __init__(self, name):
+			self.name = name
+			self.layer = None
+			self.epics = set()
+
+		def __str__(self):
+			return self.name
+
+		def __eq__(self, other):
+			if other is None:
+				return False
+			return self.name == other.name
+
+		def __hash__(self):
+			return hash(self.name)
+
+		def addEpic(self, epic):
+			self.epics.add(epic)
+			epic.layer = self
+
 	class FakeEpic(object):
 		def __init__(self, name):
 			self.name = name
@@ -24,6 +45,9 @@ class TrivialLabelFacade(object):
 			if other is None:
 				return False
 			return self.name == other.name
+
+		def __hash__(self):
+			return hash(self.name)
 
 	class FakeLabelHints(object):
 		def __init__(self, name, epic = None):
@@ -46,6 +70,7 @@ class TrivialLabelFacade(object):
 	def __init__(self, dbPath):
 		self._rpmHints = {}
 		self._epics = {}
+		self._layers = {}
 		self._buildEpic = {}
 		self.policy = None
 
@@ -63,7 +88,15 @@ class TrivialLabelFacade(object):
 
 				kwd = w.pop(0)
 				if kwd == 'epic':
-					currentEpic = self.createEpic(w[0])
+					currentEpic = self.createEpic(w.pop(0))
+					for arg in w:
+						assert('=' in arg)
+						attr, value = arg.split('=')
+						if attr == 'layer':
+							layer = self.createLayer(value)
+							layer.addEpic(currentEpic)
+						else:
+							raise Exception(f"{dbPath}: unknown attribute {arg} for epic {currentEpic}")
 				elif kwd == 'build':
 					self._buildEpic[w[0]] = currentEpic
 				elif kwd == 'rpm':
@@ -79,6 +112,19 @@ class TrivialLabelFacade(object):
 			else:
 				setattr(entry, key, value)
 		self._rpmHints[name] = entry
+
+	def createLayer(self, name):
+		if not name:
+			return None
+		layer = self._layers.get(name)
+		if layer is None:
+			layer = self.FakeLayer(name)
+			self._layers[name] = layer
+		return layer
+
+	@property
+	def layers(self):
+		return iter(self._layers.values())
 
 	def createEpic(self, name):
 		if not name:

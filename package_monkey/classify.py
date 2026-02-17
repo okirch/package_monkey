@@ -590,7 +590,7 @@ class NewResult(object):
 
 		with open(path + ".tmp", "w") as dbf:
 			for epicControl in sorted(self._members.values(), key = str):
-				write(f"epic {epicControl}")
+				write(f"epic {epicControl} layer={epicControl.label.layer}")
 				for buildControl in sorted(epicControl.builds, key = str):
 					write(f"  build {buildControl}")
 					for rpmControl in sorted(buildControl.rpms, key = str):

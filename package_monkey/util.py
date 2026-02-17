@@ -559,6 +559,9 @@ class IndexFormatter(object):
 	def __del__(self):
 		self.flush()
 
+	def __bool__(self):
+		return bool(self.queue)
+
 	def flush(self):
 		if self.queue:
 			for entry in sorted(self.queue):

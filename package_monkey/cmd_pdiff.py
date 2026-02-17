@@ -271,10 +271,24 @@ class CodebaseDelta(object):
 		return iter(self.buildChanges)
 
 class DiffRenderer(object):
-	def __init__(self, onlyType = -1):
+	def __init__(self, onlyType = -1, caption = None):
 		self.onlyType = onlyType
 
 		self.formatter = IndexFormatter(sort = True)
+		self.caption = caption
+
+	def __del__(self):
+		self.flush()
+
+	def flush(self):
+		if not self.formatter:
+			# nothing to show
+			return False
+
+		if self.caption is not None:
+			print(self.caption)
+		self.formatter.flush()
+		return True
 
 	def processBuildRecord(self, buildRec):
 		if buildRec.shouldDisplay(self.onlyType):
@@ -300,7 +314,7 @@ class PackageDiffApplication(ApplicationBase):
 			if data is None:
 				raise Exception(f"Unknown snapshot {path}")
 		else:
-			return Placement.load(path)
+			raise Exception(f"Expected snapshot name format \"@someid\"")
 
 		codebaseData = data.getCodebase(self.opts.codebase)
 
@@ -358,9 +372,19 @@ class PackageDiffApplication(ApplicationBase):
 		else:
 			renderer = DiffRenderer()
 
-		print(f"Changed packages:")
+		if not self.opts.quiet:
+			oldPath = self.opts.oldPath or '@latest'
+			newPath = self.opts.newPath or 'current'
+			print(f"Showing codebase diff between {oldPath} and {newPath}")
+			print(f"  {oldPath} codebase dated {old.downloadTimestamp or 'unknown'}")
+			print(f"  {newPath} codebase dated {new.downloadTimestamp or 'unknown'}")
+
+		renderer.caption = "Changed packages:"
 		for record in delta:
 			renderer.processBuildRecord(record)
+
+		if not renderer.flush():
+			print("No changes")
 
 	def compareRpms(self, buildChange, rpmName, oldRpm, newRpm, extraRecords = []):
 		# HACK: detect noship -> noship

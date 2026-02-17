@@ -10,6 +10,7 @@ from .filter import Classification
 from .model import ComponentModelMapping
 from .usecase import UseCaseCatalog
 from .preprocess import *
+from .postprocess import *
 from .snapshots import *
 
 import os
@@ -67,7 +68,7 @@ class ApplicationBase(object):
 		return self._data
 
 	def getSnapshot(self, slug):
-		if slug == '@@':
+		if slug is None or slug == '@@':
 			return self.data
 
 		if self._snapshots is None:
@@ -75,6 +76,12 @@ class ApplicationBase(object):
 			self._snapshots = SnapshotFactory(snapRoot)
 
 		return self._snapshots.load(slug.lstrip('@'))
+
+	def getCodebaseForSnapshot(self, slug = None):
+		data = self.getSnapshot(slug)
+		if data is None:
+			raise Exception(f"Cannot locate snapshot {slug}")
+		return data.getCodebase(self.opts.codebase)
 
 	@property
 	def codebaseData(self):
@@ -110,6 +117,10 @@ class ApplicationBase(object):
 		classificationScheme.installLabelTracing(self.traceMatcher)
 		return self.codebaseData.loadPackagesFull(classificationScheme)
 
+	def loadDBForSnapshot(self, slug = None):
+		codebaseData = self.getCodebaseForSnapshot(slug)
+		return codebaseData.loadDB(traceMatcher = self.traceMatcher)
+
 	def loadNewDB(self):
 		return self.codebaseData.loadDB(traceMatcher = self.traceMatcher)
 
@@ -121,6 +132,15 @@ class ApplicationBase(object):
 
 	def loadPolicy(self, labelFacade):
 		return self.codebaseData.loadPolicy(labelFacade)
+
+	def loadClassificationForSnapshot(self, slug = None):
+		codebaseData = self.getCodebaseForSnapshot(slug)
+
+		path = codebaseData.getPath("classification.db")
+		labelFacade = TrivialLabelFacade(path)
+
+		labelFacade.policy = codebaseData.loadPolicy(labelFacade)
+		return labelFacade
 
 	@property
 	def traceMatcher(self):

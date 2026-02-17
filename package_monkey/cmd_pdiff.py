@@ -306,22 +306,9 @@ class PackageDiffApplication(ApplicationBase):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 
-	def load(self, path):
-		if path is None:
-			data = self.data
-		elif path.startswith('@'):
-			data = self.getSnapshot(path[1:])
-			if data is None:
-				raise Exception(f"Unknown snapshot {path}")
-		else:
-			raise Exception(f"Expected snapshot name format \"@someid\"")
-
-		codebaseData = data.getCodebase(self.opts.codebase)
-
-		db = codebaseData.loadDB()
-
-		labelFacade = TrivialLabelFacade(codebaseData.getPath("classification.db"))
-		labelFacade.policy = codebaseData.loadPolicy(labelFacade)
+	def load(self, arg):
+		db = self.loadDBForSnapshot(arg)
+		labelFacade = self.loadClassificationForSnapshot(arg)
 
 		for build in db.builds:
 			build.rpmNames = set(rpm.name for rpm in build.binaries)

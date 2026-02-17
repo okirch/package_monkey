@@ -18,10 +18,7 @@ class CommonInfoApplication(ApplicationBase):
 
 		labelFacade = None
 		if not self.opts.no_labels:
-			path = self.getCodebasePath("classification.db")
-			labelFacade = TrivialLabelFacade(path)
-
-			labelFacade.policy = self.loadPolicy(labelFacade)
+			labelFacade = self.loadClassificationForSnapshot(None)
 
 		renderer = Renderer(labelFacade)
 

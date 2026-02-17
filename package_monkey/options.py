@@ -68,13 +68,13 @@ class ApplicationBase(object):
 
 	def getSnapshot(self, slug):
 		if slug == '@@':
-			return self.productData
+			return self.data
 
 		if self._snapshots is None:
 			snapRoot = self.getCachePath('snapshots')
 			self._snapshots = SnapshotFactory(snapRoot)
 
-		return self._snapshots.load(slug)
+		return self._snapshots.load(slug.lstrip('@'))
 
 	@property
 	def codebaseData(self):

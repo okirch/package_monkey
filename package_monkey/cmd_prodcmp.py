@@ -5,6 +5,8 @@
 
 import sys
 import yaml
+import os
+import time
 
 from .util import infomsg, warnmsg, errormsg
 from .arch import ArchSet, archRegistry
@@ -60,11 +62,8 @@ class ProductDiffApplication(ApplicationBase):
 			return set(self.packages.keys())
 
 	class Composition(object):
-		def __init__(self, path):
-			self.path = path
-
-			with open(path) as f:
-				self.data = yaml.full_load(f)
+		def __init__(self, arg, application):
+			self.loadRawData(arg, application)
 
 			self.products = {}
 			self.mainList = None
@@ -84,6 +83,36 @@ class ProductDiffApplication(ApplicationBase):
 
 		def __str__(self):
 			return self.path
+
+		def loadRawData(self, arg, application):
+			productName = 'unknown'
+
+			if not arg.startswith('@'):
+				self.codebaseInfo = 'unknown'
+				self.path = arg
+			else:
+				data = application.getSnapshot(arg)
+				if data is None:
+					raise Exception(f"Unknown snapshot {arg}")
+
+				codebaseData = data.getCodebase(application.opts.codebase)
+				info = codebaseData.loadDownloadInfo()
+				if info.timestamp is not None:
+					self.codebaseInfo = f"{application.opts.codebase} (build time {info.timestamp})"
+				else:
+					self.codebaseInfo = f"{application.opts.codebase}"
+
+				productName = application.productRelease
+				productData = data.getProduct(application.productRelease)
+				self.path = productData.getPath('default.productcompose')
+
+			with open(self.path) as f:
+				self.data = yaml.full_load(f)
+
+			ctime = os.stat(self.path).st_ctime
+			ctime = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(ctime))
+
+			self.productInfo = f"{productName} (generated {ctime})"
 
 		@property
 		def packages(self):
@@ -168,11 +197,15 @@ class ProductDiffApplication(ApplicationBase):
 		srcComposition = self.loadComposition(self.opts.srcfile)
 		dstComposition = self.loadComposition(self.opts.dstfile)
 
-		print(f"Inspecting difference {srcComposition} -> {dstComposition}")
+		if not self.opts.quiet:
+			print(f"Inspecting difference {srcComposition} -> {dstComposition}")
+			print(f"   product {srcComposition.productInfo}; codebase {srcComposition.codebaseInfo}")
+			print(f"   product {dstComposition.productInfo}; codebase {dstComposition.codebaseInfo}")
+
 		self.compositionDiff(srcComposition, dstComposition)
 
 	def loadComposition(self, arg):
-		return self.Composition(self.getComposerPath(arg))
+		return self.Composition(arg, self)
 
 	def compositionDiff(self, src, dst):
 		ignoreProducts = set(self.opts.ignore_product)
@@ -249,18 +282,3 @@ class ProductDiffApplication(ApplicationBase):
 			if not ignore:
 				for name in sorted(added):
 					print(f"    {name}")
-
-	def getComposerPath(self, arg):
-		if not arg.startswith('@'):
-			return arg
-
-		if arg == '@@':
-			productData = self.productData
-		else:
-			data = self.getSnapshot(arg[1:])
-			if data is None:
-				raise Exception(f"Unknown snapshot {arg[1:]}")
-
-			productData = data.getProduct(self.productRelease)
-
-		return productData.getPath('default.productcompose')

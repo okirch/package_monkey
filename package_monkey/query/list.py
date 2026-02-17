@@ -1,5 +1,4 @@
 
-from ..util import CountingDict
 from ..util import infomsg
 from ..queries import GenericQuery
 from ..filter import Classification

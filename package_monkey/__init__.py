@@ -237,28 +237,10 @@ class EpicShowCommand(GenericSubcommand):
 
 		return EpicShowApplication(self.NAME, opts)
 
-class EpicWhatRequiresCommand(GenericSubcommand):
-	NAME = 'what-requires'
-	ALIASES = ['wr', 'provides']
-	HELP = 'given an epic, show what depends on it (and how)'
-
-	def registerArguments(self, args):
-		args.add_argument('--only-rpms', action = 'store_true',
-				help = 'do not display label dependencies, only packages used')
-		args.add_argument(dest = 'required', metavar = 'REQUIRED',
-				help = 'required epic')
-		args.add_argument(dest = 'epics', metavar = 'EPICS', nargs = '*',
-				help = 'list of candidate epics to check whether they require REQUIRED')
-
-	def createApplication(self, opts):
-		from package_monkey.cmd_epicinfo import EpicWhatRequiresApplication
-
-		return EpicWhatRequiresApplication(self.NAME, opts)
-
 class EpicInfoCommand(GenericSubcommand):
 	NAME = 'epicinfo'
 	ALIASES = ['epics', 'einfo', 'ei']
-	SUBCOMMANDS = [EpicListCommand(), EpicShowCommand(), EpicWhatRequiresCommand()]
+	SUBCOMMANDS = [EpicListCommand(), EpicShowCommand()]
 	HELP = 'Display information on epics'
 
 	def registerArguments(self, args):

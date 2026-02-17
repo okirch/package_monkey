@@ -7,7 +7,6 @@
 from .options import ApplicationBase
 from .util import infomsg, errormsg, warnmsg
 from .queries import QueryContext
-from .query.runtime_requires import WhatRequiresQuery
 from .query.list import ListQuery, ShowQuery
 
 class EpicQueryApplication(ApplicationBase):
@@ -27,10 +26,6 @@ class EpicQueryApplication(ApplicationBase):
 
 		epics = getattr(self.opts, 'epics', [])
 		query.perform(epics)
-
-class EpicWhatRequiresApplication(EpicQueryApplication):
-	def createQuery(self, context):
-		return WhatRequiresQuery(context, self.opts.required.split(','), onlyRpms = self.opts.only_rpms)
 
 class EpicListApplication(EpicQueryApplication):
 	def createQuery(self, context):

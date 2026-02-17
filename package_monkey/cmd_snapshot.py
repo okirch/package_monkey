@@ -64,8 +64,7 @@ class PublishApplication(ApplicationBase):
 		if slug is None:
                         return self.data
 
-		slug = slug.lstrip('@')
-		data = self.getSnapshot(slug[1:])
+		data = self.getSnapshot(slug)
 		if data is None:
 			raise Exception(f"Unknown snapshot {slug}")
 

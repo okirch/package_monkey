@@ -1,91 +1,54 @@
 
 from ..util import CountingDict
+from ..util import infomsg
 from ..queries import GenericQuery
 from ..filter import Classification
 
-
-class ListQuery(GenericQuery):
-	def __init__(self, context, onlyBaseLabels = None):
-		super().__init__(context, None)
-
-		classification = context.classification
-		membershipSizes = CountingDict()
-
-		if onlyBaseLabels is None and context.verbosityLevel < 2:
-			onlyBaseLabels = True
-
-		for label, members in classification.enumeratePackages():
-			if onlyBaseLabels:
-				label = label.baseLabel
-			membershipSizes.increment(label, len(members))
-
-		for label, build in classification.enumerateBuilds():
-			membershipSizes.increment(label, 1)
-
-		self._membershipSizes = membershipSizes
-
-	def __call__(self, queryTargetLabel):
-		# stats = self.getComponentStats(queryTargetLabel)
-
-		size = self._membershipSizes[queryTargetLabel]
-		print(f"  {queryTargetLabel} ({size} OBS packages)")
-
-		verbosityLevel = self.context.verbosityLevel
-		if verbosityLevel > 0:
-			classificationScheme = self.context.classificationScheme
-			topicOrder = self.context.labelOrder
-
-			binaryLabels = classificationScheme.getReferencingLabels(queryTargetLabel)
-			for label in topicOrder.bottomUpTraversal(binaryLabels):
-				self.processTopic(label)
-
-			print()
-		return
-
-	def processTopic(self, label):
-		size = self._membershipSizes[label]
-		if not size:
-			return
-
-		print(f"      - {label} ({size} rpms)")
-		if self.context.verbosityLevel > 1:
-			classification = self.context.classification
-			for rpm in sorted(classification.getPackagesForLabel(label), key = str):
-				print(f"          {rpm}")
-
-class ShowQuery(GenericQuery):
+class EpicQueryBase(GenericQuery):
 	def __init__(self, context):
-		super().__init__(context, None)
+		super().__init__(context)
 
 		classification = context.classification
 
-		self._archSet = classification.classificationScheme.defaultArchSet
-		self._epics = {}
+		self._members = {}
+		for epic in context.enumerateEpics():
+			self._members[epic] = set()
 
-		for epic, build in classification.enumerateBuilds():
+		for build, epic in context.enumerateBuilds():
 			if build.isSynthetic:
 				continue
+			self._members[epic].add(build)
 
-			buildSet = self._epics.get(epic)
-			if buildSet is None:
-				buildSet = set()
-				self._epics[epic] = buildSet
-			buildSet.add(build)
+		self._archSet = classification.classificationScheme.defaultArchSet
 
+class ListQuery(EpicQueryBase):
 	def __call__(self, queryTargetLabel):
-		builds = self._epics.get(queryTargetLabel)
+		members = self._members[queryTargetLabel]
+		infomsg(f"{queryTargetLabel} ({len(members)} builds)")
+
+		verbosityLevel = self.context.verbosityLevel
+		if verbosityLevel > 1:
+			# FIXME: we could save additional epic information to classification.db,
+			# such as the file where the epic is defined
+			for build in sorted(members, key = str):
+				infomsg(f"   {build}")
+
+class ShowQuery(EpicQueryBase):
+	def __call__(self, queryTargetLabel):
+		builds = self._members.get(queryTargetLabel)
 
 		if not builds:
-			print(f"  {queryTargetLabel}: no builds")
+			infomsg(f"{queryTargetLabel}: no builds")
 			return
 
 		wantNewline = False
 
-		print(f"  {queryTargetLabel}: {len(builds)} build(s)")
+		infomsg(f"{queryTargetLabel}: {len(builds)} build(s)")
 		if queryTargetLabel.description:
-			print(f"    Description:")
+			infomsg(f"   Description:")
 			for s in queryTargetLabel.description.split('\n'):
-				print(f"      {s}")
+				if s:
+					infomsg(f"      {s}")
 			wantNewline = True
 
 		if queryTargetLabel.lifecycleID is not None:
@@ -93,9 +56,9 @@ class ShowQuery(GenericQuery):
 
 			lifecycle = policy.getLifeCycle(queryTargetLabel.lifecycleID)
 			if lifecycle is None:
-				print(f"    Life Cycle: {queryTargetLabel.lifecycleID} [NOT DEFINED]")
+				infomsg(f"   Life Cycle: {queryTargetLabel.lifecycleID} [NOT DEFINED]")
 			else:
-				print(f"    Life Cycle: {queryTargetLabel.lifecycleID}")
+				infomsg(f"   Life Cycle: {queryTargetLabel.lifecycleID}")
 				for impl in sorted(lifecycle.implementations or [], key = str):
 					implEpics = Classification.createLabelSet()
 					for epic in self.context.classificationScheme.allEpics:
@@ -103,43 +66,40 @@ class ShowQuery(GenericQuery):
 							implEpics.add(epic)
 
 					if implEpics:
-						print(f"       implemented by {implEpics}")
+						infomsg(f"       implemented by {implEpics}")
 					else:
-						print(f"       implemented by life cycle {impl} [NO EPICS]")
+						infomsg(f"       implemented by life cycle {impl} [NO EPICS]")
 
 			wantNewline = True
 
 		if wantNewline:
-			print()
+			infomsg("")
 
 		for build in sorted(builds, key = str):
-			print(f"    {build}")
+			infomsg(f"   {build}")
 			for rpm in sorted(build.rpms, key = str):
+				hints = rpm.labelHints
+				if hints is None or hints.label is None:
+					infomsg(f"      {rpm}")
+					continue
+
+				label = hints.label
+
 				attrs = []
-				if rpm.label and rpm.label.definingBuildOption:
-					attrs.append(f"option={rpm.label.definingBuildOption}")
-				elif rpm.label and rpm.label.fromAutoFlavor:
-					name = rpm.label.fromAutoFlavor.name.lstrip('%')
+				if label and label.definingBuildOption:
+					attrs.append(f"option={label.definingBuildOption}")
+				elif label and label.fromAutoFlavor:
+					name = label.fromAutoFlavor.name.lstrip('%')
 					attrs.append(f"extra={name}")
-				if rpm.label and rpm.label.klass:
-					attrs.append(f"class={rpm.label.klass}")
+
+				if rpm.new_class is not None:
+					attrs.append(f"class={rpm.new_class}")
 				if rpm.architectures != self._archSet:
 					attrs.append(f"arch={rpm.architectures}")
 
 				extra = ""
 				if attrs:
 					extra = "; " + ' '.join(attrs)
-				print(f"      {rpm}{extra}")
-			print()
+				infomsg(f"      {rpm}{extra}")
+			infomsg("")
 		return
-
-	def processTopic(self, label):
-		size = self._membershipSizes[label]
-		if not size:
-			return
-
-		print(f"      - {label} ({size} rpms)")
-		if self.context.verbosityLevel > 1:
-			classification = self.context.classification
-			for rpm in sorted(classification.getPackagesForLabel(label), key = str):
-				print(f"          {rpm}")

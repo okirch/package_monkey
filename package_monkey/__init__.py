@@ -210,6 +210,8 @@ class ProductDiffCommand(GenericSubcommand):
 class EpicListCommand(GenericSubcommand):
 	NAME = 'list'
 	HELP = 'list epics'
+	LOG_USE_TIMESTAMPS = False
+	LOG_USE_LATE_STDOUT = True
 
 	def registerArguments(self, args):
 		args.add_argument(dest = 'epics', metavar = 'EPICS', nargs = '*',
@@ -223,6 +225,8 @@ class EpicListCommand(GenericSubcommand):
 class EpicShowCommand(GenericSubcommand):
 	NAME = 'show'
 	HELP = 'show contents of epic'
+	LOG_USE_TIMESTAMPS = False
+	LOG_USE_LATE_STDOUT = True
 
 	def registerArguments(self, args):
 		args.add_argument(dest = 'epics', metavar = 'EPICS', nargs = '*',

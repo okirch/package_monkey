@@ -1,16 +1,38 @@
 from .filter import Classification, PackageFilter
+from .cmd_label import ClassificationGadget
 from .util import ANSITreeFormatter, NameMatcher, DictOfSets
-from .util import errormsg, infomsg
+from .util import errormsg, infomsg, loggingFacade
+
 
 class QueryContextBase(object):
 	def __init__(self, application):
 		self.application = application
 
-		self.classificationScheme = Classification.Scheme()
-		self.classification = application.loadClassification(self.classificationScheme)
+		self.db = application.loadDBForSnapshot()
 
-		self.labelOrder = None
-		self.componentOrder = self.classificationScheme.componentOrder()
+		gadget = ClassificationGadget(self.db, application.modelDescription)
+		self.classification = gadget.solve(application.productCodebase)
+
+		self.classificationScheme = gadget.classificationScheme
+		self.epicOrder = self.classificationScheme.componentOrder()
+
+	def enumerateLayers(self):
+		for layer in sorted(self.classification.layers, key = str):
+			yield layer
+
+	def enumerateEpics(self):
+		for epic in sorted(self.classificationScheme.allEpics, key = str):
+			yield epic
+
+	def enumerateBuilds(self):
+		for build in self.db.builds:
+			hints = build.labelHints
+			if hints is None:
+				continue
+
+			epic = hints.epic
+			if epic is not None:
+				yield build, epic
 
 	def argumentsToTopics(self, names, buildClosure = False):
 		result = Classification.createLabelSet()
@@ -32,26 +54,31 @@ class QueryContextBase(object):
 
 	def enumerateLabelsForQuery(self, requestedNames):
 		if not requestedNames:
-			for component in self.componentOrder.bottomUpTraversal():
-				yield component
+			for layer in self.enumerateLayers():
+				if not layer.epics:
+					infomsg(f"{layer}: (no epics)")
+					continue
+				infomsg(f"{layer}:")
+				with loggingFacade.temporaryIndent():
+					for epic in sorted(layer.epics, key = str):
+						yield epic
 			return
 
 		nameMatcher = NameMatcher(requestedNames)
-		for epic in self.matchEpics(nameMatcher):
-			yield epic
-		for topic in self.matchTopics(nameMatcher):
-			yield topic
+		for epic in self.enumerateEpics():
+			if nameMatcher.match(epic.name):
+				yield epic
 
 		unmatched = nameMatcher.reportUnmatched()
 		if unmatched:
 			raise Exception(f"Could not find matching epic or topic label: {' '.join(sorted(unmatched))}")
 
-	def matchEpics(self, nameMatcher):
+	def xxx_matchEpics(self, nameMatcher):
 		for epic in self.classificationScheme.allEpics:
 			if nameMatcher.match(epic.name):
 				yield epic
 
-	def matchTopics(self, nameMatcher):
+	def xxx_matchTopics(self, nameMatcher):
 		for topic in self.classificationScheme.allTopics:
 			if nameMatcher.match(topic.name):
 				yield topic
@@ -262,8 +289,11 @@ class GenericQuery(object):
 		self.renderer = renderer
 
 	def perform(self, queryNames, **kwargs):
-		for label in self.context.enumerateLabelsForQuery(queryNames, **kwargs):
-			self(label)
+		loggingFacade.enableStdout()
+
+		with loggingFacade.temporaryIndent():
+			for label in self.context.enumerateLabelsForQuery(queryNames, **kwargs):
+				self(label)
 
 	def topicsForLabel(self, label):
 		return []

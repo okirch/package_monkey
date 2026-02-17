@@ -337,6 +337,7 @@ class PackageDiffApplication(ApplicationBase):
 				rpm.topic = None
 				rpm.epic = None
 				rpm.klass = 'default'
+				rpm.choice = None
 				if rpm.new_build is not None:
 					rpm.epic = rpm.new_build.new_epic
 			else:
@@ -460,7 +461,7 @@ class PackageDiffApplication(ApplicationBase):
 			for rpmName in rpmNames.removedNames:
 				newRpm = new.lookupRpm(rpmName)
 				if newRpm is not None:
-					buildChange.noteRpmMove(old.lookupRpm(rpmName), f"moved to build {newRpm.build}")
+					buildChange.noteRpmMove(old.lookupRpm(rpmName), f"moved to build {newRpm.new_build}")
 				else:
 					buildChange.noteRpmRemoval(old.lookupRpm(rpmName))
 

@@ -8,3 +8,4 @@ a given codebase in a structured way.
 * [Concepts and Model](model.md)
 * [Tools](tools.md)
 * [Build and Install](build.md)
+* [Tips and Tricks](tricks.md)

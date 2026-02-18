@@ -97,7 +97,7 @@ class DownloadRpmsCommand(OBSSubcommand):
 
 class ExtractRpmInfoCommand(OBSSubcommand):
 	NAME = 'extractinfo'
-	HELP = 'Extract auxiliary information from rpm headers. This includes summary, description etc.'
+	HELP = 'Obsolete command to extract auxiliary information from rpm headers.'
 
 	def registerArguments(self, args):
 		super().registerArguments(args)

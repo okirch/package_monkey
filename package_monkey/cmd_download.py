@@ -1,8 +1,9 @@
-#!/usr/bin/python3.11
+##################################################################
 #
 # For a given codebase (like slfo), mirror all rpm headers for each architecture
 # and prepare a solver file.
 #
+##################################################################
 
 import os
 import rpm
@@ -20,6 +21,7 @@ class SolverDownloadApplication(OBSApplicationBase):
 		super().__init__(*args, **kwargs)
 
 		self.repoCollection = None
+		self.infoGadget = RpmInfoUpdateGadget(self.codebaseData)
 
 	def run(self):
 		solverDir = self.getCachePath('solve')
@@ -58,9 +60,16 @@ class SolverDownloadApplication(OBSApplicationBase):
 			obsProject = repository.obsProject
 			downloadQueue = repository.downloadQueue
 
+			if len(downloadQueue) == 0:
+				continue
+
 			obsProject.performDownload(client, downloadQueue, progressMeter)
 
 			downloadQueue.purgeCache()
+
+			if self.infoGadget is not None:
+				for path in downloadQueue.downloadedFiles:
+					self.infoGadget.maybeUpdate(path, obsProject.buildArch)
 
 			solver = RepositoryArchSolver(repository)
 			if solver.isUptodate():
@@ -82,6 +91,9 @@ class SolverDownloadApplication(OBSApplicationBase):
 		info.setTimestampNow()
 
 		self.codebaseData.saveDownloadInfo(info)
+
+		if self.infoGadget is not None:
+			self.infoGadget.commit()
 
 	def queryBuildResults(self, db, client, project, nameFilter = None):
 		resList = project.queryBuildResults(client)
@@ -158,36 +170,21 @@ class RpmHeaderExtractorApplication(ApplicationBase):
 		self.repoCollection = None
 
 	def run(self):
-		db = self.codebaseData.loadExtraDB()
-
 		solverDir = self.getCachePath('solve')
 		cacheRoot = self.getCachePath("rpmhdrs")
 
 		self.repoCollection = SolverRepositoryCollection.fromCodebase(self.productCodebase, solverDir)
 
-		needsUpdate = []
+		infoGadget = RpmInfoUpdateGadget(self.codebaseData, batching = True)
 		for repository in self.repoCollection:
 			obsProject = repository.obsProject
 			downloadManager = obsProject.createDownloadManager(cacheRoot)
 
 			for name in downloadManager.localFilenames:
-				hash, rpmName = name.split('-', maxsplit = 1)
-				stem, suffix = os.path.splitext(rpmName)
-				if suffix == '.rpm':
-					rpmName = stem
-
-				if rpmName.endswith('-debuginfo') or \
-				   rpmName.endswith('-debugsource'):
-					continue
-
-				rpmInfo = db.maybeUpdate(rpmName, obsProject.buildArch, hash)
-				if rpmInfo is None:
-					continue
-
 				path = downloadManager.fullpath(name)
-				needsUpdate.append((rpmInfo, path, hash))
+				infoGadget.maybeUpdate(path, obsProject.buildArch)
 
-		totalCount = len(needsUpdate)
+		totalCount = len(infoGadget)
 
 		if totalCount == 0:
 			infomsg(f"No updates.")
@@ -195,20 +192,67 @@ class RpmHeaderExtractorApplication(ApplicationBase):
 			infomsg(f"Extracting information from {totalCount} updated rpms")
 
 			progressMeter = ThatsProgress(totalCount, withETA = True)
-			for rpmInfo, path, hash in needsUpdate:
+			for args in infoGadget:
 				if (progressMeter.count % 1000) == 0:
-					infomsg(f"   {progressMeter}: {rpmInfo.name}")
+					infomsg(f"   {progressMeter}: {args[0]}")
 
-				self.loadRPM(rpmInfo, path, hash)
+				infoGadget.update(*args)
 				progressMeter.tick()
 
 			infomsg(f"   {progressMeter}: Done.")
 
-		db.removeStaleEntries()
+		infoGadget.commit()
 
-		self.codebaseData.saveExtraDB(db)
+class RpmInfoUpdateGadget(object):
+	def __init__(self, codebaseData, batching = False):
+		self.codebaseData = codebaseData
+		self.extraDB = codebaseData.loadExtraDB()
+		self.batching = batching
+		self.queue = []
+		self.modified = False
 
-	def loadRPM(self, rpmInfo, path, hash):
+	def __len__(self):
+		return len(self.queue)
+
+	def __iter__(self):
+		return iter(self.queue)
+
+	def commit(self):
+		if self.modified:
+			self.extraDB.removeStaleEntries()
+			self.codebaseData.saveExtraDB(self.extraDB)
+
+	def maybeUpdate(self, path, buildArch):
+		dirname, name = os.path.split(path)
+
+		hash, rpmName = name.split('-', maxsplit = 1)
+		stem, suffix = os.path.splitext(rpmName)
+		if suffix == '.rpm':
+			rpmName = stem
+
+		if rpmName.endswith('-debuginfo') or \
+		   rpmName.endswith('-debugsource'):
+			return
+
+		rpmInfo = self.extraDB.maybeUpdate(rpmName, buildArch, hash)
+		if rpmInfo is None:
+			return
+
+		if self.batching:
+			self.queue.append((rpmInfo, path, hash))
+		else:
+			self.update(rpmInfo, path, hash)
+
+	def update(self, rpmInfo, path, hash):
+		# infomsg(f"update {rpmInfo}")
+		hdr = self.extractRpmHeaderFields(path, ('name', 'version', 'release', 'summary', 'buildtime', 'description'))
+		if hdr is None:
+			errormsg(f"Failed to update {rpmInfo}: unable to extract header fields from {path}")
+
+		rpmInfo.update(hdr, hash)
+		self.modified = True
+
+	def extractRpmHeaderFields(self, path, fieldNames):
 		ts = rpm.TransactionSet()
 
 		ts.setVSFlags(rpm.RPMVSF_NOHDRCHK | rpm.RPMVSF_MASK_NOSIGNATURES | rpm.RPMVSF_NOPAYLOAD)
@@ -217,18 +261,15 @@ class RpmHeaderExtractorApplication(ApplicationBase):
 		hdr = ts.hdrFromFdno(fdno)
 		os.close(fdno)
 
-
 		if hdr[rpm.RPMTAG_SOURCEPACKAGE]:
 			# infomsg(f"{path}: source package")
-			return
+			return None
 
-		rpmInfo.update(self.extractFields(hdr), hash)
-
-	def extractFields(self, hdr):
 		result = {}
-		for key in 'name', 'version', 'release', 'summary', 'buildtime', 'description':
+		for key in fieldNames:
 			value = hdr[key]
 			if type(value) is bytes:
 				value = value.decode('utf-8')
 			result[key] = value
+
 		return result

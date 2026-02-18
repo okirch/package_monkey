@@ -11,9 +11,6 @@ fi
 # and builds a solver file from it
 ./monkey --log download.log download
 
-# extract header info like summary
-./monkey extractinfo
-
 ./monkey --log prepare.log prep
 
 ./monkey --log label.log label

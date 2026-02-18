@@ -120,14 +120,12 @@ class DownloadQueue(object):
 
 	@property
 	def downloadedFiles(self):
-		if True:
-			for name in self.requestedLocalNames:
-				path = self.downloadManager.fullpath(name)
-				if not os.path.isfile(path):
-					raise Exception(f"Download of {path} failed")
-				yield path
-			return
-		return set(map(self.downloadManager.fullpath, self.requestedLocalNames))
+		for name in self.requestedLocalNames:
+			path = self.downloadManager.fullpath(name)
+			if not os.path.isfile(path):
+				raise Exception(f"Download of {path} failed")
+			yield path
+		return
 
 	def popChunk(self, count):
 		result = self.queue[:count]

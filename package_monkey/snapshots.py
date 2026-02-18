@@ -14,6 +14,7 @@ import shutil
 from .util import infomsg, errormsg, warnmsg
 from .newdb import *
 from .policy import Policy
+from .postprocess import *
 from .download import DownloadInfo
 from .csvio import CSVReader
 
@@ -124,6 +125,13 @@ class CodebaseLocation(object):
 
 	def saveClassification(self, classificationResult):
 		classificationResult.save(self.getPath("classification.db"))
+
+	def loadClassification(self):
+		path = self.getPath("classification.db")
+		labelFacade = TrivialLabelFacade(path)
+
+		labelFacade.policy = self.loadPolicy(labelFacade)
+		return labelFacade
 
 ##################################################################
 # Provide access to all data in ~/.local/package_monkey/$product

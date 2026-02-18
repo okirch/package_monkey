@@ -10,7 +10,6 @@ from .filter import Classification
 from .model import ComponentModelMapping
 from .usecase import UseCaseCatalog
 from .preprocess import *
-from .postprocess import *
 from .snapshots import *
 
 import os
@@ -129,12 +128,7 @@ class ApplicationBase(object):
 
 	def loadClassificationForSnapshot(self, slug = None):
 		codebaseData = self.getCodebaseForSnapshot(slug)
-
-		path = codebaseData.getPath("classification.db")
-		labelFacade = TrivialLabelFacade(path)
-
-		labelFacade.policy = codebaseData.loadPolicy(labelFacade)
-		return labelFacade
+		return codebaseData.loadClassification()
 
 	@property
 	def traceMatcher(self):

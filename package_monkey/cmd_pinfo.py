@@ -14,42 +14,14 @@ class CommonInfoApplication(ApplicationBase):
 		self.extraDB = None
 
 	def run(self):
-		self.db = self.loadNewDB()
+		if (self.opts.requires_only + self.opts.provides_only + self.opts.names_only) > 1:
+			errormsg(f"You can specify only one of --requires-only --provides-only or --names-only")
+			exit(1)
 
-		labelFacade = None
-		if not self.opts.no_labels:
-			labelFacade = self.loadClassificationForSnapshot(None)
+		codebaseData = self.getCodebaseForSnapshot(None)
+		self.db = codebaseData.loadDB()
 
-		renderer = Renderer(labelFacade)
-
-		if self.opts.verbose:
-			renderer.rpmPackageInfo = RpmSummaryRendererLong()
-
-		if self.opts.requires_only:
-			renderer.rpmPackageInfo = None
-			renderer.provides = None
-			renderer.promisedTo = None
-			renderer.policy = None
-		if self.opts.provides_only:
-			renderer.rpmPackageInfo = None
-			renderer.requires = None
-			renderer.policy = None
-		if self.opts.names_only:
-			renderer.rpmPackageInfo = None
-			renderer.provides = None
-			renderer.promisedTo = None
-			renderer.requires = None
-			renderer.obsPackageInfo = None
-			renderer.policy = None
-
-		if self.opts.siblings:
-			renderer.obsPackageInfo = OBSBuildSiblingRenderer()
-
-		if renderer.rpmPackageInfo is not None:
-			self.extraDB = self.codebaseData.loadExtraDB()
-
-		self.renderer = renderer
-
+		self.renderer = Renderer(self.opts, codebaseData)
 		self.processQuery(self.db, self.opts.packages)
 
 	def renderOneRpm(self, rpm, obsBuild = None):
@@ -57,24 +29,18 @@ class CommonInfoApplication(ApplicationBase):
 
 		print(f"{renderer.renderRpmName(rpm)}")
 
-		renderer.renderExtraInfo(rpm, self.extraDB)
-
-		renderer.renderArchitectures(rpm)
-		renderer.renderVersion(rpm)
+		renderer.renderRpmInfo(rpm)
 		renderer.renderPolicy(rpm)
 		renderer.renderScenarios(rpm)
 
 		if obsBuild is not None:
-			renderer.renderOBSBuildInfo(obsBuild, exceptRpm = rpm)
+			renderer.renderBuildInfo(obsBuild, exceptRpm = rpm)
 
 		renderer.renderRequires(rpm)
 		renderer.renderUnresolvables(rpm)
 
 		if not rpm.isSourcePackage:
-			renderer.renderProvides(rpm, self.db)
-
-		if not rpm.isSourcePackage:
-			renderer.renderPromises(rpm, self.db)
+			renderer.renderProvides(rpm)
 
 class PackageInfoApplication(CommonInfoApplication):
 	def processQuery(self, db, nameList):
@@ -125,46 +91,24 @@ class BuildInfoApplication(CommonInfoApplication):
 
 class TrivialStringRenderer(object):
 	def render(self, s):
-		return s
-
-	def renderItems(self, values, indent = ''):
-		for s in sorted(values):
-			print(f"{indent} - {self.render(s)}")
+		return str(s)
 
 class RpmNameRenderer(object):
-	def __init__(self):
-		pass
-
-	def render(self, rpm):
-		return rpm.name
-
-	def renderPolicy(self, rpm):
-		pass
-
-	def renderVersion(self, rpm):
-		pass
-
-	def renderArchitectures(self, rpm):
-		pass
-
-	def renderItems(self, rpms, indent = ''):
-		for rpm in sorted(rpms, key = lambda p: p.name):
-			print(f"{indent} - {self.render(rpm)}")
-
-class LabellingRpmNameRenderer(RpmNameRenderer):
-	def __init__(self, labelFacade):
-		super().__init__()
-
+	def __init__(self, labelFacade = None):
 		self.labelFacade = labelFacade
 
-	def render(self, rpm):
-		result = super().render(rpm)
+	def render(self, rpm, arch = None):
+		result = rpm.name
 
-		labelHints = self.labelFacade.getHintsForRpm(rpm)
-		if labelHints is not None:
-			result = f"{result} ({labelHints})"
-		if rpm.type == rpm.TYPE_MISSING:
-			result = result + " [MISSING]"
+		if self.labelFacade is not None:
+			labelHints = self.labelFacade.getHintsForRpm(rpm)
+			if labelHints is not None:
+				result += f" ({labelHints})"
+			if rpm.type == rpm.TYPE_MISSING:
+				result += " [MISSING]"
+
+		if arch is not None:
+			result += f" [{arch}]"
 		return result
 
 class PolicyRenderer(object):
@@ -195,112 +139,109 @@ class PolicyRenderer(object):
 				print(f"  lifecycle: {epic.lifecycleID}")
 
 class ListRenderer(object):
-	def renderList(self, items, itemRenderer):
-		if not items:
-			if self.MSG_EMPTY is not None:
-				print(f"  {self.MSG_EMPTY}")
-			return
+	def __init__(self, itemRenderer):
+		self.itemRenderer = itemRenderer
+		self.count = None
 
-		print(f"  {self.MSG_HEADER}:")
-		itemRenderer.renderItems(items, indent = "  ")
+	def __del__(self):
+		if self.count == 0 and self.MSG_EMPTY is not None:
+			print(f"  {self.MSG_EMPTY}")
+
+	def beginList(self):
+		if self.count is None:
+			self.count = 0
+
+	def renderItem(self, *args, **kwargs):
+		if self.count is None:
+			raise Exception(f"You must call ListRenderer.beginList() first")
+
+		if self.count == 0:
+			print(f"  {self.MSG_HEADER}:")
+		self.count += 1
+
+		item = self.itemRenderer.render(*args, **kwargs)
+		print(f"    - {item}")
 
 class DependencyRenderer(ListRenderer):
-	def __init__(self, rpmNameRenderer):
-		self.rpmNameRenderer = rpmNameRenderer
-
-	def dependencyListToPackages(self, depList):
-		packages = set()
-		for dep in depList:
-			packages.update(dep.packages)
-		return packages
-
-	def render(self, depList):
-		self.renderPackageList(depList)
-
 	def renderPackageList(self, packages):
-		self.renderList(packages, self.rpmNameRenderer)
+		self.beginList()
+		for rpm in sorted(packages, key = str):
+			self.renderItem(rpm)
 
 class RequiresRenderer(DependencyRenderer):
 	MSG_EMPTY = "does not require anything"
 	MSG_HEADER = "requires"
 
 	def render(self, rpm):
-		packages = list(rpm.enumerateRequiredRpms())
-		super().render(packages)
+		self.beginList()
+
+		common = rpm.solutions.common
+		self.renderPackageList(common)
+
+		specific = {}
+		for arch in rpm.architectures:
+			for rpm in rpm.getDependencies(arch).difference(common):
+				if rpm not in specific:
+					specific[rpm] = ArchSet()
+				specific[rpm].add(arch)
+
+		for rpm in sorted(specific.keys(), key = str):
+			self.renderItem(rpm, arch = specific[rpm])
 
 class ProvidesRenderer(DependencyRenderer):
 	MSG_EMPTY = "not required by anything"
 	MSG_HEADER = "required by"
 
-	def render(self, rpm, db):
-		packages = db.lookupRequiredBy(rpm)
+	def __init__(self, db, rpmNameRenderer):
+		super().__init__(rpmNameRenderer)
+		self.db = db
+
+	def render(self, rpm):
+		packages = self.db.lookupRequiredBy(rpm)
 		packages = set(filter(lambda p: not p.isSourcePackage, packages))
 		self.renderPackageList(packages)
 
-class PromisedToRenderer(object):
-	MSG_EMPTY = None
-	MSG_HEADER = "promised to"
-
-	def __init__(self, rpmNameRenderer):
-		self.rpmNameRenderer = rpmNameRenderer
-
-	def render(self, rpm, db):
-		promiseList = db.lookupPromisedTo(rpm)
-		if not promiseList:
-			if self.MSG_EMPTY is not None:
-				print(f"  {self.MSG_EMPTY}")
-			return
-
-		print(f"  {self.MSG_HEADER}:")
-		archSpecific = {}
-		for promise, packages in promiseList:
-			if promise.arch is None:
-				archSet = archRegistry.fullset
-			else:
-				archSet = ArchSet((promise.arch, ))
-
-			for rpm in sorted(packages, key = str):
-				existing = archSpecific.get(rpm)
-				if existing is None:
-					archSpecific[rpm] = archSet
-				else:
-					archSpecific[rpm] = existing.union(archSet)
-
-		for rpm in sorted(archSpecific.keys(), key = str):
-			rpmName = self.rpmNameRenderer.render(rpm)
-			archSet = archSpecific.get(rpm)
-			if archSet == archRegistry.fullset:
-				print(f"   - {rpmName}")
-			else:
-				print(f"   - {rpmName} ({archSet})")
+		# FIXME: handle arch-specific required-by
 
 class UnresolvableRenderer(ListRenderer):
 	MSG_EMPTY = None
 	MSG_HEADER = "unresolvable requires"
 
-	depRenderer = TrivialStringRenderer()
+	def __init__(self):
+		super().__init__(TrivialStringRenderer())
 
 	def render(self, rpm):
-		depList = list(rpm.enumerateUnresolvedDependencies())
-		self.renderList(depList, self.depRenderer)
+		self.beginList()
+
+		for dep in sorted(rpm.enumerateUnresolvedDependencies(), key = str):
+			self.renderItem(dep)
 
 class RpmSummaryRenderer(object):
-	def render(self, rpm, db):
-		auxInfo = db.lookupRpm(rpm.name, 'x86_64')
-		if auxInfo is None:
-			return
+	def __init__(self, db):
+		self.db = db
 
+	def render(self, rpm):
+		self.renderBasicInfo(rpm)
+
+		auxInfo = self.db.lookupRpm(rpm.name, 'x86_64')
+		if auxInfo is not None:
+			self.renderAuxInfo(rpm, auxInfo)
+
+	def renderBasicInfo(self, rpm):
+		vlist = list(rpm.versions.common)
+		if len(vlist) == 1:
+			print(f"  version: {vlist[0]}")
+
+		print(f"  architectures: {rpm.architectures or 'none'}")
+
+
+	def renderAuxInfo(self, rpm, auxInfo):
 		if auxInfo.summary is not None:
 			print(f"  summary: {auxInfo.summary}")
 
 class RpmSummaryRendererLong(RpmSummaryRenderer):
-	def render(self, rpm, db):
-		auxInfo = db.lookupRpm(rpm.name, 'x86_64')
-		if auxInfo is None:
-			return
-
-		if auxInfo.summary is not None:
-			print(f"  summary: {auxInfo.summary}")
+	def renderAuxInfo(self, rpm, auxInfo):
+		super().renderAuxInfo(rpm, auxInfo)
 		if auxInfo.description is not None:
 			lines = auxInfo.description.split('\n')
 			if len(lines) == 1:
@@ -332,72 +273,90 @@ class OBSBuildSiblingRenderer(OBSBuildNameRenderer):
 			print(f"        {renderer.renderRpmName(sib)}")
 
 class Renderer(object):
-	def __init__(self, labelFacade = None):
-		if labelFacade is None:
-			self.rpm = RpmNameRenderer()
-			self.policy = None
-		else:
-			self.rpm = LabellingRpmNameRenderer(labelFacade)
+	def __init__(self, opts, codebaseData):
+		db = codebaseData.loadDB()
+
+		labelFacade = None
+		if not opts.no_labels:
+			labelFacade = codebaseData.loadClassification()
+
+		with_rpmInfo = True
+		with_provides = True
+		with_requires = True
+		with_buildInfo = True
+		with_policy = True
+
+		if opts.requires_only:
+			with_provides = False
+			with_policy = False
+		if opts.provides_only:
+			with_requires = False
+			with_policy = False
+		if opts.names_only:
+			with_rpmInfo = False
+			with_provides = False
+			with_requires = False
+			with_buildInfo = False
+			with_policy = False
+
+		self.rpmPackageInfo = None
+		self.obsPackageInfo = None
+		self.requires = None
+		self.provides = None
+		self.unresolvable = None
+		self.policy = None
+
+		self.rpm = RpmNameRenderer(labelFacade)
+
+		if with_rpmInfo:
+			extraDB = codebaseData.loadExtraDB()
+			if opts.verbose:
+				self.rpmPackageInfo = RpmSummaryRendererLong(extraDB)
+			else:
+				self.rpmPackageInfo = RpmSummaryRenderer(extraDB)
+
+		if with_buildInfo:
+			if opts.siblings:
+				self.obsPackageInfo = OBSBuildSiblingRenderer()
+			else:
+				self.obsPackageInfo = OBSBuildNameRenderer()
+
+		if with_requires:
+			self.requires = RequiresRenderer(self.rpm)
+			self.unresolvable = UnresolvableRenderer()
+		if with_provides:
+			self.provides = ProvidesRenderer(db, self.rpm)
+		if with_policy and labelFacade is not None:
 			self.policy = PolicyRenderer(labelFacade)
 
-		self.obsPackageInfo = OBSBuildNameRenderer()
-		self.rpmPackageInfo = RpmSummaryRenderer()
-		self.requires = RequiresRenderer(self.rpm)
-		self.unresolvable = UnresolvableRenderer()
-		self.provides = ProvidesRenderer(self.rpm)
-		self.promisedTo = PromisedToRenderer(self.rpm)
-
-	def renderOBSBuildInfo(self, obsBuild, **kwargs):
-		if self.obsPackageInfo is None:
-			return
-		self.obsPackageInfo.render(obsBuild, self, **kwargs)
+	def renderBuildInfo(self, obsBuild, **kwargs):
+		if self.obsPackageInfo is not None:
+			self.obsPackageInfo.render(obsBuild, self, **kwargs)
 
 	def renderRpmName(self, rpm):
 		return self.rpm.render(rpm)
 
 	def renderPolicy(self, rpm):
-		if self.policy is None:
-			return
-		self.policy.render(rpm)
-
-	def renderVersion(self, rpm):
-		vlist = list(rpm.versions.common)
-		if len(vlist) == 1:
-			print(f"  version: {vlist[0]}")
-
-	def renderArchitectures(self, rpm):
-		if not rpm.architectures:
-			print(f"  architectures: none")
-		else:
-			print(f"  architectures: {rpm.architectures}")
+		if self.policy is not None:
+			self.policy.render(rpm)
 
 	def renderScenarios(self, rpm):
 		scenarios = rpm.validForScenarios
 		if scenarios:
 			print(f"  valid scenarios: {' '.join(sorted(map(str, scenarios)))}")
 
-	def renderExtraInfo(self, rpm, db):
-		if self.rpmPackageInfo is None or db is None:
-			return
-
-		self.rpmPackageInfo.render(rpm, db)
+	def renderRpmInfo(self, rpm):
+		if self.rpmPackageInfo is not None:
+			self.rpmPackageInfo.render(rpm)
 
 	def renderRequires(self, rpm):
-		if self.requires is None:
-			return
-		return self.requires.render(rpm)
+		if self.requires is not None:
+			self.requires.render(rpm)
 
 	def renderUnresolvables(self, rpm):
-		if self.unresolvable is None:
-			return
-		return self.unresolvable.render(rpm)
+		if self.unresolvable is not None:
+			self.unresolvable.render(rpm)
 
-	def renderProvides(self, rpm, db):
-		if self.provides is None:
-			return
-		return self.provides.render(rpm, db)
-
-	def renderPromises(self, rpm, db):
-		if self.promisedTo is None:
-			return
-		return self.promisedTo.render(rpm, db)
+	def renderProvides(self, rpm):
+		if self.provides is not None:
+			self.provides.render(rpm)

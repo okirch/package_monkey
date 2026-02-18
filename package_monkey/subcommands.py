@@ -62,7 +62,7 @@ class PackageMonkey(object):
 		self.opts = None
 
 		self.args.add_argument('--model-path', default = '../SLFO',
-					help = 'Specify where to find the model definition')
+					help = 'Specify where to find the model definition (default: $MONKEY_MODEL_PATH or "../SLFO")')
 		self.args.add_argument('--statedir', default = '~/.local/package_monkey',
 					help = 'Specify where to store generated data')
 		self.args.add_argument('--cache', default = '~/.cache/package_monkey',

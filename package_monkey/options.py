@@ -173,7 +173,7 @@ class ModelDescription(object):
 	def __init__(self, opts):
 		path = opts.model_path
 		if path is None:
-			path = os.getenv("PACKAGEMONKEY_MODEL_PATH")
+			path = os.getenv("MONKEY_MODEL_PATH")
 		if path is None:
 			path = "."
 		self.path = path

@@ -170,27 +170,20 @@ class NewDB(object):
 	class ParsedPromise(object):
 		def __init__(self, name, rpm = None):
 			assert(name.startswith('promise:'))
-			name = name[8:]
-			if ':' in name:
-				arch, rest = name.split(':', maxsplit = 1)
-				if archRegistry.isValidArchitecture(arch):
-					name = rest
-			else:
-				arch = None
-			self.name = name
-			self.arch = arch
+			self.name = name[8:]
 			self.rpm = rpm
 
+			assert(':' not in self.name)
+			self.arch = None
+
 		def __str__(self):
-			if self.arch:
-				return f"promise:{self.arch}:{self.name}"
 			return f"promise:{self.name}"
 
 		def __hash__(self):
 			return hash(self.name)
 
 		def __eq__(self, other):
-			return self.name == other.name and self.arch == other.arch
+			return self.name == other.name
 
 	def lookupPromisedTo(self, rpm):
 		if self._promiseCache is None:

@@ -6,8 +6,8 @@ from .subcommands import *
 __names__ = ['PackageMonkey']
 
 class PackageInfoCommand(GenericSubcommand):
-	NAME = 'packageinfo'
-	ALIASES = ['pi', 'pinfo']
+	NAME = 'rpminfo'
+	ALIASES = ['ri', 'pi', 'pinfo', 'packageinfo']
 	HELP = 'Display information on rpm(s)'
 
 	def registerArguments(self, args):
@@ -89,8 +89,6 @@ class DownloadRpmsCommand(OBSSubcommand):
 
 		args.add_argument('--staging',
 				help = 'Download packages from staging projects (either "all" or a comma separated list, such as A,B,C)')
-		args.add_argument('--with-debug-rpms', action = 'store_true',
-				help = 'Also download debuginfo and debugsource files.')
 
 	def createApplication(self, opts):
 		from package_monkey.cmd_download import SolverDownloadApplication
@@ -110,7 +108,7 @@ class ExtractRpmInfoCommand(OBSSubcommand):
 		return RpmHeaderExtractorApplication(self.NAME, opts)
 
 class ProcessSolverCommand(GenericSubcommand):
-	NAME = 'process-solv'
+	NAME = 'prepare'
 	ALIASES = ['prep']
 	HELP = 'Process OBS package information into a database for further processing'
 
@@ -215,7 +213,7 @@ class EpicListCommand(GenericSubcommand):
 
 	def registerArguments(self, args):
 		args.add_argument(dest = 'epics', metavar = 'EPICS', nargs = '*',
-				help = 'list of epics to query')
+				help = 'list of epics or layers to query')
 
 	def createApplication(self, opts):
 		from package_monkey.cmd_epicinfo import EpicListApplication
@@ -230,7 +228,7 @@ class EpicShowCommand(GenericSubcommand):
 
 	def registerArguments(self, args):
 		args.add_argument(dest = 'epics', metavar = 'EPICS', nargs = '*',
-				help = 'list of epics to query')
+				help = 'list of epics or layers to query')
 
 	def createApplication(self, opts):
 		from package_monkey.cmd_epicinfo import EpicShowApplication
@@ -241,7 +239,7 @@ class EpicInfoCommand(GenericSubcommand):
 	NAME = 'epicinfo'
 	ALIASES = ['epics', 'einfo', 'ei']
 	SUBCOMMANDS = [EpicListCommand(), EpicShowCommand()]
-	HELP = 'Display information on epics'
+	HELP = 'Display information on layers and epics'
 
 	def registerArguments(self, args):
 		args.add_argument('--terse', action = 'store_true', default = False)

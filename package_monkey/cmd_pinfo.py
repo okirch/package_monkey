@@ -144,12 +144,16 @@ class ListRenderer(object):
 		self.count = None
 
 	def __del__(self):
-		if self.count == 0 and self.MSG_EMPTY is not None:
-			print(f"  {self.MSG_EMPTY}")
+		self.endList()
 
 	def beginList(self):
 		if self.count is None:
 			self.count = 0
+
+	def endList(self):
+		if self.count == 0 and self.MSG_EMPTY is not None:
+			print(f"  {self.MSG_EMPTY}")
+		self.count = None
 
 	def renderItem(self, *args, **kwargs):
 		if self.count is None:
@@ -188,6 +192,8 @@ class RequiresRenderer(DependencyRenderer):
 		for rpm in sorted(specific.keys(), key = str):
 			self.renderItem(rpm, arch = specific[rpm])
 
+		self.endList()
+
 class ProvidesRenderer(DependencyRenderer):
 	MSG_EMPTY = "not required by anything"
 	MSG_HEADER = "required by"
@@ -215,6 +221,8 @@ class UnresolvableRenderer(ListRenderer):
 
 		for dep in sorted(rpm.enumerateUnresolvedDependencies(), key = str):
 			self.renderItem(dep)
+
+		self.endList()
 
 class RpmSummaryRenderer(object):
 	def __init__(self, db):

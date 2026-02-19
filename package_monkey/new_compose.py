@@ -19,6 +19,9 @@ __names__ = [
 	'CompositionRules',
 	'CompositionBuilder',
 	'ReasonRequires',
+	'ReasonPolicy',
+	'ReasonUnresolvable',
+	'ReasonDisableArchitectures',
 ]
 
 COMPOSE_UNSPEC = 0
@@ -141,7 +144,6 @@ class Justification(object):
 		if isinstance(self.other, Composable):
 			for j in self.other.justifications:
 				yield self.other, j
-				
 
 	globalDict = {}
 
@@ -183,6 +185,12 @@ def ReasonRequiredBy(other):
 
 def ReasonRequires(other):
 	return Justification.create(f"requires {other.TYPE}", other)
+
+def ReasonUnresolvable(other):
+	return Justification.create(f"unresolvable", other)
+
+def ReasonDisableArchitectures(archSet, other):
+	return Justification.create(f"disable {archSet} because it requires {other.TYPE}", other)
 
 class ComposerReasoning(object):
 	class ReasonChain(object):
@@ -226,6 +234,8 @@ class ComposerReasoning(object):
 
 				chain.follow.append((f"{justification}", chase))
 
+			chain.architectures = composable._validArchitectures
+
 		return chain
 
 	def overrideInclude(self, rpmName, overrideArch):
@@ -256,7 +266,11 @@ class ComposerReasoning(object):
 			treeNode.add(f"{name}: spurious decision")
 			return
 
-		node = treeNode.add(f"{name} {chain.decision}")
+		if chain.architectures:
+			node = treeNode.add(f"{name} {chain.decision} (arch {chain.architectures})")
+		else:
+			node = treeNode.add(f"{name} {chain.decision}")
+
 		node.entry = chain
 
 		self.follow(node, chain, [])
@@ -279,7 +293,12 @@ class ComposerReasoning(object):
 
 	def follow(self, node, entry, seen):
 		for justification, otherEntry in entry.follow:
-			child = node.add(f"{justification}")
+			tag = f"{justification}"
+			if otherEntry is not None and \
+			   otherEntry.architectures is not None and \
+			   entry.architectures != otherEntry.architectures:
+				tag += f" (arch {otherEntry.architecture})"
+			child = node.add(f"{tag}")
 
 			# preserve our reasoning entry inside the tree node;
 			# used by the culling algorithm below
@@ -653,6 +672,7 @@ class Composable(object):
 		self.shippable = True
 		self._decision = COMPOSE_UNSPEC
 		self._constraints = None
+		self._validArchitectures = None
 		self.justifications = set()
 		self.trace = False
 

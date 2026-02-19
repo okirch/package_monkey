@@ -27,14 +27,22 @@ class RpmControl(Composable):
 		self.promises = None
 		self.choice = None
 		self.definedByOption = None
-		self.requiredBy = []
+		self.requiredBy = {}
 		self.tentativePolicy = None
-		self._validArchitectures = None
 
 		rpm.composable = self
 
 	def __str__(self):
 		return str(self.rpm)
+
+	def addRequiredBy(self, requiringRpmControl, arch):
+		if requiringRpmControl not in self.requiredBy:
+			self.requiredBy[requiringRpmControl] = ArchSet()
+
+		if arch is None:
+			self.requiredBy[requiringRpmControl].update(requiringRpmControl.rpm.architectures)
+		else:
+			self.requiredBy[requiringRpmControl].add(arch)
 
 	@property
 	def isUnresolvable(self):
@@ -47,14 +55,12 @@ class RpmControl(Composable):
 			self.propagateDecisionFrom(dependsOn)
 			assert(self.isExcluded)
 		else:
-			self.markExcluded("rpm is unresolvable")
+			self.markExcluded(ReasonPolicy("rpm {rpm} is defined to be unresolvable"))
 
-		for other, arch in self.requiredBy:
-			if arch is None:
+		for other, archSet in self.requiredBy.items():
+			other.disableArchitectures(archSet, self)
+			if not other._validArchitectures:
 				other.markUnresolvable(self)
-			else:
-				# FIXME: include reason?
-				other.disableArchitecture(arch)
 
 	def addOptionDependency(self, option):
 		if self.optionSet is None:
@@ -121,35 +127,37 @@ class RpmControl(Composable):
 
 		if decision == COMPOSE_EXCLUDE:
 			reason = ReasonRequires(self)
-			for reqControl, arch in self.requiredBy:
-				if arch is None:
-					reqControl.markExcluded(reason)
-				else:
-					reqControl.disableArchitecture(arch)
+			for reqControl, archSet in self.requiredBy.items():
+				reqControl.disableArchitectures(archSet, self)
 		return True
 
 	def markExcluded(self, reason = None):
 		self.setDecision(COMPOSE_EXCLUDE, reason)
 
-	def disableArchitecture(self, badArch):
-		if self.trace:
-			infomsg(f"{self}: disable architecure {badArch}")
+	def disableArchitectures(self, badArchSet, dependsOn = None):
+		assert(badArchSet is not None)
 
 		if self._validArchitectures is None:
 			self._validArchitectures = self.rpm.architectures.copy()
 
-		if badArch not in self._validArchitectures:
+		badArchSet = badArchSet.intersection(self._validArchitectures)
+		if not badArchSet:
 			return
 
-		self._validArchitectures.remove(badArch)
+		if self.trace:
+			infomsg(f"{self}: disable architecures {badArchSet} because it depends on {dependsOn}")
+
+		self.justifications.add(ReasonDisableArchitectures(badArchSet, dependsOn))
+		self._validArchitectures.difference_update(badArchSet)
 
 		if not self._validArchitectures:
-			self.markExcluded()
+			self.markExcluded(ReasonRequires(dependsOn))
 			return
 
-		for reqControl, arch in self.requiredBy:
-			if arch is None or arch == badArch:
-				reqControl.disableArchitecture(badArch)
+		for reqControl, reqArchSet in self.requiredBy.items():
+			removeArchSet = badArchSet.intersection(reqArchSet)
+			if removeArchSet:
+				reqControl.disableArchitectures(removeArchSet, self)
 
 	@property
 	def rpmClass(self):
@@ -186,6 +194,8 @@ class LabelControl(Composable):
 
 		self._label = label
 		self.trace = label.trace
+
+		self._validArchitectures = label.architectures
 
 	def __str__(self):
 		return str(self._label)
@@ -579,9 +589,10 @@ class NewResult(object):
 					if reqControl is None:
 						raise Exception(f"{rpm} requires {req}, but I'm not tracking this rpm")
 
-					reqControl.requiredBy.append((rpmControl, arch))
+					reqControl.addRequiredBy(rpmControl, arch)
 
 		for rpmControl in unresolvables:
+			# Normally, the only rpm we find in this manner should be __unresolvable__
 			rpmControl.markUnresolvable()
 
 	def save(self, path):

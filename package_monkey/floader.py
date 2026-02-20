@@ -460,10 +460,6 @@ class FilterLoader(MonkeyConfigLoader):
 			else:
 				raise Exception(f"Trying to define epic {epic} without layer");
 
-			if 'default_disposition' in data:
-				id = data.pop('default_disposition')
-				epic.defaultDisposition = self.packageFilter.defineDisposition(id)
-
 			labelHints = self.createLabelHints(epic, layer = epic.layer, epic = epic)
 
 			self.processLabelWithHints(labelHints, data, FilterLoader.EpicProcessor)
@@ -643,9 +639,6 @@ class FilterLoader(MonkeyConfigLoader):
 				self.settings.defaultSupport = self.context.asString(key, value)
 			elif key == 'contracts':
 				self.processContracts(self.context.dictContext(key, value))
-			elif key == 'default_disposition':
-				disposition = self.packageFilter.defineDisposition(self.context.asString(key, value))
-				self.settings.defaultDisposition = disposition
 			else:
 				super().processKeyValue(key, value)
 
@@ -992,9 +985,6 @@ class FilterLoader(MonkeyConfigLoader):
 				warnmsg(f"{self.context}: ignore obsolete {key}")
 			elif key == 'layer':
 				self.processLayer(self.context.asString(key, value))
-			elif key == 'default_disposition':
-				# already processed
-				pass
 			elif key == 'lifecycle':
 				self.label.lifecycleID = self.context.asString(key, value)
 			elif key in ('maintainer', 'reviewer'):

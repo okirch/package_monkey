@@ -1575,7 +1575,7 @@ class PackageFilter(object):
 		def processMatchParameters(self, packageFilter, m):
 			# A match may come with additional parameters, as in
 			#
-			#	libvamp2-sdk class=api disposition=private
+			#	libvamp2-sdk class=api arch-=blup
 			#
 			classificationScheme = packageFilter.classificationScheme
 			originalLabel = m.label
@@ -1847,9 +1847,6 @@ class PackageFilter(object):
 
 		if policyDefaults.defaultSupport is not None:
 			epic.supportID = policyDefaults.defaultSupport
-
-		if policyDefaults.defaultDisposition is not None:
-			epic.defaultDisposition = policyDefaults.defaultDisposition
 
 		# same for other fields like the support policy
 

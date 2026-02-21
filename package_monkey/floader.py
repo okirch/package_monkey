@@ -732,8 +732,6 @@ class FilterLoader(MonkeyConfigLoader):
 			self.name = name
 			self.labelHints = labelHints
 
-			self.stringMatcher = self.schemeBuilder.stringMatcher
-
 		def process(self, data):
 			labelName = None
 			labelType = None
@@ -791,7 +789,8 @@ class FilterLoader(MonkeyConfigLoader):
 				self.addRoleMatch(pattern, labelHints)
 
 		def addRoleMatch(self, pattern, labelHints):
-			m = self.stringMatcher.createRoleMatch(pattern, labelHints)
+			packageLabelling = self.schemeBuilder.packageLabelling
+			m = packageLabelling.createRoleMatch(pattern, labelHints)
 			if m.parameters:
 				raise Exception(f"parameters not allowed in definition of pattern match \"{pattern}\" for role {role}")
 
@@ -801,8 +800,6 @@ class FilterLoader(MonkeyConfigLoader):
 			label = labelHints.label
 
 			super().__init__(parent.schemeBuilder, FilterLoader.Context(str(label), parent = parent.context), parent.settings)
-
-			self.stringMatcher = self.schemeBuilder.stringMatcher
 
 			self.label = label
 			self.labelHints = labelHints

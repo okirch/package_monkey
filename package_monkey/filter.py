@@ -1548,10 +1548,10 @@ class ClassificationSchemeBuilder(object):
 			self.priority = labelHints.priority
 
 		def bind(self, schemeBuilder):
-			stringMatcher = schemeBuilder.stringMatcher
+			packageLabelling = schemeBuilder.packageLabelling
 			classificationScheme = schemeBuilder.classificationScheme
 
-			m = self.createMatch(stringMatcher)
+			m = self.createMatch(packageLabelling)
 
 			self.processMatchParameters(schemeBuilder, m)
 
@@ -1634,22 +1634,21 @@ class ClassificationSchemeBuilder(object):
 
 
 	class LateRpmFilterRuleBinding(LateFilterRuleBinding):
-		def createMatch(self, stringMatcher):
-			return stringMatcher.createBinaryRpmMatch(self.pattern, self.labelHints)
+		def createMatch(self, packageLabelling):
+			return packageLabelling.createBinaryRpmMatch(self.pattern, self.labelHints)
 
 	class LateBuildFilterRuleBinding(LateFilterRuleBinding):
-		def createMatch(self, stringMatcher):
-			return stringMatcher.createBuildMatch(self.pattern, self.labelHints)
+		def createMatch(self, packageLabelling):
+			return packageLabelling.createBuildMatch(self.pattern, self.labelHints)
 
 	class LateHintsFilterRuleBinding(LateFilterRuleBinding):
-		def createMatch(self, stringMatcher):
-			return stringMatcher.createRpmHintsMatch(self.pattern, self.labelHints)
+		def createMatch(self, packageLabelling):
+			return packageLabelling.createRpmHintsMatch(self.pattern, self.labelHints)
 
 	def __init__(self, scheme = None, scenarios = None):
 		self.classificationScheme = scheme or Classification.Scheme()
 		self.validScenarios = scenarios
-		# FIXME rename labelEngine
-		self.stringMatcher = PackageLabelling()
+		self.packageLabelling = PackageLabelling()
 		self._lateLabelBindings = []
 		self._lateFilterBindings = []
 
@@ -1728,7 +1727,7 @@ class ClassificationSchemeBuilder(object):
 
 		callAndClear(self._lateFilterBindings)
 
-		self.stringMatcher.finalize()
+		self.packageLabelling.finalize()
 
 	@profiling
 	def complete(self):
@@ -1758,7 +1757,7 @@ class ClassificationSchemeBuilder(object):
 			self.classificationScheme.finalize()
 
 	def tryToLabelPackage(self, pkg):
-		labelHints = self.stringMatcher.tryToLabelPackage(pkg)
+		labelHints = self.packageLabelling.tryToLabelPackage(pkg)
 		if labelHints is not None:
 			pkg.setLabelHints(labelHints)
 			debugInitialPlacement(f"{pkg} is placed in {labelHints} by package filter rules")
@@ -1771,7 +1770,7 @@ class ClassificationSchemeBuilder(object):
 				infomsg(f"{build} was already placed in {build.labelHints} by scenario binding {build.labelHints.scenarioBinding}")
 			return
 
-		labelHints = self.stringMatcher.tryToLabelBuild(build)
+		labelHints = self.packageLabelling.tryToLabelBuild(build)
 		if labelHints is not None:
 			build.setLabelHints(labelHints)
 			debugInitialPlacement(f"{build} is placed in {labelHints} by package filter rules")

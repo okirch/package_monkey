@@ -1149,7 +1149,7 @@ class EpicCentricView(object):
 			self.epicRpms[epic].update(build.rpms)
 
 	def __iter__(self):
-		epicOrder = self.composer.classificationScheme.componentOrder()
+		epicOrder = self.composer.classificationScheme.epicOrder()
 		for epic in epicOrder.bottomUpTraversal():
 			# If the epic does not contain any rpms at all, dont bother mentioning it.
 			memberRpms = self.epicRpms[epic]

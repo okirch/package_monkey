@@ -389,7 +389,7 @@ class Classification(object):
 
 			self._defaultClassOrder = None
 			self._defaultLayerOrder = None
-			self._defaultComponentOrder = None
+			self._defaultEpicOrder = None
 
 			self._category = {}
 			for type in Classification.VALID_TYPES:
@@ -673,12 +673,11 @@ class Classification(object):
 
 			return self.createOrdering(Classification.TYPE_LAYER)
 
-		# FIXME rename componentOrder, _defaultComponentOrder
-		def componentOrder(self):
+		def epicOrder(self):
 			# Until the component order has been frozen, we re-create every time
 			# someone calls this function
-			if self._defaultComponentOrder is not None:
-				return self._defaultComponentOrder
+			if self._defaultEpicOrder is not None:
+				return self._defaultEpicOrder
 
 			return self.createOrdering(Classification.TYPE_EPIC)
 
@@ -773,8 +772,8 @@ class Classification(object):
 
 			self.autoCompleteEpicDependencies()
 
-			self._defaultComponentOrder = self.componentOrder()
-			return self._defaultComponentOrder
+			self._defaultEpicOrder = self.epicOrder()
+			return self._defaultEpicOrder
 
 		# FIXME: not sure that this is the right place for this method
 		def buildOptionForAutoFlavor(self, autoFlavor):
@@ -1440,7 +1439,7 @@ class LabelTreeValidator(object):
 
 	@classmethod
 	def displayEpics(klass, classificationScheme):
-		epicOrder = classificationScheme.componentOrder()
+		epicOrder = classificationScheme.epicOrder()
 		for epic in epicOrder.bottomUpTraversal():
 			infomsg(f"{epic}:")
 			for topic in sorted(epic.topicMembers, key = str):

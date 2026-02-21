@@ -106,7 +106,7 @@ def writeLabelGraph(output, labels, order):
 def writeComponentGraph(application):
 	classificationScheme = loadClassificationScheme(application)
 
-	order = classificationScheme.componentOrder()
+	order = classificationScheme.epicOrder()
 	labels = list(order.bottomUpTraversal())
 
 	output = DotfileWriter("components")

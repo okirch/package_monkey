@@ -1500,7 +1500,7 @@ class CompositionRules(object):
 				trace = epicControl.trace or rpmControl.trace
 				self.tryIncludeRpm(rpmControl, epicControl, classificationResult, trace)
 
-		epicOrder = classificationResult.classificationScheme.componentOrder()
+		epicOrder = classificationResult.classificationScheme.epicOrder()
 		for epic in epicOrder.topDownTraversal():
 			epicControl = classificationResult.addEpic(epic)
 

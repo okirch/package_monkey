@@ -51,7 +51,7 @@ class QueryContext(object):
 		self.classification = gadget.solve(application.productCodebase)
 
 		self.classificationScheme = gadget.classificationScheme
-		self.epicOrder = self.classificationScheme.componentOrder()
+		self.epicOrder = self.classificationScheme.epicOrder()
 
 	def enumerateLayers(self):
 		for layer in sorted(self.classificationScheme.allLayers, key = str):

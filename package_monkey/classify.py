@@ -486,7 +486,7 @@ class NewResult(object):
 	def __init__(self, db, classificationScheme):
 		self._db = db
 		self.classificationScheme = classificationScheme
-		self.epicOrder = classificationScheme.componentOrder()
+		self.epicOrder = classificationScheme.epicOrder()
 		self._members = {}
 		self._choices = {}
 		self._options = {}

@@ -454,6 +454,44 @@ class LifeCycle(ClonableObject):
 			if lifecycleContract.endOfSupport is None:
 				lifecycleContract.computeEndDate(release.date)
 
+class SupportLevel(object):
+	def __init__(self, id, rank, description):
+		self.id = id
+		self.rank = rank
+		self.description = description
+
+	def __str__(self):
+		return self.id
+
+	def __eq__(self, other):
+		if other is None:
+			return False
+		return self.rank == other.rank
+	
+	def __lt__(self, other):
+		return self.rank < other.rank
+
+	def __le__(self, other):
+		return self.rank <= other.rank
+
+class SupportDictionary(object):
+	def __init__(self):
+		self.supportLevels = {}
+
+	def create(self, id, rank, description):
+		if id in self.supportLevels:
+			raise Exception(f"Duplicate definition of support level \"{id}\"")
+		level = SupportLevel(id, rank, description)
+		self.supportLevels[id] = level
+		return level
+
+	def get(self, id):
+		return self.supportLevels.get(id)
+
+	# return the highest support level
+	@property
+	def defaultLevel(self):
+		return max(self.supportLevels.values(), key = lambda s: s.rank)
 
 class Policy(object):
 	def __init__(self):
@@ -461,6 +499,7 @@ class Policy(object):
 		self.lifecyclesByID = {}
 		self.releasesByID = {}
 		self.contracts = []
+		self.supportDictionary = SupportDictionary()
 		self.globalSettings = PolicySettings()
 
 	def createContract(self, id):
@@ -470,6 +509,9 @@ class Policy(object):
 		contract = ContractDefinition(id)
 		self.contracts.append(contract)
 		return contract
+
+	def createSupportLevel(self, *args, **kwargs):
+		return self.supportDictionary.create(*args, **kwargs)
 
 	@property
 	def teams(self):

@@ -639,6 +639,8 @@ class FilterLoader(MonkeyConfigLoader):
 				self.settings.defaultSupport = self.context.asString(key, value)
 			elif key == 'contracts':
 				self.processContracts(self.context.dictContext(key, value))
+			elif key == 'support_levels':
+				self.processSupportLevels(self.context.listContext(key, value))
 			else:
 				super().processKeyValue(key, value)
 
@@ -662,6 +664,14 @@ class FilterLoader(MonkeyConfigLoader):
 					contractDef.stability = context.asString(cKey, cValue)
 				else:
 					raise Exception(f"{context}: unsupported {cKey}={cValue}")
+
+		def processSupportLevels(self, context):
+			index = 0
+			maxRank = len(context)
+			for e in context:
+				for key, value in context.dictContext(f"[{index}]", e).items():
+					self.packageFilter.createSupportLevel(key, maxRank - index, value)
+				index += 1
 
 	class ReleaseProcessor(Processor):
 		def __init__(self, release, parent):

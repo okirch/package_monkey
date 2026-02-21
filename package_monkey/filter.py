@@ -1667,6 +1667,9 @@ class PackageFilter(object):
 	def createContract(self, id):
 		return self.policy.createContract(id)
 
+	def createSupportLevel(self, *args):
+		return self.policy.createSupportLevel(*args)
+
 	def createTeam(self, id):
 		return self.policy.createTeam(id)
 

@@ -56,6 +56,7 @@ class TrivialLabelFacade(object):
 			self.choice = None
 			self.option = None
 			self.klass = None
+			self.requiredOptions = None
 			self.isIgnored = False
 
 		def __str__(self):
@@ -109,6 +110,8 @@ class TrivialLabelFacade(object):
 			key, value = p.split('=')
 			if key == 'class':
 				entry.klass = value
+			elif key == 'requires':
+				entry.requiredOptions = value.split(',')
 			else:
 				setattr(entry, key, value)
 		self._rpmHints[name] = entry

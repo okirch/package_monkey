@@ -29,6 +29,7 @@ class RpmControl(Composable):
 		self.definedByOption = None
 		self.requiredBy = {}
 		self.tentativePolicy = None
+		self.indirectRequiredOptions = None
 
 		rpm.composable = self
 
@@ -80,6 +81,24 @@ class RpmControl(Composable):
 			return True
 
 		return self.optionSet.issubset(validLabels)
+
+	def updateIndirectRequiredOptions(self, requires):
+		if self.choice and False:
+			requires = requires.copy()
+			for reqControl in self.choice.requiredOptions:
+				requires.discard(reqControl.label)
+
+		if not requires:
+			return
+
+		if self.indirectRequiredOptions is None:
+			self.indirectRequiredOptions = Classification.createLabelSet()
+		elif requires.issubset(self.indirectRequiredOptions):
+			return
+
+		self.indirectRequiredOptions.update(requires)
+		for other in self.requiredBy:
+			other.updateIndirectRequiredOptions(requires)
 
 	def rewireDependency(self, req, promiseRpm, optionLabel = None, **kwargs):
 		self.rpm.replaceDependency(req, promiseRpm, **kwargs)
@@ -308,6 +327,10 @@ class LocalFlavorControl(Composable):
 	@property
 	def lackingOptions(self):
 		return self.globalFlavorControl.lackingOptions
+
+	@property
+	def requiredOptions(self):
+		return self.globalFlavorControl.requiredOptions
 
 	@property
 	def hasOptionDependencies(self):
@@ -598,6 +621,20 @@ class NewResult(object):
 			# Normally, the only rpm we find in this manner should be __unresolvable__
 			rpmControl.markUnresolvable()
 
+	def buildIndirectRequirements(self):
+		for epicControl in self._members.values():
+			for rpmControl in epicControl.rpms:
+				rpm = rpmControl.rpm
+
+				requires = rpmControl.optionSet or set()
+				if rpmControl.choice:
+					requires = requires.copy()
+					for reqControl in rpmControl.choice.requiredOptions:
+						requires.discard(reqControl.label)
+
+				if requires:
+					rpmControl.updateIndirectRequiredOptions(requires)
+
 	def save(self, path):
 		def write(msg):
 			print(msg, file = dbf)
@@ -614,6 +651,8 @@ class NewResult(object):
 							extra.append(f"option={rpmControl.definedByOption}")
 						if rpmControl.choice:
 							extra.append(f"choice={rpmControl.choice}")
+						if rpmControl.indirectRequiredOptions:
+							extra.append(f"requires={','.join(map(str, rpmControl.indirectRequiredOptions))}")
 						if rpmControl.rpm.new_override_epic is not None and \
 						   rpmControl.rpm.new_override_epic is not epicControl.label:
 							# this rpm was placed in a different epic using split-ok
@@ -732,6 +771,7 @@ class NewResult(object):
 							localFlavorControl.trace = True
 
 		newResult.buildInverseTree()
+		newResult.buildIndirectRequirements()
 
 		for buildOption in classificationScheme.allBuildOptions:
 			optionControl = newResult.addOption(buildOption)

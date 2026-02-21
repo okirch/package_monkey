@@ -177,6 +177,13 @@ class RequiresRenderer(DependencyRenderer):
 	MSG_HEADER = "requires"
 
 	def render(self, rpm):
+		labelHints = rpm.labelHints
+		labelHints = self.itemRenderer.labelFacade.getHintsForRpm(rpm)
+		if labelHints is not None and labelHints.requiredOptions:
+			print("  depends on build option(s):")
+			for option in sorted(labelHints.requiredOptions):
+				print(f"    - {option}")
+
 		self.beginList()
 
 		common = rpm.solutions.common

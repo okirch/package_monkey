@@ -69,8 +69,6 @@ class ComposerApplication(ApplicationBase):
 		outputPath = self.getComposeOutputPath("supportstatus-%id.txt")
 		composer.writeSupportStatus(outputPath)
 
-		infomsg(f"Caveat emptor: the composer currently ignores supportlevel settings; this needs to be implemented")
-
 class ErklaerBaerApplication(ComposerApplication):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)

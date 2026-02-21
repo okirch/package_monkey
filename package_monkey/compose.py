@@ -1110,10 +1110,10 @@ class SupportStatusProducer(object):
 		if '%id' not in outputPathTemplate:
 			raise Exception(f"{self.__class__.__name__}: output path \"{outputPathTemplate}\" does not contain '%id'")
 
-		infomsg(f"Writing supportstatus files:")
 		for id, map in self.data.items():
 			outputPath = outputPathTemplate.replace('%id', id)
 
+			infomsg(f"Writing {outputPath}")
 			with open(outputPath, "w") as f:
 				for rpm, level in sorted(map.items(), key = lambda pair: str(pair[0])):
 					if level is not self.defaultLevel:

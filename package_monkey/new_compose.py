@@ -213,7 +213,6 @@ class SupportSummary(object):
 		self.map = {}
 	
 	def add(self, rpm, level):
-		infomsg(f"{level} {rpm}")
 		self.map[rpm] = level
 
 	def items(self):
@@ -1605,24 +1604,6 @@ class CompositionRules(object):
 				result.add(rpmControl)
 
 		return result
-
-	def displaySupportLevels(self, policy = None, seenStatement = None):
-		if policy is None:
-			policy = self.defaultPolicy
-
-		supportStatement = None
-		if policy.constraints:
-			supportStatement = policy.constraints.supportStatement
-
-		if supportStatement is not None and supportStatement is not seenStatement:
-			infomsg(f"{policy.label} with support statement {supportStatement}")
-			with loggingFacade.temporaryIndent():
-				for child in policy._children.values():
-					self.displaySupportLevels(child, supportStatement)
-		else:
-			for child in policy._children.values():
-				self.displaySupportLevels(child, seenStatement)
-
 
 class LoaderGlue(object):
 	class ClassRule(object):

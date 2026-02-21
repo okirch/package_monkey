@@ -53,8 +53,6 @@ class ProductComposition(object):
 		self._overrideRpmsInclude = Composer.RpmOverrideList()
 		self._overrideRpmsExclude = Composer.RpmOverrideList()
 
-		self._supportLevel = {}
-
 	def __str__(self):
 		return self.id
 
@@ -112,42 +110,6 @@ class ProductComposition(object):
 
 		if verbose:
 			show("result", self._overrideRpmsInclude, self._overrideRpmsExclude)
-
-	def getSupportLevels(self, epic, klass, roles, options):
-		supported = set()
-
-		supported.update(self.epicRules.getSupportLevels(epic))
-		supported.update(self.classRules.getSupportLevels(klass))
-		for role in roles:
-			supported.update(self.roleRules.getSupportLevels(role))
-		supported.update(self.epicRules.getSupportLevels(epic))
-
-		# FIXME: handle options
-
-		return supported
-
-	def rpmSupportLevel(self, rpm):
-		hints = rpm.labelHints
-		if hints is None:
-			return []
-
-		epic = hints.epic
-		klass = hints.klass
-		roles = None
-		options = None
-
-		if hints.role:
-			roles = [hints.role]
-
-		supported = self.getSupportLevels(epic, klass, roles, options)
-		if not supported:
-			return None
-		return min(supported)
-
-	def defineSupportLevel(self, rpm, supportLevel):
-		if supportLevel is None:
-			warnmsg(f"{rpm}: unable to determine support level")
-		self._supportLevel[rpm] = supportLevel
 
 	def overrideRpmInclude(self, yamlList):
 		self._overrideRpmsInclude = Composer.RpmOverrideList.build(yamlList)

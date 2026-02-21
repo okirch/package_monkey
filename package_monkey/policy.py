@@ -32,8 +32,6 @@ class PolicySettings(ObjectWithAttributes):
 		'maintainerName',
 		'maintainerEmail',
 		'defaultLifecycle',
-		'defaultSupport',
-		'defaultDisposition',
 	)
 
 	def __init__(self, scope = 'global'):

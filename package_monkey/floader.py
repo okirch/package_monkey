@@ -1002,8 +1002,6 @@ class FilterLoader(MonkeyConfigLoader):
 				self.label.lifecycleID = self.context.asString(key, value)
 			elif key in ('maintainer', 'reviewer'):
 				self.label.maintainerID = self.parsePersonOrTeam(key, value)
-			elif key == 'support':
-				self.label.supportID = self.context.asString(key, value)
 			elif key == 'decisionlog':
 				self.processDecisionLog(self.context.asString(key, value))
 			elif key == 'implement_scenario':

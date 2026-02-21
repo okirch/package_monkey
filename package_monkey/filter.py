@@ -139,7 +139,6 @@ class Classification(object):
 			# policy objects defined for this label
 			self.lifecycleID = None
 			self.maintainerID = None
-			self.supportID = None
 
 			# the set of architectures this label is valid for
 			self._archSet = None
@@ -1847,9 +1846,6 @@ class PackageFilter(object):
 
 		if policyDefaults.maintainer is not None:
 			epic.maintainerID = policyDefaults.maintainer
-
-		if policyDefaults.defaultSupport is not None:
-			epic.supportID = policyDefaults.defaultSupport
 
 		# same for other fields like the support policy
 

@@ -10,7 +10,7 @@ import datetime
 from .util import TimedExecutionBlock
 from .util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from .util import VariableExpander
-from .filter import Classification, PackageFilter
+from .filter import Classification, ClassificationSchemeBuilder
 from .filter import PackageLabelling
 from .arch import *
 from .compose import Composer
@@ -256,10 +256,10 @@ class MonkeyConfigLoader(object):
 
 class FilterLoader(MonkeyConfigLoader):
 	class Processor(MonkeyConfigLoader.Processor):
-		def __init__(self, packageFilter, context, settings):
+		def __init__(self, schemeBuilder, context, settings):
 			super().__init__(context)
-			self.packageFilter = packageFilter
-			self.classificationScheme = packageFilter.classificationScheme
+			self.schemeBuilder = schemeBuilder
+			self.classificationScheme = schemeBuilder.classificationScheme
 			self.settings = settings
 
 			self.labelHints = None
@@ -295,7 +295,7 @@ class FilterLoader(MonkeyConfigLoader):
 			labelProcessor.process(data)
 
 		def definePromise(self, name):
-			self.packageFilter.definePromise(name)
+			self.schemeBuilder.definePromise(name)
 
 		# Should this be Context.asMonthPeriod()?
 		def parseTimeValueUnit(self, key, value):
@@ -393,7 +393,7 @@ class FilterLoader(MonkeyConfigLoader):
 			elif key == 'policy_defaults':
 				self.processPolicyDefaults(self.context.dictContext(key, value))
 			elif key == 'default_layer':
-				layer = self.packageFilter.defineLayer(self.context.asString(key, value))
+				layer = self.schemeBuilder.defineLayer(self.context.asString(key, value))
 				self.context.defaultLayer = layer
 			elif key == 'reviewers':
 				self.processMaintainers(self.context.dictContext(key, value))
@@ -411,7 +411,7 @@ class FilterLoader(MonkeyConfigLoader):
 
 		def processMaintainers(self, d):
 			for id, data in d.items():
-				team = self.packageFilter.createTeam(id)
+				team = self.schemeBuilder.createTeam(id)
 
 				if type(data) is str:
 					self.parsePersonOrTeam(id, data, team)
@@ -422,18 +422,18 @@ class FilterLoader(MonkeyConfigLoader):
 
 		def processLifeCycles(self, d):
 			for id, data in d.items():
-				lifecycle = self.packageFilter.createLifeCycle(id)
+				lifecycle = self.schemeBuilder.createLifeCycle(id)
 
 				baseId = data.pop('inherit', None)
 				if baseId is not None:
-					baseLifecycle = self.packageFilter.getLifeCycle(baseId)
+					baseLifecycle = self.schemeBuilder.getLifeCycle(baseId)
 					if baseLifecycle is None:
 						raise Exception(f"Bad definition of lifecycle {id}: cannot inherit from {baseId} - not defined")
 					lifecycle.inherits = baseLifecycle
 
 				baseId = data.pop('implement', None)
 				if baseId is not None:
-					baseLifecycle = self.packageFilter.getLifeCycle(baseId)
+					baseLifecycle = self.schemeBuilder.getLifeCycle(baseId)
 					if baseLifecycle is None:
 						raise Exception(f"Bad definition of lifecycle {id}: cannot implement {baseId} - not defined")
 					lifecycle.implements = baseLifecycle
@@ -449,14 +449,14 @@ class FilterLoader(MonkeyConfigLoader):
 				processor.process(self.context.dictContext(id, data))
 
 		def processEpicNew(self, labelName, data):
-			epic = self.packageFilter.defineEpic(labelName)
+			epic = self.schemeBuilder.defineEpic(labelName)
 
 			# apply the per-file default policy settings to all epics defined in that file
-			self.packageFilter.setEpicPolicyDefaults(epic, self.settings)
+			self.schemeBuilder.setEpicPolicyDefaults(epic, self.settings)
 
 			if 'layer' in data:
 				id = data.pop('layer')
-				epic.setLayer(self.packageFilter.defineLayer(id))
+				epic.setLayer(self.schemeBuilder.defineLayer(id))
 			elif self.context.defaultLayer is not None:
 				# If the context specifies a default layer, assign our new epic to this layer
 				epic.setLayer(self.context.defaultLayer)
@@ -468,21 +468,21 @@ class FilterLoader(MonkeyConfigLoader):
 			self.processLabelWithHints(labelHints, data, FilterLoader.EpicProcessor)
 
 		def processLayer(self, labelName, data):
-			layer = self.packageFilter.defineLayer(labelName)
+			layer = self.schemeBuilder.defineLayer(labelName)
 
 			labelHints = self.createLabelHints(layer, layer = layer)
 			self.processLabelWithHints(labelHints, data, processorFactory = FilterLoader.LayerProcessor)
 
 	class MainFileProcessor(CommonFileProcessor):
-		def __init__(self, packageFilter, filename):
+		def __init__(self, schemeBuilder, filename):
 			context = FilterLoader.Context(filename = filename,
 						expander = VariableExpander(),
-						policy = packageFilter.policy)
+						policy = schemeBuilder.policy)
 
-			super().__init__(packageFilter, context, packageFilter.globalPolicySettings)
+			super().__init__(schemeBuilder, context, schemeBuilder.globalPolicySettings)
 
 			# FIXME: the expander should be internal to Context
-			packageFilter.expander = self.context.expander
+			schemeBuilder.expander = self.context.expander
 
 		def process(self, data):
 			for key, value in data.items():
@@ -512,7 +512,7 @@ class FilterLoader(MonkeyConfigLoader):
 
 		def processClasses(self, context):
 			for name, data in context.items():
-				label = self.packageFilter.defineLabel(name, Classification.TYPE_CLASS)
+				label = self.schemeBuilder.defineLabel(name, Classification.TYPE_CLASS)
 				if data is not None:
 					labelHints = self.createLabelHints(label, klass = label)
 					self.processLabelWithHints(labelHints, data)
@@ -525,10 +525,10 @@ class FilterLoader(MonkeyConfigLoader):
 					raise Exception(f"role {roleName}: you cannot specify class and option at the same time")
 
 				if klassName is not None:
-					klass = self.packageFilter.getTopicClass(klassName)
+					klass = self.schemeBuilder.getTopicClass(klassName)
 					labelHints = self.createLabelHints(klass, klass = klass)
 				elif optionName is not None:
-					buildOption = self.packageFilter.defineOption(optionName)
+					buildOption = self.schemeBuilder.defineOption(optionName)
 					labelHints = self.createLabelHints(buildOption, buildOption = buildOption)
 				else:
 					labelHints = self.createLabelHints(None)
@@ -540,11 +540,11 @@ class FilterLoader(MonkeyConfigLoader):
 		def __init__(self, filename, parent):
 			context = FilterLoader.Context(filename = filename, parent = parent.context)
 			clonedSettings = parent.settings.clone(filename)
-			super().__init__(parent.packageFilter, context, clonedSettings)
+			super().__init__(parent.schemeBuilder, context, clonedSettings)
 
 	class TeamProcessor(Processor):
 		def __init__(self, team, parent):
-			super().__init__(parent.packageFilter, parent.context, parent.settings)
+			super().__init__(parent.schemeBuilder, parent.context, parent.settings)
 			self.team = team
 
 		def processKeyValue(self, key, value):
@@ -557,7 +557,7 @@ class FilterLoader(MonkeyConfigLoader):
 
 	class LifeCycleProcessor(Processor):
 		def __init__(self, lifecycle, parent):
-			super().__init__(parent.packageFilter, parent.context, parent.settings)
+			super().__init__(parent.schemeBuilder, parent.context, parent.settings)
 			self.lifecycle = lifecycle
 
 		def processKeyValue(self, key, value):
@@ -628,7 +628,7 @@ class FilterLoader(MonkeyConfigLoader):
 
 	class PolicyProcessor(Processor):
 		def __init__(self, parent):
-			super().__init__(parent.packageFilter, parent.context, parent.settings)
+			super().__init__(parent.schemeBuilder, parent.context, parent.settings)
 			self.settings = parent.settings
 
 		def processKeyValue(self, key, value):
@@ -651,7 +651,7 @@ class FilterLoader(MonkeyConfigLoader):
 		# really exist globally.
 		def processContracts(self, context):
 			for key, value in context.items():
-				contractDef = self.packageFilter.createContract(key)
+				contractDef = self.schemeBuilder.createContract(key)
 				contractDef.enabled = True
 				self.processContractSettings(contractDef, context.dictContext(key, value))
 
@@ -673,12 +673,12 @@ class FilterLoader(MonkeyConfigLoader):
 			maxRank = len(context)
 			for e in context:
 				for key, value in context.dictContext(f"[{index}]", e).items():
-					self.packageFilter.createSupportLevel(key, maxRank - index, value)
+					self.schemeBuilder.createSupportLevel(key, maxRank - index, value)
 				index += 1
 
 	class ReleaseProcessor(Processor):
 		def __init__(self, release, parent):
-			super().__init__(parent.packageFilter, parent.context, parent.settings)
+			super().__init__(parent.schemeBuilder, parent.context, parent.settings)
 			self.release = release
 
 		def processingComplete(self):
@@ -727,12 +727,12 @@ class FilterLoader(MonkeyConfigLoader):
 
 	class RoleProcessor(Processor):
 		def __init__(self, name, labelHints, parent):
-			super().__init__(parent.packageFilter, FilterLoader.Context(name, parent = parent.context), parent.settings)
+			super().__init__(parent.schemeBuilder, FilterLoader.Context(name, parent = parent.context), parent.settings)
 
 			self.name = name
 			self.labelHints = labelHints
 
-			self.stringMatcher = self.packageFilter.stringMatcher
+			self.stringMatcher = self.schemeBuilder.stringMatcher
 
 		def process(self, data):
 			labelName = None
@@ -800,9 +800,9 @@ class FilterLoader(MonkeyConfigLoader):
 			assert(isinstance(labelHints, Classification.LabelHints))
 			label = labelHints.label
 
-			super().__init__(parent.packageFilter, FilterLoader.Context(str(label), parent = parent.context), parent.settings)
+			super().__init__(parent.schemeBuilder, FilterLoader.Context(str(label), parent = parent.context), parent.settings)
 
-			self.stringMatcher = self.packageFilter.stringMatcher
+			self.stringMatcher = self.schemeBuilder.stringMatcher
 
 			self.label = label
 			self.labelHints = labelHints
@@ -836,7 +836,7 @@ class FilterLoader(MonkeyConfigLoader):
 				elif kwd == 'unresolvable':
 					if self.label.type is not Classification.TYPE_CLASS:
 						raise Exception(f"Only class labels can be marked as '{kwd}'")
-					self.packageFilter.setUnresolvableClass(self.label)
+					self.schemeBuilder.setUnresolvableClass(self.label)
 				elif kwd == 'no-default-requires':
 					# quietly ignore this pragma for now
 					pass
@@ -871,10 +871,10 @@ class FilterLoader(MonkeyConfigLoader):
 		def processRequires(self, nameList):
 			if self.label.type is Classification.TYPE_EPIC:
 				for name in nameList:
-					self.packageFilter.addLateRequiredEpicBinding(self.label, name, self.context)
+					self.schemeBuilder.addLateRequiredEpicBinding(self.label, name, self.context)
 			elif self.label.type is Classification.TYPE_CLASS:
 				for name in nameList:
-					self.packageFilter.addLateRequiredClassBinding(self.label, name, self.context)
+					self.schemeBuilder.addLateRequiredClassBinding(self.label, name, self.context)
 			else:
 				raise Exception(f"{self.context}: requires only valid in epic or class context, not for label {self.label.describe()}")
 
@@ -883,10 +883,10 @@ class FilterLoader(MonkeyConfigLoader):
 				if self.label.type is Classification.TYPE_AUTOFLAVOR:
 					# the mapping between build options and their corresponding flavor(s) must be
 					# established immediately.
-					buildOption = self.packageFilter.defineOption(name)
+					buildOption = self.schemeBuilder.defineOption(name)
 					self.label.addBuildOptionDependency(buildOption)
 				else:
-					self.packageFilter.addLateRequiredOptionBinding(self.label, name, self.context)
+					self.schemeBuilder.addLateRequiredOptionBinding(self.label, name, self.context)
 
 		def processArchitectures(self, data):
 			archSet = ArchSet(data)
@@ -905,10 +905,10 @@ class FilterLoader(MonkeyConfigLoader):
 				name = pattern[8:]
 				self.definePromise(name)
 
-			self.packageFilter.addLateRpmFilterRuleBinding(pattern, self.labelHints)
+			self.schemeBuilder.addLateRpmFilterRuleBinding(pattern, self.labelHints)
 
 		def addOBSPackageFilter(self, pattern):
-			self.packageFilter.addLateBuildFilterRuleBinding(pattern, self.labelHints)
+			self.schemeBuilder.addLateBuildFilterRuleBinding(pattern, self.labelHints)
 
 	class LabelProcessor(LabelProcessorBase):
 		def __init__(self, labelHints, parent):
@@ -937,7 +937,7 @@ class FilterLoader(MonkeyConfigLoader):
 			assert(self.label.type is Classification.TYPE_LAYER)
 
 			for name in nameList:
-				self.packageFilter.addLateRequiredLayerBinding(self.label, name, self.context)
+				self.schemeBuilder.addLateRequiredLayerBinding(self.label, name, self.context)
 
 	class TopicScopeProcessor(LabelProcessorBase):
 		def processKeyValue(self, key, value):
@@ -960,7 +960,7 @@ class FilterLoader(MonkeyConfigLoader):
 					name = pattern.split()[0]
 					self.definePromise(name[8:])
 
-				self.packageFilter.addLateHintsFilterRuleBinding(pattern, self.labelHints)
+				self.schemeBuilder.addLateHintsFilterRuleBinding(pattern, self.labelHints)
 
 	class OptionProcessor(TopicScopeProcessor):
 		def __init__(self, labelHints, parent):
@@ -981,7 +981,7 @@ class FilterLoader(MonkeyConfigLoader):
 			assert(buildOption.mainTopic is label)
 
 			for name in nameList:
-				self.packageFilter.addLateRequiredEpicBinding(buildOption, name, self.context)
+				self.schemeBuilder.addLateRequiredEpicBinding(buildOption, name, self.context)
 
 	class EpicProcessor(TopicScopeProcessor):
 		def __init__(self, labelHints, parent):
@@ -1009,20 +1009,20 @@ class FilterLoader(MonkeyConfigLoader):
 			elif key == 'releasedate':
 				self.processReleaseDate(self.context.asInt(key, value))
 			elif key == 'catchall':
-				self.packageFilter.setCatchAllEpic(self.label)
+				self.schemeBuilder.setCatchAllEpic(self.label)
 			else:
 				super().processKeyValue(key, value)
 
 		def processNewSubset(self, context, labelType):
 			for subsetName, subsetData in context.items():
 				if labelType is Classification.TYPE_BUILD_OPTION:
-					label = self.packageFilter.defineOption(subsetName, epic = self.label)
+					label = self.schemeBuilder.defineOption(subsetName, epic = self.label)
 				elif labelType is Classification.TYPE_AUTOFLAVOR:
-					label = self.packageFilter.defineEpicFlavorByName(subsetName, epic = self.label)
+					label = self.schemeBuilder.defineEpicFlavorByName(subsetName, epic = self.label)
 				else:
 					raise Exception(f"processNewSubset: unsupported label type {labelType}")
 
-				subset = self.packageFilter.defineSubset(label)
+				subset = self.schemeBuilder.defineSubset(label)
 
 				subsetData = context.dictContext(subsetName, subsetData)
 
@@ -1049,11 +1049,11 @@ class FilterLoader(MonkeyConfigLoader):
 					if not p.startswith('class='):
 						raise Exception(f"cannot parse param {p} for subset pattern {pattern}")
 					klassName = p[6:]
-					klass = self.packageFilter.getTopicClass(klassName)
+					klass = self.schemeBuilder.getTopicClass(klassName)
 					m.addClass(klass)
 
 		def processLayer(self, name):
-			self.packageFilter.addLateLayerBinding(self.label, name, self.context)
+			self.schemeBuilder.addLateLayerBinding(self.label, name, self.context)
 
 		def processPackages(self, nameList):
 			for name in nameList:
@@ -1064,13 +1064,13 @@ class FilterLoader(MonkeyConfigLoader):
 
 		def processImplementScenario(self, scenarioSpec):
 			name, version = scenarioSpec.split('=')
-			self.packageFilter.implementScenario(self.label, name, version)
+			self.schemeBuilder.implementScenario(self.label, name, version)
 
 		def processReleaseDate(self, date):
-			self.packageFilter.setReleaseDate(self.label, date)
+			self.schemeBuilder.setReleaseDate(self.label, date)
 
 	def load(self, filename = 'filter.yaml', **kwargs):
-		filter = PackageFilter(**kwargs)
+		filter = ClassificationSchemeBuilder(**kwargs)
 
 		mainProcessor = self.MainFileProcessor(filter, filename)
 

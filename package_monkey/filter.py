@@ -1453,19 +1453,18 @@ class LabelTreeValidator(object):
 
 		infomsg(f"Created label tree containing {len(classificationScheme.allEpics)} epics")
 
-# FIXME Rename to something else eg ClassificationSchemeBuilder
-class PackageFilter(object):
+class ClassificationSchemeBuilder(object):
 	class LateBinding(object):
 		def __init__(self, labelName, labelType, context):
 			self.labelName = labelName
 			self.labelType = labelType
 			self.context = context
 
-		def bind(self, packageFilter, defaultClassName = 'default'):
-			classificationScheme = packageFilter.classificationScheme
+		def bind(self, schemeBuilder, defaultClassName = 'default'):
+			classificationScheme = schemeBuilder.classificationScheme
 
 			try:
-				label = packageFilter.bindLabel(self.labelName, self.labelType)
+				label = schemeBuilder.bindLabel(self.labelName, self.labelType)
 				if label.trace or self.referencingLabel.trace:
 					infomsg(f"{self.context}: {self.referencingLabel}: resolved {self} for {self.labelName}: {label}")
 			except Exception as e:
@@ -1548,13 +1547,13 @@ class PackageFilter(object):
 			self.targetLabel = labelHints.label
 			self.priority = labelHints.priority
 
-		def bind(self, packageFilter):
-			stringMatcher = packageFilter.stringMatcher
-			classificationScheme = packageFilter.classificationScheme
+		def bind(self, schemeBuilder):
+			stringMatcher = schemeBuilder.stringMatcher
+			classificationScheme = schemeBuilder.classificationScheme
 
 			m = self.createMatch(stringMatcher)
 
-			self.processMatchParameters(packageFilter, m)
+			self.processMatchParameters(schemeBuilder, m)
 
 			# can this ever happen?
 			if m.label is None:
@@ -1568,15 +1567,15 @@ class PackageFilter(object):
 				optionSet = Classification.createLabelSet(m.options)
 				flavor = classificationScheme.autoFlavorForBuildOptions(optionSet)
 
-				epicFlavor = packageFilter.defineEpicFlavor(m.label, flavor)
+				epicFlavor = schemeBuilder.defineEpicFlavor(m.label, flavor)
 				self.labelHints = self.labelHints.clone(options = optionSet, autoFlavor = flavor)
 
-		def processMatchParameters(self, packageFilter, m):
+		def processMatchParameters(self, schemeBuilder, m):
 			# A match may come with additional parameters, as in
 			#
 			#	libvamp2-sdk class=api arch-=blup
 			#
-			classificationScheme = packageFilter.classificationScheme
+			classificationScheme = schemeBuilder.classificationScheme
 			originalLabel = m.label
 
 			if m.parameters:
@@ -1590,7 +1589,7 @@ class PackageFilter(object):
 						m.splitOkay = True
 						continue
 
-					mapping = packageFilter.getClassMapping(param)
+					mapping = schemeBuilder.getClassMapping(param)
 					if mapping is not None:
 						if classMapping is not None:
 							raise Exception(f"Conflicting class mappings {classMapping} and {mapping}")
@@ -1649,6 +1648,7 @@ class PackageFilter(object):
 	def __init__(self, scheme = None, scenarios = None):
 		self.classificationScheme = scheme or Classification.Scheme()
 		self.validScenarios = scenarios
+		# FIXME rename labelEngine
 		self.stringMatcher = PackageLabelling()
 		self._lateLabelBindings = []
 		self._lateFilterBindings = []

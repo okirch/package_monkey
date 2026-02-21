@@ -1,6 +1,6 @@
 
 from .packages import ProductMediator, PackageCollection
-from .filter import PackageFilter, Classification
+from .filter import Classification
 from .floader import FilterLoader
 from .options import ApplicationBase
 from .util import TimedExecutionBlock, ExecTimer
@@ -30,13 +30,13 @@ class ClassificationGadget(object):
 		scenarioFacade = ScenarioLabellingFacade(db, modelDescription.loadPreprocessorHints())
 
 		filterPath = modelDescription.getPath('filter.yaml')
-		self.packageFilter = loader.load(filename = filterPath, scheme = classificationScheme, scenarios = scenarioFacade)
+		self.schemeBuilder = loader.load(filename = filterPath, scheme = classificationScheme, scenarios = scenarioFacade)
 
 	def solve(self, codebase):
 		productMediator = self.performInitialPlacement(codebase)
 
 		# Now finalize the label hierarchy
-		self.packageFilter.complete()
+		self.schemeBuilder.complete()
 
 		return NewResult.build(self.classificationScheme,
 					productMediator.packageCollection,
@@ -44,7 +44,7 @@ class ClassificationGadget(object):
 
 	def performInitialPlacement(self, codebase):
 		collection = PackageCollection()
-		packageFilter = self.packageFilter
+		schemeBuilder = self.schemeBuilder
 		db = self.db
 
 		with TimedExecutionBlock("loading all packages from database"):
@@ -63,12 +63,12 @@ class ClassificationGadget(object):
 				collection.enablePackageTracing(self.traceMatcher)
 
 		with TimedExecutionBlock("performing initial placement of packages"):
-			for name in packageFilter.promises:
+			for name in schemeBuilder.promises:
 				productMediator.generatePromise(name, db)
 
 			deferred = []
 			for build in collection.builds:
-				packageFilter.tryToLabelBuild(build)
+				schemeBuilder.tryToLabelBuild(build)
 				if build.epic is None and not build.isSynthetic:
 					deferred.append(build)
 
@@ -95,13 +95,13 @@ class ClassificationGadget(object):
 					labelHints = Classification.LabelHints(label = epic, epic = epic, layer = epic.layer)
 					build.setLabelHints(labelHints)
 
-			defaultClass = packageFilter.classificationScheme.defaultClass
+			defaultClass = schemeBuilder.classificationScheme.defaultClass
 			for pkg in collection.packages:
-				packageFilter.tryToLabelPackage(pkg)
+				schemeBuilder.tryToLabelPackage(pkg)
 				if pkg.new_class is None:
 					pkg.new_class = defaultClass
 
-			packageFilter.resolveSubsets(db)
+			schemeBuilder.resolveSubsets(db)
 
 			numBadBuilds = 0
 			badBuilds = {}

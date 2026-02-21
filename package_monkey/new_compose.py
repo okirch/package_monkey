@@ -36,6 +36,8 @@ class Constraints(object):
 		self.validClasses = None
 		self.closureRules = None
 
+		self.supportStatement = None
+
 	def __str__(self):
 		attrs = []
 		if self.validArchitectures is not None:
@@ -51,7 +53,8 @@ class Constraints(object):
 	def __eq__(self, other):
 		if self.validArchitectures != other.validArchitectures or \
 		   self.validClasses != other.validClasses or \
-		   self.closureRules != other.closureRules:
+		   self.closureRules != other.closureRules or \
+		   self.supportStatement is not other.supportStatement:
 			return False
 
 		return True
@@ -64,6 +67,7 @@ class Constraints(object):
 		if self.validClasses is not None:
 			result.validClasses = self.validClasses.copy()
 
+		result.supportStatement = self.supportStatement
 		result.closureRules = self.closureRules
 		return result
 
@@ -129,6 +133,91 @@ class Constraints(object):
 		if self.closureRules is None:
 			return None
 		return self.closureRules.findComplementing(candidate, included)
+
+	def setSupportLevel(self, level, klass = None):
+		if self.supportStatement is None:
+			self.supportStatement = SupportStatement(self)
+		else:
+			self.supportStatement = self.supportStatement.unshare(self)
+		self.supportStatement.set(level, klass)
+
+	def updateSupportStatement(self, otherConstraints):
+		otherStatement = otherConstraints.supportStatement
+		if self.supportStatement is None:
+			self.supportStatement = otherStatement
+		elif self.supportStatement is otherStatement:
+			pass
+		else:
+			self.supportStatement = self.supportStatement.unshare(self)
+			self.supportStatement.update(otherStatement)
+
+class SupportStatement(object):
+	def __init__(self, owner = None):
+		self.owner = owner
+		self.level = None
+		self.classLevels = None
+
+	def __eq__(self, other):
+		if other is None:
+			return False
+		if self.level != other.level:
+			return False
+
+		all = set(self.classLevels.keys()).union(set(other.classLevels.keys()))
+		for klass in all:
+			if self.classLevels.get(klass) is not other.classLevels.get(klass):
+				return False
+
+		return True
+
+	def __str__(self):
+		words = []
+		if self.level:
+			words.append(self.level)
+		if self.classLevels is not None:
+			for klass, level in sorted(self.classLevels.items(), key = str):
+				words.append(f"{klass}={level}")
+		return " ".join(words) or "<none>"
+
+	def set(self, level, klass = None):
+		if klass is None:
+			self.level = level
+		else:
+			if self.classLevels is None:
+				self.classLevels = {}
+			self.classLevels[klass] = level
+
+	def get(self, klass):
+		return self.classLevels.get(klass) or self.level
+
+	def update(self, other):
+		if other.level:
+			self.level = other.level
+		if other.classLevels is not None:
+			for klass, level in other.classLevels.items():
+				self.set(klass, level)
+
+	def unshare(self, owner):
+		if self.owner is owner:
+			return self
+		return self.copy(owner)
+
+	def copy(self, owner = None):
+		result = self.__class__(owner)
+		result.level = self.level
+		result.classLevels = self.classLevels.copy()
+		return result
+
+class SupportSummary(object):
+	def __init__(self):
+		self.map = {}
+	
+	def add(self, rpm, level):
+		infomsg(f"{level} {rpm}")
+		self.map[rpm] = level
+
+	def items(self):
+		return self.map.items()
 
 class Justification(object):
 	def __init__(self, reason, other = None):
@@ -593,6 +682,14 @@ class Policy(object):
 
 		return verb
 
+	def setSupportLevel(self, id, klass):
+		self.constraints.setSupportLevel(id, klass)
+		for child in self._children.values():
+			child.updateSupportStatement(self)
+	
+	def updateSupportStatement(self, otherPolicy):
+		self.constraints.updateSupportStatement(otherPolicy.constraints)
+
 class ClosureRules(object):
 	class ClassRule(object):
 		def __init__(self, targetClass):
@@ -790,12 +887,19 @@ class Composable(object):
 		reason = ReasonPropagate(other)
 		return self.propagateDecision(other.decision, reason)
 
+	def getSupportLevel(self, klass = None):
+		cons = self.constraints
+		if cons is None or cons.supportStatement is None:
+			return None
+		return cons.supportStatement.get(klass)
+
 class CompositionRules(object):
 	def __init__(self, builder):
 		self.builder = builder
 		self.classificationScheme = builder.classificationScheme
 		self.architectures = ArchSet(('x86_64', 'ppc64le', 's390x', 'aarch64'))
 		self.topicClasses = self.classificationScheme.allTopicClasses
+		self.supportDictionary = None
 
 		defaultConstraints = Constraints()
 		defaultConstraints.validArchitectures = self.architectures
@@ -872,6 +976,17 @@ class CompositionRules(object):
 	def requestClass(self, nameOrLabel, closureRules):
 		label = self.castToLabel(nameOrLabel, Classification.TYPE_CLASS)
 		return closureRules.requestClass(label)
+
+	def installSupportLevels(self, supportDictionary):
+		self.supportDictionary = supportDictionary
+
+	def translateSupportLevel(self, id):
+		if self.supportDictionary is None:
+			return id
+		level = self.supportDictionary.get(id)
+		if level is None:
+			raise Exception(f"Unknown support level {id}")
+		return level
 
 	# helper function for building Justifications
 	def optionsToControls(self, classificationResult, buildOptions):
@@ -1410,6 +1525,19 @@ class CompositionRules(object):
 
 		return solution
 
+	def produceSupportSummary(self, classificationResult):
+		result = SupportSummary()
+		for epic in classificationResult.epics:
+			for rpmControl in epic.rpms:
+				if rpmControl.rpm.isSynthetic:
+					continue
+				if rpmControl.isIncluded:
+					level = rpmControl.getSupportLevel()
+					if level is not None:
+						result.add(rpmControl.rpm.name, level)
+
+		return result
+
 	def resolveIncrementalEpic(self, epic, classificationResult):
 		result = PackageCollection()
 
@@ -1478,10 +1606,28 @@ class CompositionRules(object):
 
 		return result
 
+	def displaySupportLevels(self, policy = None, seenStatement = None):
+		if policy is None:
+			policy = self.defaultPolicy
+
+		supportStatement = None
+		if policy.constraints:
+			supportStatement = policy.constraints.supportStatement
+
+		if supportStatement is not None and supportStatement is not seenStatement:
+			infomsg(f"{policy.label} with support statement {supportStatement}")
+			with loggingFacade.temporaryIndent():
+				for child in policy._children.values():
+					self.displaySupportLevels(child, supportStatement)
+		else:
+			for child in policy._children.values():
+				self.displaySupportLevels(child, seenStatement)
+
 
 class LoaderGlue(object):
 	class ClassRule(object):
-		def __init__(self, policy, klass):
+		def __init__(self, rules, policy, klass):
+			self.rules = rules
 			self.policy = policy
 			self.klass = klass
 
@@ -1492,9 +1638,8 @@ class LoaderGlue(object):
 			self.policy.disableClass(self.klass)
 
 		def setSupportLevel(self, value):
-			pass
-			# infomsg(f"IGNORE composer setting: {self.policy}/class={self.klass}/supportLevel={value}")
-			# implement later
+			value = self.rules.translateSupportLevel(value)
+			self.policy.setSupportLevel(value, self.klass)
 
 	class ClassFacade(object):
 		def __init__(self, rules, policy):
@@ -1506,7 +1651,7 @@ class LoaderGlue(object):
 		def getRuleByName(self, id):
 			# infomsg(f"getRuleByName({self.policy}, class={id})")
 			klass = self.rules.castToLabel(id, Classification.TYPE_CLASS)
-			return LoaderGlue.ClassRule(self.policy, klass)
+			return LoaderGlue.ClassRule(self.rules, self.policy, klass)
 
 	class PolicyMediator(object):
 		def __init__(self, rules, policy):
@@ -1523,8 +1668,7 @@ class LoaderGlue(object):
 			self.policy.decision = COMPOSE_UNSPEC
 
 		def setSupportLevel(self, value):
-			infomsg(f"IGNORE: {self.policy}/supportLevel={value}")
-			# implement later
+			self.policy.setSupportLevel(value)
 
 		def setArchitectures(self, names):
 			self.policy.constrainArchitectures(ArchSet(names))
@@ -1694,6 +1838,7 @@ class CompositionBuilder(object):
 		self._default = None
 		self._products = {}
 		self._closureRules = {}
+		self._supportDictionary = classificationScheme.policy.supportDictionary
 
 	def createProduct(self, id):
 		product = self._products.get(id)
@@ -1705,6 +1850,8 @@ class CompositionBuilder(object):
 				self._default = product
 
 			product.installDefaultClosureRules()
+			if self._supportDictionary:
+				product.rules.installSupportLevels(self._supportDictionary)
 
 		return product
 

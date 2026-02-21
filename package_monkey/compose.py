@@ -333,6 +333,7 @@ class Composer(object):
 			product.rules.apply(self.classificationResult)
 
 			product.rpms = product.rules.produceSolution(self.classificationResult)
+			product.supportStatement = product.rules.produceSupportSummary(self.classificationResult)
 
 			if self.includeExplanations:
 				product.reasoning = product.rules.produceReasoning(self.classificationResult)

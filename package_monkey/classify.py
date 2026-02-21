@@ -166,6 +166,9 @@ class RpmControl(Composable):
 			raise Exception(f"{self}: rpm has not class")
 		return klass
 
+	def getSupportLevel(self, dummy = None):
+		return super().getSupportLevel(self.rpmClass)
+
 class BuildControl(Composable):
 	TYPE = "build"
 

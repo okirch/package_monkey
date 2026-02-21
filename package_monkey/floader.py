@@ -234,6 +234,9 @@ class MonkeyConfigLoader(object):
 		def __iter__(self):
 			return iter(self.value)
 
+		def __len__(self):
+			return len(self.value)
+
 	class Processor(object):
 		def __init__(self, context):
 			self.context = context

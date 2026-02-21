@@ -315,6 +315,11 @@ class Composer(object):
 		producer.produce(self)
 		producer.write(outputPath)
 
+	def writeSupportStatus(self, outputPath):
+		producer = SupportStatusProducer()
+		producer.produce(self)
+		producer.write(outputPath)
+
 	def composePackages(self, report):
 		fullArchSet = archRegistry.fullset
 
@@ -1117,6 +1122,40 @@ class ZypperLifecycleProducer(object):
 			csv.write(row)
 
 		csv.close()
+
+class SupportStatusProducer(object):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.data = None
+
+	def produce(self, composer):
+		supportDictionary = composer.classificationScheme.policy.supportDictionary
+		if supportDictionary is None:
+			infomsg(f"Model does not define support levels")
+			return
+
+		self.data = {}
+		for product in composer.bottomUpProductTraversal():
+			if product.supportStatement is not None:
+				self.data[product.id] = product.supportStatement
+
+		self.defaultLevel = supportDictionary.defaultLevel
+
+	def write(self, outputPathTemplate):
+		if self.data is None:
+			return
+
+		if '%id' not in outputPathTemplate:
+			raise Exception(f"{self.__class__.__name__}: output path \"{outputPathTemplate}\" does not contain '%id'")
+
+		infomsg(f"Writing supportstatus files:")
+		for id, map in self.data.items():
+			outputPath = outputPathTemplate.replace('%id', id)
+
+			with open(outputPath, "w") as f:
+				for rpm, level in sorted(map.items(), key = lambda pair: str(pair[0])):
+					if level is not self.defaultLevel:
+						print(f"{rpm:30} {level}", file = f)
 
 ##################################################################
 # Helper class to provide an epic centric view of all products

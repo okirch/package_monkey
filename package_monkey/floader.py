@@ -15,6 +15,7 @@ from .filter import PackageLabelling
 from .arch import *
 from .compose import Composer
 from .policy import Team
+from .tracked_yaml import YamlLocationTracking
 
 class MonkeyConfigLoader(object):
 	def __init__(self):
@@ -49,7 +50,7 @@ class MonkeyConfigLoader(object):
 			return (self.name, self.sequence)
 
 	class Context(object):
-		def __init__(self, name = None, filename = None, parent = None, expander = None, policy = None):
+		def __init__(self, name = None, filename = None, parent = None, expander = None, policy = None, locationTracking = None):
 			self.name = name or filename
 			self._filename = filename
 			self.parent = parent
@@ -71,11 +72,23 @@ class MonkeyConfigLoader(object):
 			else:
 				self.location = parent.location
 
+			if locationTracking is None and parent is not None:
+				locationTracking = parent.locationTracking
+			self.locationTracking = locationTracking
+
+			self.approximateLocation = None
+			if parent is not None:
+				self.approximateLocation = parent.approximateLocation
+
 			assert(self.name)
 
 		def __str__(self):
+			loc = self.approximateLocation
+			if loc is not None:
+				return f"{os.path.basename(loc.name)}, line {loc.line}"
+
 			if self.parent is not None:
-				return f"{self.parent} -> {self.name}"
+				return f"{self.parent} -> {loc}"
 			return self.name
 
 		def descend(self, name):
@@ -169,20 +182,28 @@ class MonkeyConfigLoader(object):
 			if not self.expander or data is None:
 				return data
 
+			location = None
+			if self.locationTracking is not None:
+				location = self.locationTracking.get(data)
+
 			dataType = type(data)
 			if dataType in (int, bool, float):
-				return data
-			if dataType is str:
-				return self.expander.expand(data)
-			if dataType is dict:
-				return dict((self.expander.expand(key), self.variableExpansion(value)) for (key, value) in data.items())
-			if dataType is list:
-				return list(map(self.variableExpansion, data))
-			if dataType is datetime.date:
+				pass
+			elif dataType is str:
+				data = self.expander.expand(data)
+			elif dataType is dict:
+				data = dict((self.expander.expand(key), self.variableExpansion(value)) for (key, value) in data.items())
+			elif dataType is list:
+				data = list(map(self.variableExpansion, data))
+			elif dataType is datetime.date:
 				# yaml is nuts
-				return data
+				data = data
+			else:
+				raise Exception(f"{self}: unexpected YAML data {dataType} in variableExpansion")
 
-			raise Exception(f"{self}: unexpected YAML data {dataType} in variableExpansion")
+			if location is not None:
+				self.locationTracking.add(data, location)
+			return data
 
 	class DataContext(Context):
 		def __init__(self, expectedType, name, value, *args, **kwargs):
@@ -191,6 +212,12 @@ class MonkeyConfigLoader(object):
 
 			if expectedType and type(value) != expectedType:
 				raise Exception(f"{self} expected a {expectedType.__name__} not a {type(value)}")
+
+			if self.locationTracking is not None:
+				location = self.locationTracking.get(value)
+				if location is None:
+					location = self.locationTracking.get(name)
+				self.approximateLocation = location
 
 	class StringContext(DataContext):
 		def __init__(self, *args, **kwargs):
@@ -288,11 +315,13 @@ class FilterLoader(MonkeyConfigLoader):
 			if priority is not None:
 				labelHints.priority = self.context.asInt(label.name, priority)
 
+			dataContext = self.context.dictContext(label.name, data)
+
 			if processorFactory is None:
 				processorFactory = FilterLoader.LabelProcessor
 
-			labelProcessor = processorFactory(labelHints, self)
-			labelProcessor.process(data)
+			labelProcessor = processorFactory(labelHints, self, context = dataContext)
+			labelProcessor.process(dataContext)
 
 		def definePromise(self, name):
 			self.schemeBuilder.definePromise(name)
@@ -361,8 +390,10 @@ class FilterLoader(MonkeyConfigLoader):
 			if includeBaseDir:
 				includeFile = os.path.join(includeBaseDir, includeFile)
 
+			locationTracking = YamlLocationTracking()
 			with open(includeFile) as f:
-				data = yaml.full_load(f)
+				from .tracked_yaml import tracked_load
+				data = tracked_load(f, line_tracking = locationTracking)
 
 			if not data:
 				errormsg(f"{includeFile} seems to be empty")
@@ -371,7 +402,7 @@ class FilterLoader(MonkeyConfigLoader):
 			# recursively expand all ${variables}
 			data = self.context.variableExpansion(data)
 
-			includeProcessor = FilterLoader.IncludeFileProcessor(includeFile, self)
+			includeProcessor = FilterLoader.IncludeFileProcessor(includeFile, self, locationTracking)
 			try:
 				includeProcessor.process(data)
 			except Exception as e:
@@ -385,6 +416,7 @@ class FilterLoader(MonkeyConfigLoader):
 			if key == 'epics':
 				context = self.context.dictContext(key, value)
 				for epicName, epicData in context.items():
+					loc = context.locationTracking.get(epicName)
 					self.processEpicNew(epicName, epicData)
 			elif key == 'layers':
 				context = self.context.dictContext(key, value)
@@ -474,10 +506,11 @@ class FilterLoader(MonkeyConfigLoader):
 			self.processLabelWithHints(labelHints, data, processorFactory = FilterLoader.LayerProcessor)
 
 	class MainFileProcessor(CommonFileProcessor):
-		def __init__(self, schemeBuilder, filename):
+		def __init__(self, schemeBuilder, filename, locationTracking):
 			context = FilterLoader.Context(filename = filename,
 						expander = VariableExpander(),
-						policy = schemeBuilder.policy)
+						policy = schemeBuilder.policy,
+						locationTracking = locationTracking)
 
 			super().__init__(schemeBuilder, context, schemeBuilder.globalPolicySettings)
 
@@ -537,8 +570,8 @@ class FilterLoader(MonkeyConfigLoader):
 				roleProcessor.process(roleData)
 
 	class IncludeFileProcessor(CommonFileProcessor):
-		def __init__(self, filename, parent):
-			context = FilterLoader.Context(filename = filename, parent = parent.context)
+		def __init__(self, filename, parent, locationTracking):
+			context = FilterLoader.Context(filename = filename, parent = parent.context, locationTracking = locationTracking)
 			clonedSettings = parent.settings.clone(filename)
 			super().__init__(parent.schemeBuilder, context, clonedSettings)
 
@@ -795,11 +828,13 @@ class FilterLoader(MonkeyConfigLoader):
 				raise Exception(f"parameters not allowed in definition of pattern match \"{pattern}\" for role {role}")
 
 	class LabelProcessorBase(Processor):
-		def __init__(self, labelHints, parent):
+		def __init__(self, labelHints, parent, context = None):
 			assert(isinstance(labelHints, Classification.LabelHints))
 			label = labelHints.label
 
-			super().__init__(parent.schemeBuilder, FilterLoader.Context(str(label), parent = parent.context), parent.settings)
+			if context is None:
+				context = FilterLoader.Context(str(label), parent = parent.context)
+			super().__init__(parent.schemeBuilder, context, parent.settings)
 
 			self.label = label
 			self.labelHints = labelHints
@@ -812,6 +847,8 @@ class FilterLoader(MonkeyConfigLoader):
 
 			# for the time being, do not protect against redefining a label
 			label.defined = True
+
+			assert(self.context.approximateLocation is not None)
 
 		def updateStringAttribute(self, key, value, attr_name = None):
 			value = self.context.asString(key, value)
@@ -908,9 +945,6 @@ class FilterLoader(MonkeyConfigLoader):
 			self.schemeBuilder.addLateBuildFilterRuleBinding(pattern, self.labelHints)
 
 	class LabelProcessor(LabelProcessorBase):
-		def __init__(self, labelHints, parent):
-			super().__init__(labelHints, parent)
-
 		def processKeyValue(self, key, value):
 			if key == 'enabled':
 				self.updateBooleanAttribute(key, value, 'isEnabled')
@@ -981,9 +1015,6 @@ class FilterLoader(MonkeyConfigLoader):
 				self.schemeBuilder.addLateRequiredEpicBinding(buildOption, name, self.context)
 
 	class EpicProcessor(TopicScopeProcessor):
-		def __init__(self, labelHints, parent):
-			super().__init__(labelHints, parent)
-
 		def processKeyValue(self, key, value):
 			if key == 'options':
 				context = self.context.dictContext(key, value)
@@ -1006,7 +1037,8 @@ class FilterLoader(MonkeyConfigLoader):
 			elif key == 'releasedate':
 				self.processReleaseDate(self.context.asInt(key, value))
 			elif key == 'catchall':
-				self.schemeBuilder.setCatchAllEpic(self.label)
+				if self.context.asBoolean(key, value):
+					self.schemeBuilder.setCatchAllEpic(self.label)
 			else:
 				super().processKeyValue(key, value)
 
@@ -1069,10 +1101,15 @@ class FilterLoader(MonkeyConfigLoader):
 	def load(self, filename = 'filter.yaml', **kwargs):
 		filter = ClassificationSchemeBuilder(**kwargs)
 
-		mainProcessor = self.MainFileProcessor(filter, filename)
+		locationTracking = YamlLocationTracking()
+		assert(locationTracking is not None)
+
+		mainProcessor = self.MainFileProcessor(filter, filename, locationTracking)
 
 		with open(filename) as f:
-			data = yaml.full_load(f)
+			from .tracked_yaml import tracked_load
+
+			data = tracked_load(f, line_tracking = locationTracking)
 
 		with TimedExecutionBlock(f"loading definition from {filename}"):
 			mainProcessor.process(data)

@@ -46,3 +46,14 @@ ceph-mgr-cephadm (Rados-default)
     - python3-asyncssh
   not required by anything
 ```
+
+## Editing tips for yaml files
+
+With YAML relying on indentation to express nesting of data structures, it becomes sort of
+important how your editor translates TABs to space. To be on the safe side, I have opted to expand
+all tabs in the yaml files involved here. All files have a vi modeline that automatically enables TAB
+expansion when you open the file; you may need to use ``set modelines`` in your global ``.virmc`` file
+to make vim parse them.
+
+If you're using a different editor, which requires a different way of ensuring the equivalent effect,
+feel free to send me patches.

@@ -883,10 +883,7 @@ class FilterLoader(MonkeyConfigLoader):
 				setattr(self.label, attr_name or key, value)
 
 		def processKeyValue(self, key, value):
-			if key == 'name':
-				# we have already handled this
-				return
-			if key in ('description', 'compatibility', ):
+			if key in ('description', ):
 				self.updateStringAttribute(key, value)
 			elif key == 'requires':
 				self.processRequires(self.context.asStringList(key, value))
@@ -931,8 +928,6 @@ class FilterLoader(MonkeyConfigLoader):
 			archSet = archRegistry.fullset.difference(ArchSet(data))
 			if not self.label.restrictArchitectures(archSet):
 				errormsg(f"{self.label}: ignoring exclude_architecture specification")
-			for arch in data:
-				assert(arch not in self.label._archSet)
 
 		def addBinaryPackageFilter(self, pattern):
 			if pattern.startswith('promise:') and '?' not in pattern and '*' not in pattern:
@@ -941,7 +936,7 @@ class FilterLoader(MonkeyConfigLoader):
 
 			self.schemeBuilder.addLateRpmFilterRuleBinding(pattern, self.labelHints)
 
-		def addOBSPackageFilter(self, pattern):
+		def addBuildFilter(self, pattern):
 			self.schemeBuilder.addLateBuildFilterRuleBinding(pattern, self.labelHints)
 
 	class LabelProcessor(LabelProcessorBase):
@@ -955,7 +950,7 @@ class FilterLoader(MonkeyConfigLoader):
 
 		def processPackages(self, nameList):
 			for name in nameList:
-				self.addOBSPackageFilter(name)
+				self.addBuildFilter(name)
 
 	class LayerProcessor(LabelProcessor):
 		def processKeyValue(self, key, value):
@@ -983,7 +978,7 @@ class FilterLoader(MonkeyConfigLoader):
 
 		def processPackages(self, nameList):
 			for name in nameList:
-				self.addOBSPackageFilter(name)
+				self.addBuildFilter(name)
 
 		def processHints(self, data):
 			for pattern in data:
@@ -1086,10 +1081,10 @@ class FilterLoader(MonkeyConfigLoader):
 
 		def processPackages(self, nameList):
 			for name in nameList:
-				self.addOBSPackageFilter(name)
+				self.addBuildFilter(name)
 
-		def processDecisionLog(self, values):
-			self.label.decisionLog.append(values)
+		def processDecisionLog(self, string):
+			self.label.decisionLog.append(string)
 
 		def processImplementScenario(self, scenarioSpec):
 			name, version = scenarioSpec.split('=')

@@ -257,3 +257,27 @@ Product sles/aarch64 CHANGES:
     libpmemlog-devel
 ...
 ```
+
+## The ``publish`` command
+
+This command pushes the current output of the pipeline to a directory from where it can, presumably, be committed
+to some git repository. This tool is still at bit of a draft stage, and should be adjusted as we integrate package
+monkey more into our workflows.
+
+As an example how it could be used, please look at `src.suse.de:okir/SLES16_wip.git`. You could check out a
+copy of this repository, and then copy files to it:
+
+```
+$ monkey publish /path/to/my/copy/of/SLES16_wip
+```
+
+It is still up to the user to formulate a proper git commit message for the set of changes you pushed, git push
+your changes, and create a pull request.
+
+Possible improvements, in case we decide to use the tool:
+
+- check whether the output of the pipeline was produced from a committed model state, or whether there
+  were any uncommitted changes. Warn and or error out if the latter is the case (because it makes it
+  hard to reconstruct by anyone else)
+- pre-formulate a commit message based on changelog entries from the SLFO model
+

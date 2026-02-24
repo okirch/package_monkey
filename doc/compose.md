@@ -83,7 +83,98 @@ they are used for building other packages; so by definition, we should exclude i
 
 Last but not least, the `layers` attribute specifies layers (and labels nested within them, like epics
 and extras), and whether they shall be included or excluded. Again, these are *policy statements*, and
-we'll take a deeper look at their syntax in the next section.
+we'll take a deeper look at their syntax in a few moments.
+
+### Products and their attributes
+
+The `defaults` section is followed by one or more product definitions. This definition mainly
+consists of a few attributes that describe key product properties, followed by `options`
+and `layers` sections just like in `defaults`. Here's what the start of SLES 16.1 looks like:
+
+```
+sles_16.1:
+    name:           SLES16.1
+    obs_composekey: sles
+    release_epic:   SLESProduct
+    contracts:
+     - general
+     - lts
+    
+    options:
+     SLES:          include
+     opengl:        include
+     ...
+
+    layers:
+     LayerCore:     include
+     ...
+```
+
+The value of `obs_composekey` is used when generating `default.productcompose`.
+The `name` attribute is, obviously, the product name, which is used in several output
+files.
+
+The `contracts` list is used in generating lifecycle data; and we will cover it in
+that context.
+
+The `release_epic` is the name of an epic that contains packages like `SLES-release`.
+These epics receive special treatment due to the way we generate extensions and
+derived products.
+
+### Extensions and Derived Products
+
+An extension is a product that is installed on top of a base product, such as SLE HA,
+which looks like this in `compose.yaml`:
+
+```
+sleha_16.1:
+    name:           SLE HA 16.1
+    obs_composekey: sles_ha
+    release_epic:   HAExtension
+    extend:         sles_16.1
+    contracts:
+     - general
+     - lts
+```
+
+The keyword `extend` signals that it is an extension of the base product `sles_16.1`.
+
+The composer handles extensions by combining the policy statements from the base product
+with the policy statements of the extension, and performing a full composition. Finally,
+it uses the set of rpms that result from this composition, and subtracts the set of rpms
+that make up the base product.
+
+A product like SLES for SAP is not an extension, but basically copies everything from
+a base product (SLES in this case) and adds things on top. Its definition looks like this:
+
+```
+sles_sap_16.1:
+    name:           SLE for SAP 16.1
+    obs_composekey: sles_sap
+    release_epic:   SAPProduct
+    copy:           sles_16.1
+    contracts:
+     - general
+     - lts
+
+    architectures:
+     - ppc64le
+     - x86_64
+```
+
+The keyword `copy` tells the composer that this product is deried from its base product.
+
+Again, the composer handles derived products by combining the policy statements from the
+base product with the policy statements of the extension, and performing a full composition.
+The set of rpms coming out of this composition is what makes up the derived product.
+
+In this context, it becomes clear why we handle `*-release` packages via a special mechanism
+outside of the regular policy statements; because a derived product like SLES for SAP should
+include *only* its own release package(s), but not those of the base product it is
+derived from.
+
+Note how SLES for SAP overrides the `architectures` specified in the `defaults` section;
+we provide this product on these architectures only.
 
 ### Policy Statements
 
@@ -259,14 +350,29 @@ well enough so far.
 
 The closure rules are also defined in `compose.yaml`, in the `closure_rules` section.
 
-### Products and their attributes
+### RPM Overrides
 
-The rest is yet TBD.
+Sometimes, making the classifier and composer do exactly what you want can be tedious
+and complicated, while you may be in a hurry to make a single change stick with hours
+to go before the RC1 deadline. This is why RPM overrides exist. This section can be used
+within any product section, and specifies individual RPMs to be included or excluded.
 
-Extensions vs derived products.
+```
+override_rpms:
+ include:
+  - libpmem-devel: [x86_64, ppc64le]
+  - libpmempool-devel: [x86_64, ppc64le]
+  - libpmem2-devel: [x86_64]
+  - python313-process-tests
 
-#### Product Names
+ exclude:
+  - python313-pyproject-api
+  - pcre-doc
+```
 
-#### Release Packages
+RPMs listed in the `include` section will be added to the composition, or will have
+their list of architectures adjusted. RPMs listed in the `exclude` section will be
+removed from the composition.
 
-#### Support Contracts
+Note that there is no wildcarding in these override lists; so do not rely too much on
+them. They become messy very quickly.

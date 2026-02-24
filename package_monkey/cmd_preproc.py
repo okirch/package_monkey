@@ -15,6 +15,7 @@ from .util import debugmsg, infomsg, warnmsg, errormsg, loggingFacade
 from .util import ThatsProgress, TableFormatter
 from .options import ApplicationBase
 from .preprocess import *
+from .scenario import *
 from .newdb import NewDB
 from .reports import GenericStringReport
 from .arch import *
@@ -251,6 +252,26 @@ class SolverApplication(ApplicationBase):
 		self.displayBuildsWithVersionDrift(db)
 
 		nAmbiguityErrors = 0
+
+		# Try to detect when a build like rust1.99 provides rpms for just a single scenario version
+		# Not all packages covered by scenarios do that; for example, build systemd-default-settings
+		# spits out a bunch of rpms, for different products, and hence for different product=XXX scenarios.
+		for build in db.builds:
+			controllingScenarios = set()
+			for rpm in build.binaries:
+				rpmScenarios = functools.reduce(set.union, rpm.controllingScenarios.values(), set())
+				controllingScenarios.update(rpmScenarios)
+
+			if build.trace and controllingScenarios:
+				infomsg(f"{build}: rpms covered by {' '.join(map(str, controllingScenarios))}")
+
+			# up to this point, the scenario set contains just strings formatted as var/version/rpmname;
+			# now parse it into a set of ScenarioTuples:
+			controllingScenarios = ScenarioTupleSet(map(ScenarioTuple.parse, controllingScenarios))
+			controllingVersions = controllingScenarios.versions
+
+			if len(controllingVersions) == 1:
+				build.controllingScenarioVersion = next(iter(controllingVersions))
 
 		rpmMap = {}
 		for build in db.builds:

@@ -269,6 +269,8 @@ class NewDB(object):
 				for arch, status in build._buildStatus.items():
 					if status != 'succeeded':
 						write(f" status {arch} {status}")
+				if build.controllingScenarioVersion:
+					write(f" mem {build.controllingScenarioVersion}")
 				for rpm in sorted(map(str, build.rpms)):
 					write(f" rpm {rpm}")
 
@@ -330,14 +332,16 @@ class NewDB(object):
 					else:
 						currentRpm.solutions.update(key, rpms.union(currentRpm.solutions.common))
 				elif cmd == 'mem':
-					assert(currentRpm)
-
-					key = w.pop(0)
-					if key == 'common':
-						currentRpm.controllingScenarios.updateCommon(w)
-						assert(set(w) == currentRpm.controllingScenarios.common)
-					else:
-						currentRpm.controllingScenarios.update(key, set(w))
+					if currentRpm is not None:
+						key = w.pop(0)
+						if key == 'common':
+							currentRpm.controllingScenarios.updateCommon(w)
+							assert(set(w) == currentRpm.controllingScenarios.common)
+						else:
+							currentRpm.controllingScenarios.update(key, set(w))
+					elif currentBuild is not None:
+						assert(len(w) == 1)
+						currentBuild.controllingScenarioVersion = w[0]
 				elif cmd == 'scn':
 					assert(currentRpm)
 
@@ -713,6 +717,8 @@ class GenericBuild(object):
 
 		self.new_epic = None
 		self.new_layer = None
+
+		self.controllingScenarioVersion = None
 
 	def __str__(self):
 		return self.name

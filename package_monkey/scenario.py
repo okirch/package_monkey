@@ -45,7 +45,7 @@ from .pmatch import ParallelStringMatcher
 import re
 import functools
 
-__names__ = ['NewScenarioManager', 'ScenarioSalad', 'ScenarioTupleSet']
+__names__ = ['NewScenarioManager', 'ScenarioSalad', 'ScenarioTupleSet', 'ScenarioTuple']
 
 class ScenarioTuple(object):
 	def __init__(self, variable, value, abstractPackage = None):

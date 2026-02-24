@@ -155,6 +155,9 @@ class DownloadInfo(object):
 			if self.timestamp is not None:
 				print(f"timestamp {self.timestamp}", file = f)
 	def load(self, path):
+		if not os.path.exists(path):
+			return
+
 		with open(path) as f:
 			for line in f.readlines():
 				w = line.strip().split()

@@ -272,6 +272,8 @@ class SnapshotCommand(GenericSubcommand):
 		'''
 
 	def registerArguments(self, args):
+		args.add_argument('--with-rpms', action = 'store_true',
+					help = 'Create a snapshot of the downloaded rpmhdrs as well (adds 5-10 MB to a snapshot)')
 		args.add_argument(dest = 'slug', metavar = 'SLUG', nargs = '?',
 					help = 'The name by which this snapshot will be accessible',
 					default = 'latest')

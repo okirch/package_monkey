@@ -211,10 +211,12 @@ changes in the model affect the output of the toolchain.
 If you invoke ``monkey snapshot`` without further arguments, it will generate a snapshot called
 ``latest`` by copying your _working state_ from ``~/.local/package_monkey`` to a snapshot
 directory somewhere below ``~/.cache``. A snapshot includes the output of the ``prepare`` stage
-and all further pipeline stages. Note that the snapshot (intentionally) does not include a copy
-of the rpm headers downloaded from the build service.
+and all further pipeline stages.
 
-To create additional snapshots, call the command with the name of the snapshot you wish to create.
+By default, the snapshot does not include a copy of the rpm headers downloaded from the build service.
+If you want to retain a copy (e.g. for future archeology), invoke the command using `--with-rpms`.
+
+To create snapshots other than `latest`, call the command with the name of the snapshot you wish to create.
 If the name exists already, the old snapshot will be replaced.
 
 When using commands like ``packagediff`` and ``productdiff`` described, you can refer to a snapshot

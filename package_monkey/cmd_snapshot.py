@@ -37,6 +37,9 @@ class SnapshotApplication(ApplicationBase):
 
 		snapshot = snapFactory.createSnapshot(self.expandedStateRoot)
 
+		if self.opts.with_rpms:
+			snapshot.addRpms(self.productCodebase, self.getCachePath("rpmhdrs"))
+
 		if not self.keep:
 			snapFactory.remove(slug)
 

@@ -38,6 +38,19 @@ class Snapshot(object):
 		shutil.copytree(self.path, path, dirs_exist_ok = True)
 		return 0
 
+	def addRpms(self, codebase, cachePath):
+		import shutil
+
+		for project in codebase.projects.buildProjects:
+			if '/' not in project:
+				project += "/standard"
+
+			infomsg(f"   saving rpms for {project}")
+			srcpath = f"{cachePath}/{project}"
+			dstpath = f"{self.path}/rpmhdrs/{project}"
+
+			shutil.copytree(srcpath, dstpath, copy_function = os.link)
+
 ##################################################################
 # Provide access to all data in ~/.local/package_monkey/$codebase
 ##################################################################

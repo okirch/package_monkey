@@ -41,7 +41,7 @@ class Snapshot(object):
 	def addRpms(self, codebase, cachePath):
 		import shutil
 
-		for project in codebase.projects.buildProjects:
+		for project in codebase.buildProjects:
 			if '/' not in project:
 				project += "/standard"
 

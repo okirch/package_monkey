@@ -14,11 +14,6 @@ class CacheLocation(object):
 	def __init__(self, path):
 		self.path = path
 
-class BuildServiceCollection(object):
-	def __init__(self):
-		self.sourceProjects = []
-		self.buildProjects = []
-
 class OBSNameFilter(object):
 	class Filter(object):
 		def __init__(self):
@@ -82,47 +77,33 @@ class ProductCodebase(object):
 		self.release = None
 
 		self.architectures = ArchSet()
-		self.projects = []
+		self.buildProjects = []
+		self.sourceProjects = []
 
 		self.nameFilter = None
 
 	def __str__(self):
 		return self.name
 
+	def addBuildNameFilter(self, pattern):
+		if self.nameFilter is None:
+			self.nameFilter = OBSNameFilter()
+		self.nameFilter.addBuildPattern(pattern)
+
+	def addRpmNameFilter(self, pattern):
+		if self.nameFilter is None:
+			self.nameFilter = OBSNameFilter()
+		self.nameFilter.addRpmPattern(pattern)
+
 	@classmethod
 	def load(klass, name, filename, *args, **kwargs):
+		from .floader import CodebaseLoader
+
+		loader = CodebaseLoader()
+
 		infomsg(f"Loading definition of codebase {name} from {filename}")
-
 		codebase = klass(name, *args, **kwargs)
-		with open(filename) as f:
-			data = yaml.full_load(f)
 
-		codebase.release = data.get('release')
-		if codebase.release is None:
-			raise Exception(f"{filename} does not specify the product release")
+		loader.load(codebase, filename)
 
-		codebase.architectures = ArchSet(data['architectures'])
-		codebase.projects = codebase.expandProjects(data)
-
-		filterDict = data.get('filter')
-		if filterDict is not None:
-			codebase.nameFilter = OBSNameFilter()
-
-			for name in filterDict.get('builds', []):
-				codebase.nameFilter.addBuildPattern(name)
-
-			for name in filterDict.get('rpms', []):
-				codebase.nameFilter.addRpmPattern(name)
-
-		infomsg(f"   supported architectures: {codebase.architectures}")
 		return codebase
-
-	def expandProjects(self, data):
-		data = data.get('buildservice')
-		if data is None:
-			return None
-
-		info = BuildServiceCollection()
-		info.sourceProjects = data.get('source') or []
-		info.buildProjects = data.get('build') or []
-		return info

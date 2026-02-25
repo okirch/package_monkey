@@ -1394,3 +1394,49 @@ class CompositionLoader(MonkeyConfigLoader):
 
 		with TimedExecutionBlock(f"loading product composition from {filename}"):
 			mainProcessor.process(data)
+
+class CodebaseLoader(MonkeyConfigLoader):
+	class Processor(MonkeyConfigLoader.Processor):
+		pass
+
+	class MainFileProcessor(Processor):
+		def __init__(self, codebase, filename):
+			super().__init__(FilterLoader.Context(filename = filename, expander = VariableExpander()))
+			self.codebase = codebase
+
+			self.orderedKeys = ('release', 'closure_rules', 'ghosts', 'products', )
+
+		def processKeyValue(self, key, value):
+			if key == 'release':
+				self.codebase.release = self.context.asString(key, value)
+			elif key == 'versions':
+				pass
+			elif key == 'architectures':
+				self.codebase.architectures = ArchSet(self.context.asStringList(key, value))
+			elif key == 'filter':
+				self.processFilters(self.context.dictContext(key, value))
+			elif key == 'build_projects':
+				self.codebase.buildProjects = self.context.asStringList(key, value)
+			else:
+				super().processKeyValue(key, value)
+
+		def processFilters(self, context):
+			for key, value in context.items():
+				patterns = context.asStringList(key, value)
+				if key == 'builds':
+					for s in patterns:
+						self.codebase.addBuildNameFilter(s)
+				elif key == 'rpms':
+					for s in patterns:
+						self.codebase.addRpmNameFilter(s)
+				else:
+					raise Exception(f"Unknown filter class {key}")
+
+	def load(self, codebase, filename, **kwargs):
+		infomsg(f"Loading definition of codebase {codebase} from {filename}")
+
+		mainProcessor = self.MainFileProcessor(codebase, filename)
+		with open(filename) as f:
+			data = yaml.full_load(f)
+		mainProcessor.process(data)
+

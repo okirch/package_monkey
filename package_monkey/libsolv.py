@@ -140,7 +140,7 @@ class SolverRepositoryCollection(object):
 	def fromCodebase(klass, codebase, solverDir):
 		result = klass(codebase.architectures, solverDir)
 
-		for projectSpec in codebase.projects.buildProjects:
+		for projectSpec in codebase.buildProjects:
 			result.addProject(projectSpec)
 		return result
 
@@ -161,7 +161,7 @@ class SolverRepositoryCollection(object):
 			self.createRepositoryHandle(projectName, repoName, arch)
 
 	def discoverStagingProjects(self, client, codebase):
-		for projectName in codebase.projects.sourceProjects:
+		for projectName in codebase.sourceProjects:
 			stagings = client.listStagings(projectName, status = 1) or []
 			for info in stagings:
 				stagingId = info.name.split(':')[-1]

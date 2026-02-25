@@ -382,11 +382,7 @@ class Classification(object):
 			self._nextLabelId = 0
 			self._final = False
 
-			# 2 means any new labels may be created
-			# 1 means, no new base labels
-			# 0, no new labels at all
-			self._newLabelsAllowed = 2
-
+			self._newLabelsAllowed = True
 			self._defaultClassOrder = None
 			self._defaultLayerOrder = None
 			self._defaultEpicOrder = None
@@ -538,22 +534,15 @@ class Classification(object):
 		def nameToBuildOption(self, name):
 			return self.getTypedLabelThrow(name, Classification.TYPE_BUILD_OPTION)
 
-		def forbidNewBaseLabels(self):
-			self._newLabelsAllowed = min(self._newLabelsAllowed, 1)
-
-		def forbidAnyNewLabels(self):
-			self._newLabelsAllowed = min(self._newLabelsAllowed, 0)
+		def forbidNewLabels(self):
+			self._newLabelsAllowed = False
 
 		def mayCreateNewLabel(self, type, parent):
 			if self.isFrozen(type):
 				errormsg(f"Cannot create {type} label after this category has been declared final")
 				return False
 
-			if parent is None:
-				# new base label
-				return self._newLabelsAllowed >= 2
-
-			return self._newLabelsAllowed >= 1
+			return self._newLabelsAllowed
 
 		def createLabel(self, name, type, parent = None):
 			category = self._category[type]
@@ -681,17 +670,21 @@ class Classification(object):
 
 			return self.createOrdering(Classification.TYPE_EPIC)
 
-		def freezeClassOrder(self):
+		def freezeClasses(self):
 			self.freezeCategory(Classification.TYPE_CLASS)
-
 			self._defaultClassOrder = self.classOrder()
-			return self._defaultClassOrder
 
-		def freezeLayerOrder(self):
+		def freezeBuildOptions(self):
+			self.freezeCategory(Classification.TYPE_BUILD_OPTION)
+
+		def freezeLayers(self):
 			self.freezeCategory(Classification.TYPE_LAYER)
-
 			self._defaultLayerOrder = self.layerOrder()
-			return self._defaultLayerOrder
+
+		def freezeEpics(self):
+			self.freezeCategory(Classification.TYPE_EPIC)
+			self.autoCompleteEpicDependencies()
+			self._defaultEpicOrder = self.epicOrder()
 
 		# When we get here, the layer definitions and layer order should be frozen.
 		# The set of epics should also be frozen, but the epic *order* should still be
@@ -767,14 +760,6 @@ class Classification(object):
 
 			infomsg(f"GOOD. All epic dependencies are either within the layer, or can be handled via layer visibility")
 
-		def freeEpicOrder(self):
-			self.freezeCategory(Classification.TYPE_EPIC)
-
-			self.autoCompleteEpicDependencies()
-
-			self._defaultEpicOrder = self.epicOrder()
-			return self._defaultEpicOrder
-
 		# FIXME: not sure that this is the right place for this method
 		def buildOptionForAutoFlavor(self, autoFlavor):
 			if autoFlavor is not None:
@@ -814,20 +799,14 @@ class Classification(object):
 			if self._final:
 				raise Exception(f"Duplicate call to ClassificationScheme.finalize()")
 
-			# forbid creation of new base labels
-			self.forbidNewBaseLabels()
+			self.forbidNewLabels()
 
-			self.freezeCategory(Classification.TYPE_BUILD_OPTION)
-
-			# We're ready to freeze the layer and epic orders
-			self.freezeClassOrder()
-			self.freezeLayerOrder()
-			self.freeEpicOrder()
+			self.freezeClasses()
+			self.freezeBuildOptions()
+			self.freezeLayers()
+			self.freezeEpics()
 
 			self._final = True
-
-			# forbid creation of any new labels
-			self.forbidAnyNewLabels()
 
 		def getReferencingLabels(self, target):
 			return target._referencingLabels

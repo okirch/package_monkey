@@ -136,8 +136,6 @@ class Composer(object):
 		# handle $foo-release packages using product/release
 		self.releaseScenario = "product/release"
 
-		self.tracer = Tracer(self.classificationScheme)
-
 		self._epicProductMembership = DictOfSets()
 		self._rpmProductMembership = DictOfSets()
 		self._buildProductMembership = DictOfSets()
@@ -160,18 +158,6 @@ class Composer(object):
 			raise Exception(f"invalid release id {id}")
 
 		self._release = release
-
-	def installRpmTracer(self, nameMatcher, classificationResult):
-		if nameMatcher is None:
-			return
-
-		for epicControl in classificationResult.epics:
-			for rpmControl in epicControl.rpms:
-				rpm = rpmControl.rpm
-				if nameMatcher.match(rpm.name):
-					infomsg(f"Tracing {rpm.name}")
-					self.tracer.addRpm(rpm)
-					rpm.trace = True
 
 	def createProduct(self, id):
 		if id in self._products:
@@ -247,8 +233,8 @@ class Composer(object):
 		# object, which would contain all the ProductComposition objects plus the classification
 		self.classificationResult = classificationResult
 
-	def displayRpmDecisions(self):
-		self.tracer.displayRpmDecisions(self.products)
+	def displayRpmDecisions(self, db):
+		CompositionResultLogger.displayRpmDecisions(db, self.products)
 
 	def writeYamlAll(self, outputPath):
 		producer = YamlAllProducer()
@@ -1234,30 +1220,11 @@ class LifecycleCentricView(object):
 ##################################################################
 # Helper class for tracing
 ##################################################################
-class Tracer(object):
-	def __init__(self, classificationScheme):
-		self.classificationScheme = classificationScheme
-
-		self.focusEpics = Classification.createLabelSet()
-		for epic in classificationScheme.allEpics:
-			if epic.trace:
-				self.focusEpics.add(epic)
-
-		self.focusRpms = set()
-
-	@property
-	def active(self):
-		return bool(self.focusEpics)
-
-	def addEpic(self, epic):
-		assert(epic.type is Classification.TYPE_EPIC)
-		self.focusEpics.add(epic)
-
-	def addRpm(self, rpm):
-		self.focusRpms.add(rpm)
-
-	def displayRpmDecisions(self, products):
-		if not self.focusRpms:
+class CompositionResultLogger(object):
+	@staticmethod
+	def displayRpmDecisions(db, products):
+		tracedRpms = set(filter((lambda rpm: rpm.trace), db.rpms))
+		if not tracedRpms:
 			return
 
 		def writeLine(words):
@@ -1269,13 +1236,16 @@ class Tracer(object):
 		# Convert iter to sorted list
 		products = sorted(products, key = str)
 
-		col0w = max(len(rpm.name) for rpm in self.focusRpms) + 2
+		col0w = max(len(rpm.name) for rpm in tracedRpms) + 2
 		col1w = max(len(product.name) for product in products) + 2
 
 		infomsg("")
 		infomsg(f"State of traced rpms:")
 		writeLine([""] + [product.name for product in products])
-		for rpm in self.focusRpms:
+		for rpm in tracedRpms:
+			if not rpm.trace:
+				continue
+
 			words = [rpm.name]
 			for product in products:
 				if rpm in product.rpms:

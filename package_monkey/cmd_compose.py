@@ -14,24 +14,20 @@ class ComposerApplication(ApplicationBase):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 
-	def produce(self, **kwargs):
-		db = self.loadNewDB()
-
+	def produce(self, db, **kwargs):
 		gadget = ClassificationGadget(db, self.modelDescription, traceMatcher = self.traceMatcher)
 		classificationResult = gadget.solve(self.productCodebase)
 
 		composer = Composer(gadget.classificationScheme, **kwargs)
 		self.modelDescription.loadProductComposition(composer)
 
-		# Let the user control tracing by specifying rpm names.
-		# If the rpm has been labelled with a topic, trace that topic.
-		composer.installRpmTracer(self.traceMatcher, classificationResult)
-
 		composer.compose(classificationResult)
 		return composer
 
 	def run(self):
-		composer = self.produce()
+		db = self.loadNewDB()
+
+		composer = self.produce(db)
 
 		for product in composer.products:
 			infomsg(f"Product {product.name}:")
@@ -45,7 +41,7 @@ class ComposerApplication(ApplicationBase):
 				errormsg(f"Please fix the above problems first")
 				exit(1)
 
-		composer.displayRpmDecisions()
+		composer.displayRpmDecisions(db)
 
 		outputPath = self.getComposeOutputPath("output_all.yaml")
 		composer.writeYamlAll(outputPath)

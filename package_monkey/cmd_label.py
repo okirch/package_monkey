@@ -33,13 +33,9 @@ class ClassificationGadget(object):
 		self.schemeBuilder = loader.load(filename = filterPath, scheme = classificationScheme, scenarios = scenarioFacade)
 
 	def solve(self, codebase):
-		productMediator = self.performInitialPlacement(codebase)
-
-		# Now finalize the label hierarchy
-		self.schemeBuilder.complete()
-
+		packageCollection = self.performInitialPlacement(codebase)
 		return NewResult.build(self.classificationScheme,
-					productMediator.packageCollection,
+					packageCollection,
 					self.db)
 
 	def performInitialPlacement(self, codebase):
@@ -130,7 +126,7 @@ class ClassificationGadget(object):
 						print(f"    - {build}")
 				raise Exception(f"Found {numBadBuilds} with insufficent labelling")
 
-		return productMediator
+		return collection
 
 
 class LabellingApplication(ApplicationBase):

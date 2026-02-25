@@ -1110,6 +1110,7 @@ class FilterLoader(MonkeyConfigLoader):
 			mainProcessor.process(data)
 
 		filter.bindAll()
+		filter.complete()
 
 		return filter
 

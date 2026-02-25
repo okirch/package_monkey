@@ -259,24 +259,30 @@ class RpmOverrideList(object):
 
 		for item in self:
 			rpm = db.lookupRpm(item.name)
-			if rpm is None and create:
+			if rpm is not None:
+				if item.archSet is not None:
+					if rpm.trace:
+						infomsg(f"Override {rpm}: {archSet}")
+					if not item.archSet.issubset(rpm.architectures):
+						missing = item.archSet.difference(rpm.architectures)
+						raise Exception(f"Refusing to override {rpm}: unsupported architecture(s) {missing}")
+
+				result.add(rpm, item.archSet or rpm.architectures)
+				continue
+
+			if create:
 				# and item.archSet is not None:
 				assert(item.archSet is not None)
 				rpm = db.createRpm(item.name)
-				rpm.architectures.update(item.archSet)
+				rpm.architectures.update(item.archSet or archRegistry.fullset)
 
 				rpm.new_build = db.createBuild("__external__")
-				infomsg(f"XXX Created {rpm}")
 
-			if rpm is None:
-				errormsg(f"override_rpms specifies unknown rpm {item.name}")
-				nerrors += 1
+				result.add(rpm, rpm.architectures)
 				continue
 
-			if rpm.trace and item.archSet is not None:
-				infomsg(f"Override {rpm}: {item.archSet}")
-
-			result.add(rpm, item.archSet or rpm.architectures)
+			errormsg(f"override_rpms specifies unknown rpm {item.name}")
+			nerrors += 1
 
 		if nerrors:
 			raise Exception(f"unknown rpm names in override_rpms")

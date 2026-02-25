@@ -282,24 +282,3 @@ class RpmOverrideList(object):
 			raise Exception(f"unknown rpm names in override_rpms")
 
 		return result
-
-	@classmethod
-	def build(klass, yamlList, defaultArchSet = None):
-		result = klass()
-		for entry in yamlList:
-			item = None
-			if type(entry) is dict:
-				if len(entry) == 1:
-					for key, value in entry.items():
-						if type(value) is list:
-							item = klass.Entry(key, ArchSet(value))
-			elif type(entry) is str:
-				item = klass.Entry(entry, defaultArchSet)
-				assert(item)
-
-			if item is None:
-				raise Exception(f"entries in override_rpms must be either string or 'name: [arch, ...]': found {entry} (type {type(entry)})")
-
-			result.add(item)
-		return result
-

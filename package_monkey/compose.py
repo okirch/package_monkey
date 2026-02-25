@@ -111,11 +111,11 @@ class ProductComposition(object):
 		if verbose:
 			show("result", self._overrideRpmsInclude, self._overrideRpmsExclude)
 
-	def overrideRpmInclude(self, yamlList):
-		self._overrideRpmsInclude = RpmOverrideList.build(yamlList)
+	def overrideRpmInclude(self, rpmOverrideList):
+		self._overrideRpmsInclude = rpmOverrideList
 
-	def overrideRpmExclude(self, yamlList):
-		self._overrideRpmsExclude = RpmOverrideList.build(yamlList)
+	def overrideRpmExclude(self, rpmOverrideList):
+		self._overrideRpmsExclude = rpmOverrideList
 
 class Composer(object):
 	def __init__(self, classificationScheme, includeExplanations = False, verbose = True):

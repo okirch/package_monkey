@@ -16,6 +16,7 @@ from .arch import *
 from .compose import Composer
 from .policy import Team
 from .tracked_yaml import YamlLocationTracking
+from .packages import RpmOverrideList
 
 class MonkeyConfigLoader(object):
 	def __init__(self):
@@ -178,6 +179,10 @@ class MonkeyConfigLoader(object):
 
 			return release
 
+		def asRpmOverrideList(self, key, value):
+			listContext = self.listContext(key, value)
+			return listContext.asRpmOverrideList()
+
 		def variableExpansion(self, data):
 			if not self.expander or data is None:
 				return data
@@ -263,6 +268,25 @@ class MonkeyConfigLoader(object):
 
 		def __len__(self):
 			return len(self.value)
+
+		def asRpmOverrideList(self):
+			result = RpmOverrideList()
+			for entry in self:
+				item = None
+				if type(entry) is dict:
+					if len(entry) == 1:
+						for key, value in entry.items():
+							if type(value) is list:
+								item = result.Entry(key, ArchSet(value))
+				elif type(entry) is str:
+					item = result.Entry(entry)
+					assert(item)
+
+				if item is None:
+					raise Exception(f"entries in override_rpms must be either string or 'name: [arch, ...]': found {entry} (type {type(entry)})")
+
+				result.add(item)
+			return result
 
 	class Processor(object):
 		def __init__(self, context):
@@ -1356,9 +1380,9 @@ class CompositionLoader(MonkeyConfigLoader):
 		def processOverrideRpms(self, context):
 			for key, value in context.items():
 				if key == 'include':
-					self.product.overrideRpmInclude(context.listContext(key, value))
+					self.product.overrideRpmInclude(context.asRpmOverrideList(key, value))
 				elif key == 'exclude':
-					self.product.overrideRpmExclude(context.listContext(key, value))
+					self.product.overrideRpmExclude(context.asRpmOverrideList(key, value))
 				else:
 					raise Exception(f"{context}: unsupported keyword {key}")
 

@@ -585,24 +585,6 @@ class NewResult(object):
 				raise Exception(f"{rpm} requires {req}, but I'm not tracking this rpm")
 			yield m
 
-	def getRequiredOld(self, rpm, archSet):
-		commonRequires = rpm.resolvedRequires
-		for req in commonRequires:
-			if req.isSynthetic:
-				continue
-			m = self.membershipForRpm(req)
-			if m is None:
-				raise Exception(f"{rpm} requires {req}, but I'm not tracking this rpm")
-			yield m
-		for arch in archSet:
-			for req in rpm.solutions.raw_get(arch).difference(commonRequires):
-				if req.isSynthetic:
-					continue
-				m = self.membershipForRpm(req)
-				if m is None:
-					raise Exception(f"{rpm} requires {req}, but I'm not tracking this rpm")
-				yield m
-
 	def buildInverseTree(self):
 		unresolvables = []
 		for epicControl in self._members.values():

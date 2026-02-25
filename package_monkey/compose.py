@@ -13,7 +13,7 @@ from .filter import Classification
 from .sick_yaml import *
 from .newdb import GenericRpm
 from .arch import *
-from .packages import PackageCollection
+from .packages import PackageCollection, RpmOverrideList
 from .scenario import *
 
 ##################################################################
@@ -50,8 +50,8 @@ class ProductComposition(object):
 		# We can't juse use sets here, because the config file may contain entries
 		# like 'foobar: [arch1, arch2]' ie a dict. You cannot have a set containing
 		# dict elements (no __hash__ method).
-		self._overrideRpmsInclude = Composer.RpmOverrideList()
-		self._overrideRpmsExclude = Composer.RpmOverrideList()
+		self._overrideRpmsInclude = RpmOverrideList()
+		self._overrideRpmsExclude = RpmOverrideList()
 
 	def __str__(self):
 		return self.id
@@ -112,10 +112,10 @@ class ProductComposition(object):
 			show("result", self._overrideRpmsInclude, self._overrideRpmsExclude)
 
 	def overrideRpmInclude(self, yamlList):
-		self._overrideRpmsInclude = Composer.RpmOverrideList.build(yamlList)
+		self._overrideRpmsInclude = RpmOverrideList.build(yamlList)
 
 	def overrideRpmExclude(self, yamlList):
-		self._overrideRpmsExclude = Composer.RpmOverrideList.build(yamlList)
+		self._overrideRpmsExclude = RpmOverrideList.build(yamlList)
 
 class Composer(object):
 	def __init__(self, classificationScheme, includeExplanations = False, verbose = True):
@@ -366,121 +366,10 @@ class Composer(object):
 				first = False
 			report.add(f" - {promiseName}: required by {' '.join(requiredBy)}")
 
-	class RpmOverrideList(object):
-		class Entry(object):
-			def __init__(self, name, archSet = None):
-				self.name = name
-				self.archSet = archSet
-
-			def __str__(self):
-				if self.archSet is not None:
-					return f"{self.name}: [{self.archSet}]"
-				return self.name
-
-		def __init__(self):
-			self.items = {}
-
-		def __bool__(self):
-			return bool(self.items)
-
-		def __len__(self):
-			return len(self.items)
-
-		def __iter__(self):
-			return iter(sorted(self.items.values(), key = lambda i: i.name))
-
-		def __contains__(self, item):
-			if type(item) is str:
-				return item in self.items
-			return item.name in self.items
-
-		def add(self, item):
-			assert(isinstance(item, self.Entry))
-			self.items[item.name] = item
-
-		def discard(self, name):
-			try:
-				del self.items[name]
-				return True
-			except:
-				pass
-			return False
-
-		# Note, entries from "other" do not overwrite entries in self that have the same key
-		def update(self, other):
-			assert(isinstance(other, self.__class__))
-
-			for item in other:
-				if item not in self:
-					self.add(item)
-
-		def difference_update(self, other):
-			assert(isinstance(other, self.__class__))
-
-			for item in other:
-				self.discard(item.name)
-
-		def union(self, other):
-			assert(isinstance(other, self.__class__))
-
-			result = self.__class__()
-			result.items = self.items.copy()
-			result.update(other)
-			return result
-
-		def difference(self, other):
-			assert(isinstance(other, self.__class__))
-
-			result = self.__class__()
-			result.items = self.items.copy()
-			result.difference_update(other)
-			return result
-
-		def toRpms(self, classificationResult):
-			result = PackageCollection()
-			nerrors = 0
-
-			db = classificationResult.db
-			for item in self:
-				rpm = db.lookupRpm(item.name)
-				if rpm is None:
-					errormsg(f"override_rpms specifies unknown rpm {item.name}")
-					nerrors += 1
-					continue
-
-				if rpm.trace and item.archSet is not None:
-					infomsg(f"Override {rpm}: {item.archSet}")
-
-				result.add(rpm, item.archSet or rpm.architectures)
-
-			if nerrors:
-				raise Exception(f"unknown rpm names in override_rpms")
-
-			return result
-
-		@classmethod
-		def build(klass, yamlList):
-			result = klass()
-			for entry in yamlList:
-				item = None
-				if type(entry) is dict:
-					if len(entry) == 1:
-						for key, value in entry.items():
-							if type(value) is list:
-								item = klass.Entry(key, ArchSet(value))
-				elif type(entry) is str:
-					item = klass.Entry(entry)
-					assert(item)
-
-				if item is None:
-					raise Exception(f"entries in override_rpms must be either string or 'name: [arch, ...]': found {entry} (type {type(entry)})")
-
-				result.add(item)
-			return result
 
 	def overrideRpms(self, product, report, classificationResult):
-		excludeRpms = product._overrideRpmsExclude.toRpms(classificationResult)
-		includeRpms = product._overrideRpmsInclude.toRpms(classificationResult)
+		excludeRpms = product._overrideRpmsExclude.toRpms(classificationResult.db)
+		includeRpms = product._overrideRpmsInclude.toRpms(classificationResult.db)
 
 		if excludeRpms:
 			self.excludeRpms(excludeRpms, product, report)

@@ -1094,12 +1094,12 @@ class FilterLoader(MonkeyConfigLoader):
 			self.schemeBuilder.setReleaseDate(self.label, date)
 
 	def load(self, filename = 'filter.yaml', **kwargs):
-		filter = ClassificationSchemeBuilder(**kwargs)
+		schemeBuilder = ClassificationSchemeBuilder(**kwargs)
 
 		locationTracking = YamlLocationTracking()
 		assert(locationTracking is not None)
 
-		mainProcessor = self.MainFileProcessor(filter, filename, locationTracking)
+		mainProcessor = self.MainFileProcessor(schemeBuilder, filename, locationTracking)
 
 		with open(filename) as f:
 			from .tracked_yaml import tracked_load
@@ -1109,9 +1109,9 @@ class FilterLoader(MonkeyConfigLoader):
 		with TimedExecutionBlock(f"loading definition from {filename}"):
 			mainProcessor.process(data)
 
-		filter.complete()
+		schemeBuilder.complete()
 
-		return filter
+		return schemeBuilder
 
 class CompositionLoader(MonkeyConfigLoader):
 	class Processor(MonkeyConfigLoader.Processor):

@@ -215,6 +215,7 @@ class ProvidesRenderer(DependencyRenderer):
 		self.renderPackageList(packages)
 
 		# FIXME: handle arch-specific required-by
+		self.endList()
 
 class UnresolvableRenderer(ListRenderer):
 	MSG_EMPTY = None

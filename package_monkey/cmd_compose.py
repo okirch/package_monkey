@@ -18,17 +18,16 @@ class ComposerApplication(ApplicationBase):
 		db = self.loadNewDB()
 
 		gadget = ClassificationGadget(db, self.modelDescription, traceMatcher = self.traceMatcher)
-		classification = gadget.solve(self.productCodebase)
+		classificationResult = gadget.solve(self.productCodebase)
 
-		composer = Composer(classification, **kwargs)
-
+		composer = Composer(gadget.classificationScheme, **kwargs)
 		self.modelDescription.loadProductComposition(composer)
 
 		# Let the user control tracing by specifying rpm names.
 		# If the rpm has been labelled with a topic, trace that topic.
-		composer.installRpmTracer(self.traceMatcher)
+		composer.installRpmTracer(self.traceMatcher, classificationResult)
 
-		composer.compose()
+		composer.compose(classificationResult)
 		return composer
 
 	def run(self):

@@ -118,9 +118,8 @@ class ProductComposition(object):
 		self._overrideRpmsExclude = Composer.RpmOverrideList.build(yamlList)
 
 class Composer(object):
-	def __init__(self, classificationResult, includeExplanations = False, verbose = True):
-		self.classificationResult = classificationResult
-		self.classificationScheme = classificationResult.classificationScheme
+	def __init__(self, classificationScheme, includeExplanations = False, verbose = True):
+		self.classificationScheme = classificationScheme
 		self.includeExplanations = includeExplanations
 		self.verbose = verbose
 
@@ -162,11 +161,11 @@ class Composer(object):
 
 		self._release = release
 
-	def installRpmTracer(self, nameMatcher):
+	def installRpmTracer(self, nameMatcher, classificationResult):
 		if nameMatcher is None:
 			return
 
-		for epicControl in self.classificationResult.epics:
+		for epicControl in classificationResult.epics:
 			for rpmControl in epicControl.rpms:
 				rpm = rpmControl.rpm
 				if nameMatcher.match(rpm.name):
@@ -229,10 +228,9 @@ class Composer(object):
 			   not product.baseProductName:
 				raise Exception(f"extension {product} lacks a base product name (spec={productSpec}; {productSpec.baseProductName})")
 
-
 		return
 
-	def compose(self):
+	def compose(self, classificationResult):
 		# We could probably use the value from the --release command line option here
 		if self.release is None:
 			raise Exception(f"You need to specify a release id for this product group")
@@ -240,9 +238,14 @@ class Composer(object):
 		self.resolveLifecycles()
 
 		report = GenericStringReport("Detected the following problems in composer definition")
-		self.composePackages(report)
+		self.composePackages(report, classificationResult)
 
 		self.errorReport = report
+
+		# HACK: some of the producers want to go back to the classificationResult.
+		# The proper way to do this would be for this function to return a ReleaseComposition
+		# object, which would contain all the ProductComposition objects plus the classification
+		self.classificationResult = classificationResult
 
 	def displayRpmDecisions(self):
 		self.tracer.displayRpmDecisions(self.products)
@@ -282,7 +285,7 @@ class Composer(object):
 		producer.produce(self)
 		producer.write(outputPath)
 
-	def composePackages(self, report):
+	def composePackages(self, report, classificationResult):
 		fullArchSet = archRegistry.fullset
 
 		for product in self.products:
@@ -297,17 +300,17 @@ class Composer(object):
 
 			if self.verbose:
 				infomsg(f"Applying composition rules for product {product}")
-			product.rules.apply(self.classificationResult)
+			product.rules.apply(classificationResult)
 
-			product.rpms = product.rules.produceSolution(self.classificationResult)
-			product.supportStatement = product.rules.produceSupportSummary(self.classificationResult)
+			product.rpms = product.rules.produceSolution(classificationResult)
+			product.supportStatement = product.rules.produceSupportSummary(classificationResult)
 
 			if self.includeExplanations:
-				product.reasoning = product.rules.produceReasoning(self.classificationResult)
+				product.reasoning = product.rules.produceReasoning(classificationResult)
 
-			self.overrideRpms(product, report)
+			self.overrideRpms(product, report, classificationResult)
 
-			self.resolveReleasePackages(product)
+			self.resolveReleasePackages(product, classificationResult)
 
 			self.verifyPromises(product, report)
 
@@ -321,7 +324,7 @@ class Composer(object):
 				product.rpms.difference_update(product.baseProduct.rpms)
 				product.releaseRpms.difference_update(product.baseProduct.rpms)
 
-	def resolveReleasePackages(self, product):
+	def resolveReleasePackages(self, product, classificationResult):
 		if product.releasePackage is not None:
 			# FIXME: look this up in the DB
 			releaseRpm = GenericRpm(product.releasePackage)
@@ -330,7 +333,7 @@ class Composer(object):
 		if product.releaseEpic is not None:
 			epic = self.classificationScheme.nameToEpic(product.releaseEpic)
 
-			members = product.rules.resolveIncrementalEpic(epic, self.classificationResult)
+			members = product.rules.resolveIncrementalEpic(epic, classificationResult)
 			if not members:
 				raise Exception(f"{product}: release epic {epic} resolves to empty package list")
 
@@ -339,7 +342,7 @@ class Composer(object):
 			product.releaseRpms.update(members)
 
 		if product.releaseRpms and self.releaseScenario:
-			product.releaseScenario = self.classificationResult._db.lookupRpm(self.releaseScenario)
+			product.releaseScenario = classificationResult._db.lookupRpm(self.releaseScenario)
 
 	def verifyPromises(self, product, report):
 		validator = PromiseValidator(product, verbose = self.verbose)
@@ -489,9 +492,9 @@ class Composer(object):
 				result.add(item)
 			return result
 
-	def overrideRpms(self, product, report):
-		excludeRpms = product._overrideRpmsExclude.toRpms(self.classificationResult)
-		includeRpms = product._overrideRpmsInclude.toRpms(self.classificationResult)
+	def overrideRpms(self, product, report, classificationResult):
+		excludeRpms = product._overrideRpmsExclude.toRpms(classificationResult)
+		includeRpms = product._overrideRpmsInclude.toRpms(classificationResult)
 
 		if excludeRpms:
 			self.excludeRpms(excludeRpms, product, report)

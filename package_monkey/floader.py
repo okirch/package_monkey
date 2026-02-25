@@ -1109,7 +1109,6 @@ class FilterLoader(MonkeyConfigLoader):
 		with TimedExecutionBlock(f"loading definition from {filename}"):
 			mainProcessor.process(data)
 
-		filter.bindAll()
 		filter.complete()
 
 		return filter

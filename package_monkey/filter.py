@@ -809,10 +809,10 @@ class Classification(object):
 		def subsets(self):
 			return self._subsets.values()
 
-		def beginFinalize(self):
+		@profiling
+		def finalize(self):
 			if self._final:
 				raise Exception(f"Duplicate call to ClassificationScheme.finalize()")
-			infomsg(f"Finalizing classification")
 
 			# forbid creation of new base labels
 			self.forbidNewBaseLabels()
@@ -824,13 +824,7 @@ class Classification(object):
 			self.freezeLayerOrder()
 			self.freeEpicOrder()
 
-		@profiling
-		def finalize(self):
 			self._final = True
-
-			self.freezeCategory(Classification.TYPE_CLASS)
-			self.freezeCategory(Classification.TYPE_AUTOFLAVOR)
-			self.freezeCategory(Classification.TYPE_BUILD_OPTION)
 
 			# forbid creation of any new labels
 			self.forbidAnyNewLabels()
@@ -1412,6 +1406,12 @@ class LabelTreeValidator(object):
 				errormsg(f"Build option {buildOption} not associated with any epic")
 				labelsMissingAnEpic.add(topic)
 
+			autoFlavor = classificationScheme.autoFlavorForBuildOptions(set((buildOption, )))
+			if autoFlavor is None:
+				warnmsg(f"You defined build option {buildOption} without corresponding autoflavor")
+			elif buildOption not in autoFlavor.requiredOptions:
+				warnmsg(f"autoflavor {autoFlavor} does not require {buildOption}")
+
 		knownUndefined = Classification.createLabelSet()
 		for label in classificationScheme.allEpics:
 			for req in label.runtimeRequires:
@@ -1713,37 +1713,23 @@ class ClassificationSchemeBuilder(object):
 		classificationScheme.unresolvableClass = klass
 
 	@profiling
-	def bindAll(self):
-		def callAndClear(lateBindingList):
-			for lateBinding in lateBindingList:
-				lateBinding.bind(self)
-			lateBindingList.clear()
-
-		classificationScheme = self.classificationScheme
-		classificationScheme.policy = self.policy
-
-		callAndClear(self._lateLabelBindings)
-
-		callAndClear(self._lateFilterBindings)
-
-		self.packageLabelling.finalize()
-
-	@profiling
 	def complete(self):
-		classificationScheme = self.classificationScheme
+		with TimedExecutionBlock(f"finalizing classification scheme"):
+			classificationScheme = self.classificationScheme
+			classificationScheme.policy = self.policy
 
-		LabelTreeValidator.validate(self.classificationScheme)
+			for lateBinding in self._lateLabelBindings:
+				lateBinding.bind(self)
+			self._lateLabelBindings.clear()
 
-		self.classificationScheme.beginFinalize()
+			for lateBinding in self._lateFilterBindings:
+				lateBinding.bind(self)
+			self._lateFilterBindings.clear()
 
-		for buildOption in classificationScheme.allBuildOptions:
-			autoFlavor = classificationScheme.autoFlavorForBuildOptions(set((buildOption, )))
-			if autoFlavor is None:
-				warnmsg(f"You defined build option {buildOption} without corresponding autoflavor")
-			elif buildOption not in autoFlavor.requiredOptions:
-				warnmsg(f"autoflavor {autoFlavor} does not require {buildOption}")
+			self.packageLabelling.finalize()
 
-		self.finalizeClassification()
+			LabelTreeValidator.validate(classificationScheme)
+			classificationScheme.finalize()
 
 	def bindLabel(self, labelName, labelType):
 		return self.classificationScheme.resolveLabel(labelName, labelType)
@@ -1751,9 +1737,6 @@ class ClassificationSchemeBuilder(object):
 	def freezeCategory(self, type):
 		self.classificationScheme.freezeCategory(type)
 
-	def finalizeClassification(self):
-		with TimedExecutionBlock(f"finalizing classification scheme"):
-			self.classificationScheme.finalize()
 
 	def tryToLabelPackage(self, pkg):
 		labelHints = self.packageLabelling.tryToLabelPackage(pkg)

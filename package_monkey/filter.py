@@ -760,15 +760,6 @@ class Classification(object):
 
 			infomsg(f"GOOD. All epic dependencies are either within the layer, or can be handled via layer visibility")
 
-		# FIXME: not sure that this is the right place for this method
-		def buildOptionForAutoFlavor(self, autoFlavor):
-			if autoFlavor is not None:
-				assert(autoFlavor.type is Classification.TYPE_AUTOFLAVOR)
-				if len(autoFlavor.requiredOptions) == 1:
-					return next(iter(autoFlavor.requiredOptions))
-
-			return None
-
 		def autoFlavorForBuildOptions(self, buildOptions):
 			best = None
 			for autoFlavor in self.allAutoFlavors:

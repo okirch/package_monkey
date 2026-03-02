@@ -361,15 +361,21 @@ class ArchSolver(object):
 
 		return rpm
 
-	def solve(self, progressMeter, **kwargs):
+	# solve some or all rpms in a set of repositories.
+	def solve(self, progressMeter, rpms = None, **kwargs):
 		self.applyHints()
 		self.pool.addfileprovides()
 		self.pool.createwhatprovides()
 
-		totalCount = len(self._rpms)
+		if rpms is None:
+			rpms = self._rpms
+
+		totalCount = len(rpms)
 
 		infomsg(f"{self.arch}: solving {totalCount} rpms")
 
+		# we need to check all RPMs for ABI providers, not just those that we
+		# want to resolve.
 		infomsg(f"Looking for ABI providers")
 		for rpm in self._rpms:
 			if rpm.isSynthetic:
@@ -377,7 +383,7 @@ class ArchSolver(object):
 
 			self.detectAbiProviders(rpm)
 
-		for rpm in self._rpms:
+		for rpm in rpms:
 			if rpm.isSynthetic:
 				continue
 

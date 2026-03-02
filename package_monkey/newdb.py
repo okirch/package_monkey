@@ -214,10 +214,7 @@ class NewDB(object):
 			except:
 				self._promiseCache[realRpm] = set((promise, ))
 
-	def save(self, path):
-		def write(msg):
-			print(msg, file = dbf)
-
+	def saveRpm(self, genericRpm, write):
 		def writeDictOfSets(pfx, dos, archSet):
 			common = dos.common
 			if common:
@@ -230,6 +227,28 @@ class NewDB(object):
 				delta = values.difference(common)
 				if delta:
 					write(f"  {pfx} {arch} {' '.join(sorted(map(str, delta)))}")
+
+		write(f"pkg {genericRpm.name} {genericRpm.type} {genericRpm.architectures}")
+		writeDictOfSets('mem', genericRpm.controllingScenarios, genericRpm.architectures)
+		writeDictOfSets('req', genericRpm.solutions, genericRpm.architectures)
+		writeDictOfSets('scn', genericRpm.validScenarios, genericRpm.architectures)
+		writeDictOfSets('ver', genericRpm.versions, genericRpm.architectures)
+
+		unrDict = genericRpm.unresolvables
+		common = unrDict.common
+		for dep in sorted(map(str, common)):
+			write(f"  unr common {dep}")
+
+		for arch in genericRpm.architectures:
+			values = unrDict.get(arch)
+			if not values:
+				continue
+			for dep in sorted(map(str, values.difference(common))):
+				write(f"  unr {arch} {dep}")
+
+	def save(self, path):
+		def write(msg):
+			print(msg, file = dbf)
 
 		with open(path + ".tmp", "w") as dbf:
 			if self.downloadTimestamp is not None:
@@ -246,23 +265,7 @@ class NewDB(object):
 
 			rpms = filter(lambda r: r.type is RpmBase.TYPE_REGULAR, self.rpms)
 			for genericRpm in sorted(rpms, key = str):
-				write(f"pkg {genericRpm.name} {genericRpm.type} {genericRpm.architectures}")
-				writeDictOfSets('mem', genericRpm.controllingScenarios, genericRpm.architectures)
-				writeDictOfSets('req', genericRpm.solutions, genericRpm.architectures)
-				writeDictOfSets('scn', genericRpm.validScenarios, genericRpm.architectures)
-				writeDictOfSets('ver', genericRpm.versions, genericRpm.architectures)
-
-				unrDict = genericRpm.unresolvables
-				common = unrDict.common
-				for dep in sorted(map(str, common)):
-					write(f"  unr common {dep}")
-
-				for arch in genericRpm.architectures:
-					values = unrDict.get(arch)
-					if not values:
-						continue
-					for dep in sorted(map(str, values.difference(common))):
-						write(f"  unr {arch} {dep}")
+				self.saveRpm(genericRpm, write)
 
 			for build in self.builds:
 				write(f"build {build.name}")
@@ -273,6 +276,17 @@ class NewDB(object):
 					write(f" mem {build.controllingScenarioVersion}")
 				for rpm in sorted(map(str, build.rpms)):
 					write(f" rpm {rpm}")
+
+		os.rename(path + ".tmp", path)
+		infomsg(f"Updated {path}")
+
+	def savePatch(self, path, rpms):
+		def write(msg):
+			print(msg, file = dbf)
+
+		with open(path + ".tmp", "w") as dbf:
+			for genericRpm in sorted(rpms, key = str):
+				self.saveRpm(genericRpm, write)
 
 		os.rename(path + ".tmp", path)
 		infomsg(f"Updated {path}")

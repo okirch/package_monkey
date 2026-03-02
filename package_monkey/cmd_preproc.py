@@ -333,56 +333,6 @@ class SolverApplication(PreprocessApplicationBase):
 
 		return None
 
-	def logResults(self, db):
-		for genericRpm in db.rpms:
-			rating = genericRpm.levelOfPerfection(db.architectures)
-			if rating == 15:
-				continue
-
-			infomsg(f"{genericRpm}: {genericRpm.architectures}")
-			if not (rating & 2):
-				common = genericRpm.solutions.common 
-				promises = set()
-
-				infomsg(f"  packages:")
-				infomsg(f"    common {' '.join(common)}")
-				for arch in genericRpm.architectures:
-					solution = genericRpm.getDependencies(arch)
-					delta = solution.difference(common)
-					if delta:
-						# infomsg(f"    {arch} {' '.join(delta)}")
-						# FIXME: is this really rpmName or is it an rpm object?
-						for rpmName in delta:
-							# FIXME: do not create a promise for rpmName if the
-							# required rpm is available for all architectures of the
-							# requiring rpm.
-							promises.add(f"promise:{arch}:{rpmName}")
-
-				infomsg(f"    promise {' '.join(promises)}")
-				common.update(promises)
-
-			if not (rating & 4):
-				common = genericRpm.controllingScenarios.common 
-
-				infomsg(f"  controlling scenarios:")
-				infomsg(f"    common {' '.join(common)}")
-				for arch in genericRpm.architectures:
-					scenarios = genericRpm.getScenarios(arch)
-					delta = scenarios.difference(common)
-					if delta:
-						infomsg(f"    {arch} {' '.join(delta)}")
-
-			if not (rating & 8):
-				common = genericRpm.validScenarios.common 
-
-				infomsg(f"  scenario dependencies:")
-				infomsg(f"    common {' '.join(common)}")
-				for arch in genericRpm.architectures:
-					scenarios = genericRpm.getScenarios(arch)
-					delta = scenarios.difference(common)
-					if delta:
-						infomsg(f"    {arch} {' '.join(delta)}")
-
 	# We get here when an rpm has a dependency on a scenario (on at least one architecture),
 	# but there is no single scenario common across all architectures.
 	# This can happen due to a number of reasons

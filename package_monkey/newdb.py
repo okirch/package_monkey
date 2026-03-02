@@ -569,23 +569,6 @@ class GenericRpm(RpmBase):
 	def addVersion(self, arch, version):
 		self.versions.add(arch, version)
 
-	def levelOfPerfection(self, allArchSet):
-		result = 0
-
-		if self.architectures == allArchSet:
-			result |= 1
-
-		if self.solutions.allIdentical():
-			result |= 2
-
-		if self.controllingScenarios.allIdentical():
-			result |= 4
-
-		if self.validScenarios.allIdentical():
-			result |= 8
-
-		return result
-
 	@property
 	def isIgnored(self):
 		if self.labelHints is None:

@@ -114,8 +114,8 @@ class ApplicationBase(object):
 		codebaseData = self.getCodebaseForSnapshot(slug)
 		return codebaseData.loadDB(traceMatcher = self.traceMatcher)
 
-	def loadNewDB(self):
-		return self.codebaseData.loadDB(traceMatcher = self.traceMatcher)
+	def loadNewDB(self, **kwargs):
+		return self.codebaseData.loadDB(traceMatcher = self.traceMatcher, **kwargs)
 
 	def saveDB(self, db):
 		return self.codebaseData.saveDB(db)

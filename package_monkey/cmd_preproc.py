@@ -483,7 +483,7 @@ class PatchApplication(PreprocessApplicationBase):
 		super().__init__(*args, **kwargs)
 
 	def run(self):
-		db = self.loadNewDB()
+		db = self.loadNewDB(withoutPatchDB = True)
 
 		unresolvables = self.getUnresolvables(db)
 		self.displayUnresolvables(unresolvables)
@@ -532,7 +532,7 @@ class PatchApplication(PreprocessApplicationBase):
 			for result in archSolver.resolvedRpms:
 				genericRpm = self.updateRpm(db, arch, result)
 
-		db.savePatch("patch.db", unresolvables)
+		db.savePatch(self.codebaseData.patchPath, unresolvables.union(ghosts))
 
 	def getUnresolvables(self, db):
 		unresolvables = set()

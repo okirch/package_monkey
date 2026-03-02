@@ -285,8 +285,17 @@ class NewDB(object):
 			print(msg, file = dbf)
 
 		with open(path + ".tmp", "w") as dbf:
+			ghostBuilds = set()
 			for genericRpm in sorted(rpms, key = str):
 				self.saveRpm(genericRpm, write)
+
+				if genericRpm.isExternal:
+					ghostBuilds.add(genericRpm.new_build)
+
+			for build in ghostBuilds:
+				write(f"build {build.name}")
+				for rpm in sorted(map(str, build.rpms)):
+					write(f" rpm {rpm} ghost")
 
 		os.rename(path + ".tmp", path)
 		infomsg(f"Updated {path}")
@@ -398,6 +407,10 @@ class NewDB(object):
 						errormsg(f"DB {path}: build {currentBuild} references unknown rpm {name}")
 						nerrors += 1
 						continue
+
+					for flag in w:
+						if flag == 'ghost':
+							rpm.isExternal = True
 					currentBuild.addRpm(rpm)
 				else:
 					errormsg(f"DB {path}: command {cmd} not supported")

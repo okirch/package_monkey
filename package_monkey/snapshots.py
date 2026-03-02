@@ -79,10 +79,18 @@ class CodebaseLocation(object):
 	def dbPath(self):
 		return os.path.join(self.path, 'codebase.db')
 
-	def loadDB(self, *args, **kwargs):
+	@property
+	def patchPath(self):
+		return os.path.join(self.path, 'patch.db')
+
+	def loadDB(self, *args, withoutPatchDB = False, **kwargs):
 		if self._db is None:
 			self._db = NewDB(*args, **kwargs)
 			self._db.load(self.dbPath)
+
+			patchPath = self.patchPath
+			if os.path.isfile(patchPath) and not withoutPatchDB:
+				self._db.loadPatch(patchPath)
 
 		return self._db
 

@@ -498,6 +498,9 @@ class DictOfSets(object):
 	def __getitem__(self, key):
 		return self.get(key)
 
+	def __iter__(self):
+		raise Exception(f"not iterable")
+
 	def items(self):
 		return self._dict.items()
 

@@ -280,6 +280,21 @@ class NewDB(object):
 	def load(self, path):
 		nerrors = 0
 
+		def updateDictOfSets(dos, w, transform = None):
+			key = w.pop(0)
+			if transform is not None:
+				w = set(map(transform, w))
+			else:
+				w = set(w)
+
+			if key != 'common':
+				dos.update(key, w)
+			else:
+				for arch in currentRpm.architectures:
+					dos.update(arch, w)
+				if dos._common is not None:
+					dos._common.update(w)
+
 		with open(path, 'r') as dbf:
 			currentRpm = None
 			currentBuild = None
@@ -313,10 +328,6 @@ class NewDB(object):
 					currentRpm = rpm
 					currentBuild = None
 				elif cmd == 'req':
-					assert(currentRpm)
-
-					key = w.pop(0)
-
 					# Workaround, until we've cleaned up the prepare stage:
 					# ignore promise:foo:arch style promises.
 					saneNames = []
@@ -326,47 +337,24 @@ class NewDB(object):
 						saneNames.append(name)
 					w = saneNames
 
-					rpms = set(map(self.createRpm, w))
-					if key == 'common':
-						currentRpm.solutions.common.update(rpms)
-					else:
-						currentRpm.solutions.update(key, rpms.union(currentRpm.solutions.common))
+					assert(currentRpm)
+					updateDictOfSets(currentRpm.solutions, w, transform = self.createRpm)
 				elif cmd == 'mem':
 					if currentRpm is not None:
-						key = w.pop(0)
-						if key == 'common':
-							currentRpm.controllingScenarios.updateCommon(w)
-							assert(set(w) == currentRpm.controllingScenarios.common)
-						else:
-							currentRpm.controllingScenarios.update(key, set(w))
+						updateDictOfSets(currentRpm.controllingScenarios, w)
 					elif currentBuild is not None:
 						assert(len(w) == 1)
 						currentBuild.controllingScenarioVersion = w[0]
 				elif cmd == 'scn':
 					assert(currentRpm)
-
-					key = w.pop(0)
-					if key == 'common':
-						currentRpm.validScenarios.updateCommon(w)
-						assert(set(w) == currentRpm.validScenarios.common)
-					else:
-						currentRpm.validScenarios.update(key, set(w))
+					updateDictOfSets(currentRpm.validScenarios, w)
 				elif cmd == 'ver':
 					assert(currentRpm)
-
-					key = w.pop(0)
-					if key == 'common':
-						currentRpm.versions.updateCommon(w)
-						assert(set(w) == currentRpm.versions.common)
-					else:
-						currentRpm.versions.update(key, set(w))
+					updateDictOfSets(currentRpm.versions, w)
 				elif cmd == 'unr':
-					arch = w.pop(0)
+					key = w.pop(0)
 					dep = ' '.join(w)
-					if key == 'common':
-						currentRpm.unresolvables.addCommon(dep)
-					else:
-						currentRpm.unresolvables.add(key, dep)
+					updateDictOfSets(currentRpm.unresolvables, [key, dep])
 				elif cmd == 'build':
 					name = w.pop(0)
 
@@ -450,48 +438,18 @@ class GenericRpm(RpmBase):
 		def __init__(self):
 			super().__init__()
 			self._common = None
-			self._configuredCommon = None
 
 		def __bool__(self):
 			return bool(self.common) or super().__bool__()
 
-		def get(self, key):
-			result = super().get(key)
-
-			if self._configuredCommon:
-				result = result.union(self._configuredCommon)
-			return result
-
 		def raw_get(self, key):
 			return super().get(key)
-
-		def values(self):
-			result = list(super().values())
-			if self._configuredCommon:
-				result = list(map(lambda s: s.union(self._configuredCommon), result))
-			return result
-
-		def addCommon(self, value):
-			if self._configuredCommon is None:
-				self._configuredCommon = set()
-			self._configuredCommon.add(value)
-
-		def updateCommon(self, values):
-			# why the heck are we making this weird distinction?
-			if self._common is None:
-				self._configuredCommon = set(values)
-			else:
-				self._configuredCommon.update(values)
 
 		@property
 		def common(self):
 			if self._common is None:
 				if self._dict:
 					self._common = functools.reduce(set.intersection, self.values())
-					if self._configuredCommon is not None:
-						self._common.update(self._configuredCommon)
-				elif self._configuredCommon:
-					self._common = self._configuredCommon
 				else:
 					self._common = set()
 			return self._common
@@ -500,19 +458,7 @@ class GenericRpm(RpmBase):
 			common = self.common
 			return all((s == common) for s in self.values())
 
-		def discardCommon(self, value):
-			if self._configuredCommon is not None:
-				self._configuredCommon.discard(value)
-			if self._common is not None:
-				self._common.discard(value)
-			for memberSet in self.values():
-				memberSet.discard(value)
-
 		def discard(self, key, value):
-			if self._configuredCommon is not None and value in self._configuredCommon:
-				# cryptic error for sth that should never happen
-				raise Exception(f"BUG: cannot remove value {value} for key {key} - value is in common set");
-
 			if self._common is not None and value in self._common:
 				self._common = None
 
@@ -695,12 +641,17 @@ class GenericRpm(RpmBase):
 		return result
 
 	def replaceDependency(self, oldReq, newReq, arch = None):
-		if arch is None:
-			self.solutions.discardCommon(oldReq)
-			self.solutions.addCommon(newReq)
+		dos = self.solutions
+		if arch is not None:
+			dos.discard(arch, oldReq)
+			dos.add(arch, newReq)
+			dos._common = None
 		else:
-			self.solutions.discard(arch, oldReq)
-			self.solutions.add(arch, newReq)
+			for arch in self.architectures:
+				dos.discard(arch, oldReq)
+				dos.add(arch, newReq)
+			if dos._common is not None:
+				dos._common.add(newReq)
 
 class GenericBuild(object):
 	def __init__(self, name):

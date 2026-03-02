@@ -81,7 +81,14 @@ class PreprocessApplicationBase(ApplicationBase):
 			if not solution:
 				solution = archSpecificDep.alternatives
 
-			required = set(map(db.createRpm, (rpm.shortname for rpm in solution)))
+			required = set()
+			for rpm in solution:
+				if rpm.isMissing:
+					# convert "known missing" rpm back into unresolved.
+					required.add(unresolvedRpm)
+				else:
+					required.add(db.createRpm(rpm.shortname))
+
 			genericRpm.addDependencies(str(archSpecificDep.dep), arch, required,
 						unresolvable = (unresolvedRpm in required))
 

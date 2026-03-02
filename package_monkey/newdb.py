@@ -260,6 +260,9 @@ class NewDB(object):
 
 			syntheticTypes = set(RpmBase.VALID_TYPES)
 			syntheticTypes.discard(RpmBase.TYPE_REGULAR)
+			# We do not output any dependencies on rpms of type missing any more; so no
+			# need to include them in the output file.
+			syntheticTypes.discard(RpmBase.TYPE_MISSING)
 			for type in sorted(syntheticTypes):
 				rpms = filter(lambda r: r.type is type, self.rpms)
 				for genericRpm in sorted(rpms, key = str):

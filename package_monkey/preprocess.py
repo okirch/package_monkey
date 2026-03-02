@@ -235,12 +235,6 @@ class ArchSolver(object):
 		for name in hints.syntheticNames:
 			self.createDummySolvable(name, type = RpmWrapper.TYPE_SYNTHETIC)
 
-		for name in hints.externalNames:
-			rpm = self.createExternalRpm(name)
-			if rpm is not None:
-				resolved = PackageResolution(rpm)
-				self.resolvedRpms.append(resolved)
-
 		for name in hints.preferredNames:
 			rpm = self.nameToRpm(name)
 			if rpm is None:
@@ -335,29 +329,6 @@ class ArchSolver(object):
 
 		if rpm.trace:
 			infomsg(f"Created dummy rpm {name}; type={type}")
-
-		return rpm
-
-	# We have rpms that get added from "somewhere", in places that we do not see (yet).
-	def createExternalRpm(self, name):
-		words = name.split(';')
-		name = words.pop(0)
-
-		for extra in words:
-			if extra.startswith("arch="):
-				supportedArchictures = set(extra[5:].split(','))
-				if self.arch not in supportedArchictures:
-					debugmsg(f"{self.arch}: external package {name} not supported on this architecture")
-					return None
-			else:
-				raise Exception(f"{self.arch}: external {name} with unsupported flag {extra}")
-
-		# Create a "regular" rpm but tag it as external so that we later know that we need
-		# to create a synthetic build for it.
-		rpm = self.createDummySolvable(name, arch = self.arch, type = RpmWrapper.TYPE_REGULAR)
-		rpm.isExternal = True
-
-		infomsg(f"Created external rpm {rpm}")
 
 		return rpm
 
@@ -1545,7 +1516,6 @@ class PreprocessorHints(object):
 		self.ignoreNames = []
 		self.preferredNames = []
 		self.syntheticNames = []
-		self.externalNames = []
 		self.knownMissingNames = []
 		self.buildNoVersionCheckSet = set()
 		self.acceptableAmbiguities = []
@@ -1614,9 +1584,6 @@ class PreprocessorHints(object):
 
 	def addSyntheticName(self, name):
 		self.syntheticNames.append(name)
-
-	def addExternalName(self, name):
-		self.externalNames.append(name)
 
 	def addPromise(self, dependency, promise):
 		assert(dependency not in self._promises)
@@ -1832,12 +1799,6 @@ class PreprocessorHintsLoader(object):
 
 			for name in words:
 				self.hints.addSyntheticName(name)
-		elif command == 'external':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
-
-			for name in words:
-				self.hints.addExternalName(name)
 		elif command == 'always-prefer':
 			if len(words) == 0:
 				return self.error(f"missing arguments for {command}")

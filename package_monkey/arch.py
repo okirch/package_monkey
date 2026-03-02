@@ -103,6 +103,9 @@ class ArchSet(object):
 	def remove(self, arch):
 		self.mask = self.mask & ~archRegistry.nameToMask(arch)
 
+	def discard(self, arch):
+		self.mask = self.mask & ~archRegistry.nameToMask(arch)
+
 	def union(self, other):
 		return self.__class__(self.mask | other.mask)
 

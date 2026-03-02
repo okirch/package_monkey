@@ -194,13 +194,13 @@ class RequiresRenderer(DependencyRenderer):
 
 		specific = {}
 		for arch in rpm.architectures:
-			for rpm in rpm.getDependencies(arch).difference(common):
-				if rpm not in specific:
-					specific[rpm] = ArchSet()
-				specific[rpm].add(arch)
+			for req in rpm.getDependencies(arch).difference(common):
+				if req not in specific:
+					specific[req] = ArchSet()
+				specific[req].add(arch)
 
-		for rpm in sorted(specific.keys(), key = str):
-			self.renderItem(rpm, arch = specific[rpm])
+		for req in sorted(specific.keys(), key = str):
+			self.renderItem(req, arch = specific[req])
 
 		self.endList()
 

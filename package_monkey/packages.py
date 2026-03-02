@@ -185,9 +185,10 @@ class PackageCollection(object):
 ##################################################################
 class RpmOverrideList(object):
 	class Entry(object):
-		def __init__(self, name, archSet = None):
+		def __init__(self, name, archSet = None, version = None):
 			self.name = name
 			self.archSet = archSet
+			self.version = version or "0.0"
 
 		def __str__(self):
 			if self.archSet is not None:
@@ -253,7 +254,7 @@ class RpmOverrideList(object):
 		result.difference_update(other)
 		return result
 
-	def toRpms(self, db, create = False):
+	def toRpms(self, db, create = False, quiet = True):
 		result = PackageCollection()
 		nerrors = 0
 
@@ -262,7 +263,7 @@ class RpmOverrideList(object):
 			if rpm is not None:
 				if item.archSet is not None:
 					if rpm.trace:
-						infomsg(f"Override {rpm}: {archSet}")
+						infomsg(f"Override {rpm}: {item.archSet}")
 					if not item.archSet.issubset(rpm.architectures):
 						missing = item.archSet.difference(rpm.architectures)
 						raise Exception(f"Refusing to override {rpm}: unsupported architecture(s) {missing}")
@@ -271,20 +272,24 @@ class RpmOverrideList(object):
 				continue
 
 			if create:
-				# and item.archSet is not None:
-				assert(item.archSet is not None)
 				rpm = db.createRpm(item.name)
 				rpm.architectures.update(item.archSet or archRegistry.fullset)
+				rpm.isExternal = True
+				for arch in rpm.architectures:
+					rpm.addVersion(arch, item.version)
 
-				rpm.new_build = db.createBuild("__external__")
+				build = db.createBuild(f"{item.name}:build")
+				build.addRpm(rpm)
 
+				if not quiet:
+					infomsg(f"Creating ghost rpm {rpm} [{rpm.architectures}]")
 				result.add(rpm, rpm.architectures)
 				continue
 
-			errormsg(f"override_rpms specifies unknown rpm {item.name}")
+			errormsg(f"override list specifies unknown rpm {item.name}")
 			nerrors += 1
 
 		if nerrors:
-			raise Exception(f"unknown rpm names in override_rpms")
+			raise Exception(f"unknown rpm names in override list")
 
 		return result

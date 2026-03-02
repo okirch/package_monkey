@@ -274,10 +274,22 @@ class MonkeyConfigLoader(object):
 			for entry in self:
 				item = None
 				if type(entry) is dict:
-					if len(entry) == 1:
-						for key, value in entry.items():
-							if type(value) is list:
-								item = result.Entry(key, ArchSet(value))
+					if len(entry) != 1:
+						raise Exception(f"Invalid entry in rpm override list: {entry}")
+
+					(key, value), = entry.items()
+					if type(value) is not list:
+						raise Exception(f"Invalid entry in rpm override list: {entry}")
+
+					# extract version=x.y from list
+					version = None
+					for s in value:
+						if s.startswith('version='):
+							version = s[8:]
+							del value[value.index(s)]
+							break
+
+					item = result.Entry(key, ArchSet(value), version = version)
 				elif type(entry) is str:
 					item = result.Entry(entry)
 					assert(item)
@@ -1417,6 +1429,8 @@ class CodebaseLoader(MonkeyConfigLoader):
 				self.processFilters(self.context.dictContext(key, value))
 			elif key == 'build_projects':
 				self.codebase.buildProjects = self.context.asStringList(key, value)
+			elif key == 'ghosts':
+				self.codebase.ghostRpms = self.context.asRpmOverrideList(key, value)
 			else:
 				super().processKeyValue(key, value)
 

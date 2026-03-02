@@ -139,9 +139,7 @@ class SolverApplication(PreprocessApplicationBase):
 			repository.loadBuilds(db)
 
 		for archSolver in archSolvers:
-			archSolver.constrainRpms(db)
 			archSolver.solve(progressMeter)
-			archSolver.validateHidden()
 
 		for archSolver in archSolvers:
 			self.extractResolution(archSolver, db)
@@ -175,10 +173,6 @@ class SolverApplication(PreprocessApplicationBase):
 				genericRpm = db.createRpm(rpm.shortname, type)
 
 		for result in archSolver.resolvedRpms:
-			if result.requiringPkg.suppress:
-				# infomsg(f"{arch}: suppress {result.requiringPkg}")
-				continue
-
 			self.updateRpm(db, arch, result)
 
 	def displayBuildsWithVersionDrift(self, db):

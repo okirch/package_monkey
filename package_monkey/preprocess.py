@@ -51,10 +51,6 @@ class RpmWrapper(RpmBase):
 		self.shortname = name
 		self.arch = arch
 
-		# Set to True iff there is a constraint rule in the hints
-		# file that excludes the rpm's architecture
-		self.suppress = False
-
 		self.abstractPackages = None
 		self.controllingScenarios = None
 		self.controllingScenarioVariables = None
@@ -291,40 +287,6 @@ class ArchSolver(object):
 		)
 		self.abiManager = AbiManager(abiProviderKeys)
 
-	def constrainRpms(self, db):
-		self.hideRpms = set()
-		for name, cons in self.hints.buildConstraints.items():
-			if cons.architectures is not None and self.arch in cons.architectures:
-				continue
-
-			build = db.lookupBuild(name)
-			if build is None:
-				warnmsg(f"hints specify constraints for \"{name}\" but there is no such package");
-				continue
-
-			for genericRpm in build.binaries:
-				rpm = self.rpmFactory.getByName(genericRpm.name)
-				if rpm is None:
-					# warnmsg(f"Trying to suppress {build}/{genericRpm}, but I don't have a solvable of that name");
-					continue;
-
-				# infomsg(f"suppress {rpm}")
-				rpm.suppress = True
-				self.hideRpms.add(rpm)
-
-		for name, cons in self.hints.rpmConstraints.items():
-			if cons.architectures is not None and self.arch in cons.architectures:
-				continue
-
-			rpm = self.rpmFactory.getByName(name)
-			if rpm is None:
-				# warnmsg(f"Trying to suppress rmp {name}, but I don't have a solvable of that name");
-				continue;
-
-			# infomsg(f"suppress {rpm}")
-			rpm.suppress = True
-			self.hideRpms.add(rpm)
-
 	def solvableToRpm(self, solvable, type = None):
 		return self.rpmFactory.createFromSolvable(solvable, type)
 
@@ -458,49 +420,6 @@ class ArchSolver(object):
 		else:
 			infomsg(f"Resolved all {totalCount} rpms")
 
-	# The user may have added architecture constraints to some RPMs in hints.conf
-	# The following method propagates these constraints along the upwards dependency chain
-	def validateHidden(self):
-		retval = True
-
-		if not self.hideRpms:
-			return retval
-
-		revMap = {}
-		for result in self.resolvedRpms:
-			requiringRpm = result.requiringPkg
-			if requiringRpm.suppress:
-				continue
-
-			for archSpecificDep in result:
-				for requiredRpm in archSpecificDep.solutions:
-					requirers = revMap.get(requiredRpm)
-					if requirers is None:
-						requirers = set()
-						revMap[requiredRpm] = requirers
-					requirers.add(requiringRpm)
-
-		queue = list(self.hideRpms)
-		while queue:
-			rpm = queue.pop(0)
-			requirers = revMap.get(rpm)
-			if not requirers:
-				continue
-
-			bad = requirers.difference(self.hideRpms)
-			if not bad:
-				continue
-
-			for requiringRpm in bad:
-				infomsg(f"suppressing {requiringRpm} on {self.arch} because {rpm} is suppressed");
-				requiringRpm.suppress = True
-
-			queue += list(bad)
-			self.hideRpms.update(bad)
-
-		return retval
-
-
 	def detectAbiProviders(self, rpm):
 		sel = self.pool.select(rpm.shortname, solv.Selection.SELECTION_NAME)
 		if sel.isempty():
@@ -537,7 +456,7 @@ class ArchSolver(object):
 			fail
 
 		if rpm.trace:
-			infomsg(f"Resolving provides for {rpm} {rpm.suppress and '[SUPPRESSED]' or ''}")
+			infomsg(f"Resolving provides for {rpm}")
 
 		result = PackageDependencies(rpm, key)
 
@@ -967,8 +886,6 @@ class ArchSolver(object):
 				if installRequest.trace:
 					infomsg(f"   direct {rule}: {s}")
 				rpm = self.solvableToRpm(s)
-				if rpm.suppress:
-					errormsg(f"{installRequest} requires {rpm}, which has been suppressed");
 				result.addResolved(rule.info().dep, rpm)
 			elif installRequest.trace:
 				infomsg(f"   ignoring indirect {rule}: {s}")
@@ -1613,24 +1530,11 @@ class PreprocessorHints(object):
 				return None
 			return requiredNames.difference(self.required)
 
-	class RpmConstraint(object):
-		def __init__(self, name, args):
-			self.name = name
-			self.architectures = None
-
-			for word in args:
-				if word.startswith("arch="):
-					self.architectures = set(word[5:].split(','))
-				else:
-					raise Exception(f"constraint for {name}: invalid argument {word}");
-
 	def __init__(self):
 		self.ignoreNames = []
 		self.preferredNames = []
 		self.syntheticNames = []
 		self.externalNames = []
-		self.rpmConstraints = {}
-		self.buildConstraints = {}
 		self.knownMissingNames = []
 		self.buildNoVersionCheckSet = set()
 		self.acceptableAmbiguities = []
@@ -1702,16 +1606,6 @@ class PreprocessorHints(object):
 
 	def addExternalName(self, name):
 		self.externalNames.append(name)
-
-	def addBuildConstraint(self, name, args):
-		if name in self.buildConstraints:
-			raise Exception(f"Duplicate build constraints for {name}")
-		self.buildConstraints[name] = self.RpmConstraint(name, args)
-
-	def addRpmConstraint(self, name, args):
-		if name in self.rpmConstraints:
-			raise Exception(f"Duplicate rpm constraints for {name}")
-		self.rpmConstraints[name] = self.RpmConstraint(name, args)
 
 	def addPromise(self, dependency, promise):
 		assert(dependency not in self._promises)
@@ -1933,18 +1827,6 @@ class PreprocessorHintsLoader(object):
 
 			for name in words:
 				self.hints.addExternalName(name)
-		elif command == 'constrain-build':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
-
-			rpm = words.pop(0)
-			self.hints.addBuildConstraint(rpm, words)
-		elif command == 'constrain-rpm':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
-
-			rpm = words.pop(0)
-			self.hints.addRpmConstraint(rpm, words)
 		elif command == 'always-prefer':
 			if len(words) == 0:
 				return self.error(f"missing arguments for {command}")

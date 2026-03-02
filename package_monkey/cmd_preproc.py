@@ -69,6 +69,41 @@ class PreprocessApplicationBase(ApplicationBase):
 
 		return archSolver
 
+	def updateRpm(self, db, arch, result, patching = False):
+		rpmName = result.requiringPkg.shortname
+		unresolvedRpm = db.lookupRpm('__unresolved__')
+
+		genericRpm = db.createRpm(rpmName)
+		if patching:
+			genericRpm.dropArchitecture(arch)
+		genericRpm.architectures.add(arch)
+
+		for archSpecificDep in result:
+			solution = archSpecificDep.solutions
+			if not solution:
+				solution = archSpecificDep.alternatives
+
+			required = set(map(db.createRpm, (rpm.shortname for rpm in solution)))
+			genericRpm.addDependencies(str(archSpecificDep.dep), arch, required,
+						unresolvable = (unresolvedRpm in required))
+
+		if result.validScenarioChoices is not None:
+			genericRpm.addScenarios(arch, set(map(str, result.validScenarioChoices)))
+
+		if result.controllingScenarios:
+			genericRpm.addControllingScenarios(arch, set(map(str, result.controllingScenarios)))
+
+		version = result.version
+		if version is not None:
+			genericRpm.addVersion(arch, version)
+
+		if result.requiringPkg.isExternal:
+			debugmsg(f"creating synthetic build for external rpm {result.requiringPkg}")
+			build = db.createBuild(f"{rpmName}:build")
+			build.addRpm(genericRpm);
+			build.isSynthetic = True
+
+		return genericRpm
 
 class SolverApplication(PreprocessApplicationBase):
 	def __init__(self, *args, **kwargs):
@@ -139,42 +174,12 @@ class SolverApplication(PreprocessApplicationBase):
 				assert(rpm.type == type)
 				genericRpm = db.createRpm(rpm.shortname, type)
 
-		unresolvedRpm = db.lookupRpm('__unresolved__')
-
 		for result in archSolver.resolvedRpms:
 			if result.requiringPkg.suppress:
 				# infomsg(f"{arch}: suppress {result.requiringPkg}")
 				continue
 
-			rpmName = result.requiringPkg.shortname
-
-			genericRpm = db.createRpm(rpmName)
-			genericRpm.architectures.add(arch)
-
-			for archSpecificDep in result:
-				solution = archSpecificDep.solutions
-				if not solution:
-					solution = archSpecificDep.alternatives
-
-				required = set(map(db.createRpm, (rpm.shortname for rpm in solution)))
-				genericRpm.addDependencies(str(archSpecificDep.dep), arch, required,
-							unresolvable = (unresolvedRpm in required))
-
-			if result.validScenarioChoices is not None:
-				genericRpm.addScenarios(arch, set(map(str, result.validScenarioChoices)))
-
-			if result.controllingScenarios:
-				genericRpm.addControllingScenarios(arch, set(map(str, result.controllingScenarios)))
-
-			version = result.version
-			if version is not None:
-				genericRpm.addVersion(arch, version)
-
-			if result.requiringPkg.isExternal:
-				debugmsg(f"creating synthetic build for external rpm {result.requiringPkg}")
-				build = db.createBuild(f"{rpmName}:build")
-				build.addRpm(genericRpm);
-				build.isSynthetic = True
+			self.updateRpm(db, arch, result)
 
 	def displayBuildsWithVersionDrift(self, db):
 		tableFormatter = TableFormatter(["name"] + list(map(str, self.architectures)),

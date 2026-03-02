@@ -1,4 +1,3 @@
-#!/usr/bin/python3.11
 #
 # This is the second step. For a set of repositories, use libsolv to resolve all
 # package dependencies.
@@ -20,7 +19,7 @@ from .newdb import NewDB
 from .reports import GenericStringReport
 from .arch import *
 
-class SolverApplication(ApplicationBase):
+class PreprocessApplicationBase(ApplicationBase):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 
@@ -29,10 +28,51 @@ class SolverApplication(ApplicationBase):
 		self.promises = set()
 		self.hints = None
 		self.pedantic = False
+		self.traceDisambiguation = False
 		self.ignoreErrors = False
 
 		self.resolverLog = None
 		self.errorReport = GenericStringReport()
+
+	def openResolverLog(self):
+		if self.opts.reslog is None:
+			self.opts.reslog = self.getCodebasePath("resolver.log")
+		self.resolverLog = ResolverLog(self.opts.reslog)
+
+	def loadHints(self):
+		self.hints = self.modelDescription.loadPreprocessorHints()
+
+	def loadRepositories(self, withStaging = None):
+		solverDir = self.getCachePath('solve')
+		self.repositoryCollection = SolverRepositoryCollection.fromCodebase(self.productCodebase, solverDir)
+
+		if withStaging is not None:
+			self.repositoryCollection.enableStaging(withStaging)
+
+		self.architectures = self.repositoryCollection.architectures
+
+	def overrideArchitectures(self, archList):
+		self.architectures = ArchSet()
+		for s in self.opts.only_arch:
+			self.architectures.update(ArchSet(s.split(',')))
+
+	def createArchSolver(self, arch):
+		archSolver = ArchSolver(arch, hints = self.hints, traceMatcher = self.traceMatcher, errorReport = self.errorReport)
+
+		for repository in self.repositoryCollection:
+			if repository.arch == arch:
+				archSolver.addRepository(repository)
+
+		archSolver.resolverLog = self.resolverLog
+		archSolver.pedantic = self.pedantic
+		archSolver.traceDisambiguation = self.opts.trace_scenarios
+
+		return archSolver
+
+
+class SolverApplication(PreprocessApplicationBase):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 
 	def run(self):
 		self.ignoreErrors = self.opts.ignore_errors
@@ -44,12 +84,7 @@ class SolverApplication(ApplicationBase):
 		self.loadRepositories(withStaging = self.opts.staging)
 
 		if self.opts.only_arch:
-			archSet = set()
-			for s in self.opts.only_arch:
-				archSet.update(s.split(','))
-		else:
-			archSet = self.repositoryCollection.architectures
-		self.architectures = archSet
+			self.overrideArchitectures(self.opts.only_arch)
 
 		infomsg(f"Using the following repositories:")
 		for repository in self.repositoryCollection:
@@ -58,7 +93,7 @@ class SolverApplication(ApplicationBase):
 		self.openResolverLog()
 
 		archSolvers = []
-		for arch in sorted(archSet):
+		for arch in sorted(self.architectures):
 			archSolvers.append(self.createArchSolver(arch))
 
 		totalRpmCount = sum(len(a.queue) for a in archSolvers)
@@ -89,34 +124,6 @@ class SolverApplication(ApplicationBase):
 			return 1
 
 		return 0
-
-	def openResolverLog(self):
-		if self.opts.reslog is None:
-			self.opts.reslog = self.getCodebasePath("resolver.log")
-		self.resolverLog = ResolverLog(self.opts.reslog)
-
-	def loadHints(self):
-		self.hints = self.modelDescription.loadPreprocessorHints()
-
-	def loadRepositories(self, withStaging = None):
-		solverDir = self.getCachePath('solve')
-		self.repositoryCollection = SolverRepositoryCollection.fromCodebase(self.productCodebase, solverDir)
-
-		if withStaging is not None:
-			self.repositoryCollection.enableStaging(withStaging)
-
-	def createArchSolver(self, arch):
-		archSolver = ArchSolver(arch, hints = self.hints, traceMatcher = self.traceMatcher, errorReport = self.errorReport)
-
-		for repository in self.repositoryCollection:
-			if repository.arch == arch:
-				archSolver.addRepository(repository)
-
-		archSolver.resolverLog = self.resolverLog
-		archSolver.pedantic = self.opts.pedantic
-		archSolver.traceDisambiguation = self.opts.trace_scenarios
-
-		return archSolver
 
 	def extractResolution(self, archSolver, db):
 		arch = archSolver.arch

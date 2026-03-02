@@ -357,16 +357,6 @@ class Composer(object):
 					report.add(f"   {rpm} is valid in these scenarios: {' '.join(requiredScenarios)}")
 					report.add(f"   but none of these is supported by the product")
 
-		# The promise stuff may be on its way out, at least at this stage.
-		# We're currently using promises only while labelling.
-		first = True
-		for promiseName, requiredBy in validator.unkeptPromises:
-			if first:
-				report.add(f"{product}: the following promises were not kept")
-				first = False
-			report.add(f" - {promiseName}: required by {' '.join(requiredBy)}")
-
-
 	def overrideRpms(self, product, report, classificationResult):
 		excludeRpms = product._overrideRpmsExclude.toRpms(classificationResult.db)
 		includeRpms = product._overrideRpmsInclude.toRpms(classificationResult.db)
@@ -468,24 +458,10 @@ class PromiseValidator(object):
 	def __init__(self, product, verbose = False):
 		self.verbose = verbose
 		self.rpmsDependingOnScenario = set()
-		self.requiredPromises = set()
 		self.regularRpms = set()
 		self._allSupportedScenarios = ScenarioTupleSet()
 
 		self.addProduct(product)
-
-	@property
-	def unkeptPromises(self):
-		validNames = set(rpm.name for rpm in self.regularRpms)
-		for name in sorted(self.requiredPromises.difference(validNames)):
-			promiseName = f"promise:{name}"
-			requiredBy = []
-			for rpm in self.regularRpms:
-				if promiseName in list(req.name for req in rpm.enumerateRequiredRpms()):
-					requiredBy.append(rpm.name)
-			assert(requiredBy)
-			yield name, requiredBy
-		return
 
 	def addProduct(self, product, parentProduct = None):
 		if self.verbose:
@@ -510,8 +486,8 @@ class PromiseValidator(object):
 				self._allSupportedScenarios.update(rpm.controllingScenarios.common)
 
 				for req in rpm.enumerateRequiredRpms():
-					if req.name.startswith('promise:'):
-						self.requiredPromises.add(req.name[8:])
+					if req.type == req.TYPE_PROMISE:
+						raise Exception(f"Should not happen: {rpm} requires promise {req}")
 
 				# Build the queue of rpms to inspect only for the product
 				# we're currently inspecting; not for its base product.

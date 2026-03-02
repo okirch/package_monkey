@@ -24,7 +24,6 @@ class RpmControl(Composable):
 		self.rpm = rpm
 		self.trace = rpm.trace
 		self.optionSet = None
-		self.promises = None
 		self.choice = None
 		self.definedByOption = None
 		self.requiredBy = {}
@@ -99,16 +98,6 @@ class RpmControl(Composable):
 		self.indirectRequiredOptions.update(requires)
 		for other in self.requiredBy:
 			other.updateIndirectRequiredOptions(requires)
-
-	def rewireDependency(self, req, promiseRpm, optionLabel = None, **kwargs):
-		self.rpm.replaceDependency(req, promiseRpm, **kwargs)
-
-		if self.promises is None:
-			self.promises = set()
-		self.promises.add(promiseRpm)
-
-		if optionLabel is not None:
-			self.addOptionDependency(optionLabel)
 
 	def setTentativePolicy(self, policy):
 		self.tentativePolicy = policy
@@ -415,7 +404,7 @@ class EpicControl(LabelControl):
 			self.byClass[klass] = memberSet
 		return memberSet
 
-	def maybeRewireDependency(self, rpmControl, req, arch = None):
+	def checkForDependencyInversion(self, rpmControl, req, arch = None):
 		rpm = rpmControl.rpm
 
 		# This is wrong; we need to handle dependencies on stuff like
@@ -486,7 +475,12 @@ class EpicControl(LabelControl):
 		if rpm.trace or req.trace:
 			debugmsg(f"{rpm.new_build}: replace {rpm} -> {req} (option {optionLabel}) with {promiseRpm}; arch={arch}")
 
-		rpmControl.rewireDependency(req, promiseRpm, optionLabel, arch = arch)
+		# FIXME: should this really be unconditional? Making this per-arch seems
+		#  (a) lots of effort
+		#  (b) not quite the thing we want to achieve
+		if optionLabel is not None:
+			rpmControl.addOptionDependency(optionLabel)
+
 		return True
 
 class NewResult(object):
@@ -711,17 +705,13 @@ class NewResult(object):
 				# the set of resolved requirements may change while we iterate over it,
 				# so force a copy
 				for req in list(rpm.resolvedRequires):
-					if req.name.startswith("promise:"):
-						assert(req.name.count(":") == 2)
-						continue
-
-					epicControl.maybeRewireDependency(rpmControl, req)
+					epicControl.checkForDependencyInversion(rpmControl, req)
 
 				common = rpm.solutions.common
 				for arch in rpm.solutions.keys():
 					assert(arch is not None)
 					for req in rpm.solutions.raw_get(arch).difference(common):
-						epicControl.maybeRewireDependency(rpmControl, req, arch = arch)
+						epicControl.checkForDependencyInversion(rpmControl, req, arch = arch)
 
 				if labelHints is not None:
 					buildOption = labelHints.definingBuildOption

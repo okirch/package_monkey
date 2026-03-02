@@ -146,8 +146,8 @@ class SolverApplication(PreprocessApplicationBase):
 		for archSolver in archSolvers:
 			self.extractResolution(archSolver, db)
 
+		self.displayUnresolved(db)
 		self.collapseResults(db)
-		# self.logResults(db)
 
 		info = self.codebaseData.loadDownloadInfo()
 		db.downloadTimestamp = info.timestamp
@@ -204,15 +204,39 @@ class SolverApplication(PreprocessApplicationBase):
 
 		tableFormatter.render("The following rpms have version drift", displayfn = infomsg)
 
-	def collapseResults(self, db):
-		unresolvedRpm = db.lookupRpm('__unresolved__')
+	def displayUnresolved(self, db):
+		tableFormatter = TableFormatter(["name"] + list(map(str, self.architectures)) + ["deps"],
+					[50, 8, 8, 8, 8, 8, 8])
+		for rpm in db.rpms:
+			if rpm.isSynthetic or not rpm.unresolvables:
+				continue
 
+			row = tableFormatter.addRow(rpm.name)
+			overallMissing = set()
+
+			for arch in rpm.architectures:
+				missingDeps = rpm.unresolvables.get(arch)
+				if not missingDeps:
+					row[arch] = f"-"
+					continue
+
+				overallMissing.update(missingDeps)
+				if not self.hints.filterUnresolvedRequirements(rpm.name, missingDeps):
+					row[arch] = f"(known)"
+					continue
+
+				row[arch] = f"YES"
+
+			row['deps'] = '; '.join(map(str, overallMissing))
+
+		tableFormatter.render("The following rpms have unresolved dependencies", displayfn = infomsg)
+
+	def collapseResults(self, db):
 		# db.rpms returns an iterator to a dict that keeps changing (because we add
 		# new promises to the DB). Use list() to create a copy
 		for genericRpm in list(db.rpms):
 			# FIXME: we should mark architecture as missing *only* if it was required by something
 			if not genericRpm.architectures and genericRpm.missingArchitectures == db.architectures:
-				infomsg(f"Looks like {genericRpm} is indeed missing")
 				# fudge the rpm type:
 				genericRpm._type = RpmBase.TYPE_MISSING
 				genericRpm.isSynthetic = True
@@ -231,8 +255,8 @@ class SolverApplication(PreprocessApplicationBase):
 				if unresolvableDeps:
 					unresolvableDeps = self.hints.filterUnresolvedRequirements(genericRpm.name, unresolvableDeps)
 
-				if unresolvableDeps:
-					errormsg(f"{genericRpm} has unresolvable dependencies on all architectures: {unresolvableDeps}")
+				if unresolvableDeps and genericRpm.trace:
+					infomsg(f"{genericRpm} has unresolvable dependencies on all architectures: {unresolvableDeps}")
 				continue
 
 			common = genericRpm.solutions.common 
@@ -241,25 +265,14 @@ class SolverApplication(PreprocessApplicationBase):
 				delta = solution.difference(common)
 
 				# If a package is unresolvable on _all_ architectures, the package will show up as
-				# depending on unresolvedRpm.
-				# If it is unresolved on just some architectures, we have two options:
-				#  - add promise:arch:__unresolved__
-				#    This requires complex solver code when handling these partial unresolvables
-				#  - disable the package for this architecture
-				#    This will potentially leave us with dangling references to an unresolvable pkg.
-				# Both options are icky.
-				# The proper fix would be to trace these architectures as rpm.badarch and percolate that
-				# up the depedency chain inside the resolver, or in the composer.
-				if unresolvedRpm in delta:
-					# FIXME: it would be nice to identify the failed dependencies and suppress any noise
-					# according to the nowarn rules.
-					# The following call will suppress errors if the requiring rpm is flagged as nowarn,
-					# but it will not catch any nowarn required names (because the failed requirement has been
-					# translated to __unresolved__ at this point).
-					if self.hints.filterUnresolvedRequirements(genericRpm.name, set(map(str, delta))):
-						errormsg(f"{genericRpm} is unresolvable on {arch} - disabling package on this architecture")
+				# depending on __unresolved__.
+				# If it is unresolved on just some architectures, we disable the package for this
+				# architecture.
+				badDependencies = genericRpm.unresolvables.get(arch)
+				if badDependencies:
+					if genericRpm.trace:
+						infomsg(f"{genericRpm} is unresolvable on {arch} - disabling package on this architecture")
 					genericRpm.architectures.remove(arch)
-					continue
 
 		self.displayBuildsWithVersionDrift(db)
 

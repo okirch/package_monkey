@@ -587,9 +587,6 @@ class ArchSolver(object):
 
 				if not choices:
 					if not isSystemDependency:
-						if self.hints.filterUnresolvedRequirements(rpm.shortname, set((str(dep), ))):
-							warnmsg(f"{rpm}: {dep} resolves to an empty set")
-
 						result.addResolved(dep, self.unresolvableRpm)
 						result.isResolvable = False
 

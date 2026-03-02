@@ -142,6 +142,8 @@ class NewDB(object):
 		return self._promises.items()
 
 	def lookupBuildForRpm(self, rpm):
+		if rpm.new_build is not None:
+			return rpm.new_build
 		if self._rpmToBuildCache is None:
 			self._rpmToBuildCache = {}
 			for build in self.builds:

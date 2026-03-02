@@ -1062,6 +1062,8 @@ class LifecycleCentricView(object):
 
 		for rpm in product.rpms:
 			epic = rpm.new_build.new_epic
+			if epic is None:
+				continue
 
 			lifecycle = policy.getLifeCycle(epic.lifecycleID)
 			if lifecycle is None:

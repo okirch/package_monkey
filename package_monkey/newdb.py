@@ -305,8 +305,10 @@ class NewDB(object):
 		os.rename(path + ".tmp", path)
 		infomsg(f"Updated {path}")
 
-	def load(self, path, patching = False):
+	def loadWorker(self, path, patching = False):
 		nerrors = 0
+		nrpms = 0
+		nbuilds = 0
 
 		def updateDictOfSets(dos, w, transform = None):
 			key = w.pop(0)
@@ -360,6 +362,7 @@ class NewDB(object):
 
 					currentRpm = rpm
 					currentBuild = None
+					nrpms += 1
 				elif cmd == 'req':
 					# Workaround, until we've cleaned up the prepare stage:
 					# ignore promise:foo:arch style promises.
@@ -398,6 +401,7 @@ class NewDB(object):
 
 					currentBuild = self.createBuild(name)
 					currentRpm = None
+					nbuilds += 1
 				elif cmd == 'status':
 					assert(currentBuild)
 
@@ -428,11 +432,17 @@ class NewDB(object):
 			if rpm.new_build is None and not rpm.isSynthetic:
 				raise Exception(f"After loading DB: {rpm} w/o associated build")
 
-		infomsg(f"DB {path}: loaded {len(self._builds)} builds and {len(self._rpms)} rpms")
+		return nrpms, nbuilds
+
+	def load(self, path):
+		nrpms, nbuilds = self.loadWorker(path, patching = False)
+
+		infomsg(f"DB {path}: loaded {nbuilds} builds and {nrpms} rpms")
 		self.userVersion = int(os.stat(path).st_mtime)
 
 	def loadPatch(self, path):
-		return self.load(path, patching = True)
+		nrpms, nbuilds = self.loadWorker(path, patching = True)
+		infomsg(f"DB {path}: loaded {nbuilds} builds and {nrpms} rpms")
 
 class RpmBase(object):
 	TYPE_REGULAR	= 'rpm'

@@ -418,6 +418,9 @@ class EpicControl(LabelControl):
 	def maybeRewireDependency(self, rpmControl, req, arch = None):
 		rpm = rpmControl.rpm
 
+		if req.isSynthetic:
+			return False
+
 		if rpm.new_build is req.new_build:
 			return False
 
@@ -426,7 +429,9 @@ class EpicControl(LabelControl):
 				infomsg(f"{rpm} is unresolvable because it depends on {req}")
 			return False
 
-		assert(req.new_build is not None)
+		if req.new_build is None:
+			raise Exception(f"{rpm} requires {req}, which is not attached to any build")
+
 		reqBuild = req.new_build
 		if reqBuild.new_epic is None:
 			errormsg(f"{reqBuild}: no epic (requirement)")

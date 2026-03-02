@@ -418,8 +418,10 @@ class EpicControl(LabelControl):
 	def maybeRewireDependency(self, rpmControl, req, arch = None):
 		rpm = rpmControl.rpm
 
-		if req.isSynthetic:
-			return False
+		# This is wrong; we need to handle dependencies on stuff like
+		# this-is-only-for-build-envs, and hence we should not return early from here.
+#		if req.isSynthetic:
+#			return False
 
 		if rpm.new_build is req.new_build:
 			return False

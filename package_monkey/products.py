@@ -80,6 +80,7 @@ class ProductCodebase(object):
 		self.buildProjects = []
 		self.sourceProjects = []
 
+		self.ghostRpms = None
 		self.nameFilter = None
 
 	def __str__(self):
@@ -99,11 +100,9 @@ class ProductCodebase(object):
 	def load(klass, name, filename, *args, **kwargs):
 		from .floader import CodebaseLoader
 
-		loader = CodebaseLoader()
-
-		infomsg(f"Loading definition of codebase {name} from {filename}")
 		codebase = klass(name, *args, **kwargs)
 
+		loader = CodebaseLoader()
 		loader.load(codebase, filename)
 
 		return codebase

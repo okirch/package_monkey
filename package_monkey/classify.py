@@ -571,13 +571,9 @@ class NewResult(object):
 	def getRequiredWork(self, rpm, archSet):
 		commonRequires = rpm.resolvedRequires
 		for req in commonRequires:
-			if req.isSynthetic and not req.isUnresolvable:
-				continue
 			yield req, None
 		for arch in archSet:
 			for req in rpm.solutions.raw_get(arch).difference(commonRequires):
-				if req.isSynthetic and not req.isUnresolvable:
-					continue
 				yield req, arch
 
 	def getRequired(self, rpm, archSet):

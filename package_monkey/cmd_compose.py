@@ -71,7 +71,9 @@ class ErklaerBaerApplication(ComposerApplication):
 		loggingFacade.disableTimestamps()
 
 	def run(self):
-		composer = self.produce(includeExplanations = True, verbose = False)
+		db = self.loadNewDB()
+
+		composer = self.produce(db, includeExplanations = True, verbose = False)
 
 		if not self.opts.packages:
 			raise Exception(f"Missing package(s) arguments")

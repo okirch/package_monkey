@@ -1522,7 +1522,6 @@ class PreprocessorHints(object):
 		self.ambiguityTransforms = []
 		self.dependencyTransforms = {}
 		self.conditionals = {}
-		self._promises = {}
 
 		self._nameFilter = OBSNameFilter()
 
@@ -1584,18 +1583,6 @@ class PreprocessorHints(object):
 
 	def addSyntheticName(self, name):
 		self.syntheticNames.append(name)
-
-	def addPromise(self, dependency, promise):
-		assert(dependency not in self._promises)
-		self._promises[dependency] = "promise:" + promise
-
-	def translatePromise(self, dep):
-		dependencyString = str(dep)
-		return self._promises.get(dependencyString)
-
-	@property
-	def promises(self):
-		return self._promises.values()
 
 	def acceptAmbiguity(self, nameList):
 		self.acceptableAmbiguities.append(self.AcceptableAmbiguity(nameList))

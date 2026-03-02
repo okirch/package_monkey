@@ -25,7 +25,6 @@ class PreprocessApplicationBase(ApplicationBase):
 
 		self.repositoryCollection = None
 		self.architectures = set()
-		self.promises = set()
 		self.hints = None
 		self.pedantic = False
 		self.traceDisambiguation = False
@@ -231,9 +230,7 @@ class SolverApplication(PreprocessApplicationBase):
 		tableFormatter.render("The following rpms have unresolved dependencies", displayfn = infomsg)
 
 	def collapseResults(self, db):
-		# db.rpms returns an iterator to a dict that keeps changing (because we add
-		# new promises to the DB). Use list() to create a copy
-		for genericRpm in list(db.rpms):
+		for genericRpm in db.rpms:
 			# FIXME: we should mark architecture as missing *only* if it was required by something
 			if not genericRpm.architectures and genericRpm.missingArchitectures == db.architectures:
 				# fudge the rpm type:

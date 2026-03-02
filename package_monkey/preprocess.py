@@ -382,43 +382,48 @@ class ArchSolver(object):
 				continue
 
 			with loggingFacade.temporaryIndent():
-				result = self.resolveAndDetectAmbiguities(rpm)
-				self._resolvedDependencies.append(result)
+				self.tryToSolveRpm(rpm)
 
-				installRequest = self.InstallationRequest(self.pool, rpm)
-				if result.isAmbiguous:
-					# replace ambiguous resolutions with symbolic rpms and
-					# record valid choices
-					resolved = self.disambiguate(rpm, result)
-					if resolved is None:
-						self.reportDisambiguationFailure(result, self.errorReport)
-				elif not result.isResolvable:
-					resolved = result
-				elif not self.pedantic:
-					resolved = result
-				else:
-					resolved = self.resolveOnePackage(installRequest, result)
-
-				if not resolved:
-					errormsg(f"{rpm}: unable to resolve dependencies")
-					self.resolverLog.logUnresolvablePackage(result, installRequest.problems)
-					self.unresolvableRpms.append(rpm)
-					continue
-
-				self.resolvedRpms.append(resolved)
-
-				if self.resolverLog is not None:
-					self.resolverLog.logResolvedPackage(resolved)
-
-			progressMeter.tick()
-			if progressMeter.count % 100 == 0:
-				infomsg(f"{progressMeter} {self.arch} {rpm.shortname}")
+			if progressMeter is not None:
+				progressMeter.tick()
+				if progressMeter.count % 100 == 0:
+					infomsg(f"{progressMeter} {self.arch} {rpm.shortname}")
 
 		if self.unresolvableRpms:
 			unresolvedCount = len(self.unresolvableRpms)
 			infomsg(f"Resolved {totalCount - unresolvedCount}/{totalCount} rpms; {unresolvedCount} unresolvable")
 		else:
 			infomsg(f"Resolved all {totalCount} rpms")
+
+	# try to resolve one RPM on one architecture
+	def tryToSolveRpm(self, rpm):
+		result = self.resolveAndDetectAmbiguities(rpm)
+		self._resolvedDependencies.append(result)
+
+		installRequest = self.InstallationRequest(self.pool, rpm)
+		if result.isAmbiguous:
+			# replace ambiguous resolutions with symbolic rpms and
+			# record valid choices
+			resolved = self.disambiguate(rpm, result)
+			if resolved is None:
+				self.reportDisambiguationFailure(result, self.errorReport)
+		elif not result.isResolvable:
+			resolved = result
+		elif not self.pedantic:
+			resolved = result
+		else:
+			resolved = self.resolveOnePackage(installRequest, result)
+
+		if not resolved:
+			errormsg(f"{rpm}: unable to resolve dependencies")
+			self.resolverLog.logUnresolvablePackage(result, installRequest.problems)
+			self.unresolvableRpms.append(rpm)
+			return
+
+		self.resolvedRpms.append(resolved)
+
+		if self.resolverLog is not None:
+			self.resolverLog.logResolvedPackage(resolved)
 
 	def detectAbiProviders(self, rpm):
 		sel = self.pool.select(rpm.shortname, solv.Selection.SELECTION_NAME)

@@ -100,6 +100,9 @@ class RpmNameRenderer(object):
 	def render(self, rpm, arch = None):
 		result = rpm.name
 
+		if rpm.isExternal:
+			result += " [GHOST]"
+
 		if self.labelFacade is not None:
 			labelHints = self.labelFacade.getHintsForRpm(rpm)
 			if labelHints is not None:

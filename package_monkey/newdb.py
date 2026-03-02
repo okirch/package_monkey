@@ -291,7 +291,7 @@ class NewDB(object):
 		os.rename(path + ".tmp", path)
 		infomsg(f"Updated {path}")
 
-	def load(self, path):
+	def load(self, path, patching = False):
 		nerrors = 0
 
 		def updateDictOfSets(dos, w, transform = None):
@@ -335,6 +335,11 @@ class NewDB(object):
 					rpm = self.createRpm(name, type)
 					if w:
 						rpm.architectures = ArchSet(w)
+
+					if patching:
+						# we're loading patch.db, so discard any existing data
+						# on dependencies, version numbers etc.
+						rpm.prepareToPatch()
 
 					for arch in rpm.architectures:
 						rpm.addDependencies(None, arch, set())
@@ -408,6 +413,9 @@ class NewDB(object):
 		infomsg(f"DB {path}: loaded {len(self._builds)} builds and {len(self._rpms)} rpms")
 		self.userVersion = int(os.stat(path).st_mtime)
 
+	def loadPatch(self, path):
+		return self.load(path, patching = True)
+
 class RpmBase(object):
 	TYPE_REGULAR	= 'rpm'
 	TYPE_SYNTHETIC	= 'synthetic'
@@ -477,6 +485,10 @@ class GenericRpm(RpmBase):
 				self._common = None
 
 			super().discard(key, value)
+
+		def clear(self):
+			super().clear()
+			self._common = None
 
 	def __init__(self, name, type = None):
 		super().__init__(name, type)
@@ -666,6 +678,11 @@ class GenericRpm(RpmBase):
 				dos.add(arch, newReq)
 			if dos._common is not None:
 				dos._common.add(newReq)
+
+	# This is invoked when patching up the codebase with fake rpms from the ghosts section.
+	def prepareToPatch(self):
+		for dos in (self.solutions, self.versions, self.validScenarios, self.controllingScenarios, self.unresolvables,):
+			dos.clear()
 
 class GenericBuild(object):
 	def __init__(self, name):

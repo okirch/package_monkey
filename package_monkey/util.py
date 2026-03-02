@@ -546,6 +546,9 @@ class DictOfSets(object):
 	def values(self):
 		return self._dict.values()
 
+	def clear(self):
+		self._dict.clear()
+
 ##################################################################
 #
 # Format tuples of (tag1, .. tagN, message) so that

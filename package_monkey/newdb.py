@@ -525,6 +525,12 @@ class GenericRpm(RpmBase):
 
 		if unresolvable:
 			self.unresolvables.add(arch, str(dep))
+		else:
+			# make sure we have an empty set of unresolvable dependencies
+			# for this arch; otherwise, unresolvables.common will be computed
+			# only over those architectures that actually do have any
+			# unresolvables.
+			self.unresolvables.update(arch, set())
 
 	def getDependencies(self, arch):
 		return self.solutions.get(arch)

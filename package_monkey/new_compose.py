@@ -385,7 +385,7 @@ class ComposerReasoning(object):
 			if otherEntry is not None and \
 			   otherEntry.architectures is not None and \
 			   entry.architectures != otherEntry.architectures:
-				tag += f" (arch {otherEntry.architecture})"
+				tag += f" (arch {otherEntry.architectures})"
 			child = node.add(f"{tag}")
 
 			# preserve our reasoning entry inside the tree node;

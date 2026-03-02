@@ -130,6 +130,24 @@ class ProcessSolverCommand(GenericSubcommand):
 
 		return SolverApplication(self.NAME, opts)
 
+class CodebasePatchCommand(GenericSubcommand):
+	NAME = 'patch'
+	HELP = 'Add ghost rpms to codebase and fudge unresolved dependencies'
+
+	def registerArguments(self, args):
+		args.add_argument('--trace-scenarios', action = 'store_true', default = False,
+					help = 'Display information how we disambiguate using scenarios')
+		args.add_argument('--only-arch', action = 'append')
+		args.add_argument('--staging',
+					help = 'Use packages from the indicated staging project (eg "A") in addition to the regular build project')
+		args.add_argument('--trace', action = 'append', default = [],
+					help = 'Enable tracing for packages and/or labels. Specify multiple times or use comma to separate strings to trace for')
+
+	def createApplication(self, opts):
+		from package_monkey.cmd_preproc import PatchApplication
+
+		return PatchApplication(self.NAME, opts)
+
 class LabellingCommand(GenericSubcommand):
 	NAME = 'classify'
 	ALIASES = ['label']
@@ -327,6 +345,7 @@ class OwnerSignoffCommand(GenericSubcommand):
 subcommandRegistry.registerCommand(DownloadRpmsCommand())
 subcommandRegistry.registerCommand(ExtractRpmInfoCommand())
 subcommandRegistry.registerCommand(ProcessSolverCommand())
+subcommandRegistry.registerCommand(CodebasePatchCommand())
 subcommandRegistry.registerCommand(PackageInfoCommand())
 subcommandRegistry.registerCommand(BuildInfoCommand())
 subcommandRegistry.registerCommand(LabellingCommand())

@@ -696,7 +696,9 @@ class NewResult(object):
 				# In some rare cases, we will have two builds producing the same rpm
 				# (which is usually a bug, but it happens).
 				if rpm.new_build is not build:
-					errormsg(f"{epic}/{build}: rpm {rpm} has conflicting build {rpm.new_build}")
+					# do not complain about this here; the classify command will print
+					# a report about this
+					# errormsg(f"{epic}/{build}: rpm {rpm} has conflicting build {rpm.new_build}")
 					continue
 
 				rpmControl = epicControl.addRpm(rpm)

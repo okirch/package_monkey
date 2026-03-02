@@ -5,6 +5,7 @@ from .floader import FilterLoader
 from .options import ApplicationBase
 from .util import TimedExecutionBlock, ExecTimer
 from .util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from .reports import GenericStringReport
 from .obsclnt import OBSBuild
 from .classify import *
 from .new_compose import *
@@ -128,6 +129,32 @@ class ClassificationGadget(object):
 
 		return collection
 
+	def checkDuplicateBuilds(self):
+		badRpms = set()
+		for build in self.db.builds:
+			for rpm in build.binaries:
+				if rpm.new_build is not build:
+					badRpms.add(rpm)
+
+		if not badRpms:
+			return None
+
+		report = GenericStringReport()
+
+		map = {}
+		for build in self.db.builds:
+			for rpm in build.binaries:
+				if rpm not in badRpms:
+					continue
+
+				if rpm not in map:
+					map[rpm] = set()
+				map[rpm].add(build.name)
+
+		for rpm, builds in sorted(map.items(), key = str):
+			report.add(f"{rpm.name:30} built by {' '.join(sorted(builds))}")
+
+		return report
 
 class LabellingApplication(ApplicationBase):
 	def __init__(self, *args, **kwargs):
@@ -144,6 +171,13 @@ class LabellingApplication(ApplicationBase):
 			infomsg(f"{len(result.dependencyReport)} package dependency inversions in model:")
 			result.dependencyReport.render()
 			infomsg(f"These are not fatal, but you may want to fix these.")
+			infomsg("")
+
+		report = gadget.checkDuplicateBuilds()
+		if report:
+			infomsg(f"The following RPMs are being built multiple times; this is probably a concern")
+			report.display()
+			infomsg("")
 
 		self.codebaseData.saveClassification(result)
 

@@ -761,7 +761,10 @@ class GenericBuild(object):
 		if rpm.new_build is None:
 			rpm.new_build = self
 		elif rpm.new_build is not self:
-			errormsg(f"Conflicting builds for {rpm.isSourcePackage and 'source' or 'binary'} rpm {rpm}: {self} vs {rpm.new_build}")
+			# We do not print this message here anymore; the ClassificationGadget can generate a
+			# report about this; and the classification command displays it.
+			# errormsg(f"Conflicting builds for {rpm.isSourcePackage and 'source' or 'binary'} rpm {rpm}: {self} vs {rpm.new_build}")
+			pass
 
 		if rpm.isSourcePackage:
 			if self.source is not None and self.source is not rpm:

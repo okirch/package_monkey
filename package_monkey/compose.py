@@ -338,8 +338,6 @@ class Composer(object):
 		for rpm in validator.rpmsDependingOnScenario:
 			supportedScenarios = set()
 			validForScenarios = rpm.getValidScenarios(productArchitectures)
-			if not validForScenarios and self.verbose:
-				infomsg(f"{rpm} doesn't seem to have common scenarios; need to check per arch")
 
 			for arch in product.getRpmArchitectures(rpm):
 				requiredScenarios = rpm.validScenarios.get(arch)

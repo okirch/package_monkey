@@ -58,9 +58,11 @@ class RpmControl(Composable):
 			self.markExcluded(ReasonPolicy("rpm {rpm} is defined to be unresolvable"))
 
 		for other, archSet in self.requiredBy.items():
-			other.disableArchitectures(archSet, self)
-			if not other._validArchitectures:
-				other.markUnresolvable(self)
+			if other.disableArchitectures(archSet, self):
+				# only go here if archSet was not disabled to begin with.
+				# otherwise we may end up in an infinite recursion
+				if not other._validArchitectures:
+					other.markUnresolvable(self)
 
 	def addOptionDependency(self, option):
 		if self.optionSet is None:
@@ -142,6 +144,10 @@ class RpmControl(Composable):
 	def markExcluded(self, reason = None):
 		self.setDecision(COMPOSE_EXCLUDE, reason)
 
+	# disable this rpm on a set of architectures (usually because a required
+	# package was excluded and/or is not resolvable).
+	# return True if there was a change in arch set. return False if the archs
+	# in question were already disabled.
 	def disableArchitectures(self, badArchSet, dependsOn = None):
 		assert(badArchSet is not None)
 
@@ -150,7 +156,7 @@ class RpmControl(Composable):
 
 		badArchSet = badArchSet.intersection(self._validArchitectures)
 		if not badArchSet:
-			return
+			return False
 
 		if self.trace:
 			infomsg(f"{self}: disable architecures {badArchSet} because it depends on {dependsOn}")
@@ -160,12 +166,14 @@ class RpmControl(Composable):
 
 		if not self._validArchitectures:
 			self.markExcluded(ReasonRequires(dependsOn))
-			return
+			return True
 
 		for reqControl, reqArchSet in self.requiredBy.items():
 			removeArchSet = badArchSet.intersection(reqArchSet)
 			if removeArchSet:
 				reqControl.disableArchitectures(removeArchSet, self)
+
+		return True
 
 	@property
 	def rpmClass(self):

@@ -161,7 +161,7 @@ class SolverRepositoryCollection(object):
 			self.createRepositoryHandle(projectName, repoName, arch)
 
 	def discoverStagingProjects(self, client, codebase):
-		for projectName in codebase.sourceProjects:
+		for projectName in codebase.buildProjects:
 			stagings = client.listStagings(projectName, status = 1) or []
 			for info in stagings:
 				stagingId = info.name.split(':')[-1]

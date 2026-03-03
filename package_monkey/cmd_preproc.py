@@ -183,6 +183,7 @@ class SolverApplication(PreprocessApplicationBase):
 	def run(self):
 		self.ignoreErrors = self.opts.ignore_errors
 		self.traceDisambiguation = self.opts.trace_scenarios
+		self.pedantic = self.opts.pedantic
 		if self.opts.trace:
 			self.traceDisambiguation = True
 

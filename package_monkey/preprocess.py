@@ -378,14 +378,14 @@ class ArchSolver(object):
 		self._resolvedDependencies.append(result)
 
 		installRequest = self.InstallationRequest(self.pool, rpm)
-		if result.isAmbiguous:
+		if not result.isResolvable:
+			resolved = result
+		elif result.isAmbiguous:
 			# replace ambiguous resolutions with symbolic rpms and
 			# record valid choices
 			resolved = self.disambiguate(rpm, result)
 			if resolved is None:
 				self.reportDisambiguationFailure(result, self.errorReport)
-		elif not result.isResolvable:
-			resolved = result
 		elif not self.pedantic:
 			resolved = result
 		else:

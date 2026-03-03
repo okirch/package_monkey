@@ -109,6 +109,73 @@ class PreprocessApplicationBase(ApplicationBase):
 
 		return genericRpm
 
+	def displayUnresolvables(self, unresolvables):
+		pass
+
+	def updateCodebasePatch(self):
+		db = self.loadNewDB(withoutPatchDB = True)
+
+		unresolvables = self.getUnresolvables(db)
+		self.displayUnresolvables(unresolvables)
+
+		codebaseModel = self.modelDescription.codebaseModel
+		if codebaseModel.ghostRpms is None:
+			infomsg(f"Codebase does not define any ghosts. Not patching anything.")
+			return
+
+		ghosts = codebaseModel.ghostRpms.toRpms(db, create = True)
+
+		self.loadHints()
+		self.loadRepositories(withStaging = self.opts.staging)
+
+		for rpm in unresolvables:
+			rpm.prepareToPatch()
+
+		for arch in codebaseModel.architectures:
+			archSolver = self.createArchSolver(arch)
+
+			rpmsToSolve = []
+			for rpm in unresolvables:
+				if arch not in rpm.architectures:
+					continue
+				rpm = archSolver.nameToRpm(rpm.name)
+				assert(rpm is not None)
+				rpmsToSolve.append(rpm)
+
+			if not rpmsToSolve:
+				continue
+
+			for rpm in ghosts:
+				if arch not in rpm.architectures:
+					continue
+
+				versions = rpm.versions.get(arch)
+				assert(len(versions) == 1)
+				version = next(iter(versions))
+
+				rpm = archSolver.createDummySolvable(rpm.name, evr = f"{version}-1", type = rpm.TYPE_REGULAR)
+				rpm.isExternal = True
+				infomsg(f"created external {rpm}-{rpm.solvable.evr}")
+
+			archSolver.solve(progressMeter = None, rpms = rpmsToSolve)
+
+			for result in archSolver.resolvedRpms:
+				genericRpm = self.updateRpm(db, arch, result)
+
+		db.savePatch(self.codebaseData.patchPath, unresolvables.union(ghosts))
+
+	def getUnresolvables(self, db):
+		unresolvables = set()
+		for build in db.builds:
+			for rpm in build.binaries:
+				if rpm.isSynthetic:
+					continue
+
+				if rpm.unresolvables:
+					unresolvables.add(rpm)
+
+		return unresolvables
+
 class SolverApplication(PreprocessApplicationBase):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
@@ -158,7 +225,10 @@ class SolverApplication(PreprocessApplicationBase):
 
 		if self.errorReport:
 			self.errorReport.display()
-			return 1
+			if not self.opts.ignore_errors:
+				return 1
+
+		self.updateCodebasePatch()
 
 		return 0
 
@@ -446,68 +516,7 @@ class PatchApplication(PreprocessApplicationBase):
 		super().__init__(*args, **kwargs)
 
 	def run(self):
-		db = self.loadNewDB(withoutPatchDB = True)
-
-		unresolvables = self.getUnresolvables(db)
-		self.displayUnresolvables(unresolvables)
-
-		codebaseModel = self.modelDescription.codebaseModel
-		if codebaseModel.ghostRpms is None:
-			infomsg(f"Codebase does not define any ghosts. Not patching anything.")
-			return
-
-		ghosts = codebaseModel.ghostRpms.toRpms(db, create = True)
-
-		self.loadHints()
-		self.loadRepositories(withStaging = self.opts.staging)
-
-		for rpm in unresolvables:
-			rpm.prepareToPatch()
-
-		for arch in codebaseModel.architectures:
-			archSolver = self.createArchSolver(arch)
-
-			rpmsToSolve = []
-			for rpm in unresolvables:
-				if arch not in rpm.architectures:
-					continue
-				rpm = archSolver.nameToRpm(rpm.name)
-				assert(rpm is not None)
-				rpmsToSolve.append(rpm)
-
-			if not rpmsToSolve:
-				continue
-
-			for rpm in ghosts:
-				if arch not in rpm.architectures:
-					continue
-
-				versions = rpm.versions.get(arch)
-				assert(len(versions) == 1)
-				version = next(iter(versions))
-
-				rpm = archSolver.createDummySolvable(rpm.name, evr = f"{version}-1", type = rpm.TYPE_REGULAR)
-				rpm.isExternal = True
-				infomsg(f"created external {rpm}-{rpm.solvable.evr}")
-
-			archSolver.solve(progressMeter = None, rpms = rpmsToSolve)
-
-			for result in archSolver.resolvedRpms:
-				genericRpm = self.updateRpm(db, arch, result)
-
-		db.savePatch(self.codebaseData.patchPath, unresolvables.union(ghosts))
-
-	def getUnresolvables(self, db):
-		unresolvables = set()
-		for build in db.builds:
-			for rpm in build.binaries:
-				if rpm.isSynthetic:
-					continue
-
-				if rpm.unresolvables:
-					unresolvables.add(rpm)
-
-		return unresolvables
+		self.updateCodebasePatch()
 
 	def displayUnresolvables(self, unresolvables):
 		infomsg(f"Unresolvables:")

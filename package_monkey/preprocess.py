@@ -742,7 +742,7 @@ class ArchSolver(object):
 
 		validFor = self.disambiguateOnePackage(rpm, disambiguation)
 		if not validFor:
-			errormsg(f"Cannot disambiguate: {rpm}")
+			errormsg(f"Cannot disambiguate {rpm}")
 			ambiguousResult.failedAlternatives = disambiguation.failedAlternatives
 			return None
 
@@ -763,8 +763,9 @@ class ArchSolver(object):
 				rpms.add(symbolicRpm)
 				assert(symbolicRpm)
 
-			if len(rpms) > 1:
-				warnmsg(f"{rpm}: dependency {rd} resolves to multiple scenario packages: {' '.join(map(str, rpms))}")
+			# This warning no longer makes sense; the new code handles multiple scenarios just fine.
+#			if len(rpms) > 1:
+#				warnmsg(f"{rpm}: dependency {rd} resolves to multiple scenario packages: {' '.join(map(str, rpms))}")
 
 			if trace:
 				infomsg(f"  {rd}: replace with {' '.join(map(str, rpms))}, {' '.join(map(str, validFor))}")

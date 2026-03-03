@@ -767,7 +767,7 @@ class ArchSolver(object):
 				warnmsg(f"{rpm}: dependency {rd} resolves to multiple scenario packages: {' '.join(map(str, rpms))}")
 
 			if trace:
-				infomsg(f"  {dependency}: replace with {' '.join(map(str, rpms))}, {' '.join(map(str, validFor))}")
+				infomsg(f"  {rd}: replace with {' '.join(map(str, rpms))}, {' '.join(map(str, validFor))}")
 
 			rd.solutions = rpms
 			rd.acceptableAmbiguity = True

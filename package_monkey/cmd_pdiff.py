@@ -54,26 +54,34 @@ class BuildRecordBase(RecordBase):
 
 		return ret
 
+	def filterChangeList(self, changeList, requestedType):
+		result = []
+		for change in changeList:
+			if change.shouldDisplay(requestedType):
+				result.append(change)
+		return result
+
 	def render(self, formatter, requestedType = -1):
+		buildChanges = self.filterChangeList(self.buildChanges, requestedType)
+		rpmChanges = self.filterChangeList(self.rpmChanges, requestedType)
+
+		if not buildChanges and not rpmChanges:
+			return
+
 		if self.epic is None:
 			epicTag = "- NO EPIC -"
 		else:
 			epicTag = str(self.epic)
 
-		assert(bool(self))
-
 		buildTag = f"build {self.name}"
-		if self.buildChanges:
-			m = "; ".join(map(str, self.buildChanges))
+		if buildChanges:
+			m = "; ".join(map(str, buildChanges))
 			buildTag += f" ({m})"
 
-		if not self.rpmChanges:
+		if not rpmChanges:
 			formatter.next(epicTag, buildTag, "all rpms otherwise unchanged")
 		else:
-			for rpmChange in self.rpmChanges:
-				if not rpmChange.shouldDisplay(requestedType):
-					continue
-
+			for rpmChange in rpmChanges:
 				msg = str(rpmChange)
 				formatter.next(epicTag, buildTag, msg)
 
@@ -101,7 +109,7 @@ class BuildAddRecord(BuildRecordBase):
 	def __init__(self, build):
 		super().__init__(build.name, epic = build.epic)
 
-		self.buildChanges.append("newly added build")
+		self.noteBuildChange(TrivialRecord(self.changeType, "newly added build"))
 		if build.binaries:
 			for rpm in build.binaries:
 				self.noteRpmAddition(rpm)
@@ -114,7 +122,7 @@ class BuildRemoveRecord(BuildRecordBase):
 	def __init__(self, build):
 		super().__init__(build.name, epic = build.epic)
 
-		self.buildChanges.append("removed build")
+		self.noteBuildChange(TrivialRecord(self.changeType, "removed build"))
 		if build.binaries:
 			for rpm in build.binaries:
 				self.noteRpmRemoval(rpm)
@@ -172,7 +180,7 @@ class RpmMoveRecord(RpmAddRemoveRecordBase):
 	def __str__(self):
 		return self.toString(self.detail)
 
-class AttributeChangeRecord(object):
+class AttributeChangeRecord(RecordBase):
 	changeType = RecordBase.RECORD_CHANGE
 
 	def __init__(self, type, oldValue, newValue):
@@ -183,7 +191,7 @@ class AttributeChangeRecord(object):
 	def __str__(self):
 		return f"{self.type}: {self.oldValue} -> {self.newValue}"
 
-class SoversionChangeRecord(object):
+class SoversionChangeRecord(RecordBase):
 	changeType = RecordBase.RECORD_CHANGE
 
 	def __init__(self, oldName):

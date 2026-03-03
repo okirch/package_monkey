@@ -116,6 +116,73 @@ scenario product/release
         other:          ALP-dummy-release
 ```
 
-Just like with the OpenJDK scenario, packages requiring a release package will have that dependency replaced with
-``product/release``; and during the final stage of product composition, we will make sure that these requirements
-are satisfiable for at least one of these product scenarios.
+Just like with the OpenJDK scenario, packages requiring a release package will have that dependency
+replaced with ``product/release``; and during the final stage of product composition, we will make sure
+that these requirements are satisfiable for at least one of these product scenarios.
+
+## Ghost Packages
+
+By default, a primary objective of product composition is consistency; in the sense that the product
+codebase should not contain any rpms with unsatisifiable dependencies. However, there are exceptions:
+
+1. inclusion of a stub package like `mariadb-galera` that will only work when installing a third-party package
+  named `galera-4`
+2. inclusion of packages that we do not see in our build project(s), but which the product composer has
+  access to. A typical example would be the `tftpboot-agama-installer-*` packages.
+3. inclusion of packages that should be there in the final product, but which require bits that will only arrive
+  later during the development cycle (such as the CLI and SDK transparent container images for public cloud)
+4. during maintenance, inclusion of packages that depend on earlier builds of some other package.
+  A typical example of that would be kernel live patches, where a live patch RPM typically depends on something
+  like `kernel-default-16.0-5`, referencing an old kernel rpm released previously. Whereas the latest `kernel-default`
+  present in the `SLFO:Main` codebase would be `kernel-default-16.0-6` or later, rendering the live patch
+  package inaccessible to the resolver.
+
+The `slfo.yaml` file offers limited facilities to define /ghost/ packages that just exists to make the
+resolver happy, so that the composer can generate the desired output files. With the current implementation,
+you can handle cases 1, 2 and 3 above; the maintenance case 4 is not implemented yet.
+
+This is what the `ghosts` section in `slfo.yaml` could typically look like:
+
+```
+ghosts:
+ - tftpboot-agama-installer-SUSE_SLE_16.1-ppc64le: [ppc64le]
+ - tftpboot-agama-installer-SUSE_SLE_16.1-s390x: [s390x]
+ - tftpboot-agama-installer-SUSE_SLE_16.1-aarch64: [aarch64]
+ - tftpboot-agama-installer-SUSE_SLE_16.1-x86_64: [x86_64]
+
+```
+
+This defines four ghost rpms, each for a specific architecure. If you do not specify architecture
+constraints, the packages will be "created" for all architectures this codebase is built for.
+
+In a slightly more elaborate example, consider the transparent container images for public cloud tools:
+
+```
+ # These will come from SUSE:SLFO:Products:PublicCloud:Toolchain:*
+ # but it will usually take until the RC phase for them to show
+ # up. So let's put them here:
+ - aws-cli-image: [x86_64,aarch64]
+ - aws-cli-cmd: [x86_64,aarch64]
+ - aws-cli-image: [x86_64,aarch64]
+ - aws-sdk-image: [x86_64,aarch64]
+ - az-cli-image: [x86_64,aarch64]
+ - az-sdk-image: [x86_64,aarch64,version=0.1.9]
+ - google-sdk-image: [x86_64,aarch64]
+```
+
+As before, this defines a bunch of fake rpms for two architectures. The definition of `az-sdk-image`
+comes with a little twist, as `az-sdk-cmd` requires `az-sdk-image >= 0.1.9`. So in order to satisfy that
+dependency, we need to create our little ghost rpm with a specific version number, which we specify as
+an additional constraint along with the architectures.
+
+Note that ghost rpms will *only* get created if the requested rpm is not present in the codebase; if a
+real rpm of the given name already exists, the entry in the ghosts section is ignored.
+
+The contents of the ghosts section are not simple munged into the `codebase.db` file along with the rest
+of the codebase; instead, it will be used to create a file called `patch.db` that contains the results
+of using the ghost rpms with previously unresolvable rpms.
+
+There are two ways for creating `patch.db`. When the `prepare` command is executed, it will detect the
+presence of the `ghosts` section and create `patch.db` automatically. If you decide you need to add or
+remove ghosts, you can edit `slfo.yaml` and run the `monkey patch` command (which is considerably faster
+than re-running the complete `prepare` stage).

@@ -35,6 +35,15 @@ resolve their dependencies.
 If you want to learn more about the internals, and the format of ``hints.conf``, please
 consult [this section](prepare.md).
 
+## The ``patch`` command
+
+``monkey patch`` can be used to re-evaluate the ghosts section present in ``slfo.yaml``, as described in
+section [Ghost Packages](prepare.md#ghost-packages).  Normally, this happens transparently while running the ``prepare`` command.
+
+However, when experimenting with the ghosts section, re-running the complete prepare stage can be a bit
+boring. You can short-circuit that by using ``monkey patch``, which just re-evaluates those rpms that
+have dependencies that were previously unresolvable.
+
 ## The ``classify`` command
 
 ``monkey classify`` performs the classification of the codebase, using the model definition from 

@@ -828,7 +828,7 @@ class GenericBuild(object):
 	@property
 	def buildFailures(self):
 		for arch, status in self._buildStatus.items():
-			if status not in ('succeeded', 'excluded'):
+			if status not in ('succeeded', 'excluded', 'blocked', 'scheduled', 'building'):
 				yield arch, status
 
 	@property

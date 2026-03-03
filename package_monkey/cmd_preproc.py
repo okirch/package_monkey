@@ -179,23 +179,31 @@ class SolverApplication(PreprocessApplicationBase):
 		for result in archSolver.resolvedRpms:
 			self.updateRpm(db, arch, result)
 
-	def displayBuildsWithVersionDrift(self, db):
+	def displayBuildFailures(self, db):
 		tableFormatter = TableFormatter(["name"] + list(map(str, self.architectures)),
-					[30, 12, 12, 12, 12, 12, 12])
+					[50, 12, 12, 12, 12, 12, 12])
 		for build in db.builds:
-			if not build.successful:
-				status = list(f"{arch}={status}" for (arch, status) in build.buildFailures)
-				warnmsg(f"{build} has build failures: {' '.join(status)}")
+			if build.successful:
 				continue
 
-			if build.isSynthetic:
+			row = tableFormatter.addRow(build.name)
+			for arch, status in build.buildFailures:
+				row[arch] = status
+
+		tableFormatter.render("The following builds seem to be failing", displayfn = infomsg)
+
+	def displayBuildsWithVersionDrift(self, db):
+		tableFormatter = TableFormatter(["name"] + list(map(str, self.architectures)),
+					[50, 12, 12, 12, 12, 12, 12])
+		for build in db.builds:
+			if not build.successful or build.isSynthetic:
 				continue
 
 			if self.hints and build.name in self.hints.buildNoVersionCheckSet:
 				continue
 
 			for rpm in build.rpms:
-				if not rpm.isSynthetic and not rpm.versions.common:
+				if not rpm.isSynthetic and rpm.versions and not rpm.versions.common:
 					row = tableFormatter.addRow(rpm.name)
 					for arch, vset in rpm.versions.items():
 						row[arch] = f"{' '.join(vset)}"
@@ -270,6 +278,7 @@ class SolverApplication(PreprocessApplicationBase):
 						infomsg(f"{genericRpm} is unresolvable on {arch} - disabling package on this architecture")
 					genericRpm.architectures.remove(arch)
 
+		self.displayBuildFailures(db)
 		self.displayBuildsWithVersionDrift(db)
 
 		nAmbiguityErrors = 0

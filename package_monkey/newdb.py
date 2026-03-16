@@ -619,6 +619,8 @@ class GenericRpm(RpmBase):
 				infomsg(f"   label hints {labelHints}")
 
 		self.labelHints = labelHints
+		labelHints.inuse = True
+
 		if labelHints is not None:
 			if self.new_class is not None and labelHints.klass is not self.new_class:
 				errormsg(f"XXX: {self}: my klass={self.new_class}; cannot overwrite with {labelHints.klass}")

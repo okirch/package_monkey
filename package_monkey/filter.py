@@ -871,12 +871,13 @@ class Classification(object):
 			self.excludeArch = None
 			self.includeArch = None
 
+			self.inuse = False
+
 		def clone(self, **kwargs):
 			return Classification.LabelHints(self, **kwargs)
-			return result
 
 		def unshare(self):
-			if not self.potentiallyShared:
+			if not self.potentiallyShared and not self.inuse:
 				return self
 
 			return self.clone(potentiallyShared = False)
@@ -898,6 +899,8 @@ class Classification(object):
 			self._label = value
 
 		def overrideFlavor(self, epicFlavor):
+			assert(not self.inuse)
+
 			assert(epicFlavor.type is Classification.TYPE_EXTRA)
 			assert(epicFlavor.fromAutoFlavor is not None)
 			assert(not self.potentiallyShared)

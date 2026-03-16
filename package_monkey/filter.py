@@ -1243,12 +1243,12 @@ class PackageLabelling(object):
 			buildHints = rpm.new_build.labelHints
 
 			if buildHints is not None:
-				if buildHints.options:
-					warnmsg(f"EXPERIMENTAL: using class/option hints in build pattern for {rpm.new_build}")
-					extraHints = Classification.LabelHints(label = buildHints.epic)
+				if buildHints.options or buildHints.klass:
+					extraHints = Classification.LabelHints(label = buildHints.epic, layer = buildHints.layer)
 					extraMatch = PackageLabelling.Match("", 'hints', 6, extraHints)
 
 					extraHints.options = buildHints.options
+					extraHints.klass = buildHints.klass
 					matches.append(extraMatch)
 
 			matchFilter = self.MatchFilter(rpm.new_build)

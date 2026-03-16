@@ -789,6 +789,12 @@ class GenericBuild(object):
 		   labelHints.excludeArch:
 			warnmsg(f"{self} ignoring architecture overrides from label hints")
 
+		# I'm still displaying these messages because the syntax may be a bit misleading/surprising for these things.
+		if labelHints.klass:
+			infomsg(f"EXPERIMENTAL: using class={labelHints.klass} hints in build pattern for {self}")
+		if labelHints.options:
+			infomsg(f"EXPERIMENTAL: using option={labelHints.options} hints in build pattern for {self}")
+
 	@property
 	def uniformArchitectures(self):
 		archSet = archRegistry.fullset

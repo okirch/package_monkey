@@ -796,6 +796,19 @@ class ArchSolver(object):
 				disambiguation.failedAlternatives.append(installRequest)
 
 				if trace:
+					infomsg(f"Trouble with {installRequest}:")
+					for problem in installRequest.problems:
+						for item in problem:
+							infomsg(f"{item}")
+							if isinstance(item, problem.NothingProvides):
+								infomsg(f"  NothingProvides dep={item.dep}")
+							elif isinstance(item, problem.Requires):
+								infomsg(f"  Requires dep={item.dep} rpm={item.rpm}")
+							elif isinstance(item, problem.Conflict):
+								infomsg(f"  Conflict rpms={' '.join(map(str, item.rpms))}")
+							else:
+								infomsg(f"  Unexpected rpm install problem of type {type(item)}")
+
 					infomsg(f"{installRpm}: unresolvable conflict in {solution.selectedVersions}")
 					installRequest.displayProblems()
 				continue
@@ -949,6 +962,13 @@ class ArchSolver(object):
 
 		if result.failedAlternatives:
 			for installRequest in result.failedAlternatives:
+				# Note: installRequest.problems is a list of Problem objects; each problem
+				# can be iterated over, with items being
+				#   a) instance of problem.NothingProvides
+				#	.rpm is the requiring rpm, .dep is the dependency string
+				#   b) a pair of instances of problem.Requires (.rpm and .dep like above),
+				#	and problem.Conflict, the latter having a .rpms member that is
+				#	a set of packages that conflict.
 				errorReport.add(f"   Failed alternative {installRequest}")
 				for problem in installRequest.problems:
 					indent = "  "

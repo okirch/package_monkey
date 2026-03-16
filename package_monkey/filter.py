@@ -1463,6 +1463,79 @@ class LabelTreeValidator(object):
 
 		infomsg(f"Created label tree containing {len(classificationScheme.allEpics)} epics")
 
+class SubsetMemberResolver(object):
+	def __init__(self, subsets = None):
+		self.epicMap = {}
+
+		for subset in subsets or []:
+			self.addSubset(subset)
+
+		self.rpmMap = {}
+		self.builds = []
+
+	def addSubset(self, subset):
+		epic = subset.epic
+		if epic not in self.epicMap:
+			self.epicMap[epic] = []
+
+		self.epicMap[epic].append(subset)
+
+	def resolveBuild(self, build):
+		def maybeUpdateRpm(rpm, m):
+			have = self.rpmMap[rpm]
+			if have is None or have.priority < m.priority:
+				self.rpmMap[rpm] = m
+
+		def maybeUpdateBuild(build, m):
+			for rpm in build.binaries:
+				if not m.classes or rpm.new_class in m.classes:
+					maybeUpdateRpm(rpm, m)
+
+		epic = build.new_epic
+		if epic not in self.epicMap:
+			return
+
+		for rpm in build.binaries:
+			self.rpmMap[rpm] = None
+		self.builds.append(build)
+
+		for subset in self.epicMap[epic]:
+			m = subset.bestBuildRule(build)
+			if m is not None:
+				maybeUpdateBuild(build, m)
+
+			for rpm in build.binaries:
+				m = subset.bestRpmRule(rpm)
+				if m is not None:
+					assert(m.subset is subset)
+					maybeUpdateRpm(rpm, m)
+
+		# Propagate the build and rpm trace flags to the subset
+		for rpm in build.binaries:
+			m = self.rpmMap[rpm]
+			if m is not None and (build.trace or rpm.trace):
+				m.subset.trace = True
+
+	@property
+	def result(self):
+		for rpm, m in self.rpmMap.items():
+			if m is not None:
+				yield rpm, m.subset
+
+	def showResult(self):
+		from .util import OptionalCaption
+
+		infomsg(f"Subset membership results:")
+		for build in self.builds:
+			section = OptionalCaption(f"  {build}:")
+			for rpm in build.binaries:
+				m = self.rpmMap[rpm]
+				if m is None:
+					if rpm.trace:
+						section(f"   - {rpm}: NO MATCH")
+					continue
+				section(f"   - {rpm}: {m.subset}")
+
 class ClassificationSchemeBuilder(object):
 	class LateBinding(object):
 		def __init__(self, labelName, labelType, context):
@@ -1659,6 +1732,7 @@ class ClassificationSchemeBuilder(object):
 		self.classificationScheme = scheme or Classification.Scheme()
 		self.validScenarios = scenarios
 		self.packageLabelling = PackageLabelling()
+		self.subsetResolver = SubsetMemberResolver()
 		self._lateLabelBindings = []
 		self._lateFilterBindings = []
 
@@ -1883,7 +1957,12 @@ class ClassificationSchemeBuilder(object):
 			build.setLabelHints(labelHints)
 
 	def defineSubset(self, label):
-		return self.classificationScheme.defineSubset(label)
+		subset = self.classificationScheme.defineSubset(label)
+		self.subsetResolver.addSubset(subset)
+		return subset
+
+	def addSubsetMatch(self, m):
+		self.subsetResolver.addMatch(m)
 
 	class SubsetDependencyResolver(object):
 		def __init__(self, subsets):
@@ -1955,29 +2034,34 @@ class ClassificationSchemeBuilder(object):
 		defaultClass = self.classificationScheme.defaultClass
 
 		for subset in self.classificationScheme.subsets:
-			epic = subset.epic
-
 			subset.buildClassClosure(self.classificationScheme)
 
-			for build in db.builds:
-				if build.new_epic is epic:
-					subset.resolveBuild(build)
-					if build.trace:
-						subset.trace = True
+		memberResolver = self.subsetResolver
 
-			for rpm in subset.rpms:
-				hints = rpm.unshareLabelHints()
-				if hints is None:
-					klass = rpm.new_class or defaultClass
-					hints = Classification.LabelHints(label = klass, klass = klass, potentiallyShared = None)
-					rpm.setLabelHints(hints)
+		for build in db.builds:
+			memberResolver.resolveBuild(build)
 
-				if subset.label.type is Classification.TYPE_EXTRA:
-					# try to override the flavor
-					hints.overrideFlavor(subset.label)
-				else:
-					assert(subset.label.type is Classification.TYPE_BUILD_OPTION)
-					hints.definingBuildOption = subset.label
+		# memberResolver.showResult()
+
+		for rpm, subset in memberResolver.result:
+			hints = rpm.labelHints
+			if hints is not None:
+				hints = hints.unshare()
+				if hints.klass is None:
+					hints.klass = rpm.new_class
+			else:
+				klass = rpm.new_class or defaultClass
+				hints = Classification.LabelHints(label = klass, klass = klass, potentiallyShared = None)
+
+			if subset.label.type is Classification.TYPE_EXTRA:
+				hints.overrideFlavor(subset.label)
+			elif subset.label.type is Classification.TYPE_BUILD_OPTION:
+				hints.definingBuildOption = subset.label
+			else:
+				raise Exception(f"{subset}: bad label type in label {subset.label.describe()}")
+
+			rpm.setLabelHints(hints)
+			subset.rpms.add(rpm)
 
 		dependencyResolver = self.SubsetDependencyResolver(self.classificationScheme.subsets)
 		dependencyResolver.resolveAll()

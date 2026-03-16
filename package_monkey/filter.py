@@ -1245,7 +1245,11 @@ class PackageLabelling(object):
 			if buildHints is not None:
 				if buildHints.options or buildHints.klass:
 					extraHints = Classification.LabelHints(label = buildHints.epic, layer = buildHints.layer)
-					extraMatch = PackageLabelling.Match("", 'hints', 6, extraHints)
+
+					# Note: priority 5 and a pattern of "" (ie length 0) result in a precedence of 500,
+					# placing it *after* any other epic level rules defined by the user, but *before*
+					# any class rules like "*-devel", which usually have priority 6 or higher.
+					extraMatch = PackageLabelling.Match("", 'hints', 5, extraHints)
 
 					extraHints.options = buildHints.options
 					extraHints.klass = buildHints.klass

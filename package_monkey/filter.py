@@ -1032,17 +1032,32 @@ class Classification(object):
 			assert(hintOption is None or self.autoFlavor is None)
 
 	class Subset(object):
+		TYPE_BUILD	= 0
+		TYPE_RPM	= 1
+
 		class MemberMatch(object):
-			# type is either 'build' or 'rpm'
-			def __init__(self, type, pattern):
+			# type is either 0 for build patterns or 1 for rpm patterns
+			def __init__(self, type, pattern, subset):
+				self.exclude = False
+				if pattern.startswith('!'):
+					pattern = pattern[1:]
+					self.exclude = True
+
 				self.type = type
+				self.subset = subset
 				self.pattern = pattern
+				self.priority = len(pattern)
 				self.classes = None
 
 			def addClass(self, klass):
+				if self.type == 0 and self.exclude:
+					raise Exception(f"Bad subset rule: exclusion pattern \"!{self.pattern}\" with class filter not allowed")
 				if self.classes is None:
 					self.classes = Classification.createLabelSet()
 				self.classes.add(klass)
+
+			def match(self, name):
+				return fnmatch.fnmatchcase(name, self.pattern)
 
 		def __init__(self, label):
 			self.label = label
@@ -1062,13 +1077,14 @@ class Classification(object):
 		def __str__(self):
 			return self.label.describe()
 
+		# Yes, we create circular references here. Sue me.
 		def addBuildMatch(self, pattern):
-			match = self.MemberMatch('build', pattern)
+			match = self.MemberMatch(self.TYPE_BUILD, pattern, self)
 			self.buildMatches.append(match)
 			return match
 
 		def addRpmMatch(self, pattern):
-			match = self.MemberMatch('rpm', pattern)
+			match = self.MemberMatch(self.TYPE_RPM, pattern, self)
 			self.rpmMatches.append(match)
 			return match
 
@@ -1081,6 +1097,31 @@ class Classification(object):
 			for m in self.buildMatches + self.rpmMatches:
 				if m.classes is not None:
 					m.classes = classOrder.downwardClosureForSet(m.classes)
+
+		def bestBuildRule(self, build):
+			for m in self.buildMatches:
+				if not fnmatch.fnmatchcase(build.name, m.pattern):
+					continue
+
+				if m.exclude:
+					assert(not m.classes)
+					return None
+
+				return m
+			return None
+
+		def bestRpmRule(self, rpm):
+			for m in self.rpmMatches:
+				if not fnmatch.fnmatchcase(rpm.name, m.pattern):
+					continue
+
+				if m.classes is not None and rpm.new_class not in m.classes:
+					continue
+
+				if m.exclude:
+					return None
+				return m
+			return None
 
 		def resolveBuild(self, build):
 			assert(build.new_epic is self.epic)

@@ -416,7 +416,6 @@ class Classification(object):
 			self.testClass = self.createLabel('test', Classification.TYPE_CLASS)
 			self.unresolvableClass = self.createLabel('unresolved', Classification.TYPE_CLASS)
 
-			self._subsets = {}
 			self.policy = None
 
 		@property
@@ -772,18 +771,6 @@ class Classification(object):
 
 				best = autoFlavor
 			return best
-
-		def defineSubset(self, label):
-			if label in self._subsets:
-				raise Exception(f"Refusing to redefine subset {label}")
-
-			subset = Classification.Subset(label)
-			self._subsets[label] = subset
-			return subset
-
-		@property
-		def subsets(self):
-			return self._subsets.values()
 
 		@profiling
 		def finalize(self):
@@ -1443,21 +1430,31 @@ class LabelTreeValidator(object):
 		infomsg(f"Created label tree containing {len(classificationScheme.allEpics)} epics")
 
 class SubsetMemberResolver(object):
-	def __init__(self, subsets = None):
+	def __init__(self):
 		self.epicMap = {}
 
-		for subset in subsets or []:
-			self.addSubset(subset)
-
+		self._subsets = {}
 		self.rpmMap = {}
 		self.builds = []
 
-	def addSubset(self, subset):
+	def defineSubset(self, label):
+		if label in self._subsets:
+			raise Exception(f"Refusing to redefine subset {label}")
+
+		subset = Classification.Subset(label)
+		self._subsets[label] = subset
+
 		epic = subset.epic
 		if epic not in self.epicMap:
 			self.epicMap[epic] = []
 
 		self.epicMap[epic].append(subset)
+
+		return subset
+
+	@property
+	def subsets(self):
+		return self._subsets.values()
 
 	def resolveBuild(self, build):
 		def maybeUpdateRpm(rpm, m):
@@ -1936,12 +1933,7 @@ class ClassificationSchemeBuilder(object):
 			build.setLabelHints(labelHints)
 
 	def defineSubset(self, label):
-		subset = self.classificationScheme.defineSubset(label)
-		self.subsetResolver.addSubset(subset)
-		return subset
-
-	def addSubsetMatch(self, m):
-		self.subsetResolver.addMatch(m)
+		return self.subsetResolver.defineSubset(label)
 
 	class SubsetDependencyResolver(object):
 		def __init__(self, subsets):
@@ -2012,10 +2004,10 @@ class ClassificationSchemeBuilder(object):
 	def resolveSubsets(self, db):
 		defaultClass = self.classificationScheme.defaultClass
 
-		for subset in self.classificationScheme.subsets:
-			subset.buildClassClosure(self.classificationScheme)
-
 		memberResolver = self.subsetResolver
+
+		for subset in memberResolver.subsets:
+			subset.buildClassClosure(self.classificationScheme)
 
 		for build in db.builds:
 			memberResolver.resolveBuild(build)
@@ -2042,11 +2034,11 @@ class ClassificationSchemeBuilder(object):
 			rpm.setLabelHints(hints)
 			subset.rpms.add(rpm)
 
-		dependencyResolver = self.SubsetDependencyResolver(self.classificationScheme.subsets)
+		dependencyResolver = self.SubsetDependencyResolver(memberResolver.subsets)
 		dependencyResolver.resolveAll()
 
 		if True:
-			for subset in self.classificationScheme.subsets:
+			for subset in memberResolver.subsets:
 				if not subset.trace:
 					continue
 

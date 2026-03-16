@@ -965,13 +965,6 @@ class FilterLoader(MonkeyConfigLoader):
 			if not self.label.restrictArchitectures(archSet):
 				errormsg(f"{self.label}: ignoring exclude_architecture specification")
 
-		def addBinaryPackageFilter(self, pattern):
-			if pattern.startswith('promise:') and '?' not in pattern and '*' not in pattern:
-				name = pattern[8:]
-				self.definePromise(name)
-
-			self.schemeBuilder.addLateRpmFilterRuleBinding(pattern, self.labelHints)
-
 		def addBuildFilter(self, pattern):
 			self.schemeBuilder.addLateBuildFilterRuleBinding(pattern, self.labelHints)
 
@@ -984,7 +977,7 @@ class FilterLoader(MonkeyConfigLoader):
 			else:
 				super().processKeyValue(key, value)
 
-		def processPackages(self, nameList):
+		def processBuilds(self, nameList):
 			for name in nameList:
 				self.addBuildFilter(name)
 
@@ -1003,20 +996,18 @@ class FilterLoader(MonkeyConfigLoader):
 
 	class TopicScopeProcessor(LabelProcessorBase):
 		def processKeyValue(self, key, value):
-			# TODO: drop support for 'packages' keyword
-			if key in ('packages', 'builds'):
-				self.processPackages(self.context.asStringList(key, value))
-			# TODO: drop support for 'hints' keyword
-			elif key in ('hints', 'rpms'):
-				self.processHints(self.context.asStringList(key, value))
+			if key == 'builds':
+				self.processBuilds(self.context.asStringList(key, value))
+			elif key == 'rpms':
+				self.processRpms(self.context.asStringList(key, value))
 			else:
 				super().processKeyValue(key, value)
 
-		def processPackages(self, nameList):
+		def processBuilds(self, nameList):
 			for name in nameList:
 				self.addBuildFilter(name)
 
-		def processHints(self, data):
+		def processRpms(self, data):
 			for pattern in data:
 				if pattern.startswith('promise:') and '?' not in pattern and '*' not in pattern:
 					name = pattern.split()[0]
@@ -1115,7 +1106,7 @@ class FilterLoader(MonkeyConfigLoader):
 		def processLayer(self, name):
 			self.schemeBuilder.addLateLayerBinding(self.label, name, self.context)
 
-		def processPackages(self, nameList):
+		def processBuilds(self, nameList):
 			for name in nameList:
 				self.addBuildFilter(name)
 

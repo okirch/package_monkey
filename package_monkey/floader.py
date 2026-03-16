@@ -802,8 +802,6 @@ class FilterLoader(MonkeyConfigLoader):
 			self.labelHints = labelHints
 
 		def process(self, data):
-			labelName = None
-			labelType = None
 			suffixList = []
 			prefixList = []
 			binaryList = []
@@ -812,14 +810,9 @@ class FilterLoader(MonkeyConfigLoader):
 			labelHints.priority = 6
 
 			for fieldName, fieldValue in data.items():
-				if fieldName == 'class':
-					assert(type(fieldValue) is str)
-					labelName = fieldValue
-					labelType = Classification.TYPE_CLASS
-				elif fieldName == 'option':
-					assert(type(fieldValue) is str)
-					labelName = fieldValue
-					labelType = Classification.TYPE_AUTOFLAVOR
+				if fieldName in ('class', 'option'):
+					# already processed by caller
+					pass
 				elif fieldName == 'priority':
 					labelHints.priority = int(fieldValue)
 				elif fieldName == 'packagesuffixes':
@@ -831,29 +824,14 @@ class FilterLoader(MonkeyConfigLoader):
 				else:
 					raise Exception(f"Bad field '{fieldName}' in definition of role {self.name}")
 
-			if labelName is None and labelHints.priority < 10:
-				raise Exception(f"Definition of role {self.name} does not specify a label but has priority != 10")
-
 			for suffix in suffixList:
 				self.addRoleMatch(f"*-{suffix}", labelHints)
 			for prefix in prefixList:
 				self.addRoleMatch(f"{prefix}-*", labelHints)
 
 			for pattern in binaryList:
-				labelHints = self.labelHints
-
-				words = pattern.split()
-				if len(words) > 1:
-					pattern = words.pop(0)
-					while words:
-						w = words.pop(0)
-						if '=' not in w:
-							raise Exception(f"bad modifier syntax in definition of {role}: {w} (expecting key=value)")
-						key, value = w.split('=')
-						if key == 'priority':
-							labelHints = self.labelHints.clone(priority = int(value))
-						else:
-							raise Exception(f"unsupported modifier in definition of {role}: {w}")
+				if len(pattern.split()) > 1:
+					raise Exception(f"role {role}: bad modifiers in rpm pattern \"{pattern}\"")
 
 				self.addRoleMatch(pattern, labelHints)
 

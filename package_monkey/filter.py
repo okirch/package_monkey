@@ -1123,30 +1123,6 @@ class Classification(object):
 				return m
 			return None
 
-		def resolveBuild(self, build):
-			assert(build.new_epic is self.epic)
-
-			for m in self.buildMatches:
-				if not fnmatch.fnmatchcase(build.name, m.pattern):
-					continue
-				if m.classes is None:
-					self.rpms.update(build.binaries)
-				else:
-					for rpm in build.binaries:
-						if rpm.new_class in m.classes:
-							self.rpms.add(rpm)
-
-			for m in self.rpmMatches:
-				for rpm in build.binaries:
-					if not fnmatch.fnmatchcase(rpm.name, m.pattern):
-						continue
-
-					if m.classes is not None and \
-					   rpm.new_class not in m.classes:
-						continue
-
-					self.rpms.add(rpm)
-
 # This can be used, for example, to map certain class labels to some other class
 class LabelMapping(object):
 	def __init__(self, name):

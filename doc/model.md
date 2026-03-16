@@ -500,3 +500,40 @@ and start a discussion; or we could define a global build option ``bluez`` that 
 Bluetooth support provided by bluez. In this case, defining an extra is definitely a hackish workaround, but
 it does the trick. And if you feel it's worth it, you can explicitly include this extra in your product by
 referencing it from the product composition file.
+
+### Using wildcards in extras and options
+
+You can also use shell pattern matching in the definition of subsets. Consider the following example:
+
+```
+ UBoot:
+    builds:
+     - u-boot:*
+
+    extras:
+      raspberry:
+        rpms:
+	 - u-boot-rpi*
+
+      other:
+        rpms:
+	 - "!u-boot-tools"
+	 - u-boot-*
+
+    rpms:
+     - u-boot-tools default
+```
+
+This will place `u-boot-tools` in `UBoot` itself; and `u-boot-rpi3` and `u-boot-rpi4` (and other,
+future rpms that match the pattern) into `UBoot+raspberry`. All other u-boot packages will end up in
+`UBoot+other`, giving you a convenient way to ignore them in your product composition.
+
+Some notes on the use of the pattern `!u-boot-tools`: The leading exclamation mark negates the pattern,
+causing any rpms that match this pattern to /not/ be included in this subset. However, with `!` being
+a somehow magic character in YAML, you need to quote the string to prevent the YAML parser of getting
+tangled up in its shoestrings and tripping over.
+
+As this example illustrates, patterns do "the right thing" across different subsets of an epic. In this
+example, `u-boot-rpi4` will end up in the `raspberry` subset rather than `other`, even though the name
+is matched by both both the `u-boot-rpi*` and the `u-boot-*` pattern, respectively. However, the former
+pattern wins because it is longer than the latter.

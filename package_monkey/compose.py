@@ -799,6 +799,8 @@ class YamlLifecycleProducer(YamlMultiDictProducerBase):
 			self.produceLifecycle(parent, view.defaultLifecycle, view.defaultRpms)
 
 		for lifecycle, rpms in view:
+			if lifecycle is view.defaultLifecycle:
+				continue
 			self.produceLifecycle(parent, lifecycle, rpms)
 
 	def produceProductInfo(self, parent, product):

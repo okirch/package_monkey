@@ -179,19 +179,6 @@ class NewDB(object):
 				for req in rpm.solutions.raw_get(arch).difference(commonRequires):
 					req.requiredBy.add(arch, rpm)
 
-	def lookupRequiredBy(self, rpm):
-		if self._reverseDependencyCache is None:
-			self._reverseDependencyCache = {}
-			for tmpRpm in self.rpms:
-				for dep in tmpRpm.enumerateRequiredRpms():
-					provSet = self._reverseDependencyCache.get(dep)
-					if provSet is None:
-						provSet = set()
-						self._reverseDependencyCache[dep] = provSet
-					provSet.add(tmpRpm)
-
-		return self._reverseDependencyCache.get(rpm) or set()
-
 	class ParsedPromise(object):
 		def __init__(self, name, rpm = None):
 			assert(name.startswith('promise:'))
@@ -209,20 +196,6 @@ class NewDB(object):
 
 		def __eq__(self, other):
 			return self.name == other.name
-
-	def lookupPromisedTo(self, rpm):
-		if self._promiseCache is None:
-			self.buildPromiseCache()
-
-		result = []
-
-		pset = self._promiseCache.get(rpm)
-		for promise in pset or []:
-			promiseRequiredBy = self.lookupRequiredBy(promise.rpm)
-			if promiseRequiredBy:
-				result.append((promise, promiseRequiredBy))
-
-		return result
 
 	def buildPromiseCache(self):
 		self._promiseCache = {}

@@ -15,12 +15,6 @@ class EpicQueryApplication(ApplicationBase):
 		super().__init__(name, *args, **kwargs)
 
 	def run(self):
-		self.verbosityLevel = 1
-		if self.opts.terse:
-			self.verbosityLevel = 0
-		if self.opts.verbose:
-			self.verbosityLevel = 2
-
 		query = self.createQuery(QueryContext(self))
 
 		epics = getattr(self.opts, 'epics', [])
@@ -44,6 +38,12 @@ class QueryContext(object):
 			self.verbosityLevel = 0
 		if application.opts.verbose:
 			self.verbosityLevel = 2
+
+		self.displayEmptyBuilds = False
+		try:
+			self.displayEmptyBuilds = application.opts.display_empty_builds
+		except:
+			pass
 
 		self.db = application.loadDBForSnapshot()
 
@@ -178,6 +178,9 @@ class ShowQuery(EpicQueryBase):
 			infomsg("")
 
 		for build in sorted(builds, key = str):
+			if not build.rpms and not self.context.displayEmptyBuilds:
+				continue
+
 			infomsg(f"   {build}")
 			for rpm in sorted(build.rpms, key = str):
 				hints = rpm.labelHints

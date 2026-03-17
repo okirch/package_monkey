@@ -245,6 +245,8 @@ class EpicShowCommand(GenericSubcommand):
 	LOG_USE_LATE_STDOUT = True
 
 	def registerArguments(self, args):
+		args.add_argument('--display-empty-builds', action = 'store_true',
+				help = 'Builds that do not generate rpms are usually not display. This option forces them to be shown.')
 		args.add_argument(dest = 'epics', metavar = 'EPICS', nargs = '*',
 				help = 'list of epics or layers to query')
 

@@ -65,8 +65,7 @@ class PackageInfoApplication(CommonInfoApplication):
 				continue
 
 			for rpm in rpmList:
-				obsBuild = db.lookupBuildForRpm(rpm)
-				self.renderOneRpm(rpm, obsBuild)
+				self.renderOneRpm(rpm, rpm.new_build)
 
 class BuildInfoApplication(CommonInfoApplication):
 	def processQuery(self, db, nameList):

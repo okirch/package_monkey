@@ -60,9 +60,7 @@ class NewDB(object):
 		self.userVersion = None
 		self.downloadTimestamp = None
 
-		self._rpmToBuildCache = None
 		self._buildProvidesCache = False
-		self._promiseCache = None
 
 	def addArchitecture(self, arch):
 		self.architectures.add(arch)
@@ -141,21 +139,6 @@ class NewDB(object):
 	def promisedItems(self):
 		return self._promises.items()
 
-	def lookupBuildForRpm(self, rpm):
-		if rpm.new_build is not None:
-			return rpm.new_build
-		if self._rpmToBuildCache is None:
-			self._rpmToBuildCache = {}
-			for build in self.builds:
-				for tmpRpm in build.rpms:
-					if tmpRpm in self._rpmToBuildCache:
-						errormsg(f"{tmpRpm} belongs to several builds: {self._rpmToBuildCache[tmpRpm]} and {build}")
-						continue
-
-					self._rpmToBuildCache[tmpRpm] = build
-
-		return self._rpmToBuildCache.get(rpm)
-
 	def enableProvidesLookups(self):
 		if self._buildProvidesCache:
 			return
@@ -178,39 +161,6 @@ class NewDB(object):
 			for arch in rpm.architectures:
 				for req in rpm.solutions.raw_get(arch).difference(commonRequires):
 					req.requiredBy.add(arch, rpm)
-
-	class ParsedPromise(object):
-		def __init__(self, name, rpm = None):
-			assert(name.startswith('promise:'))
-			self.name = name[8:]
-			self.rpm = rpm
-
-			assert(':' not in self.name)
-			self.arch = None
-
-		def __str__(self):
-			return f"promise:{self.name}"
-
-		def __hash__(self):
-			return hash(self.name)
-
-		def __eq__(self, other):
-			return self.name == other.name
-
-	def buildPromiseCache(self):
-		self._promiseCache = {}
-		for rpm in self.rpms:
-			if rpm.type != RpmBase.TYPE_PROMISE:
-				continue
-
-			promise = self.ParsedPromise(rpm.name, rpm)
-			realRpm = self.lookupRpm(promise.name)
-			assert(realRpm is not None)
-
-			try:
-				self._promiseCache[realRpm].add(promise)
-			except:
-				self._promiseCache[realRpm] = set((promise, ))
 
 	def saveRpm(self, genericRpm, write):
 		def writeDictOfSets(pfx, dos, archSet):

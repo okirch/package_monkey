@@ -805,6 +805,7 @@ class Classification(object):
 			self.options = options or Classification.createLabelSet()
 			self.klass = klass
 			self.scenarioBinding = scenarioBinding
+			self.lifecycleID = None
 
 			if parent is not None:
 				if self.label is None:
@@ -836,6 +837,9 @@ class Classification(object):
 
 				if self.scenarioBinding is None:
 					self.scenarioBinding = parent.scenarioBinding
+
+				if self.lifecycleID is None:
+					self.lifecycleID = parent.lifecycleID
 
 			if label is not None:
 				if label.type is Classification.TYPE_LAYER:
@@ -920,6 +924,8 @@ class Classification(object):
 				attrs.append(f"definingOption={self.definingBuildOption}")
 			if self.klass is not None:
 				attrs.append(f"klass={self.klass}")
+			if self.lifecycleID is not None:
+				attrs.append(f"lifecycle={self.lifecycleID}")
 			if self.options:
 				attrs.append(f"options=<{self.options}>")
 			if self.scenarioBinding is not None:
@@ -952,6 +958,9 @@ class Classification(object):
 			if m.isPrivate:
 				self.isPrivate = True
 
+			if m.lifecycleID is not None:
+				self.lifecycleID = m.lifecycleID
+
 			# This needs to happen last, as the other attributes set
 			# by the match are supposed to override
 			if m.labelHints is not None:
@@ -971,6 +980,8 @@ class Classification(object):
 				self.definingBuildOption = other.definingBuildOption
 			if self.klass is None:
 				self.klass = other.klass
+			if self.lifecycleID is None:
+				self.lifecycleID = other.lifecycleID
 			if self.autoFlavor is None:
 				self.autoFlavor = other.autoFlavor
 
@@ -1149,6 +1160,7 @@ class PackageLabelling(object):
 			self.klass = None
 			self.splitOkay = False
 			self.isPrivate = False
+			self.lifecycleID = None
 
 			self.labelHints = None
 
@@ -1674,6 +1686,8 @@ class ClassificationSchemeBuilder(object):
 						m.klass = classificationScheme.nameToTopicClass(argValue)
 					elif argName == 'option':
 						m.options.append(classificationScheme.nameToBuildOption(argValue))
+					elif argName == 'lifecycle':
+						m.lifecycleID = str(argValue)
 					elif argName == 'arch':
 						# arch=s390x,ppc64le
 						labelHints.overrideArch = ArchSet(argValue.split(','))

@@ -821,6 +821,8 @@ class FilterLoader(MonkeyConfigLoader):
 					prefixList = fieldValue
 				elif fieldName in ('binaries', 'rpms'):
 					binaryList = fieldValue
+				elif fieldName == 'lifecycle':
+					labelHints.lifecycleID = str(fieldValue)
 				else:
 					raise Exception(f"Bad field '{fieldName}' in definition of role {self.name}")
 

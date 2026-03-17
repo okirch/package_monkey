@@ -599,7 +599,7 @@ class GenericRpm(RpmBase):
 
 		# Do not label promises and the like with roles or class labels:
 		if self.type != self.TYPE_REGULAR:
-			if labelHints.epic is None:
+			if labelHints.epic is None and labelHints.definingBuildOption is None:
 				return
 
 		if self.trace:

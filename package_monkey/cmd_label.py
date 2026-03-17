@@ -44,6 +44,8 @@ class ClassificationGadget(object):
 		schemeBuilder = self.schemeBuilder
 		db = self.db
 
+		schemeBuilder.codebase = codebase
+
 		with TimedExecutionBlock("loading all packages from database"):
 			productMediator = ProductMediator(codebase, collection)
 

@@ -1161,6 +1161,7 @@ class PackageLabelling(object):
 			self.splitOkay = False
 			self.isPrivate = False
 			self.lifecycleID = None
+			self.codebaseOnly = None
 
 			self.labelHints = None
 
@@ -1267,7 +1268,7 @@ class PackageLabelling(object):
 					extraHints.klass = buildHints.klass
 					matches.append(extraMatch)
 
-			matchFilter = self.MatchFilter(rpm.new_build)
+			matchFilter = self.MatchFilter(build = rpm.new_build, codebase = self.codebaseName)
 
 		matches = self.preprocessMatches(rpm.name, matches, rpm.trace, matchFilter)
 		return self.returnMatches(rpm.name, matches, rpm.trace)
@@ -1278,8 +1279,9 @@ class PackageLabelling(object):
 		return self.returnMatches(build.name, matches, build.trace)
 
 	class MatchFilter(object):
-		def __init__(self, build = None):
+		def __init__(self, build = None, codebase = None):
 			self.splitOkay = False
+			self.codebase = codebase
 
 			buildHints = None
 			if build is not None:
@@ -1309,6 +1311,10 @@ class PackageLabelling(object):
 				return a is b
 
 			self.reason = ""
+
+			if m.codebaseOnly and self.codebase not in m.codebaseOnly:
+				self.reason = f" IGNORED: does not apply to codebase {self.codebase}";
+				return False
 
 			if self.stop:
 				self.reason = f" IGNORED: follows an exact match";
@@ -1344,7 +1350,7 @@ class PackageLabelling(object):
 
 	def preprocessMatches(self, name, matches, trace, matchFilter = None):
 		if matchFilter is None:
-			matchFilter = self.MatchFilter()
+			matchFilter = self.MatchFilter(codebase = self.codebaseName)
 
 		result = list(sorted(matches, key = lambda m: m.precedence, reverse = True))
 
@@ -1688,6 +1694,8 @@ class ClassificationSchemeBuilder(object):
 						m.options.append(classificationScheme.nameToBuildOption(argValue))
 					elif argName == 'lifecycle':
 						m.lifecycleID = str(argValue)
+					elif argName == 'codebase':
+						m.codebaseOnly = str(argValue).split(',')
 					elif argName == 'arch':
 						# arch=s390x,ppc64le
 						labelHints.overrideArch = ArchSet(argValue.split(','))
@@ -1733,6 +1741,7 @@ class ClassificationSchemeBuilder(object):
 		self.policy = Policy()
 		self.globalPolicySettings = self.policy.globalSettings
 
+		self._codebase = None
 		self.promises = set()
 		self.scenarioBindings = {}
 		self.releaseDate = {}
@@ -1790,6 +1799,18 @@ class ClassificationSchemeBuilder(object):
 		classificationScheme = self.classificationScheme
 		assert(classificationScheme.unresolvableClass in (klass, None))
 		classificationScheme.unresolvableClass = klass
+
+	@property
+	def codebase(self):
+		return self._codebase
+
+	@codebase.setter
+	def codebase(self, value):
+		self._codebase = value
+		if value is not None:
+			self.packageLabelling.codebaseName = value.name
+		else:
+			self.packageLabelling.codebaseName = None
 
 	@profiling
 	def complete(self):

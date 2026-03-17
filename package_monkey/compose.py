@@ -1063,6 +1063,9 @@ class LifecycleCentricView(object):
 			if epic is None:
 				continue
 
+			if rpm.isSynthetic:
+				continue
+
 			lifecycle = policy.getLifeCycle(epic.lifecycleID)
 			if lifecycle is None:
 				raise Exception(f"{epic}: lifecycle {epic.lifecycleID} not known")

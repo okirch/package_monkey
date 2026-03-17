@@ -61,7 +61,7 @@ class NewDB(object):
 		self.downloadTimestamp = None
 
 		self._rpmToBuildCache = None
-		self._reverseDependencyCache = None
+		self._buildProvidesCache = False
 		self._promiseCache = None
 
 	def addArchitecture(self, arch):
@@ -155,6 +155,29 @@ class NewDB(object):
 					self._rpmToBuildCache[tmpRpm] = build
 
 		return self._rpmToBuildCache.get(rpm)
+
+	def enableProvidesLookups(self):
+		if self._buildProvidesCache:
+			return
+		self._buildProvidesCache = True
+
+		for rpm in self.rpms:
+			if rpm.isSourcePackage:
+				continue
+			rpm.requiredBy = rpm.DictOfSetsWithCommonTracking()
+			for arch in rpm.architectures:
+				rpm.requiredBy.update(arch, set())
+				pass
+
+		for rpm in self.rpms:
+			commonRequires = rpm.resolvedRequires
+			for req in commonRequires:
+				for arch in rpm.architectures:
+					req.requiredBy.add(arch, rpm)
+
+			for arch in rpm.architectures:
+				for req in rpm.solutions.raw_get(arch).difference(commonRequires):
+					req.requiredBy.add(arch, rpm)
 
 	def lookupRequiredBy(self, rpm):
 		if self._reverseDependencyCache is None:
@@ -523,7 +546,9 @@ class GenericRpm(RpmBase):
 
 		self.architectures = ArchSet()
 		self.missingArchitectures = ArchSet()
+		# FIXME: rename solutions -> requires
 		self.solutions = self.DictOfSetsWithCommonTracking()
+		self.requiredBy = None
 		self.validScenarios = self.DictOfSetsWithCommonTracking()
 		self.controllingScenarios = self.DictOfSetsWithCommonTracking()
 		self.unresolvables = self.DictOfSetsWithCommonTracking()

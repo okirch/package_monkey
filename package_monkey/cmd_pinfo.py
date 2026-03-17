@@ -21,6 +21,8 @@ class CommonInfoApplication(ApplicationBase):
 		codebaseData = self.getCodebaseForSnapshot(None)
 		self.db = codebaseData.loadDB()
 
+		self.db.enableProvidesLookups()
+
 		self.renderer = Renderer(self.opts, codebaseData)
 		self.processQuery(self.db, self.opts.packages)
 
@@ -213,11 +215,18 @@ class ProvidesRenderer(DependencyRenderer):
 		self.db = db
 
 	def render(self, rpm):
-		packages = self.db.lookupRequiredBy(rpm)
-		packages = set(filter(lambda p: not p.isSourcePackage, packages))
-		self.renderPackageList(packages)
+		self.renderPackageList(rpm.requiredBy.common)
 
-		# FIXME: handle arch-specific required-by
+		specific = {}
+		for arch in rpm.architectures:
+			for prov in rpm.requiredBy.raw_get(arch).difference(rpm.requiredBy.common):
+				if prov not in specific:
+					specific[prov] = ArchSet()
+				specific[prov].add(arch)
+
+		for prov in sorted(specific.keys(), key = str):
+			self.renderItem(prov, arch = specific[prov])
+
 		self.endList()
 
 class UnresolvableRenderer(ListRenderer):

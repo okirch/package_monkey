@@ -1059,16 +1059,22 @@ class LifecycleCentricView(object):
 				self.alwaysShown.add(lifecycle)
 
 		for rpm in product.rpms:
-			epic = rpm.new_build.new_epic
-			if epic is None:
-				continue
-
 			if rpm.isSynthetic:
 				continue
 
-			lifecycle = policy.getLifeCycle(epic.lifecycleID)
-			if lifecycle is None:
-				raise Exception(f"{epic}: lifecycle {epic.lifecycleID} not known")
+			hints = rpm.labelHints
+			if hints is not None and hints.lifecycleID:
+				lifecycle = policy.getLifeCycle(hints.lifecycleID)
+				if lifecycle is None:
+					raise Exception(f"rpm {rpm}: lifecycle {hints.lifecycleID} not known")
+			else:
+				epic = rpm.new_build.new_epic
+				if epic is None:
+					continue
+
+				lifecycle = policy.getLifeCycle(epic.lifecycleID)
+				if lifecycle is None:
+					raise Exception(f"{epic}: lifecycle {epic.lifecycleID} not known")
 
 			self.members[lifecycle].add(rpm)
 

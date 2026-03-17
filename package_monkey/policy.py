@@ -242,6 +242,7 @@ class LifeCycle(ClonableObject):
 
 	def __init__(self, id):
 		self.id = id
+		self.displayName = id
 		self.url = None
 		self.description = None
 		self._mode = None

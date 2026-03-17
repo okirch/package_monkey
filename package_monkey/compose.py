@@ -796,6 +796,7 @@ class YamlLifecycleProducer(YamlMultiDictProducerBase):
 		view = LifecycleCentricView(composer, product)
 
 		if view.defaultLifecycle is not None:
+			data.createScalar('default_lifecycle', view.defaultLifecycle.id)
 			self.produceLifecycle(parent, view.defaultLifecycle, view.defaultRpms)
 
 		for lifecycle, rpms in view:
@@ -818,6 +819,10 @@ class YamlLifecycleProducer(YamlMultiDictProducerBase):
 		# implementations (such as generic openjdk, rust, gcc, etc)
 		displayDates = not(lifecycle.implementations)
 
+		if lifecycle.displayName == lifecycle.id:
+			warnmsg(f"lifecycle {lifecycle}: no display_name set")
+		if lifecycle.displayName:
+			data.createScalar('display_name', lifecycle.displayName)
 		if lifecycle.description:
 			data.createScalar('description', lifecycle.description)
 		data.createScalar('mode', str(lifecycle.mode))

@@ -642,6 +642,8 @@ class FilterLoader(MonkeyConfigLoader):
 
 			if key == 'description':
 				lifecycle.description = self.context.asString(key, value)
+			elif key == 'display_name':
+				lifecycle.displayName = self.context.asString(key, value)
 			elif key == 'url':
 				lifecycle.url = self.context.asString(key, value)
 			elif key == 'mode':

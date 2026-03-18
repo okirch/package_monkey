@@ -372,10 +372,20 @@ class ScenarioSalad(object):
 		# several libjack packages, where we currently have libjack0 covered
 		# by jack/direct/libjack0, and by jack/direct/jack-server (which contains
 		# jack libjack0 libjackserver0 libjacknet0).
-		# In such a case, we want to return the smaller of the two.
-		# FIXME: TBD
+		# Try to reduce that to a single scenario (which is the smallest one).
 		if len(selectedScenarios) > 1:
-			warnmsg(f"ambiguous: {' '.join(map(str, selectedScenarios))}")
+			if self.trace:
+				infomsg(f"{self} dependency {b.key}: ambiguous scenarios {' '.join(map(str, selectedScenarios))}")
+				for other in selectedScenarios:
+					infomsg(f"   {other}: {' '.join(map(str, other.rpms))}")
+
+			smallest = sorted(selectedScenarios, key = lambda s: (len(s.rpms), str(s)))[0]
+			if all(smallest.rpms.issubset(scenario.rpms) for scenario in selectedScenarios):
+				if self.trace:
+					infomsg(f"reduced to {smallest}")
+				selectedScenarios = set((smallest, ))
+			else:
+				warnmsg(f"{self}: ambiguous set of scenarios: {' '.join(map(str, selectedScenarios))}")
 
 		return selectedScenarios
 

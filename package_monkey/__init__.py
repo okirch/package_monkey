@@ -70,6 +70,8 @@ class PackageDiffCommand(GenericSubcommand):
 				help = 'display only changes relating to removed packages')
 		args.add_argument('--changed', dest = 'restrict', action = 'store_const', const = 'changed',
 				help = 'display only changes relating to changed packages')
+		args.add_argument('--no-versions', dest = 'restrict', action = 'store_const', const = 'noversions',
+				help = 'hide version number changes')
 		args.add_argument(dest = 'oldPath', metavar = 'OLD-PATH', nargs = '?',
 				help = 'name of the snapshot to compare against, or path of packages.csv file. Defaults to snapshot @latest')
 		args.add_argument(dest = 'newPath', metavar = 'NEW-PATH', nargs = '?',

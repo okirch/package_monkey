@@ -272,8 +272,11 @@ class DiffRenderer(object):
 		elif filter == 'removed':
 			self.filter = RenderFilterRemovedOnly()
 			self.caption = 'Showing removals only'
+		elif filter == 'noversions':
+			self.filter = RenderFilterNoVersionChanges()
+			self.caption = 'Showing all changes except version updates'
 		else:
-			assert(restrict is None)
+			assert(filter is None)
 
 	def __del__(self):
 		self.flush()
@@ -361,6 +364,49 @@ class RenderFilterChangedOnly(RenderFilter):
 	def acceptChange(self, rec):
 		return rec.changeType == RecordBase.RECORD_TRIVIAL or \
 		       rec.changeType == RecordBase.RECORD_CHANGE
+
+class RenderFilterNoVersionChanges(RenderFilter):
+	def apply(self, rec):
+		return FilteredBuildRecord(rec,
+			buildChanges = self.suppressVersionChanges(rec.buildChanges),
+			rpmChanges = self.suppressVersionChanges(rec.rpmChanges))
+
+	def suppressVersionChanges(self, changeList):
+		result = []
+		for change in changeList:
+			if change.changeType == RecordBase.RECORD_CHANGE:
+				if isinstance(change, AttributeChangeRecord) and \
+				   change.type == 'version':
+					continue
+
+				# soversion changes are hidden inside an RpmChangeRecord; so we need
+				# to dig into that and potentially suppress those.
+				# We don't modify the original record; we create a clone.
+				if isinstance(change, RpmChangeRecord):
+					change = self.filterAndCloneRpmChange(change, SoversionChangeRecord)
+					if change is None:
+						continue
+
+			result.append(change)
+
+		return result
+
+	def filterAndCloneRpmChange(self, change, suppressClass):
+		details = []
+		found = False
+		for d in change.details:
+			if isinstance(d, suppressClass):
+				found = True
+			else:
+				details.append(d)
+
+		if found:
+			if not details:
+				return None
+			change = RpmChangeRecord(change.name)
+			change.details = details
+
+		return change
 
 class PackageDiffApplication(ApplicationBase):
 	def __init__(self, *args, **kwargs):

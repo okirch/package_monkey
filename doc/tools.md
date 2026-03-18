@@ -242,6 +242,11 @@ classification between the two states. This includes things like version updates
 builds or rpms. It also shows when builds move from one epic to another, or when the class of an rpm
 changes.
 
+During development, the amount of change going into the codebase in the space of just a week can
+be confusing, so the tool allows you to filter the output. For example, you can use `--no-versions`
+to suppress any version changes, or `--added` to show only added packages. For a full reference,
+please refer to the command's help output.
+
 ## The ``productdiff`` command
 
 This command compares two product compositions. Just like ``packagediff``, if you invoke it without

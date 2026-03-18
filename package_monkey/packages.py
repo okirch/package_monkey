@@ -250,3 +250,68 @@ class RpmOverrideList(object):
 			raise Exception(f"unknown rpm names in override list")
 
 		return result
+
+##################################################################
+# The following classes help us detect soversion changes (ie
+# when rpm libfoobar1 is replaced with libfoobar2).
+##################################################################
+class LibraryPackageMap(object):
+	def __init__(self, nameSet):
+		self.mapping = {}
+
+		ambiguous = set()
+		for name in nameSet:
+			if not name.startswith('lib'):
+				continue
+
+			stem = name
+			stemplus = ""
+
+			for suffix in ("-32bit", "-x86-64-v3"):
+				if stem.endswith(suffix):
+					stemplus = f"{suffix}{stemplus}"
+					stem = stem[:-len(suffix)]
+
+			while stem[-1].isdigit():
+				stem = stem.rstrip("0123456789")
+				for suffix in ('_alpha', '_beta', '_rc'):
+					if stem.endswith(suffix):
+						stem = stem[:-len(suffix)]
+						break
+
+				if stem[-1] in ('_', '-'):
+					stem = stem[:-1]
+
+			# glue suffixes back on
+			stem += stemplus
+
+			if stem in self.mapping:
+				ambiguous.add(stem)
+
+			self.mapping[stem] = name
+
+		self.stems = set(self.mapping.keys()).difference(ambiguous)
+		self.names = set(self.mapping[stem] for stem in self.stems)
+
+	def get(self, stem):
+		return self.mapping[stem]
+
+class RpmNameClassification(object):
+	def __init__(self, oldNames, newNames):
+		self.oldNames = set(oldNames)
+		self.newNames = set(newNames)
+
+		self.commonNames = self.oldNames.intersection(self.newNames)
+
+		self.oldLibraries = LibraryPackageMap(self.oldNames.difference(self.commonNames))
+		self.newLibraries = LibraryPackageMap(self.newNames.difference(self.commonNames))
+		self.sharedLibraryNames = self.oldLibraries.stems.intersection(self.newLibraries.stems)
+
+		self.removedNames = self.oldNames.difference(self.commonNames).difference(self.oldLibraries.names)
+		self.addedNames = self.newNames.difference(self.commonNames).difference(self.newLibraries.names)
+
+	@property
+	def soversionChanges(self):
+		for name in self.sharedLibraryNames:
+			yield self.oldLibraries.get(name), self.newLibraries.get(name)
+

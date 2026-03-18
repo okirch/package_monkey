@@ -31,8 +31,9 @@ class SolverDownloadApplication(OBSApplicationBase):
 
 		self.repoCollection = SolverRepositoryCollection.fromCodebase(self.productCodebase, solverDir)
 
-		self.repoCollection.discoverStagingProjects(client, self.productCodebase)
-		self.repoCollection.saveStagingList()
+		with loggingFacade.temporaryIndent():
+			self.repoCollection.discoverStagingProjects(client, self.productCodebase)
+			self.repoCollection.saveStagingList()
 
 		if self.opts.staging:
 			stagingIds = self.opts.staging.split(',')
@@ -42,6 +43,7 @@ class SolverDownloadApplication(OBSApplicationBase):
 
 		obsNameFilter = self.productCodebase.nameFilter
 
+		infomsg(f"Checking projects for new rpms:")
 		for repository in sorted(self.repoCollection, key = str):
 			obsProject = repository.obsProject
 

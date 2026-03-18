@@ -162,13 +162,12 @@ class SolverRepositoryCollection(object):
 
 	def discoverStagingProjects(self, client, codebase):
 		for projectName in codebase.buildProjects:
-			stagings = client.listStagings(projectName, status = 1) or []
+			stagings = client.listStagings(projectName, status = 1, quiet = True) or []
+			if stagings:
+				infomsg(f"{projectName}: detected {len(stagings)} staging projects")
 			for info in stagings:
 				stagingId = info.name.split(':')[-1]
 				self._addStaging(client, stagingId, info.name, enabled = False)
-
-		# We save this list so that we know in a subsequent staging run what is available.
-		self.saveStagingList()
 
 	def _addStaging(self, client, stagingId, projectName, repoName = 'standard', **kwargs):
 		count = 0

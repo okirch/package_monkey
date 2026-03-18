@@ -21,15 +21,6 @@ class RecordBase(object):
 	RECORD_REMOVE	= 2
 	RECORD_CHANGE	= 3
 
-	def shouldDisplay(self, requestedType):
-		if requestedType < 0:
-			return True
-		if self.changeType == requestedType:
-			return True
-		if self.changeType == self.RECORD_TRIVIAL:
-			return True
-		return False
-
 class BuildRecordBase(RecordBase):
 	def __init__(self, name, epic = None):
 		self.name = name
@@ -295,12 +286,6 @@ class DiffRenderer(object):
 		view = self.filter.apply(buildRec)
 		if view is not None:
 			buildRec.render(self.formatter, view)
-
-	def processBuildRecordFull(self, buildRec):
-		buildRec.render(self.formatter)
-
-	def processBuildRecordFiltered(self, buildRec, requestedType):
-		buildRec.render(self.formatter, requestedType)
 
 # Check whether a change should be displayed or not
 class FilteredBuildRecord(object):

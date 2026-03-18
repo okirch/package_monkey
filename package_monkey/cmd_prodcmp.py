@@ -11,6 +11,7 @@ import time
 from .util import infomsg, warnmsg, errormsg
 from .arch import ArchSet, archRegistry
 from .options import ApplicationBase
+from .packages import RpmNameClassification
 
 class ProductDiffApplication(ApplicationBase):
 	def __init__(self, *args, **kwargs):
@@ -263,22 +264,24 @@ class ProductDiffApplication(ApplicationBase):
 			self.packageDiff(f"{productName}/{arch}", srcProduct.getPackageSet(arch), dstProduct.getPackageSet(arch), ignore)
 
 	def packageDiff(self, tag, srcNames, dstNames, ignore = False):
-		removed = srcNames.difference(dstNames)
-		added = dstNames.difference(srcNames)
-
-		if not removed and not added:
+		nameDelta = RpmNameClassification(srcNames, dstNames)
+		if not nameDelta:
 			return
 
-		print(f"Product {tag} CHANGES{ignore and ' (ignored)' or ''}:")
+		if ignore:
+			print(f"Product {tag} CHANGES (ignored):")
+		else:
+			print(f"Product {tag} CHANGES:")
 
-		if removed:
-			print(f"  removed {len(removed)} packages")
-			if not ignore:
-				for name in sorted(removed):
-					print(f"    {name}")
+		def showList(verbed, names):
+			if names:
+				print(f"  {verbed} {len(names)} packages")
+				if not ignore:
+					for name in sorted(names):
+						print(f"    {name}")
 
-		if added:
-			print(f"  added {len(added)} packages")
-			if not ignore:
-				for name in sorted(added):
-					print(f"    {name}")
+		showList('removed', nameDelta.removedNames)
+		showList('added', nameDelta.addedNames)
+
+		renames = [f"{a} -> {b}" for (a, b) in nameDelta.soversionChanges]
+		showList('renamed', renames)

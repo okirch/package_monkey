@@ -310,6 +310,10 @@ class RpmNameClassification(object):
 		self.removedNames = self.oldNames.difference(self.commonNames).difference(self.oldLibraries.names)
 		self.addedNames = self.newNames.difference(self.commonNames).difference(self.newLibraries.names)
 
+	# returns true if there are changes
+	def __bool__(self):
+		return bool(self.addedNames or self.removedNames or self.sharedLibraryNames)
+
 	@property
 	def soversionChanges(self):
 		for name in self.sharedLibraryNames:

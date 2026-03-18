@@ -31,30 +31,6 @@ class BuildRecordBase(RecordBase):
 	def __bool__(self):
 		return bool(self.buildChanges or self.rpmChanges)
 
-	def render(self, formatter, view):
-		buildChanges = view.buildChanges
-		rpmChanges = view.rpmChanges
-
-		if not buildChanges and not rpmChanges:
-			return
-
-		if self.epic is None:
-			epicTag = "- NO EPIC -"
-		else:
-			epicTag = str(self.epic)
-
-		buildTag = f"build {self.name}"
-		if buildChanges:
-			m = "; ".join(map(str, buildChanges))
-			buildTag += f" ({m})"
-
-		if not rpmChanges:
-			formatter.next(epicTag, buildTag, "all rpms otherwise unchanged")
-		else:
-			for rpmChange in rpmChanges:
-				msg = str(rpmChange)
-				formatter.next(epicTag, buildTag, msg)
-
 	def noteBuildChange(self, record):
 		self.buildChanges.append(record)
 
@@ -269,28 +245,45 @@ class DiffRenderer(object):
 		else:
 			assert(filter is None)
 
-	def __del__(self):
-		self.flush()
+	def process(self, codebaseDelta):
+		for buildRec in codebaseDelta:
+			view = self.filter.apply(buildRec)
+			if view is not None:
+				self.renderView(view)
 
-	def flush(self):
-		if not self.formatter:
-			# nothing to show
-			return False
+		if self.formatter:
+			if self.caption is not None:
+				print(f"{self.caption}:")
+			self.formatter.flush()
+		else:
+			print("No changes")
 
-		if self.caption is not None:
-			print(f"{self.caption}:")
-		self.formatter.flush()
-		return True
+	def renderView(self, view):
+		if not view.buildChanges and not view.rpmChanges:
+			return
 
-	def processBuildRecord(self, buildRec):
-		view = self.filter.apply(buildRec)
-		if view is not None:
-			buildRec.render(self.formatter, view)
+		if view.epic is None:
+			epicTag = "- NO EPIC -"
+		else:
+			epicTag = str(view.epic)
+
+		buildTag = f"build {view.name}"
+		if view.buildChanges:
+			m = "; ".join(map(str, view.buildChanges))
+			buildTag += f" ({m})"
+
+		if not view.rpmChanges:
+			self.formatter.next(epicTag, buildTag, "all rpms otherwise unchanged")
+		else:
+			for rpmChange in view.rpmChanges:
+				msg = str(rpmChange)
+				self.formatter.next(epicTag, buildTag, msg)
 
 # Check whether a change should be displayed or not
 class FilteredBuildRecord(object):
 	def __init__(self, rec, buildChanges = None, rpmChanges = None):
-		self.record = rec
+		self.name = rec.name
+		self.epic = rec.epic
 
 		if buildChanges is None:
 			buildChanges = rec.buildChanges
@@ -451,11 +444,7 @@ class PackageDiffApplication(ApplicationBase):
 			print(f"  {oldPath} codebase dated {old.downloadTimestamp or 'unknown'}")
 			print(f"  {newPath} codebase dated {new.downloadTimestamp or 'unknown'}")
 
-		for record in delta:
-			renderer.processBuildRecord(record)
-
-		if not renderer.flush():
-			print("No changes")
+		renderer.process(delta)
 
 	def compareRpms(self, buildChange, rpmName, oldRpm, newRpm, extraRecords = []):
 		# HACK: detect noship -> noship

@@ -243,6 +243,7 @@ class LifeCycle(ClonableObject):
 	def __init__(self, id):
 		self.id = id
 		self.displayName = id
+		self.displayHint = 'component'
 		self.url = None
 		self.description = None
 		self._mode = None
@@ -302,6 +303,7 @@ class LifeCycle(ClonableObject):
 		assert(other.mode == self.MODE_VERSIONED)
 
 		self._mode = self.MODE_SEQUENTIAL
+		self.displayHint = other.displayHint
 
 		for contract in self.contracts:
 			otherContract = other.getContract(contract.id)

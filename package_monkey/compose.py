@@ -823,6 +823,8 @@ class YamlLifecycleProducer(YamlMultiDictProducerBase):
 			warnmsg(f"lifecycle {lifecycle}: no display_name set")
 		if lifecycle.displayName:
 			data.createScalar('display_name', lifecycle.displayName)
+		if lifecycle.displayHint:
+			data.createScalar('display_hint', lifecycle.displayHint)
 		if lifecycle.description:
 			data.createScalar('description', lifecycle.description)
 		data.createScalar('mode', str(lifecycle.mode))

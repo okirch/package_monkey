@@ -37,6 +37,7 @@ class ProductLifecycle(object):
 			self.cadence = None
 			self.rpms = []
 			self.implementations = []
+			self.implements = None
 
 		def __str__(self):
 			return self.name
@@ -44,12 +45,13 @@ class ProductLifecycle(object):
 	def __init__(self):
 		self.id = None
 		self.productName = None
+		self.productType = None
 		self.defaultLifecycle = None
 		self._lifecycles = {}
 
 	@property
 	def lifecycles(self):
-		for id, lifecycle in sorted(self._lifecycles.items()):
+		for lifecycle in sorted(self._lifecycles.values(), key = lambda lc: lc.name):
 			yield lifecycle
 
 	def createLifecycle(self, id):
@@ -71,23 +73,87 @@ class ProductLifecycle(object):
 				continue
 			if impl.description is None:
 				impl.description = f"(Implementation of life cycle {lifecycle.name})"
+			impl.implements = lifecycle
 			resolved.append(id)
 		lifecycle.implementations = resolved
+
+	SECTION_ORDER = [
+		'default',
+		'generic',
+		'core',
+		'container',
+		'database',
+		'development',
+		'desktop',
+		'application',
+	]
+
+	SECTION_TITLES = {
+		'default':	'Generic Life Cycles',
+		'generic':	None,			# group with default
+		'core':		'Core Life Cycles',
+		'container':	'Container Life Cycles',
+		'database':	'Database Life Cycles',
+		'development':	'Development Life Cycles',
+		'desktop':	'Desktop Life Cycles',
+		'application':	'Application Life Cycles',
+	}
 
 	def render(self, formatter):
 		formatter.caption(f"Lifecycles for {self.productName}")
 		formatter.beginTable()
-		defaultLifecycle = self.getLifecycle(self.defaultLifecycle)
-		if defaultLifecycle is not None:
-			formatter.emitDefaultLifecycle(defaultLifecycle)
+
+		hintOrder = self.SECTION_ORDER
+		self.emitted = set()
+
+		sections = {}
+		for id in hintOrder:
+			sections[id] = []
 
 		for lifecycle in self.lifecycles:
-			if lifecycle is defaultLifecycle:
-				continue
+			# do not show life versioned life cyles unless we have at least one implementation
 			if lifecycle.mode == 'versioned' and not lifecycle.implementations:
 				continue
-			formatter.emitLifecycle(lifecycle)
+
+			id = lifecycle.display_hint
+			sectionList = sections.get(id)
+			if sectionList is None:
+				id = hintOrder[-1]
+				print(f"Warning: {lifecycle} has unknown display hint {lifecycle.display_hint} - mapping to {id} for now")
+				sectionList = sections[id]
+			sectionList.append(lifecycle)
+
+		for id in hintOrder:
+			if not sections[id]:
+				continue
+
+			caption = self.getLifecycleGroupCaption(id)
+			if caption is not None:
+				formatter.captionRowSpan(f"<br/>{caption}")
+
+			for lifecycle in sections[id]:
+				if lifecycle.implements:
+					continue
+
+				self.emitLifecycle(lifecycle, formatter)
+				for name in lifecycle.implementations:
+					impl = self.getLifecycle(name)
+					self.emitLifecycle(impl, formatter)
+
 		formatter.endTable()
+
+	def getLifecycleGroupCaption(self, displayHint):
+		return self.SECTION_TITLES.get(displayHint, f'Need to define {displayHint} section heading')
+
+	def emitLifecycle(self, lifecycle, formatter):
+		if lifecycle.display_hint == 'default':
+			isExtension = self.productType == 'extension'
+			formatter.emitDefaultLifecycle(lifecycle, hideRpms = not isExtension)
+		elif lifecycle.mode == 'versioned' and not lifecycle.implementations:
+			pass
+		else:
+			formatter.emitLifecycle(lifecycle)
+		self.emitted.add(lifecycle)
 
 	def extractStrings(self, formatter):
 		formatter.emitComment(f'Product {self.id}')
@@ -150,6 +216,8 @@ class LifecycleDataLoader(object):
 		if product.productName is None:
 			product.productName = product.id
 
+		product.productType = productData.get('type')
+
 	def extractLifecycle(self, lifecycle, data):
 		for key, value in data.items():
 			if type(value) in (int, bool):
@@ -157,6 +225,8 @@ class LifecycleDataLoader(object):
 
 			if key == 'display_name':
 				lifecycle.name = value
+			elif key == 'display_hint':
+				lifecycle.display_hint = value
 			elif key == 'description':
 				lifecycle.description = value
 			elif key == 'mode':
@@ -223,9 +293,9 @@ class LifecycleHTMLTableFormatter(object):
 			self.inRow = False
 			self.out(" </tr>")
 
-	def captionRowSpan(self, caption):
+	def captionRowSpan(self, caption, **attrs):
 		self.beginRow()
-		self.out(f"  <td colspan=\"6\" align=\"center\" style=\"font-weight:bold;font-size:x-large\">{caption}</td>")
+		self.emitElement('td', caption, colspan = 6, style = "font-weight:bold;font-size:x-large", **attrs)
 		self.endRow()
 
 	def caption(self, caption):
@@ -272,6 +342,17 @@ class LifecycleHTMLTableFormatter(object):
 		else:
 			self.emitElement('td', value, **attrs)
 
+	def emitMode(self, mode, **attrs):
+		if mode is None:
+			self.emitCell("")
+			return
+
+		tips = self.explainMode(mode)
+		if tips is None:
+			self.emitCell(mode, **attrs)
+		else:
+			self.emitCell(f'<div class="tooltip">{mode}<span class="tooltiptext">{tips}</span></div>', **attrs)
+
 	def emitEOL(self, date):
 		if date and date.startswith('='):
 			# this EOL date aligns with the product defaults; so render it as gray
@@ -289,20 +370,27 @@ class LifecycleHTMLTableFormatter(object):
 
 		self.out(RPMCELL.replace('%%RPMS%%', text))
 
-	def emitDefaultLifecycle(self, lifecycle):
+	def emitDefaultLifecycle(self, lifecycle, hideRpms = True):
 		self.beginRow()
 		self.emitCell(lifecycle.name)
-		self.emitCell(lifecycle.mode, align = 'right')
+		self.emitMode(lifecycle.mode)
 		self.emitEOL(lifecycle.eolGeneral)
 		self.emitEOL(lifecycle.eolLTS)
 		self.emitCell(lifecycle.description + "\n\nThis is the product's default life cycle.")
-		self.emitCell("RPMs not explicitly mentioned by other life cycles fall in this category.")
+		if hideRpms:
+			self.emitCell("RPMs not explicitly mentioned by other life cycles fall in this category.")
+		else:
+			# probably an extension - may make sense to display the pkgs
+			self.emitRpmList(lifecycle.rpms)
 		self.endRow()
 
 	def emitLifecycle(self, lifecycle):
 		self.beginRow()
 		self.emitCell(lifecycle.name)
-		self.emitCell(lifecycle.mode, align = 'right')
+		if not lifecycle.implements:
+			self.emitMode(lifecycle.mode)
+		else:
+			self.emitMode(None)
 		self.emitEOL(lifecycle.eolGeneral)
 		self.emitEOL(lifecycle.eolLTS)
 		self.emitCell(lifecycle.description)
@@ -339,6 +427,12 @@ class LifecycleHTMLTableFormatter(object):
 
 
 		self.out('    </p>')
+
+	def explainMode(self, mode):
+		if mode == 'sequential':
+			return "sequential: new versions of a given RPM replace the previous one"
+		if mode == 'versioned':
+			return "sequential: multiple versions of a given RPM may coexist"
 
 class PoFileFormatter(object):
 	def __init__(self, f):
@@ -415,6 +509,32 @@ table, th, td {
 }
 button.hide {display:none;}
 pre.rpms {display:none;}
+
+/* tooltips */
+.tooltip {
+  position: relative;
+  display: inline-block;
+  border-bottom: 1px dotted black; /* Add dots under the hoverable text */
+  cursor: pointer;
+}
+
+/* Tooltip text */
+.tooltiptext {
+  visibility: hidden; /* Hidden by default */
+  width: 130px;
+  background-color: black;
+  color: #ffffff;
+  text-align: center;
+  padding: 5px 0;
+  border-radius: 6px;
+  position: absolute;
+  z-index: 1; /* Ensure tooltip is displayed above content */
+}
+
+/* Show the tooltip text on hover */
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+}
 </style>
 
 <script>

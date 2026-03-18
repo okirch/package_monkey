@@ -40,30 +40,9 @@ class BuildRecordBase(RecordBase):
 	def __bool__(self):
 		return bool(self.buildChanges or self.rpmChanges)
 
-	def filter(self, changeType):
-		if changeType == self.changeType:
-			return self
-
-		if not any(rec.changeType == changeType for rec in self.rpmChanges):
-			return None
-
-		ret = BuildRecordBase(self.name, epic = self.epic)
-		for rec in self.rpmChanges:
-			if rec.changeType == changeType:
-				ret.rpmChanges.append(rec)
-
-		return ret
-
-	def filterChangeList(self, changeList, requestedType):
-		result = []
-		for change in changeList:
-			if change.shouldDisplay(requestedType):
-				result.append(change)
-		return result
-
-	def render(self, formatter, requestedType = -1):
-		buildChanges = self.filterChangeList(self.buildChanges, requestedType)
-		rpmChanges = self.filterChangeList(self.rpmChanges, requestedType)
+	def render(self, formatter, view):
+		buildChanges = view.buildChanges
+		rpmChanges = view.rpmChanges
 
 		if not buildChanges and not rpmChanges:
 			return
@@ -279,11 +258,22 @@ class CodebaseDelta(object):
 		return iter(self.buildChanges)
 
 class DiffRenderer(object):
-	def __init__(self, onlyType = -1, caption = None):
-		self.onlyType = onlyType
-
+	def __init__(self, filter = None):
 		self.formatter = IndexFormatter(sort = True)
-		self.caption = caption
+		self.caption = 'Changed packages'
+		self.filter = RenderFilterAcceptAll()
+
+		if filter == 'changed':
+			self.filter = RenderFilterChangedOnly()
+			self.caption = 'Showing changes only'
+		elif filter == 'added':
+			self.filter = RenderFilterAddedOnly()
+			self.caption = 'Showing additions only'
+		elif filter == 'removed':
+			self.filter = RenderFilterRemovedOnly()
+			self.caption = 'Showing removals only'
+		else:
+			assert(restrict is None)
 
 	def __del__(self):
 		self.flush()
@@ -294,21 +284,83 @@ class DiffRenderer(object):
 			return False
 
 		if self.caption is not None:
-			print(self.caption)
+			print(f"{self.caption}:")
 		self.formatter.flush()
 		return True
 
 	def processBuildRecord(self, buildRec):
-		if buildRec.shouldDisplay(self.onlyType):
-			self.processBuildRecordFull(buildRec)
-		elif buildRec.changeType == RecordBase.RECORD_CHANGE:
-			self.processBuildRecordFiltered(buildRec, self.onlyType)
+		view = self.filter.apply(buildRec)
+		if view is not None:
+			buildRec.render(self.formatter, view)
 
 	def processBuildRecordFull(self, buildRec):
 		buildRec.render(self.formatter)
 
 	def processBuildRecordFiltered(self, buildRec, requestedType):
 		buildRec.render(self.formatter, requestedType)
+
+# Check whether a change should be displayed or not
+class FilteredBuildRecord(object):
+	def __init__(self, rec, buildChanges = None, rpmChanges = None):
+		self.record = rec
+
+		if buildChanges is None:
+			buildChanges = rec.buildChanges
+		self.buildChanges = buildChanges
+
+		if rpmChanges is None:
+			rpmChanges = rec.rpmChanges
+		self.rpmChanges = rpmChanges
+
+class RenderFilter(object):
+	def filterChangeList(self, changeList):
+		return list(filter(self.acceptChange, changeList))
+
+	def fullView(self, rec):
+		return FilteredBuildRecord(rec)
+
+	def partialView(self, rec):
+		return FilteredBuildRecord(rec,
+			buildChanges = self.filterChangeList(rec.buildChanges),
+			rpmChanges = self.filterChangeList(rec.rpmChanges))
+
+class RenderFilterAcceptAll(RenderFilter):
+	def apply(self, rec):
+		return self.fullView(rec)
+
+class RenderFilterAddedOnly(RenderFilter):
+	def apply(self, rec):
+		if rec.changeType == RecordBase.RECORD_ADD:
+			return self.fullView(rec)
+		if rec.changeType == RecordBase.RECORD_CHANGE:
+			return self.partialView(rec)
+		return None
+
+	def acceptChange(self, rec):
+		return rec.changeType == RecordBase.RECORD_TRIVIAL or \
+		       rec.changeType == RecordBase.RECORD_ADD
+
+class RenderFilterRemovedOnly(RenderFilter):
+	def apply(self, rec):
+		if rec.changeType == RecordBase.RECORD_REMOVE:
+			return self.fullView(rec)
+		if rec.changeType == RecordBase.RECORD_CHANGE:
+			return self.partialView(rec)
+		return None
+
+	def acceptChange(self, rec):
+		return rec.changeType == RecordBase.RECORD_TRIVIAL or \
+		       rec.changeType == RecordBase.RECORD_REMOVE
+
+class RenderFilterChangedOnly(RenderFilter):
+	def apply(self, rec):
+		if rec.changeType == RecordBase.RECORD_CHANGE:
+			return self.fullView(rec)
+		return None
+
+	def acceptChange(self, rec):
+		return rec.changeType == RecordBase.RECORD_TRIVIAL or \
+		       rec.changeType == RecordBase.RECORD_CHANGE
 
 class PackageDiffApplication(ApplicationBase):
 	def __init__(self, *args, **kwargs):
@@ -359,14 +411,7 @@ class PackageDiffApplication(ApplicationBase):
 
 		delta = self.computeCodebaseChanges(old, new)
 
-		if self.opts.restrict == 'changed':
-			renderer = DiffRenderer(RecordBase.RECORD_CHANGE)
-		elif self.opts.restrict == 'added':
-			renderer = DiffRenderer(RecordBase.RECORD_ADD)
-		elif self.opts.restrict == 'removed':
-			renderer = DiffRenderer(RecordBase.RECORD_REMOVE)
-		else:
-			renderer = DiffRenderer()
+		renderer = DiffRenderer(filter = self.opts.restrict)
 
 		if not self.opts.quiet:
 			oldPath = self.opts.oldPath or '@latest'
@@ -375,7 +420,6 @@ class PackageDiffApplication(ApplicationBase):
 			print(f"  {oldPath} codebase dated {old.downloadTimestamp or 'unknown'}")
 			print(f"  {newPath} codebase dated {new.downloadTimestamp or 'unknown'}")
 
-		renderer.caption = "Changed packages:"
 		for record in delta:
 			renderer.processBuildRecord(record)
 

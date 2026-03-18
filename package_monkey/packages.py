@@ -1,54 +1,11 @@
+##################################################################
 #
-# package and product handling classes
+# package classes
 #
+##################################################################
 
-import xml.etree.ElementTree as ET
-import urllib.parse
-import os.path
-import os
-from .util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from .util import debugmsg, infomsg, warnmsg, errormsg
 from .arch import *
-from .newdb import RpmBase, RpmInfo
-from .filter import Classification
-
-class ProductMediator(object):
-	def __init__(self, productCodebase, packageCollection):
-		self.productCodebase = productCodebase
-		self.packageCollection = packageCollection
-
-	# Generate all synthetic builds and packages
-	def generateSyntheticBuilds(self, db):
-		collection = self.packageCollection
-
-		for rpm in db.rpms:
-			if not rpm.isSynthetic:
-				continue
-
-			build = db.createBuild(rpm.name)
-			build.isSynthetic = True
-			build.addRpm(rpm)
-			collection.addBuild(build)
-
-	def loadAndVerifyPackages(self, store):
-		collection = self.packageCollection
-		for build in store.builds:
-			collection.addBuild(build)
-
-		return True
-
-	def generatePromise(self, name, db):
-		rpm = db.createRpm(f"promise:{name}", type = RpmBase.TYPE_PROMISE)
-
-		if rpm.new_build is not None:
-			assert(rpm.new_build in self.packageCollection.builds)
-			return
-
-		build = db.createBuild(rpm.name)
-		build.isSynthetic = True
-		build.addRpm(rpm)
-
-		self.packageCollection.addBuild(build)
-		return rpm
 
 # FIXME: should this move to newdb.py?
 class PackageCollection(object):

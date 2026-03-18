@@ -574,8 +574,9 @@ class FilterLoader(MonkeyConfigLoader):
 					for name in nameList:
 						self.processInclude(name)
 				elif key == 'promises':
-					for name in self.context.asStringList(key, value):
-						self.definePromise(name)
+					# FIXME drop this
+					where = self.context.stringListContext(key, value)
+					warnmsg(f"Ignoring obsolete keyword \"{key}\" (roughly {where.approximateLocation})")
 				else:
 					self.processKeyValue(key, value)
 

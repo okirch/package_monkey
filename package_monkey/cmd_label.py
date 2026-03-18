@@ -1,5 +1,5 @@
 
-from .packages import ProductMediator, PackageCollection
+from .packages import PackageCollection
 from .filter import Classification
 from .floader import FilterLoader
 from .options import ApplicationBase
@@ -7,6 +7,7 @@ from .util import TimedExecutionBlock, ExecTimer
 from .util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from .reports import GenericStringReport
 from .obsclnt import OBSBuild
+from .newdb import RpmBase
 from .classify import *
 from .new_compose import *
 from .scenario import *
@@ -47,24 +48,22 @@ class ClassificationGadget(object):
 		schemeBuilder.codebase = codebase
 
 		with TimedExecutionBlock("loading all packages from database"):
-			productMediator = ProductMediator(codebase, collection)
+			for name in schemeBuilder.promises:
+				rpm = db.createRpm(f"promise:{name}", type = RpmBase.TYPE_PROMISE)
 
 			# generate all synthetic packages like environment_with_systemd, and
 			# wrap them in a fake build object.
 			# These objects will be added the the PackageCollection
-			productMediator.generateSyntheticBuilds(db)
+			self.generateSyntheticBuilds(db, collection)
 
-			if not productMediator.loadAndVerifyPackages(db):
-				raise Exception("Inconsistencies in package data; refusing to continue")
+			for build in db.builds:
+				collection.addBuild(build)
 
 			# enable tracing of packages as early as possible
 			if self.traceMatcher is not None:
 				collection.enablePackageTracing(self.traceMatcher)
 
 		with TimedExecutionBlock("performing initial placement of packages"):
-			for name in schemeBuilder.promises:
-				productMediator.generatePromise(name, db)
-
 			deferred = []
 			for build in collection.builds:
 				schemeBuilder.tryToLabelBuild(build)
@@ -108,6 +107,15 @@ class ClassificationGadget(object):
 				raise Exception(f"build {build} is placed in layer {build.layer} but has no epic.")
 
 		return collection
+
+	# Fabricate build objects for synthetic rpms (such as scenarios)
+	def generateSyntheticBuilds(self, db, collection):
+		for rpm in db.rpms:
+			if rpm.isSynthetic and rpm.new_build is None:
+				build = db.createBuild(rpm.name)
+				build.isSynthetic = True
+				build.addRpm(rpm)
+				collection.addBuild(build)
 
 	def checkDuplicateBuilds(self):
 		badRpms = set()

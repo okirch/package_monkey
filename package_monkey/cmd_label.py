@@ -102,32 +102,10 @@ class ClassificationGadget(object):
 
 			schemeBuilder.resolveSubsets(db)
 
-			numBadBuilds = 0
-			badBuilds = {}
-			for build in collection.builds:
-				if build.isSynthetic:
-					continue
-
-				if build.layer is None:
-					continue
-
-				epic = build.new_epic
-				if epic is None:
-					warnmsg(f"build {build} is placed in layer {build.layer} but has no placement hints. should be in {build.new_epic}")
-					numBadBuilds += 1
-
-					epic = build.new_epic
-					if epic not in badBuilds:
-						badBuilds[epic] = set()
-					badBuilds[epic].add(build)
-
-			if numBadBuilds:
-				for epic in sorted(badBuilds.keys(), key = str):
-					print(f"{epic}:")
-					print(f"   packages:")
-					for build in sorted(badBuilds[epic], key = str):
-						print(f"    - {build}")
-				raise Exception(f"Found {numBadBuilds} with insufficent labelling")
+		# Is this still useful?
+		for build in collection.builds:
+			if not build.isSynthetic and build.layer is not None and build.new_epic is None:
+				raise Exception(f"build {build} is placed in layer {build.layer} but has no epic.")
 
 		return collection
 

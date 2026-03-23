@@ -42,95 +42,95 @@ class RepositoryArchSolver(object):
 		os.rename(tempSolverPath, self.finalSolverPath)
 		infomsg(f"Created {self.finalSolverPath}")
 
+class RepositoryHandle(object):
+	def __init__(self, projectName, repositoryName, arch, solverDir = None, stagingId = None, enabled = True):
+		self.projectName = projectName
+		self.repositoryName = repositoryName
+		self.arch = arch
+		self.solverDir = solverDir
+
+		self.repoDirStateDir = os.path.join(solverDir, f"repo-{self.projectName}-{self.repositoryName}-{self.arch}")
+		self.solverDataPath = os.path.join(self.repoDirStateDir, "rpms.solv")
+		self.buildDataPath = os.path.join(self.repoDirStateDir, "builds")
+		self.stateDataPath = os.path.join(self.repoDirStateDir, "state")
+
+		if not os.path.isdir(self.repoDirStateDir):
+			os.makedirs(self.repoDirStateDir)
+
+		self.stagingId = stagingId
+
+		self._obsProject = None
+		self.downloadQueue = None
+
+		# This is used in the prep stage to distinguish between stagings that we ignore and those we want to test
+		self.enabled = enabled
+
+	def __str__(self):
+		return f"{self.projectName}/{self.repositoryName}/{self.arch}"
+
+	@property
+	def obsProject(self):
+		if self._obsProject is None:
+			project = OBSProject(self.projectName)
+			project.buildRepository = self.repositoryName
+			project.buildArch = self.arch
+
+			self._obsProject = project
+		return self._obsProject
+
+	# The remote state is just a hash of the "md5-rpmname" strings from server side
+	# and helps us identify when there was a rebuild
+	@property
+	def remoteState(self):
+		if self.downloadQueue is None:
+			return None
+		return self.downloadQueue.state
+
+	def saveBuilds(self, builds):
+		infomsg(f"Write {self.buildDataPath}")
+		with open(self.buildDataPath, 'w') as f:
+			for obsBuild in builds:
+				print(f"{obsBuild.name} {obsBuild.status}", file = f)
+				for rpm in obsBuild.rpms:
+					print(f" - {rpm.name}", file = f)
+
+	def loadBuilds(self, db):
+		infomsg(f"Load {self.buildDataPath}")
+
+		with open(self.buildDataPath, 'r') as f:
+			build = None
+
+			for line in f.readlines():
+				w = line.split()
+				if w[0] != '-':
+					name = w[0]
+
+					build = db.createBuild(name)
+					if len(w) >= 2:
+						build.setArchBuildStatus(self.arch, w[1])
+				elif build is not None:
+					rpm = db.createRpm(w[1])
+					build.addRpm(rpm)
+
+	def commitState(self):
+		infomsg(f"Updating {self.stateDataPath}")
+		with open(self.stateDataPath, "w") as f:
+			print(f"{self.remoteState}", file = f)
+
+	def isUptodate(self):
+		if not os.path.isfile(self.solverDataPath) or \
+		   not os.path.isfile(self.buildDataPath) or \
+		   not os.path.isfile(self.stateDataPath):
+			# this is our first run, or the user deleted one of our output files,
+			# or the state file. It's all the same: re-run rpm2solv and update
+			# the build file.
+			return False
+
+		with open(self.stateDataPath) as f:
+			latestState = f.read().strip()
+		return latestState == self.remoteState
+
 class SolverRepositoryCollection(object):
-	class RepositoryHandle(object):
-		def __init__(self, projectName, repositoryName, arch, solverDir = None, stagingId = None, enabled = True):
-			self.projectName = projectName
-			self.repositoryName = repositoryName
-			self.arch = arch
-			self.solverDir = solverDir
-
-			self.repoDirStateDir = os.path.join(solverDir, f"repo-{self.projectName}-{self.repositoryName}-{self.arch}")
-			self.solverDataPath = os.path.join(self.repoDirStateDir, "rpms.solv")
-			self.buildDataPath = os.path.join(self.repoDirStateDir, "builds")
-			self.stateDataPath = os.path.join(self.repoDirStateDir, "state")
-
-			if not os.path.isdir(self.repoDirStateDir):
-				os.makedirs(self.repoDirStateDir)
-
-			self.stagingId = stagingId
-
-			self._obsProject = None
-			self.downloadQueue = None
-
-			# This is used in the prep stage to distinguish between stagings that we ignore and those we want to test
-			self.enabled = enabled
-
-		def __str__(self):
-			return f"{self.projectName}/{self.repositoryName}/{self.arch}"
-
-		@property
-		def obsProject(self):
-			if self._obsProject is None:
-				project = OBSProject(self.projectName)
-				project.buildRepository = self.repositoryName
-				project.buildArch = self.arch
-
-				self._obsProject = project
-			return self._obsProject
-
-		# The remote state is just a hash of the "md5-rpmname" strings from server side
-		# and helps us identify when there was a rebuild
-		@property
-		def remoteState(self):
-			if self.downloadQueue is None:
-				return None
-			return self.downloadQueue.state
-
-		def saveBuilds(self, builds):
-			infomsg(f"Write {self.buildDataPath}")
-			with open(self.buildDataPath, 'w') as f:
-				for obsBuild in builds:
-					print(f"{obsBuild.name} {obsBuild.status}", file = f)
-					for rpm in obsBuild.rpms:
-						print(f" - {rpm.name}", file = f)
-
-		def loadBuilds(self, db):
-			infomsg(f"Load {self.buildDataPath}")
-
-			with open(self.buildDataPath, 'r') as f:
-				build = None
-
-				for line in f.readlines():
-					w = line.split()
-					if w[0] != '-':
-						name = w[0]
-
-						build = db.createBuild(name)
-						if len(w) >= 2:
-							build.setArchBuildStatus(self.arch, w[1])
-					elif build is not None:
-						rpm = db.createRpm(w[1])
-						build.addRpm(rpm)
-
-		def commitState(self):
-			infomsg(f"Updating {self.stateDataPath}")
-			with open(self.stateDataPath, "w") as f:
-				print(f"{self.remoteState}", file = f)
-
-		def isUptodate(self):
-			if not os.path.isfile(self.solverDataPath) or \
-			   not os.path.isfile(self.buildDataPath) or \
-			   not os.path.isfile(self.stateDataPath):
-				# this is our first run, or the user deleted one of our output files,
-				# or the state file. It's all the same: re-run rpm2solv and update
-				# the build file.
-				return False
-
-			with open(self.stateDataPath) as f:
-				latestState = f.read().strip()
-			return latestState == self.remoteState
-
 	def __init__(self, architectures, solverDir):
 		self.architectures = ArchSet(architectures)
 		self.solverDir = solverDir
@@ -148,7 +148,7 @@ class SolverRepositoryCollection(object):
 		return result
 
 	def createRepositoryHandle(self, *args, **kwargs):
-		project = self.RepositoryHandle(*args, solverDir = self.solverDir, **kwargs)
+		project = RepositoryHandle(*args, solverDir = self.solverDir, **kwargs)
 		self._projects.append(project)
 		return project
 

@@ -281,7 +281,7 @@ class SolverApplication(PreprocessApplicationBase):
 
 		tableFormatter.render("The following rpms have version drift", displayfn = infomsg)
 
-	def displayUnresolved(self, db):
+	def displayUnresolved(self, db, missingCutoff = 7):
 		tableFormatter = TableFormatter(["name"] + list(map(str, self.architectures)) + ["deps"],
 					[50, 8, 8, 8, 8, 8, 8])
 		for rpm in db.rpms:
@@ -304,7 +304,10 @@ class SolverApplication(PreprocessApplicationBase):
 
 				row[arch] = f"YES"
 
-			row['deps'] = '; '.join(map(str, overallMissing))
+			overallMissing = sorted(map(str, overallMissing))
+			if len(overallMissing) > missingCutoff:
+				overallMissing[missingCutoff - 1] = '...'
+			row['deps'] = '; '.join(map(str, overallMissing[:missingCutoff]))
 
 		tableFormatter.render("The following rpms have unresolved dependencies", displayfn = infomsg)
 

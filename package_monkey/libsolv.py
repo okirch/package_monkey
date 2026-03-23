@@ -5,42 +5,7 @@ from .util import errormsg, warnmsg, infomsg
 from .obsclnt import OBSProject
 from .arch import *
 
-__names__ = ['RepositoryArchSolver', 'SolverRepositoryCollection']
-
-class RepositoryArchSolver(object):
-	def __init__(self, repoHandle):
-		self.project = repoHandle.projectName
-		self.repository = repoHandle.repositoryName
-		self.arch = repoHandle.arch
-
-		self.finalSolverPath = repoHandle.solverDataPath
-
-	def __str__(self):
-		return f"solver for {self.project}/{self.repository}/{self.arch}"
-
-	def produceSolver(self, files):
-		basename, extension = os.path.splitext(self.finalSolverPath)
-		tempSolverPath = f"{basename}.{os.getpid()}f{extension}"
-
-		infomsg(f"{self}: processing {len(files)} rpms")
-		with open(tempSolverPath, 'w') as fh:
-			# -X	means "add auto patterns"
-			# -m -	read manifest from stdin
-			# -0	manifest entries separated by NUL characters
-			p = subprocess.Popen(
-				['rpms2solv', '-X', '-m', '-', '-0'], stdin=subprocess.PIPE, stdout=fh)
-			p.communicate(bytes('\0'.join(files), 'utf-8'))
-			fh.close()
-
-		if p.wait() != 0:
-			try:
-				os.remove(tempSolverPath)
-			except:
-				pass
-			raise Exception("rpm2solv failed")
-
-		os.rename(tempSolverPath, self.finalSolverPath)
-		infomsg(f"Created {self.finalSolverPath}")
+__names__ = ['SolverRepositoryCollection']
 
 class RepositoryHandle(object):
 	def __init__(self, projectName, repositoryName, arch, solverDir = None, stagingId = None, enabled = True):
@@ -77,6 +42,24 @@ class RepositoryHandle(object):
 
 			self._obsProject = project
 		return self._obsProject
+
+	def produceSolver(self, files):
+		infomsg(f"{self}: processing {len(files)} rpms")
+		tempSolverPath = os.path.join(self.repoDirStateDir, f"rpms.{os.getpid()}.solv")
+		with open(tempSolverPath, 'w') as fh:
+			# -X	means "add auto patterns"
+			# -m -	read manifest from stdin
+			# -0	manifest entries separated by NUL characters
+			p = subprocess.Popen(
+				['rpms2solv', '-X', '-m', '-', '-0'], stdin=subprocess.PIPE, stdout=fh)
+			p.communicate(bytes('\0'.join(files), 'utf-8'))
+			fh.close()
+
+		if p.wait() != 0:
+			raise Exception("rpm2solv failed")
+
+		os.rename(tempSolverPath, self.solverDataPath)
+		infomsg(f"Created {self.solverDataPath}")
 
 	# The remote state is just a hash of the "md5-rpmname" strings from server side
 	# and helps us identify when there was a rebuild

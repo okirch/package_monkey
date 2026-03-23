@@ -77,9 +77,8 @@ class SolverDownloadApplication(OBSApplicationBase):
 				infomsg(f"{repository}: local cache is up-to-date")
 				continue
 
-			solver = RepositoryArchSolver(repository)
 			files = set(downloadQueue.downloadedFiles)
-			solver.produceSolver(files)
+			repository.produceSolver(files)
 
 			# Associate OBS builds with the rpms they produce.
 			# We save the build information to a secondary DB, to be merged

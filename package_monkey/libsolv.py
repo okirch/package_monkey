@@ -13,28 +13,17 @@ class RepositoryArchSolver(object):
 		self.repository = repoHandle.repositoryName
 		self.arch = repoHandle.arch
 
-		self.symlinkSolverPath = repoHandle.solverDataPath
-
-		basename, extension = os.path.splitext(self.symlinkSolverPath)
-		basename += f"-{repoHandle.remoteState}"
-
-		self.tempSolverPath = basename + f".{os.getpid()}" + extension
-		self.finalSolverPath = basename + extension
+		self.finalSolverPath = repoHandle.solverDataPath
 
 	def __str__(self):
 		return f"solver for {self.project}/{self.repository}/{self.arch}"
 
-	def isUptodate(self):
-		try:
-			current = os.readlink(self.symlinkSolverPath)
-		except:
-			return False
-
-		return current == self.finalSolverPath
-
 	def produceSolver(self, files):
+		basename, extension = os.path.splitext(self.finalSolverPath)
+		tempSolverPath = f"{basename}.{os.getpid()}f{extension}"
+
 		infomsg(f"{self}: processing {len(files)} rpms")
-		with open(self.tempSolverPath, 'w') as fh:
+		with open(tempSolverPath, 'w') as fh:
 			# -X	means "add auto patterns"
 			# -m -	read manifest from stdin
 			# -0	manifest entries separated by NUL characters
@@ -44,15 +33,14 @@ class RepositoryArchSolver(object):
 			fh.close()
 
 		if p.wait() != 0:
+			try:
+				os.remove(tempSolverPath)
+			except:
+				pass
 			raise Exception("rpm2solv failed")
 
-		os.rename(self.tempSolverPath, self.finalSolverPath)
+		os.rename(tempSolverPath, self.finalSolverPath)
 		infomsg(f"Created {self.finalSolverPath}")
-
-		if os.path.exists(self.symlinkSolverPath):
-			os.remove(self.symlinkSolverPath)
-		os.symlink(self.finalSolverPath, self.symlinkSolverPath)
-
 
 class SolverRepositoryCollection(object):
 	class RepositoryHandle(object):
@@ -61,6 +49,14 @@ class SolverRepositoryCollection(object):
 			self.repositoryName = repositoryName
 			self.arch = arch
 			self.solverDir = solverDir
+
+			self.repoDirStateDir = os.path.join(solverDir, f"repo-{self.projectName}-{self.repositoryName}-{self.arch}")
+			self.solverDataPath = os.path.join(self.repoDirStateDir, "rpms.solv")
+			self.buildDataPath = os.path.join(self.repoDirStateDir, "builds")
+			self.stateDataPath = os.path.join(self.repoDirStateDir, "state")
+
+			if not os.path.isdir(self.repoDirStateDir):
+				os.makedirs(self.repoDirStateDir)
 
 			self.stagingId = stagingId
 
@@ -91,16 +87,6 @@ class SolverRepositoryCollection(object):
 				return None
 			return self.downloadQueue.state
 
-		@property
-		def solverDataPath(self):
-			filename = f"repo-{self.projectName}-{self.repositoryName}-{self.arch}.solv"
-			return os.path.join(self.solverDir, filename)
-
-		@property
-		def buildDataPath(self):
-			filename = f"repo-{self.projectName}-{self.repositoryName}-{self.arch}-builds"
-			return os.path.join(self.solverDir, filename)
-
 		def saveBuilds(self, builds):
 			infomsg(f"Write {self.buildDataPath}")
 			with open(self.buildDataPath, 'w') as f:
@@ -127,6 +113,23 @@ class SolverRepositoryCollection(object):
 						rpm = db.createRpm(w[1])
 						build.addRpm(rpm)
 
+		def commitState(self):
+			infomsg(f"Updating {self.stateDataPath}")
+			with open(self.stateDataPath, "w") as f:
+				print(f"{self.remoteState}", file = f)
+
+		def isUptodate(self):
+			if not os.path.isfile(self.solverDataPath) or \
+			   not os.path.isfile(self.buildDataPath) or \
+			   not os.path.isfile(self.stateDataPath):
+				# this is our first run, or the user deleted one of our output files,
+				# or the state file. It's all the same: re-run rpm2solv and update
+				# the build file.
+				return False
+
+			with open(self.stateDataPath) as f:
+				latestState = f.read().strip()
+			return latestState == self.remoteState
 
 	def __init__(self, architectures, solverDir):
 		self.architectures = ArchSet(architectures)

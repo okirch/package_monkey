@@ -73,12 +73,13 @@ class SolverDownloadApplication(OBSApplicationBase):
 				for path in downloadQueue.downloadedFiles:
 					self.infoGadget.maybeUpdate(path, obsProject.buildArch)
 
+			if repository.isUptodate():
+				infomsg(f"{repository}: local cache is up-to-date")
+				continue
+
 			solver = RepositoryArchSolver(repository)
-			if solver.isUptodate():
-				infomsg(f"{repository}: solving file already up-to-date")
-			else:
-				files = set(downloadQueue.downloadedFiles)
-				solver.produceSolver(files)
+			files = set(downloadQueue.downloadedFiles)
+			solver.produceSolver(files)
 
 			# Associate OBS builds with the rpms they produce.
 			# We save the build information to a secondary DB, to be merged
@@ -88,6 +89,8 @@ class SolverDownloadApplication(OBSApplicationBase):
 			db = NewDB()
 			self.queryBuildResults(db, client, obsProject, nameFilter = obsNameFilter)
 			repository.saveBuilds(db.builds)
+
+			repository.commitState()
 
 		info = DownloadInfo()
 		info.setTimestampNow()

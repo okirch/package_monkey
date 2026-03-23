@@ -89,6 +89,8 @@ class DownloadRpmsCommand(OBSSubcommand):
 	def registerArguments(self, args):
 		super().registerArguments(args)
 
+		args.add_argument('--http-cache-ttl', metavar = 'TTL', default = 0,
+				help = 'Use local HTTP cache for some OBS queries (TTL given in minutes; default: no caching)')
 		args.add_argument('--staging',
 				help = 'Download packages from staging projects (either "all" or a comma separated list, such as A,B,C)')
 
@@ -97,7 +99,7 @@ class DownloadRpmsCommand(OBSSubcommand):
 
 		return SolverDownloadApplication(self.NAME, opts)
 
-class ExtractRpmInfoCommand(OBSSubcommand):
+class ExtractRpmInfoCommand(GenericSubcommand):
 	NAME = 'extractinfo'
 	HELP = 'Obsolete command to extract auxiliary information from rpm headers.'
 

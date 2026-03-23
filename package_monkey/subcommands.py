@@ -54,7 +54,6 @@ class OBSSubcommand(GenericSubcommand):
 	def registerArguments(self, args):
 		args.add_argument('--obs-host', default = self.OBS_HOST_DEFAULT,
 					help = f'Specify the OBS service to talk to (default: {self.OBS_HOST_DEFAULT})')
-		args.add_argument('--obs-cache-strategy', default = None)
 
 class PackageMonkey(object):
 	def __init__(self, name):

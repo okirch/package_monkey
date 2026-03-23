@@ -638,31 +638,20 @@ class OBSClient(object):
 		self._apiUser = osc.conf.config['user']
 
 		infomsg(f"Created OBS client for {self._apiurl}, user {self._apiUser}")
-		self.setCacheStrategy('default')
+		self.cachePolicy = 'none'
+		self._maxCacheAge = 0
+		self._allowApiCalls = True
 
 	def setCachePath(self, path):
 		self._cache = HTTPCache(path)
 
-	def setCacheStrategy(self, name, defaultCacheAge = 3600):
-		self._allowApiCalls = True
-		if name == 'none':
-			# always go to OBS. Slow
+	def setCacheTTL(self, ttl):
+		if ttl <= 0:
+			self.cachePolicy = 'none'
 			self._maxCacheAge = 0
-		elif name == 'opportunistic':
-			# avoid calling OBS where possible
-			self._maxCacheAge = None
-		elif name == 'exclusive':
-			self._maxCacheAge = None
-			self._allowApiCalls = False
-		elif name == 'default':
-			self._maxCacheAge = defaultCacheAge
-		elif name.isdigit():
-			# "--cache-strategy 6" means max cache age 6 hours
-			self._maxCacheAge = int(name) * 3600
 		else:
-			raise Exception(f"Unknown OBS cache strategy {name}")
-		self.cachePolicy = name
-		infomsg(f"Setting OBS cache strategy to {name}")
+			self.cachePolicy = 'default'
+			self._maxCacheAge = ttl
 
 	@property
 	def cachingEnabled(self):

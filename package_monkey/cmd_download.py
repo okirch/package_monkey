@@ -28,6 +28,8 @@ class SolverDownloadApplication(OBSApplicationBase):
 		cacheRoot = self.getCachePath("rpmhdrs")
 
 		client = self.obsClient
+		if self.opts.http_cache_ttl:
+			client.setCacheTTL(60 * int(self.opts.http_cache_ttl))
 
 		self.repoCollection = SolverRepositoryCollection.fromCodebase(self.productCodebase, solverDir)
 

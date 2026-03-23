@@ -157,10 +157,6 @@ class OBSApplicationBase(ApplicationBase):
 		obs = OBSClient(self.opts.obs_host)
 		obs.setCachePath(self.defaultHttpPath)
 
-		# control how much we talk to OBS directly, and how much we use the cache
-		if self.opts.obs_cache_strategy is not None:
-			obs.setCacheStrategy(self.opts.obs_cache_strategy)
-
 		return obs
 
 class ModelDescription(object):

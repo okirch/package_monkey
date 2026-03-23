@@ -9,27 +9,33 @@ import os
 import rpm
 import subprocess
 
-from .options import OBSApplicationBase, ApplicationBase
+from .options import ApplicationBase
 from .util import errormsg, warnmsg, infomsg
 from .util import ThatsProgress
 from .libsolv import *
 from .newdb import *
+from .obsclnt import OBSClient
 from .download import DownloadInfo
 
-class SolverDownloadApplication(OBSApplicationBase):
+class SolverDownloadApplication(ApplicationBase):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 
 		self.repoCollection = None
 		self.infoGadget = RpmInfoUpdateGadget(self.codebaseData)
 
+	def createOBSClient(self):
+		obs = OBSClient(self.opts.api_url)
+		obs.setCachePath(self.defaultHttpPath)
+		if self.opts.http_cache_ttl:
+			obs.setCacheTTL(60 * int(self.opts.http_cache_ttl))
+		return obs
+
 	def run(self):
 		solverDir = self.getCachePath('solve')
 		cacheRoot = self.getCachePath("rpmhdrs")
 
-		client = self.obsClient
-		if self.opts.http_cache_ttl:
-			client.setCacheTTL(60 * int(self.opts.http_cache_ttl))
+		client = self.createOBSClient()
 
 		self.repoCollection = SolverRepositoryCollection.fromCodebase(self.productCodebase, solverDir)
 

@@ -2,6 +2,7 @@
 # the profile module needs to be implemented before anything else
 from .profile import profiling
 from .subcommands import *
+from .obsclnt import OBSClient
 
 __names__ = ['PackageMonkey']
 
@@ -82,13 +83,15 @@ class PackageDiffCommand(GenericSubcommand):
 
 		return PackageDiffApplication(self.NAME, opts)
 
-class DownloadRpmsCommand(OBSSubcommand):
+class DownloadRpmsCommand(GenericSubcommand):
 	NAME = 'download'
 	HELP = 'Download package information from OBS'
 
 	def registerArguments(self, args):
 		super().registerArguments(args)
 
+		args.add_argument('--api-url', default = OBSClient.DEFAULT_API_URL,
+					help = f'Specify the OBS service to talk to (default: {OBSClient.DEFAULT_API_URL})')
 		args.add_argument('--http-cache-ttl', metavar = 'TTL', default = 0,
 				help = 'Use local HTTP cache for some OBS queries (TTL given in minutes; default: no caching)')
 		args.add_argument('--staging',

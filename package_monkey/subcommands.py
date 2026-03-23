@@ -9,7 +9,7 @@ import os
 
 from .util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 
-__names__ = ['subcommandRegistry', 'GenericSubcommand', 'OBSSubcommand', 'PackageMonkey']
+__names__ = ['subcommandRegistry', 'GenericSubcommand', 'PackageMonkey']
 
 ##################################################################
 # Very simple facility for registering the sub-commands
@@ -41,19 +41,6 @@ class GenericSubcommand(object):
 
 	def createApplication(self, opts):
 		raise NotImplementedError(f"subcommand {self.NAME}")
-
-##################################################################
-# base class for subcommands that want to talk to OBS
-##################################################################
-class OBSSubcommand(GenericSubcommand):
-	OBS_HOST_DEFAULT = "api.suse.de"
-
-	def __init__(self):
-		self.args = None
-
-	def registerArguments(self, args):
-		args.add_argument('--obs-host', default = self.OBS_HOST_DEFAULT,
-					help = f'Specify the OBS service to talk to (default: {self.OBS_HOST_DEFAULT})')
 
 class PackageMonkey(object):
 	def __init__(self, name):

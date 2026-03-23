@@ -623,12 +623,13 @@ class OBSError(Exception):
 		self.summary = ''
 
 class OBSClient(object):
-	def __init__(self, hostname, cache = None):
-		if hostname is None:
-			raise Exception("Cannot create OBS client: missing hostname argument")
+	DEFAULT_API_URL = "https://api.suse.de"
 
-		self.hostname = hostname
-		self._apiurl = f"https://{hostname}"
+	def __init__(self, apiURL, cache = None):
+		if apiURL is None:
+			raise Exception("Cannot create OBS client: missing apiURL argument")
+
+		self._apiurl = apiURL
 		self._schema = OBSSchema()
 		self._cache = cache
 

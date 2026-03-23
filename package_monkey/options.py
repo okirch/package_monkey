@@ -148,17 +148,6 @@ class ApplicationBase(object):
 	def getCachePath(self, subdir):
 		return f"{self.cacheRootPath}/{subdir}"
 
-class OBSApplicationBase(ApplicationBase):
-	def __init__(self, *args, **kwargs):
-		super().__init__(*args, **kwargs)
-
-	@property
-	def obsClient(self):
-		obs = OBSClient(self.opts.obs_host)
-		obs.setCachePath(self.defaultHttpPath)
-
-		return obs
-
 class ModelDescription(object):
 	def __init__(self, opts):
 		path = opts.model_path

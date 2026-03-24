@@ -209,30 +209,6 @@ class LoggingExecTimer(ExecTimer):
 		sec = int(elapsed) % 60
 		return f"[{min:02}:{sec:02}]"
 
-class CumulativeTimedExecutionBlock(object):
-	def __init__(self, desc):
-		self.description = desc
-		self.timer = None
-		self.totalElapsed = 0
-		self.totalCalls = 0
-
-	def __enter__(self):
-		if self.timer is None:
-			self.timer = ExecTimer()
-
-	def __exit__(self, *args):
-		if self.timer is not None:
-			self.totalElapsed += self.timer.elapsed
-			self.totalCalls += 1
-			self.timer = None
-
-	def report(self):
-		average = 0
-		if self.totalCalls:
-			average = self.totalElapsed / self.totalCalls
-		infomsg(f"{self.description}: total calls: {self.totalCalls}; timings: cum={self.totalElapsed:.3} sec; avg={average:.3} sec")
-
-
 ##################################################################
 #
 # Add a number of months to a datetime.date object

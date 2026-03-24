@@ -579,6 +579,30 @@ class ArchSolver(object):
 						infomsg(f"      unique solution {solution}")
 					assert(not rd.requiresDisambiguation)
 
+		# Handle a common case that's easy to disambiguate.
+		# Example: many packages require something like typelib(Gdk) and 'typelib(Gtk) = 3.0'.
+		# The latter has a unique solution (typelib-Gtk-3.0), whereas the former is ambiguous, and
+		# could be solved using typelib-Gtk-1.0, typelib-Gtk-2.0, ...
+		# A similar case applies for KMPs.
+		# We disambiguate by checking whether any ambiguous dependency A would be resolved by
+		# one of the packages we're pulling in anyway (through another dependency B). If that's
+		# the case, then dependency A is already satisfied by the solution to B, and there is
+		# no real ambiguity.
+		if result.isAmbiguous:
+			uniqueSolutions = set()
+			for rd in result:
+				uniqueSolutions.update(rd.solutions)
+
+			for rd in result:
+				if not rd.requiresDisambiguation:
+					continue
+
+				selectedAlready = rd.alternatives.intersection(uniqueSolutions)
+				if selectedAlready:
+					infomsg(f"XXX {rpm} {rd} can disambiguate: {' '.join(map(str, selectedAlready))}")
+					rd.solutions.update(selectedAlready)
+					rd.alternatives = set()
+
 		return result
 
 	# When using the packages from a staging project on top of the existing build project,

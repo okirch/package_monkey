@@ -7,7 +7,7 @@ import fnmatch
 import datetime
 from functools import reduce
 
-from .util import ExecTimer, TimedExecutionBlock, CumulativeTimedExecutionBlock
+from .util import ExecTimer, TimedExecutionBlock
 from .util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
 from .ordered import PartialOrder
 from .pmatch import ParallelStringMatcher
@@ -756,8 +756,6 @@ class Classification(object):
 			if messages:
 				infomsg(f"NOTE: {len(messages)} epic dependencies can be cleaned up:")
 				messages.render()
-
-			infomsg(f"GOOD. All epic dependencies are either within the layer, or can be handled via layer visibility")
 
 		def autoFlavorForBuildOptions(self, buildOptions):
 			best = None

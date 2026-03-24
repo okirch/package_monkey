@@ -1701,7 +1701,7 @@ class PreprocessorHintsLoader(object):
 	def load(self):
 		self.hints = PreprocessorHints()
 
-		infomsg(f"Load {self.filename}")
+		infomsg(f"Loading preprocessor hints from {self.filename}")
 		with open(self.filename) as f:
 			for line in f.readlines():
 				self.lineno += 1

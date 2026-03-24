@@ -1118,7 +1118,7 @@ class FilterLoader(MonkeyConfigLoader):
 
 			data = tracked_load(f, line_tracking = locationTracking)
 
-		with TimedExecutionBlock(f"loading definition from {filename}"):
+		with TimedExecutionBlock(f"loading model from {filename}"):
 			mainProcessor.process(data)
 
 		schemeBuilder.complete()
@@ -1423,10 +1423,10 @@ class CodebaseLoader(MonkeyConfigLoader):
 					raise Exception(f"Unknown filter class {key}")
 
 	def load(self, codebase, filename, **kwargs):
-		infomsg(f"Loading definition of codebase {codebase} from {filename}")
-
 		mainProcessor = self.MainFileProcessor(codebase, filename)
 		with open(filename) as f:
 			data = yaml.full_load(f)
-		mainProcessor.process(data)
+
+		with TimedExecutionBlock(f"loading codebase definition from {filename}"):
+			mainProcessor.process(data)
 

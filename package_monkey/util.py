@@ -193,12 +193,13 @@ class TimedExecutionBlock(object):
 
 	def __enter__(self):
 		if self.timer is None:
-			infomsg(f"Begin {self.description}")
+			infomsg(self.description.capitalize())
 			self.timer = ExecTimer()
 
 	def __exit__(self, *args):
 		if self.timer is not None:
-			infomsg(f"Completed {self.description}, {self.timer} elapsed")
+			if self.timer.elapsed > 1:
+				infomsg(f"Spent {self.timer} seconds {self.description}")
 			self.timer = None
 
 class LoggingExecTimer(ExecTimer):

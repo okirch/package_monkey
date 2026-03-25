@@ -320,6 +320,10 @@ class PublishCommand(GenericSubcommand):
 		'''
 
 	def registerArguments(self, args):
+		args.add_argument('--all', dest = 'scope', action = 'store_const', const = 'all',
+					help = 'Publish all generated data (default)')
+		args.add_argument('--lifecycle', dest = 'scope', action = 'store_const', const = 'lifecycle',
+					help = 'Publish life cycle data')
 		args.add_argument(dest = 'path', metavar = 'PATH',
 					help = 'Directory to which to publish generated files to')
 		args.add_argument(dest = 'slug', metavar = 'SLUG', nargs = '?',

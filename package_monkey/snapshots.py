@@ -30,14 +30,6 @@ class Snapshot(object):
 	def getProduct(self, name):
 		return ProductLocation(os.path.join(self.path, name))
 
-	def publish(self, path):
-		if not os.path.isdir(path):
-			errormsg(f"Cannot publish to {path}: not a directory")
-			return 1
-
-		shutil.copytree(self.path, path, dirs_exist_ok = True)
-		return 0
-
 	def addRpms(self, codebase, cachePath):
 		import shutil
 

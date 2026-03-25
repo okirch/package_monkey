@@ -9,6 +9,8 @@ import sys
 import os
 import time
 import shutil
+import tempfile
+import fnmatch
 
 from .util import infomsg, errormsg, warnmsg
 from .options import ApplicationBase
@@ -57,11 +59,21 @@ class PublishApplication(ApplicationBase):
 		data = self.load(self.opts.slug)
 
 		if self.opts.slug:
-			infomsg(f"Publishing snapshot {self.opts.slug}")
+			source = f"snapshot {self.opts.slug}"
 		else:
-			infomsg(f"Publishing current state")
+			source = f"current state"
 
-		return data.publish(path)
+		scope = self.opts.scope or 'all'
+		if scope == 'all':
+			infomsg(f"Publishing {source} to {path}")
+			self.copyFiles(data.path, path)
+		elif scope == 'lifecycle':
+			infomsg(f"Publishing lifecycle from {source} to {path}")
+			self.publishLifecycle(data, path)
+		else:
+			raise Exception(f"Cannot publish {scope}: not implemented")
+
+		return 0
 
 	def load(self, slug):
 		if slug is None:
@@ -73,3 +85,33 @@ class PublishApplication(ApplicationBase):
 
 		return data
 
+	def publishLifecycle(self, data, destDir):
+		release = self.modelDescription.releaseID
+
+		productData = data.getProduct(release)
+		sourceDir = productData.path
+
+		targetName = f"lifecycle-data-{release}"
+		archiveName = f"{targetName}.tar.xz"
+
+		with tempfile.TemporaryDirectory() as tmpDir:
+			infomsg(f"Copying lifecycle data from {sourceDir} to {tmpDir}")
+
+			self.copyFiles(sourceDir, f"{tmpDir}/{targetName}",
+						onlyPatterns = ("lifecycle*.txt", "lifecycle*.yaml"))
+			os.system(f"tar -C {tmpDir} -cvjf {archiveName} {targetName}")
+
+			shutil.move(f"{archiveName}", f"{destDir}/{archiveName}")
+
+	def copyFiles(self, sourceDir, destDir, onlyPatterns = None):
+		if onlyPatterns is None:
+			shutil.copytree(sourceDir, destDir, dirs_exist_ok = True)
+		else:
+			def ignoreNames(dir, entries):
+				result = []
+				for name in entries:
+					if not any(fnmatch.fnmatch(name, pattern) for pattern in onlyPatterns):
+						result.append(name)
+				return result
+
+			shutil.copytree(sourceDir, destDir, dirs_exist_ok = True, ignore = ignoreNames)

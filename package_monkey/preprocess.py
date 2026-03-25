@@ -599,7 +599,6 @@ class ArchSolver(object):
 
 				selectedAlready = rd.alternatives.intersection(uniqueSolutions)
 				if selectedAlready:
-					infomsg(f"XXX {rpm} {rd} can disambiguate: {' '.join(map(str, selectedAlready))}")
 					rd.solutions.update(selectedAlready)
 					rd.alternatives = set()
 

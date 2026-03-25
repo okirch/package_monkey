@@ -70,7 +70,7 @@ class SolverDownloadApplication(ApplicationBase):
 			obsProject = repository.obsProject
 			downloadQueue = repository.downloadQueue
 
-			if len(downloadQueue) == 0:
+			if len(downloadQueue) == 0 and repository.isUptodate():
 				continue
 
 			obsProject.performDownload(client, downloadQueue, progressMeter)

@@ -77,6 +77,7 @@ class ProductCodebase(object):
 		self.release = None
 
 		self.architectures = ArchSet()
+		self.apiURL = None
 		self.buildProjects = []
 		self.sourceProjects = []
 

@@ -25,7 +25,13 @@ class SolverDownloadApplication(ApplicationBase):
 		self.infoGadget = RpmInfoUpdateGadget(self.codebaseData)
 
 	def createOBSClient(self):
-		obs = OBSClient(self.opts.api_url)
+		apiURL = self.opts.api_url
+		if apiURL is None:
+			apiURL = self.productCodebase.apiURL
+		if apiURL is None:
+			infomsg(f"No api url given for this codebase, using {OBSClient.DEFAULT_API_URL}")
+
+		obs = OBSClient(apiURL)
 		obs.setCachePath(self.defaultHttpPath)
 		if self.opts.http_cache_ttl:
 			obs.setCacheTTL(60 * int(self.opts.http_cache_ttl))

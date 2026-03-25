@@ -1403,6 +1403,8 @@ class CodebaseLoader(MonkeyConfigLoader):
 				self.codebase.architectures = ArchSet(self.context.asStringList(key, value))
 			elif key == 'filter':
 				self.processFilters(self.context.dictContext(key, value))
+			elif key == 'api_url':
+				self.codebase.apiURL = self.context.asString(key, value)
 			elif key == 'build_projects':
 				self.codebase.buildProjects = self.context.asStringList(key, value)
 			elif key == 'ghosts':

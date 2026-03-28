@@ -1550,12 +1550,10 @@ class PreprocessorHints(object):
 		def __str__(self):
 			return f"AmbiguityTransform([{' '.join(self.srcNameList)}] -> [{' '.join(self.dstNameList)}])"
 
-		def __call__(self, choices):
-			if not self.valid:
-				return choices
-			if self.srcRpms.issubset(choices):
-				return choices.difference(self.srcRpms).union(self.dstRpms)
-			return choices
+		def __call__(self, selection):
+			if self.valid and self.srcRpms.issubset(selection.rpms):
+				selection.difference_update(self.srcRpms)
+				selection.update(self.dstRpms)
 
 	class PreTransform(object):
 		def __init__(self, srcName, dstName, context = None):
@@ -1684,28 +1682,74 @@ class PreprocessorHints(object):
 	def definePreference(self, preferredSet, originalSet):
 		self.defineAmbiguityTransform(preferredSet + originalSet, preferredSet)
 
+	class RpmSelection(object):
+		def __init__(self, rpms):
+			self.rpms = set(rpms)
+			self._names = None
+			self._builds = None
+
+		def __bool__(self):
+			return bool(self.rpms)
+
+		def __len__(self):
+			return len(self.rpms)
+
+		def __str__(self):
+			return ' '.join(map(str, self.rpms))
+
+		def discard(self, rpm):
+			self.rpms.discard(rpm)
+			self._names.discard(rpm.shortname)
+			self._builds = None
+
+		@property
+		def nameDict(self):
+			if self._names is None:
+				self._names = dict((rpm.shortname, rpm) for rpm in self.rpms)
+			return self._names
+
+		@property
+		def names(self):
+			return set(self.nameDict.keys())
+
+		def nameToRpm(self, name):
+			return self.nameDict.get(name)
+
+		@property
+		def builds(self):
+			if self._builds is None:
+				self._builds = set(rpm.buildName for rpm in self.rpms)
+			return self._builds
+
+		def difference_update(self, rpms):
+			self.rpms.difference_update(rpms)
+			self._names = None
+			self._builds = None
+
+		def update(self, rpms):
+			self.rpms.update(rpms)
+			self._names = None
+			self._builds = None
+
 	def filterChoices(self, choices):
-		choices = set(choices)
+		selection = self.RpmSelection(choices)
 
-		debugSolver(f"filterChoices {' '.join(map(str, choices))}")
-		for name in self.ignoreNames:
-			for solvable in choices:
-				if solvable.shortname == name:
-					choices.remove(solvable)
-					debugSolver(f"  remove {name}")
-					break
+		debugSolver(f"filterChoices {selection}")
+		namesToDrop = selection.names.intersection(self.ignoreNames)
+		if namesToDrop:
+			rpmsToDrop = set(rpm for rpm in selection.rpms if rpm.shortname in namesToDrop)
+			selection.difference_update(rpmsToDrop)
 
-			if len(choices) <= 1:
-				break
+		if not selection:
+			errormsg(f"All names in selection ignored - not good")
+			return None
 
 		for transform in self.ambiguityTransforms:
-			out = transform(choices)
-			if not out:
-				raise Exception(f"transform {transform} turns {' '.join(map(str, choices))} into {out}")
-			choices = out
+			transform(selection)
+			if not selection:
+				raise Exception(f"transform {transform} reduces selection to empty set")
 
-		assert(choices)
-		return choices
+		return selection.rpms
 
 	def hasScenarioVariable(self, *args, **kwargs):
 		return self._newScenarioManager.hasVariable(*args, **kwargs)

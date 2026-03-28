@@ -1690,6 +1690,122 @@ class PreprocessorHints(object):
 			if common:
 				selection.replace(common)
 
+	class WildcardPreferBase(object):
+		def __init__(self, preferredName, alternativeNames):
+			self.preferredName = preferredName
+			self.alternativeNames = alternativeNames
+			self.dropped = None
+
+		def begin(self, selection, preferredRpm):
+			self.trace = any(rpm.trace for rpm in selection.rpms)
+			self.preferredRpm = preferredRpm
+			self.selection = selection
+			self.dropped = set()
+
+		def done(self):
+			if self.dropped:
+				if self.trace:
+					infomsg(f"prefer {self.preferredRpm} over {' '.join(map(str, self.dropped))}")
+				self.selection.difference_update(self.dropped)
+			self.dropped = None
+
+		def __str__(self):
+			return f"{self.__class__.__name__}([{' '.join(self.alternativeNames)}] -> [{self.preferredName}])"
+
+		def maybeDrop(self, regex, stripPrefix = None):
+			for other in self.selection.rpms:
+				if other is self.preferredRpm:
+					continue
+
+				name = other.shortname
+				if stripPrefix is not None:
+					if not name.startswith(stripPrefix):
+						continue
+					name = name[len(stripPrefix):]
+				if regex.fullmatch(name):
+					self.dropped.add(other)
+
+	# prefer lib.* over \0-devel
+	class WildcardPrefer1(WildcardPreferBase):
+		def __init__(self, preferredName, alternativeNames):
+			super().__init__(preferredName, alternativeNames)
+			self.preferredPattern = re.compile(preferredName)
+			if self.preferredPattern.groups == 0:
+				self.preferredPattern = re.compile(f"({preferredName})")
+
+			self.suffixREs = []
+			self.alternativeExpansions = []
+			for pattern in alternativeNames:
+				if pattern.startswith('\\1') and pattern.count('\\') == 1:
+					# at match time, we remove the matched pattern from other
+					# rpms, then check the suffix against the RE
+					self.suffixREs.append(re.compile(pattern[2:]))
+				else:
+					self.alternativeExpansions.append(pattern)
+
+		def process(self, selection):
+			for rpm in sorted(selection.rpms, key = lambda r: len(r.shortname)):
+				if rpm not in selection.rpms:
+					continue
+
+				m = self.preferredPattern.fullmatch(rpm.shortname)
+				if not m:
+					continue
+
+				self.begin(selection, rpm)
+				for suffixRE in self.suffixREs:
+					self.maybeDrop(suffixRE, stripPrefix = m.group(1))
+				for s in self.alternativeExpansions:
+					fullRE = re.compile(m.expand(s))
+					self.maybeDrop(fullRE)
+				self.done()
+
+	# prefer perl over perl-[A-Z].*
+	class WildcardPrefer2(WildcardPreferBase):
+		def __init__(self, preferredName, alternativeNames):
+			super().__init__(preferredName, alternativeNames)
+			self.alternativePatterns = list(map(re.compile, alternativeNames))
+
+		def process(self, selection):
+			preferredRpm = selection.nameToRpm(self.preferredName)
+			if preferredRpm is None:
+				return
+
+			self.begin(selection, preferredRpm)
+			for re in self.alternativePatterns:
+				self.maybeDrop(re)
+			self.done()
+
+	class WildcardPreferTransform(object):
+		def __init__(self, select):
+			self.select = select
+
+		def rebind(self, rpmFactory):
+			pass
+
+		def __str__(self):
+			return f"WildcardAmbiguityTransform({self.select})"
+
+		def __call__(self, selection):
+			if len(selection.rpms) > 1:
+				self.select.process(selection)
+
+		@classmethod
+		def factory(klass, preferredNames, alternativeNames):
+			if len(preferredNames) != 1:
+				errormsg(f"wildcard prefer rules can have only one preferred package")
+				return None
+
+			preferredName, = preferredNames
+			if any('\\1' in name for name in alternativeNames):
+				# preferredName is a regexp, alternativeNames are expansion templates
+				select = PreprocessorHints.WildcardPrefer1(preferredName, alternativeNames)
+			else:
+				# preferredName is a literal, alternativeNames are regexes
+				select = PreprocessorHints.WildcardPrefer2(preferredName, alternativeNames)
+
+			return klass(select)
+
 	class PreTransform(object):
 		def __init__(self, srcName, dstName, context = None):
 			self.srcName = srcName
@@ -1859,8 +1975,17 @@ class PreprocessorHints(object):
 	#	prefer foo over bar
 	# and
 	#	transform-ambiguity foo bar into foo
-	def definePreference(self, preferredSet, originalSet):
-		self.defineAmbiguityTransform(preferredSet + originalSet, preferredSet)
+	def definePreference(self, preferredNames, alternativeNames):
+		self.defineAmbiguityTransform(preferredNames + alternativeNames, preferredNames)
+
+	def defineWildcardPreference(self, preferredNames, alternativeNames):
+		# wildcard rules can look like this:
+		#   prefer python311-.* over \0[0-9_.]+
+		#	this will disambiguate between different versions of the same python module
+		#   prefer perl over perl-.*
+		#	this will prefer perl over any perl-Foobar module
+		transform = self.WildcardPreferTransform.factory(preferredNames, alternativeNames)
+		self.ambiguityTransforms.append(transform)
 
 	class RpmSelection(object):
 		def __init__(self, rpms):
@@ -1879,7 +2004,8 @@ class PreprocessorHints(object):
 
 		def discard(self, rpm):
 			self.rpms.discard(rpm)
-			self._names.discard(rpm.shortname)
+			if self._names is not None:
+				self._names.pop(rpm.shortname, None)
 			self._builds = None
 
 		@property
@@ -2198,6 +2324,8 @@ class PreprocessorHintsLoader(object):
 	InfixCommand('transform-ambiguity',	2,	call = PreprocessorHints.defineAmbiguityTransform,
 							splitWord = 'into'),
 	InfixCommand('prefer',			2,	call = PreprocessorHints.definePreference,
+							splitWord = 'over'),
+	InfixCommand('match-prefer',		2,	call = PreprocessorHints.defineWildcardPreference,
 							splitWord = 'over'),
 	]
 	COMMANDS = {}

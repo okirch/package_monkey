@@ -1427,7 +1427,12 @@ class DependencyOracle(object):
 
 		what, condition = m.groups()
 
-		term = BooleanDependency.parse(condition)
+		try:
+			term = BooleanDependency.parse(condition)
+		except Exception as e:
+			errormsg(f"{rpm}: cannot parse conditional {condition} - assuming it evaluates to False")
+			return None
+
 		status = term.eval(self)
 
 		if status is None:

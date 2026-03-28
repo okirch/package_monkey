@@ -1520,12 +1520,19 @@ class PreprocessorHints(object):
 			self.dstNameList = dstNameList
 			self.srcRpms = None
 			self.dstRpms = None
+			self.valid = False
 
 		def rebind(self, rpmFactory):
-			self.srcRpms = set(filter(bool, map(rpmFactory.getByName, self.srcNameList)))
-			self.dstRpms = set(filter(bool, map(rpmFactory.getByName, self.dstNameList)))
+			self.srcRpms = set(map(rpmFactory.getByName, self.srcNameList))
+			self.dstRpms = set(map(rpmFactory.getByName, self.dstNameList))
+			self.valid = (None not in self.srcRpms) and (None not in self.dstRpms)
+
+		def __str__(self):
+			return f"AmbiguityTransform([{' '.join(self.srcNameList)}] -> [{' '.join(self.dstNameList)}])"
 
 		def __call__(self, choices):
+			if not self.valid:
+				return choices
 			if self.srcRpms.issubset(choices):
 				return choices.difference(self.srcRpms).union(self.dstRpms)
 			return choices

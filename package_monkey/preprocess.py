@@ -279,6 +279,7 @@ class ArchSolver(object):
 		# This needs to be configurable via hints:
 		abiProviderKeys = (
 			'python(abi)',
+			'golang(API)',
 		)
 		self.abiManager = AbiManager(abiProviderKeys)
 

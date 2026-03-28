@@ -38,9 +38,6 @@ class PreprocessApplicationBase(ApplicationBase):
 			self.opts.reslog = self.getCodebasePath("resolver.log")
 		self.resolverLog = ResolverLog(self.opts.reslog)
 
-	def loadHints(self):
-		self.hints = self.modelDescription.loadPreprocessorHints()
-
 	def loadRepositories(self, withStaging = None):
 		solverDir = self.getCachePath('solve')
 		self.repositoryCollection = SolverRepositoryCollection.fromCodebase(self.productCodebase, solverDir)
@@ -125,7 +122,7 @@ class PreprocessApplicationBase(ApplicationBase):
 
 		ghosts = codebaseModel.ghostRpms.toRpms(db, create = True)
 
-		self.loadHints()
+		self.hints = self.modelDescription.loadPreprocessorHints()
 		self.loadRepositories(withStaging = self.opts.staging)
 
 		for rpm in unresolvables:
@@ -187,7 +184,7 @@ class SolverApplication(PreprocessApplicationBase):
 		if self.opts.trace:
 			self.traceDisambiguation = True
 
-		self.loadHints()
+		self.hints = self.modelDescription.loadPreprocessorHints()
 		self.loadRepositories(withStaging = self.opts.staging)
 
 		if self.opts.only_arch:

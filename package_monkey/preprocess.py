@@ -354,6 +354,17 @@ class ArchSolver(object):
 
 			self.detectAbiProviders(rpm)
 
+		if self.rpmFactory.traceMatcher is not None:
+			prefer = []
+			other = []
+
+			for rpm in rpms:
+				if rpm.trace:
+					prefer.append(rpm)
+				else:
+					other.append(rpm)
+			rpms = prefer + other
+
 		for rpm in rpms:
 			if rpm.isSynthetic:
 				continue

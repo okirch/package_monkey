@@ -1801,6 +1801,13 @@ class PreprocessorHints(object):
 	def createScenarioVariable(self, name, *values, **kwargs):
 		self._newScenarioManager.createVariable(name, values, **kwargs)
 
+	def defineVariableFallback(self, name, key, values):
+		var = self._newScenarioManager.getScenarioVariable(name)
+		if key not in var.values:
+			errormsg(f"cannot define fallback for {name}/{key}: unknown value for this variable")
+			return False
+		var.setFallback(key, values)
+
 	# For a scenario like "jdk" add a group of equivalent rpms, e.g. "java-headless".
 	# The objective is to detect packages that depend on "any headless jdk" and
 	# resolve this ambiguity by replacing it with a synthetic rpm named
@@ -1983,6 +1990,31 @@ class PreprocessorHintsLoader(object):
 			toValues = words[i+1:]
 			return super().__call__(hints, fromValues, toValues, **kwargs)
 
+	# Commands with this sort of syntax:
+	#   cmd arg1 arg2 ...
+	#	keyA: valueA1 valueA2
+	#	keyB: valueB1 valueB2 valueB3
+	#	...
+	class MappingCommand(Command):
+		def __call__(self, hints, words, **kwargs):
+			args = []
+			while words and not words[0].endswith(':'):
+				args.append(words.pop(0))
+
+			while words:
+				key = words.pop(0)
+				if not key.endswith(':'):
+					return False
+
+				key = key.rstrip(':')
+
+				values = []
+				while words and not words[0].endswith(':'):
+					values.append(words.pop(0))
+
+				if super().__call__(hints, *args, key, values) is False:
+					return False
+
 	class ScenarioCommand(Command):
 		def __call__(self, hints, words, **kwargs):
 			spec = words.pop(0).split('/')
@@ -2022,6 +2054,7 @@ class PreprocessorHintsLoader(object):
 	ScenarioCommand('scenario',		3,	),
 	StarCommand('variable',			1,	call = PreprocessorHints.createScenarioVariable,
 							keywords = ('pattern', )),
+	MappingCommand('fallback',		2,	call = PreprocessorHints.defineVariableFallback),
 	StarCommand('pre-transform',		[2, 2],	call = PreprocessorHints.addDependencyTransform,
 							keywords = 'context'),
 	StarCommand('conditional',		[2, 2],	call = PreprocessorHints.addConditional,

@@ -163,6 +163,14 @@ class ScenarioVariable(object):
 		self.name = name
 		self.values = list(values)
 		self.pattern = None
+		self.fallbacks = {}
+
+	def setFallback(self, key, fallbacks):
+		assert(key in self.values)
+		self.fallbacks[key] = fallbacks
+
+	def getFallbacks(self, key):
+		return self.fallbacks.get(key, [])
 
 class NewScenarioManager(object):
 	def __init__(self):
@@ -225,6 +233,8 @@ class NewScenarioManager(object):
 			for concreteScenario in self.matchPattern(name):
 				self.attachRpm(rpm, concreteScenario)
 
+		self.applyScenarioFallbacks()
+
 	def matchPattern(self, name):
 		for regex, variable, abstractPackage in self._patterns:
 			m = regex.fullmatch(name)
@@ -237,6 +247,48 @@ class NewScenarioManager(object):
 
 			concreteScenario = self.createConcreteScenario(variable, version, abstractPackage)
 			yield concreteScenario
+
+	def applyScenarioFallbacks(self):
+		allScenarios = list(self._byId.values())
+
+		for var in self._variables.values():
+			# don't bother unless this variable defines fallbacks
+			if not var.fallbacks:
+				continue
+
+			abstractPackageNames = set()
+			for scenario in allScenarios:
+				if scenario.control.variable == var.name and scenario.rpms:
+					abstractPackageNames.add(scenario.control.abstractPackage)
+
+			for abstractPackage in abstractPackageNames:
+				defined = {}
+				undefined = []
+				for version in var.values:
+					concreteScenario = self.createConcreteScenario(var.name, version, abstractPackage)
+					if concreteScenario.rpms:
+						defined[version] = concreteScenario
+					else:
+						undefined.append(concreteScenario)
+
+				for concreteScenario in undefined:
+					targetVersion = concreteScenario.control.value
+					fallbacks = var.getFallbacks(targetVersion).copy()
+
+					while fallbacks:
+						version = fallbacks.pop(0)
+
+						found = defined.get(version)
+						if found is None:
+							fallbacks += var.getFallbacks(version)
+							continue
+
+						if False:
+							infomsg(f"  {concreteScenario}: fall back to {found}")
+						defined[targetVersion] = found
+						for rpm in found.rpms:
+							self.attachRpm(rpm, concreteScenario)
+						break
 
 	def attachRpm(self, rpm, concreteScenario):
 		sct = concreteScenario.control

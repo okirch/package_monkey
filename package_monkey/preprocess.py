@@ -1812,7 +1812,17 @@ class PreprocessorHints(object):
 	# The objective is to detect packages that depend on "any headless jdk" and
 	# resolve this ambiguity by replacing it with a synthetic rpm named
 	# "jdk/java-headless"
-	def defineConcreteScenario(self, scenarioName, abstractPackageName, key, rpmNames):
+	def defineConcreteScenario(self, scenarioSpec, key, rpmNames):
+		try:
+			scenarioName, abstractPackageName = scenarioSpec.split('/')
+		except:
+			errormsg(f"expected \"scenario/key\" argument")
+			return False
+
+		if not self.hasScenarioVariable(scenarioName):
+			errormsg(f"unknown scenario \"{scenarioName}\"")
+			return False
+
 		var = self._newScenarioManager.getScenarioVariable(scenarioName)
 
 		if key != '%':
@@ -2015,30 +2025,6 @@ class PreprocessorHintsLoader(object):
 				if super().__call__(hints, *args, key, values) is False:
 					return False
 
-	class ScenarioCommand(Command):
-		def __call__(self, hints, words, **kwargs):
-			spec = words.pop(0).split('/')
-			if len(spec) != 2:
-				errormsg(f"{self}: expected \"scenario/key\" argument")
-				return False
-				
-			scenarioName, abstractPackage = spec
-			if not hints.hasScenarioVariable(scenarioName):
-				return self.error(f"{command}: unknown scenario \"{scenarioName}\"")
-
-			while words:
-				key = words.pop(0)
-				if not key.endswith(':'):
-					return False
-
-				key = key.rstrip(':')
-
-				rpmNames = set()
-				while words and not words[0].endswith(':'):
-					rpmNames.add(words.pop(0))
-
-				hints.defineConcreteScenario(scenarioName, abstractPackage, key, rpmNames)
-
 	COMMAND_LIST = [
 	Command('ignore',			1,	call = PreprocessorHints.addIgnoredDependencies),
 	Command('ignore-suffix',		1,	call = PreprocessorHints.addIgnoredSuffixes),
@@ -2051,7 +2037,8 @@ class PreprocessorHintsLoader(object):
 							keywords = ('type', )),
 	Command('build-skip-version-check',
 						1,	call = PreprocessorHints.skipVersionChecks),
-	ScenarioCommand('scenario',		3,	),
+	MappingCommand('scenario',		3,	call = PreprocessorHints.defineConcreteScenario,
+							keywords = None),
 	StarCommand('variable',			1,	call = PreprocessorHints.createScenarioVariable,
 							keywords = ('pattern', )),
 	MappingCommand('fallback',		2,	call = PreprocessorHints.defineVariableFallback),

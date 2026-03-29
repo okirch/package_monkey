@@ -242,6 +242,7 @@ class ArchSolver(object):
 			self.alwaysFavored.add(rpm)
 
 		self.unresolvableRpm = self.createDummySolvable('__unresolved__', type = RpmWrapper.TYPE_SYNTHETIC)
+		PackageDependencies.unresolvableRpm = self.unresolvableRpm
 
 		for name in hints.knownMissingNames:
 			params = name.split(';')
@@ -482,8 +483,7 @@ class ArchSolver(object):
 				if not choices:
 					if rpm.trace:
 						infomsg(f"      resolved to nothing")
-					result.addResolved(dep, self.unresolvableRpm)
-					result.isResolvable = False
+					result.markUnresolvable(dep)
 					continue
 
 				if rpm in choices:
@@ -491,7 +491,6 @@ class ArchSolver(object):
 						infomsg(f"      resolved to self")
 					# Note: we do not want to track dependencies of a package on itself.
 					# It's superfluous, plus it creates issues when dealing with scenarios.
-					# result.addResolved(dep, rpm)
 					continue
 
 				if rpm.trace:
@@ -511,11 +510,13 @@ class ArchSolver(object):
 					choices = set(filter(lambda rpm: self.checkAbiCompatibility(rpm, result.abiCompatibility), choices))
 					if not choices:
 						errormsg(f"{rpm}/{dep}: no candidate that is compatible with required ABI(s) {result.abiCompatibility}")
+						result.markUnresolvable(dep)
 						continue
 
 				choices = self.filterAlternatives(choices)
 				if not choices:
 					errormsg(f"{rpm}/{dep}: filterAlternatives failed?!")
+					result.markUnresolvable(dep)
 					continue
 
 				suppress = origChoices.difference(choices)
@@ -525,7 +526,7 @@ class ArchSolver(object):
 
 				if len(choices) == 1:
 					solution = next(iter(choices))
-					result.addResolved(dep, solution)
+					result.addSolution(dep, solution)
 
 					abi = self.abiManager.getAbi(solution.solvable)
 					if abi is not None:
@@ -539,8 +540,7 @@ class ArchSolver(object):
 					continue
 
 				acceptable = self.hints.areAlternativesAcceptable(choices)
-				rd = result.addResolved(dep)
-				rd.addAlternatives(choices, acceptable)
+				result.addAmbiguousSolution(dep, choices, acceptable)
 
 				if rpm.trace:
 					if acceptable:
@@ -1189,6 +1189,8 @@ class ResolvedDependency(object):
 		return self.alternatives.union(self.solutions)
 
 class PackageDependencies(object):
+	unresolvableRpm = None
+
 	def __init__(self, requiringPkg, key):
 		self.key = key
 		self.requiringPkg = requiringPkg
@@ -1205,6 +1207,20 @@ class PackageDependencies(object):
 	def addResolved(self, dep, solution = None):
 		rd = ResolvedDependency(dep, solution)
 		self._resolved.append(rd)
+		return rd
+
+	def markUnresolvable(self, dep):
+		assert(self.unresolvableRpm is not None)
+		rd = self.addResolved(dep, self.unresolvableRpm)
+		self.isResolvable = False
+		return rd
+
+	def addSolution(self, dep, solution):
+		return self.addResolved(dep, solution)
+
+	def addAmbiguousSolution(self, dep, rpms, acceptable = False):
+		rd = self.addResolved(dep)
+		rd.addAlternatives(rpms, acceptable)
 		return rd
 
 	def __str__(self):

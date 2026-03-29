@@ -2041,7 +2041,7 @@ class PreprocessorHintsLoader(object):
 		args = []
 		kwargs = {}
 		for w in words:
-			if '=' not in w:
+			if '=' not in w or cmd.keywords is None:
 				args.append(w)
 			else:
 				key, value = w.split('=')

@@ -49,6 +49,7 @@ class RpmWrapper(RpmBase):
 		self.solvable = solvable
 		self.buildArch = buildArch
 		self.shortname = name
+		self.buildName = None
 		self.arch = arch
 
 		self.abstractPackages = None
@@ -334,13 +335,21 @@ class ArchSolver(object):
 		return rpm
 
 	# solve some or all rpms in a set of repositories.
-	def solve(self, progressMeter, rpms = None, **kwargs):
+	def solve(self, progressMeter, rpms = None, db = None, **kwargs):
 		self.applyHints()
 		self.pool.addfileprovides()
 		self.pool.createwhatprovides()
 
 		if rpms is None:
 			rpms = self._rpms
+
+		if db is not None:
+			for rpm in rpms:
+				if rpm.isSynthetic:
+					continue
+				genericRpm = db.lookupRpm(rpm.shortname)
+				if genericRpm is not None and genericRpm.new_build is not None:
+					rpm.buildName = genericRpm.new_build.name
 
 		totalCount = len(rpms)
 

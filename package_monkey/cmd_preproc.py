@@ -211,7 +211,7 @@ class SolverApplication(PreprocessApplicationBase):
 			repository.loadBuilds(db)
 
 		for archSolver in archSolvers:
-			archSolver.solve(progressMeter)
+			archSolver.solve(progressMeter, db = db)
 
 		for archSolver in archSolvers:
 			self.extractResolution(archSolver, db)

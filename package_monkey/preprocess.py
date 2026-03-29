@@ -1535,13 +1535,27 @@ class AbiManager(object):
 		return self._abi.get(solvable.id)
 
 class PreprocessorHints(object):
-	class AcceptableAmbiguity(object):
+	class AcceptableRpmSet(object):
 		def __init__(self, nameList):
 			self.nameList = nameList
 			self.rpms = None
 
 		def rebind(self, rpmFactory):
 			self.rpms = set(filter(bool, map(rpmFactory.getByName, self.nameList)))
+
+		def check(self, choices):
+			return choices.issubset(self.rpms)
+
+	class AcceptableBuildSet(object):
+		def __init__(self, nameList):
+			self.nameList = nameList
+
+		def rebind(self, rpmFactory):
+			pass
+
+		def check(self, choices):
+			builds = set(rpm.buildName for rpm in choices)
+			return builds.issubset(self.nameList)
 
 	class AmbiguityTransform(object):
 		def __init__(self, srcNameList, dstNameList):
@@ -1673,17 +1687,28 @@ class PreprocessorHints(object):
 	def addSyntheticNames(self, args):
 		self.syntheticNames += args
 
-	def defineAcceptableAmbiguity(self, nameList):
-		self.acceptableAmbiguities.append(self.AcceptableAmbiguity(nameList))
+	def defineAcceptableAmbiguity(self, nameList, type = 'rpm'):
+		if type == 'rpm':
+			self.acceptableAmbiguities.append(self.AcceptableRpmSet(nameList))
+		elif type == 'build':
+			self.acceptableAmbiguities.append(self.AcceptableBuildSet(nameList))
+		else:
+			errormsg(f"invalid object type {type}")
+			return False
 
 	def areAlternativesAcceptable(self, choices):
+		# First check all accept-ambiguity rules defined in the hints file
+		for ambig in self.acceptableAmbiguities:
+			if ambig.check(choices):
+				return 1
+
+		# As a fallback, check for accept-unknown-ambiguities.
+		# Note, this does not apply to dependency resolutions involving
+		# scenarios (which we want to handle properly).
 		if self.acceptUnknownAmbiguities and \
 		   not any(rpm.newControllingScenarios for rpm in choices):
-			return True
-		for ambig in self.acceptableAmbiguities:
-			if choices.issubset(ambig.rpms):
-				return True
-		return False
+			return 2
+		return 0
 
 	def skipVersionChecks(self, nameList):
 		self.buildNoVersionCheckSet.update(nameList)
@@ -1990,7 +2015,8 @@ class PreprocessorHintsLoader(object):
 	Command('synthetic',			1,	call = PreprocessorHints.addSyntheticNames),
 	Command('always-prefer',		1,	call = PreprocessorHints.addPreferredNames),
 	Command('accept-missing',		1,	call = PreprocessorHints.addKnownMissing),
-	Command('accept-ambiguity',		1,	call = PreprocessorHints.defineAcceptableAmbiguity),
+	Command('accept-ambiguity',		1,	call = PreprocessorHints.defineAcceptableAmbiguity,
+							keywords = ('type', )),
 	Command('build-skip-version-check',
 						1,	call = PreprocessorHints.skipVersionChecks),
 	ScenarioCommand('scenario',		3,	),

@@ -986,11 +986,14 @@ class ArchSolver(object):
 			if not rd.requiresDisambiguation:
 				continue
 
-			if rd.abstractScenarioPackage is None:
-				errorReport.add(f"   {rd}: no scenario for {' '.join(sorted(map(str, rd.alternatives)))}")
-				continue
-
-			scenarioVariables.add(rd.abstractScenarioPackage.scenarioVar)
+			if rd.abstractScenarioPackage is not None:
+				scenarioVariables.add(rd.abstractScenarioPackage.scenarioVar)
+			else:
+				# Do not report each and every dependency with alternatives; just report the one
+				# that is not covered by a scenario
+				lacking = rd.alternativesWithoutScenario()
+				if lacking:
+					errorReport.add(f"   {rd}: no scenario for {' '.join(sorted(map(str, lacking)))}")
 
 		if len(scenarioVariables) > 1:
 			errorReport.add(f"   using packages from multiple scenarios {' '.join(map(str, scenarioVariables))}: currently not supported")
@@ -1199,6 +1202,16 @@ class ResolvedDependency(object):
 
 		return None
 
+	def alternativesWithoutScenario(self):
+		if not self.requiresDisambiguation:
+			return None
+
+		result = set()
+		for rpm in self.alternatives:
+			if not rpm.newControllingScenarios:
+				result.add(rpm)
+		return result
+
 	@property
 	def closure(self):
 		return self.alternatives.union(self.solutions)
@@ -1260,14 +1273,11 @@ class PackageDependencies(object):
 	def canAttemptScenarioDisambiguation(self, verbose = False):
 		errors = 0
 		for rd in self._resolved:
-			if not rd.requiresDisambiguation:
-				continue
-
-			for requiredRpm in rd.alternatives:
-				if not requiredRpm.newControllingScenarios:
-					if verbose:
-						errormsg(f"{self.requiringPkg} -> {requiredRpm}: not covered by a scenario")
-					errors += 1
+			lacking = rd.alternativesWithoutScenario()
+			if lacking:
+				if verbose:
+					errormsg(f"{self}/{rd}: no scenario for {' '.join(sorted(map(str, lacking)))}")
+				errors += 1
 
 		return errors == 0
 

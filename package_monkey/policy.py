@@ -5,6 +5,7 @@
 ##################################################################
 
 import datetime
+import os
 from .util import infomsg, warnmsg, errormsg
 from .util import relativeDate
 
@@ -762,6 +763,9 @@ class Policy(object):
 			print(msg, file = dbf)
 
 		context = None
+
+		if not os.path.exists(path):
+			return
 
 		with open(path, "r") as dbf:
 			line = None

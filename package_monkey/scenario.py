@@ -341,7 +341,7 @@ class ScenarioSalad(object):
 			self._symbolicRpms = symbolicRpmMap
 
 		def __str__(self):
-			return "+".join(sorted(map(str, self.selectedScenarios)))
+			return "|".join(sorted(map(str, self.selectedScenarios)))
 
 		def updateWithBucket(self, b, selectedScenarios):
 			self.selectedScenarios.update(selectedScenarios)

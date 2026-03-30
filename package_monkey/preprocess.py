@@ -1031,7 +1031,8 @@ class ArchSolver(object):
 
 		for rd in result:
 			if rd.requiresDisambiguation:
-				salad.add(rd, rd.alternatives)
+				if not salad.add(rd, rd.alternatives):
+					return None
 
 		with loggingFacade.temporaryIndent():
 			scenarioSolutions = salad.solve()

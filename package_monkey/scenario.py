@@ -378,10 +378,13 @@ class ScenarioSalad(object):
 	# concreteScenario to one alternative solution offered by the solver.
 	def add(self, key, alternatives):
 		if not alternatives:
-			raise Exception(f"{self}: refusing to add {key} with empty list of alternatives")
+			errormsg(f"{self}: refusing to add {key} with empty list of alternatives")
+			return True
 
 		b = self.Bucket(key)
 		self._buckets.append(b)
+
+		conflicts = []
 
 		# add all alternatives, except for those that conflict with our controlling scenario
 		# For example, libc++1 requires libc++abi1. If libc++1 is from llvm21, it is controlled
@@ -395,15 +398,22 @@ class ScenarioSalad(object):
 
 				if self.controllingScenarios and \
 				   self.controllingScenarios.conflicts(concreteScenario.control):
+					problem = f"ignore {rpm} with scenario {concreteScenario.control}; conflict with {' '.join(map(str, self.controllingScenarios))}"
+					conflicts.append(problem)
 					if self.trace:
-						infomsg(f"{self}: ignore {rpm} with scenario {concreteScenario.control}; conflict with {' '.join(map(str, self.controllingScenarios))}")
+						infomsg(f"{self}: {problem}")
 					continue
 
 				b.add(rpm, concreteScenario)
 
-		assert(b.alternatives)
+		if not b.alternatives:
+			errormsg(f"{self}: unable to resolve {key}: none of the alternatives is valid")
+			for problem in conflicts:
+				errormsg(f"   {problem}")
+			return False
 
 		self._symbolicRpms[key] = set()
+		return True
 
 	def solveBucket(self, b, versionSet):
 		selectedScenarios = ConcreteScenarioSet()

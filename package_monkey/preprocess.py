@@ -521,12 +521,17 @@ class ArchSolver(object):
 						errormsg(f"{rpm}/{dep}: no candidate that is compatible with required ABI(s) {result.abiCompatibility}")
 						result.markUnresolvable(dep)
 						continue
+					if rpm.trace:
+						infomsg(f"      abi compat transformed to {' '.join(map(str, choices))}")
 
 				choices = self.filterAlternatives(choices)
 				if not choices:
 					errormsg(f"{rpm}/{dep}: filterAlternatives failed?!")
 					result.markUnresolvable(dep)
 					continue
+
+				if rpm.trace and choices != origChoices:
+					infomsg(f"      filter transformed to {' '.join(map(str, choices))}")
 
 				suppress = origChoices.difference(choices)
 				if rpm.trace and suppress:

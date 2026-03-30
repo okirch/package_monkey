@@ -548,7 +548,8 @@ class ScenarioSalad(object):
 				raise Exception(f"{self}: spurious rpms added {' '.join(map(str, extra))}")
 
 			lost = allAlternatives.difference(allSolved)
-			warnmsg(f"{self}: could not generate solutions covering {' '.join(map(str, lost))}")
+			if self.trace:
+				infomsg(f"{self}: could not generate solutions covering {' '.join(map(str, lost))}")
 
 		abstractPackages = set()
 		for sol in solutions:

@@ -1546,6 +1546,9 @@ class PreprocessorHints(object):
 		def check(self, choices):
 			return choices.issubset(self.rpms)
 
+		def checkBuildNames(self, nameList):
+			return False
+
 	class AcceptableBuildSet(object):
 		def __init__(self, nameList):
 			self.nameList = nameList
@@ -1556,6 +1559,9 @@ class PreprocessorHints(object):
 		def check(self, choices):
 			builds = set(rpm.buildName for rpm in choices)
 			return builds.issubset(self.nameList)
+
+		def checkBuildNames(self, nameList):
+			return nameList.issubset(self.nameList)
 
 	class AmbiguityTransform(object):
 		def __init__(self, srcNameList, dstNameList):
@@ -1708,6 +1714,13 @@ class PreprocessorHints(object):
 		if self.acceptUnknownAmbiguities and \
 		   not any(rpm.newControllingScenarios for rpm in choices):
 			return 2
+		return 0
+
+	def checkBuildAlternatives(self, builds):
+		buildNames = set(build.name for build in builds)
+		for rule in self.acceptableAmbiguities:
+			if rule.checkBuildNames(buildNames):
+				return 1
 		return 0
 
 	def skipVersionChecks(self, nameList):

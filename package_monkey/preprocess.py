@@ -1643,6 +1643,26 @@ class PreprocessorHints(object):
 				selection.difference_update(self.srcRpms)
 				selection.update(self.dstRpms)
 
+	class StripPrefixTransform(HeuristicTransform):
+		def __call__(self, selection):
+			drop = []
+			for rpm in selection.rpms:
+				name = rpm.shortname
+				if name.startswith(self.PREFIX):
+					regularName = name[self.PREFIX_LEN:]
+					other = selection.nameToRpm(regularName)
+					if other is not None:
+						if rpm.trace or other.trace:
+							infomsg(f"{self}: prefer {other} over {rpm}")
+						drop.append(rpm)
+
+			if drop:
+				selection.difference_update(drop)
+
+	class StripBusyboxPrefixTransform(StripPrefixTransform):
+		PREFIX	= 'busybox-'
+		PREFIX_LEN = len(PREFIX)
+
 	class PreTransform(object):
 		def __init__(self, srcName, dstName, context = None):
 			self.srcName = srcName
@@ -1798,6 +1818,8 @@ class PreprocessorHints(object):
 				self.ambiguityTransforms.append(self.StripBootstrapSuffixTransform(name))
 			elif name == 'ignore-32bit-alternative':
 				self.ambiguityTransforms.append(self.Strip32BitSuffixTransform(name))
+			elif name == 'ignore-busybox-alternative':
+				self.ambiguityTransforms.append(self.StripBusyboxPrefixTransform(name))
 			else:
 				errormsg(f"Unknown heuristic {name}")
 				return False

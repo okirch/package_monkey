@@ -1663,6 +1663,22 @@ class PreprocessorHints(object):
 		PREFIX	= 'busybox-'
 		PREFIX_LEN = len(PREFIX)
 
+	class AlwaysPreferTransform(object):
+		def __init__(self, nameList):
+			self.nameList = nameList
+			self.rpms = None
+
+		def rebind(self, rpmFactory):
+			self.rpms = set(filter(bool, map(rpmFactory.getByName, self.nameList)))
+
+		def __str__(self):
+			return f"AlwaysPreferTransform()"
+
+		def __call__(self, selection):
+			common = self.rpms.intersection(selection.rpms)
+			if common:
+				selection.replace(common)
+
 	class PreTransform(object):
 		def __init__(self, srcName, dstName, context = None):
 			self.srcName = srcName
@@ -1700,6 +1716,7 @@ class PreprocessorHints(object):
 
 		self._newScenarioManager = NewScenarioManager()
 		self._nowarnRequired = self.NoWarnRequired()
+		self._alwaysPreferTransform = None
 
 	def addKnownMissing(self, names):
 		self.knownMissingNames += names
@@ -1748,6 +1765,9 @@ class PreprocessorHints(object):
 
 	def addPreferredNames(self, args):
 		self.preferredNames += args
+		if self._alwaysPreferTransform is None:
+			self._alwaysPreferTransform = self.AlwaysPreferTransform(self.preferredNames)
+			self.ambiguityTransforms.insert(0, self._alwaysPreferTransform)
 
 	def addConditional(self, name, value):
 		self.conditionals[name] = value
@@ -1877,6 +1897,11 @@ class PreprocessorHints(object):
 
 		def update(self, rpms):
 			self.rpms.update(rpms)
+			self._names = None
+			self._builds = None
+
+		def replace(self, rpms):
+			self.rpms = rpms
 			self._names = None
 			self._builds = None
 

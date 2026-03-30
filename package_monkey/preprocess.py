@@ -1594,6 +1594,34 @@ class PreprocessorHints(object):
 			if drop:
 				selection.difference_update(drop)
 
+	class StripSuffixTransform(HeuristicTransform):
+		def __call__(self, selection):
+			drop = []
+			for rpm in selection.rpms:
+				name = rpm.shortname
+				if name.endswith(self.SUFFIX):
+					regularName = name[:-self.SUFFIX_LEN]
+					other = selection.nameToRpm(regularName)
+					if other is not None:
+						if rpm.trace or other.trace:
+							infomsg(f"{self}: prefer {other} over {rpm}")
+						drop.append(rpm)
+
+			if drop:
+				selection.difference_update(drop)
+
+	class StripBootstrapSuffixTransform(StripSuffixTransform):
+		SUFFIX	= '-bootstrap'
+		SUFFIX_LEN = len(SUFFIX)
+
+	class StripDevelSuffixTransform(StripSuffixTransform):
+		SUFFIX	= '-devel'
+		SUFFIX_LEN = len(SUFFIX)
+
+	class Strip32BitSuffixTransform(StripSuffixTransform):
+		SUFFIX	= '-32bit'
+		SUFFIX_LEN = len(SUFFIX)
+
 	class AmbiguityTransform(object):
 		def __init__(self, srcNameList, dstNameList):
 			self.srcNameList = srcNameList
@@ -1764,6 +1792,12 @@ class PreprocessorHints(object):
 		for name in args:
 			if name == 'ignore-mini-packages':
 				self.ambiguityTransforms.append(self.MiniRpmTransform(name))
+			elif name == 'ignore-devel-alternative':
+				self.ambiguityTransforms.append(self.StripDevelSuffixTransform(name))
+			elif name == 'ignore-bootstrap-alternative':
+				self.ambiguityTransforms.append(self.StripBootstrapSuffixTransform(name))
+			elif name == 'ignore-32bit-alternative':
+				self.ambiguityTransforms.append(self.Strip32BitSuffixTransform(name))
 			else:
 				errormsg(f"Unknown heuristic {name}")
 				return False

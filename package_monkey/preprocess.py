@@ -1563,6 +1563,32 @@ class PreprocessorHints(object):
 		def checkBuildNames(self, nameList):
 			return nameList.issubset(self.nameList)
 
+	class HeuristicTransform(object):
+		def __init__(self, name):
+			self.name = name
+
+		def __str__(self):
+			return f"heuristic:{self.name}"
+
+		def rebind(self, rpmFactory):
+			pass
+
+	class MiniRpmTransform(HeuristicTransform):
+		def __call__(self, selection):
+			drop = []
+			for rpm in selection.rpms:
+				name = rpm.shortname
+				if '-mini' in name:
+					regularName = name.replace('-mini', '')
+					other = selection.nameToRpm(regularName)
+					if other is not None:
+						if rpm.trace or other.trace:
+							infomsg(f"{self}: prefer {other} over {rpm}")
+						drop.append(rpm)
+
+			if drop:
+				selection.difference_update(drop)
+
 	class AmbiguityTransform(object):
 		def __init__(self, srcNameList, dstNameList):
 			self.srcNameList = srcNameList
@@ -1728,6 +1754,14 @@ class PreprocessorHints(object):
 
 	def defineAmbiguityTransform(self, srcNames, dstNames):
 		self.ambiguityTransforms.append(self.AmbiguityTransform(srcNames, dstNames))
+
+	def enableHeuristics(self, *args):
+		for name in args:
+			if name == 'ignore-mini-packages':
+				self.ambiguityTransforms.append(self.MiniRpmTransform(name))
+			else:
+				errormsg(f"Unknown heuristic {name}")
+				return False
 
 	# These two are exactly the same:
 	#	prefer foo over bar
@@ -2063,6 +2097,7 @@ class PreprocessorHintsLoader(object):
 						[1, 1],	call = PreprocessorHints.setAcceptUnknownAmbiguities,
 							types = ['bool']),
 	StarCommand('nowarn',			1,	call = PreprocessorHints.suppressWarnings),
+	StarCommand('heuristic',		1,	call = PreprocessorHints.enableHeuristics),
 	InfixCommand('transform-ambiguity',	2,	call = PreprocessorHints.defineAmbiguityTransform,
 							splitWord = 'into'),
 	InfixCommand('prefer',			2,	call = PreprocessorHints.definePreference,

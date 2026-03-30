@@ -301,16 +301,6 @@ class NewScenarioManager(object):
 		concreteScenario.addRpm(rpm)
 		rpm.addControllingScenarioNew(concreteScenario)
 
-	def add(self, concreteScenario):
-		for sct in concreteScenario.controls:
-			key = str(sct)
-			assert(key not in self._byId)
-			self._byId[key] = concreteScenario
-
-		for rpm in concreteScenario.rpms:
-			assert(rpm not in self._byRpm)
-			self.byRpm[rpm] = concreteScenario
-
 	def lookupByRpm(self, rpm):
 		return self._byRpm.get(rpm)
 

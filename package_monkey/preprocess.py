@@ -2247,21 +2247,6 @@ class PreprocessorHintsLoader(object):
 
 		return self.error(f"unsupported command {command}")
 
-	def processDict(self, words):
-		d = {}
-		while words:
-			key = words.pop(0)
-			if not key.endswith(':'):
-				return False
-			key = key.rstrip(':')
-
-			rpmNames = set()
-			while words and not words[0].endswith(':'):
-				rpmNames.add(words.pop(0))
-
-			d[key] = rpmNames
-		return d
-
 	def processContinuation(self, line):
 		if self.current is None:
 			return self.error(f"spurious line continuation")

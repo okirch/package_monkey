@@ -1586,6 +1586,7 @@ class PreprocessorHints(object):
 		self.ambiguityTransforms = []
 		self.dependencyTransforms = {}
 		self.conditionals = {}
+		self.acceptUnknownAmbiguities = False
 
 		self._nameFilter = OBSNameFilter()
 
@@ -1621,6 +1622,9 @@ class PreprocessorHints(object):
 
 	def ignoreBuildName(self, name):
 		return self._nameFilter.matchBuild(name)
+
+	def setAcceptUnknownAmbiguities(self, value):
+		self.acceptUnknownAmbiguities = value
 
 	# For each architecture, we start over and re-do the mapping of names to Rpm objects
 	def rebind(self, rpmFactory):
@@ -1664,6 +1668,9 @@ class PreprocessorHints(object):
 		self.acceptableAmbiguities.append(self.AcceptableAmbiguity(nameList))
 
 	def areAlternativesAcceptable(self, choices):
+		if self.acceptUnknownAmbiguities and \
+		   not any(rpm.newControllingScenarios for rpm in choices):
+			return True
 		for ambig in self.acceptableAmbiguities:
 			if choices.issubset(ambig.rpms):
 				return True
@@ -1984,9 +1991,9 @@ class PreprocessorHintsLoader(object):
 							keywords = 'context'),
 	StarCommand('conditional',		[2, 2],	call = PreprocessorHints.addConditional,
 							types = [None, 'bool']),
-#	StarCommand('accept-unknown-ambiguities',
-#						[1, 1],	call = PreprocessorHints.setAcceptUnknownAmbiguities,
-#							types = ['bool']),
+	StarCommand('accept-unknown-ambiguities',
+						[1, 1],	call = PreprocessorHints.setAcceptUnknownAmbiguities,
+							types = ['bool']),
 	StarCommand('nowarn',			1,	call = PreprocessorHints.suppressWarnings),
 	InfixCommand('transform-ambiguity',	2,	call = PreprocessorHints.defineAmbiguityTransform,
 							splitWord = 'into'),

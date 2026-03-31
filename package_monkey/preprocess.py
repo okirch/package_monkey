@@ -2140,6 +2140,7 @@ class PreprocessorHintsLoader(object):
 
 		infomsg(f"Loading preprocessor hints from {self.filename}")
 		with open(self.filename) as f:
+			self.currentContext = None
 			for line in f.readlines():
 				self.lineno += 1
 
@@ -2222,6 +2223,7 @@ class PreprocessorHintsLoader(object):
 			self.maxArgs = maxArgs
 			self.keywords = keywords
 			self.types = types
+			self.context = None
 			self.call = call
 
 		def __str__(self):
@@ -2295,6 +2297,12 @@ class PreprocessorHintsLoader(object):
 				if super().__call__(hints, *args, key, values) is False:
 					return False
 
+	class CommandGroup(object):
+		def __init__(self, name):
+			self.name = name
+			self.setter = None
+			self.valid = False
+
 	COMMAND_LIST = [
 	Command('ignore',			1,	call = PreprocessorHints.addIgnoredDependencies),
 	Command('ignore-suffix',		1,	call = PreprocessorHints.addIgnoredSuffixes),
@@ -2359,20 +2367,50 @@ class PreprocessorHintsLoader(object):
 				elif not cmd.convertArgument(args, i, targetType):
 					return self.error(f"{cmd}: invalid type for argument #{i}: not a valid {targetType}")
 
+		if self.currentContext is not cmd.context and \
+		   self.currentContext is not None:
+			# The next command has not context, or a different one
+			self.currentContext.valid = False
+
+		self.currentContext = cmd.context
+		if self.currentContext is not None:
+			# reset the context
+			if self.currentContext.setter is cmd:
+				self.currentContext.valid = False
+			elif not self.currentContext.valid:
+				return self.error(f"{cmd.name}: outside of context (should be preceded by {self.currentContext.setter})")
+
+			kwargs['context'] = self.currentContext
+
 		try:
 			if cmd(self.hints, args, **kwargs) is False:
 				return self.error(f"{cmd.name}: invalid argument(s): {' '.join(args)}")
 		except Exception as e:
 			return self.error(f"{cmd.name} {' '.join(args)}: caught exception {e}")
 
+		if self.currentContext is not None and \
+		   not self.currentContext.valid:
+			return self.error(f"{cmd.name} was expected to initialize the context but did not")
+
 		return True
 
 	def initCommands(self):
 		if self.COMMANDS:
 			return
+
 		self.COMMANDS = {}
+		sharedContext = None
 		for cmd in self.COMMAND_LIST:
+			if isinstance(cmd, self.CommandGroup):
+				sharedContext = cmd
+				continue
+
 			self.COMMANDS[cmd.name] = cmd
+			cmd.context = sharedContext
+
+			# First command in a group must be the one to initialize the context
+			if sharedContext and sharedContext.setter is None:
+				sharedContext.setter = cmd
 
 	def processCommandWords(self, words):
 		command = words.pop(0)

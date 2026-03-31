@@ -158,6 +158,12 @@ class ConcreteScenarioSet(set):
 	def conflicts(self, version):
 		return any(concreteScenario.control.conflicts(version) for concreteScenario in self)
 
+class ScenarioVariable(object):
+	def __init__(self, name, values):
+		self.name = name
+		self.values = list(values)
+		self.pattern = None
+
 class NewScenarioManager(object):
 	def __init__(self):
 		self._byId = {}
@@ -168,13 +174,20 @@ class NewScenarioManager(object):
 		self._variables = {}
 
 	def createVariable(self, name, values):
-		self._variables[name] = values
+		var = ScenarioVariable(name, values)
+		self._variables[name] = var
 
 	def hasVariable(self, name):
 		return name in self._variables
 
+	def getScenarioVariable(self, name):
+		return self._variables.get(name)
+
 	def getPredefinedVariablesValues(self, name):
-		return self._variables.get(name, [])
+		var = self._variables.get(name)
+		if var is None:
+			return []
+		return var.values
 
 	def createConcreteScenario(self, variable, value, abstractPackage):
 		sct = ScenarioTuple(variable, value, abstractPackage)

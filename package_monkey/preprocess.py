@@ -1558,19 +1558,14 @@ class PreprocessorHints(object):
 			return choices
 
 	class PreTransform(object):
-		def __init__(self, srcName, dstName, *conditions):
+		def __init__(self, srcName, dstName, context = None):
 			self.srcName = srcName
 			self.dstName = dstName
-
-			self.conditions = None
-			if conditions:
-				self.conditions = set(conditions)
+			self.context = context
 
 		def transform(self, fromName, requringRpmName):
-			if self.conditions is not None:
-				s = f"context={requringRpmName}"
-				if s not in self.conditions:
-					return None
+			if self.context is not None and self.context != requringRpmName:
+				return None
 			return self.dstName
 
 	class NoWarnRequired(object):
@@ -1599,14 +1594,26 @@ class PreprocessorHints(object):
 		self._newScenarioManager = NewScenarioManager()
 		self._nowarnRequired = self.NoWarnRequired()
 
-	def addKnownMissing(self, rpmName):
-		self.knownMissingNames.append(rpmName)
+	def addKnownMissing(self, names):
+		self.knownMissingNames += names
 
-	def ignoreDependency(self, rpmName):
-		self.ignoreNames.append(rpmName)
+	def addIgnoredDependencies(self, names):
+		self.ignoreNames += list(names)
 
 	def addIgnoredRpm(self, pattern):
 		self._nameFilter.addRpmPattern(pattern)
+
+	def addIgnoredSuffixes(self, names):
+		for name in names:
+			self.addIgnoredRpm(f"*{name}")
+
+	def addIgnoredRpms(self, names):
+		for name in names:
+			self.addIgnoredRpm(name)
+
+	def addIgnoredBuilds(self, names):
+		for pattern in names:
+			self._nameFilter.addBuildPattern(pattern)
 
 	def ignorePackageName(self, name):
 		return self._nameFilter.matchRpm(name)
@@ -1629,8 +1636,8 @@ class PreprocessorHints(object):
 		allRpms = rpmFactory.getAllByType(RpmWrapper.TYPE_REGULAR)
 		self._newScenarioManager.rebind(allRpms)
 
-	def addPreferredName(self, name):
-		self.preferredNames.append(name)
+	def addPreferredNames(self, args):
+		self.preferredNames += args
 
 	def addConditional(self, name, value):
 		self.conditionals[name] = value
@@ -1638,8 +1645,8 @@ class PreprocessorHints(object):
 	def getConditional(self, name):
 		return self.conditionals.get(name)
 
-	def addDependencyTransform(self, fromString, toString, *conditions):
-		xfrm = self.PreTransform(fromString, toString, *conditions)
+	def addDependencyTransform(self, fromString, toString, **kwargs):
+		xfrm = self.PreTransform(fromString, toString, **kwargs)
 		self.dependencyTransforms[fromString] = xfrm
 
 	def transformDependency(self, string, context):
@@ -1652,10 +1659,10 @@ class PreprocessorHints(object):
 
 		return xfrm.transform(string, context)
 
-	def addSyntheticName(self, name):
-		self.syntheticNames.append(name)
+	def addSyntheticNames(self, args):
+		self.syntheticNames += args
 
-	def acceptAmbiguity(self, nameList):
+	def defineAcceptableAmbiguity(self, nameList):
 		self.acceptableAmbiguities.append(self.AcceptableAmbiguity(nameList))
 
 	def areAlternativesAcceptable(self, choices):
@@ -1667,8 +1674,15 @@ class PreprocessorHints(object):
 	def skipVersionChecks(self, nameList):
 		self.buildNoVersionCheckSet.update(nameList)
 
-	def transformAmbiguity(self, srcNames, dstNames):
+	def defineAmbiguityTransform(self, srcNames, dstNames):
 		self.ambiguityTransforms.append(self.AmbiguityTransform(srcNames, dstNames))
+
+	# These two are exactly the same:
+	#	prefer foo over bar
+	# and
+	#	transform-ambiguity foo bar into foo
+	def definePreference(self, preferredSet, originalSet):
+		self.defineAmbiguityTransform(preferredSet + originalSet, preferredSet)
 
 	def filterChoices(self, choices):
 		choices = set(choices)
@@ -1699,31 +1713,32 @@ class PreprocessorHints(object):
 	def getScenarioVariableValues(self, *args, **kwargs):
 		return self._newScenarioManager.getPredefinedVariablesValues(*args, **kwargs)
 
-	def createScenarioVariable(self, *args, **kwargs):
-		self._newScenarioManager.createVariable(*args, **kwargs)
+	def createScenarioVariable(self, name, *values, **kwargs):
+		self._newScenarioManager.createVariable(name, values, **kwargs)
 
 	# For a scenario like "jdk" add a group of equivalent rpms, e.g. "java-headless".
 	# The objective is to detect packages that depend on "any headless jdk" and
 	# resolve this ambiguity by replacing it with a synthetic rpm named
 	# "jdk/java-headless"
-	def addScenarioChoice(self, groupName, scenarioName, d):
-		for value, rpmNames in d.items():
-			if value == '%':
-				for name in rpmNames:
-					pattern = name.replace('%', '([0-9._]+|[a-z_]*)') + '$'
-					self._newScenarioManager.addConcreteScenarioPattern(scenarioName, groupName, pattern)
-			else:
-				concreteScenario = self._newScenarioManager.createConcreteScenario(scenarioName, value, groupName)
-				self._newScenarioManager.mapConcreteScenario(concreteScenario, rpmNames)
+	def defineConcreteScenario(self, scenarioName, abstractPackageName, key, rpmNames):
+		var = self._newScenarioManager.getScenarioVariable(scenarioName)
 
-		# for each wildcard pattern, and for each known variable value, instantiate the corresponding name->scenario link
+		if key != '%':
+			# Simple case: the scenario definition defines an rpm list for a specific version
+			concreteScenario = self._newScenarioManager.createConcreteScenario(scenarioName, key, abstractPackageName)
+			self._newScenarioManager.mapConcreteScenario(concreteScenario, rpmNames)
+			return
+
+		for name in rpmNames:
+			pattern = name.replace('%', '([0-9._]+|[a-z_]*)') + '$'
+			self._newScenarioManager.addConcreteScenarioPattern(scenarioName, abstractPackageName, pattern)
+
+		# for each known variable value, instantiate the corresponding name->scenario link
 		# We need to do this because the wildcard pattern is limited in what it matches
-		if '%' in d:
-			rpmNames = d['%']
-			for value in self._newScenarioManager.getPredefinedVariablesValues(scenarioName):
-				concreteScenario = self._newScenarioManager.createConcreteScenario(scenarioName, value, groupName)
-				mappedNames = list(name.replace('%', value) for name in rpmNames)
-				self._newScenarioManager.mapConcreteScenario(concreteScenario, mappedNames)
+		for value in self._newScenarioManager.getPredefinedVariablesValues(scenarioName):
+			concreteScenario = self._newScenarioManager.createConcreteScenario(scenarioName, value, abstractPackageName)
+			mappedNames = list(name.replace('%', value) for name in rpmNames)
+			self._newScenarioManager.mapConcreteScenario(concreteScenario, mappedNames)
 
 	def checkForUnhandledScenarios(self, rpms, **kwargs):
 		return self._scenarioManager.checkForUnhandledScenarios(rpms, **kwargs)
@@ -1824,140 +1839,169 @@ class PreprocessorHintsLoader(object):
 		else:
 			return self.processCommandWords(words)
 
-	def processCommandWords(self, words):
-		command = words.pop(0)
-
-		if command == 'ignore':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
-
-			for name in words:
-				self.hints.ignoreDependency(name)
-		elif command == 'ignore-suffix':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
-
-			for name in words:
-				self.hints.addIgnoredRpm(f"*{name}")
-		elif command == 'ignore-rpm':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
-
-			for name in words:
-				self.hints.addIgnoredRpm(name)
-		elif command == 'ignore-build':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
-
-			for name in words:
-				self.hints.addIgnoredBuild(name)
-		elif command == 'synthetic':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
-
-			for name in words:
-				self.hints.addSyntheticName(name)
-		elif command == 'always-prefer':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
-
-			for name in words:
-				self.hints.addPreferredName(name)
-		elif command == 'conditional':
-			if len(words) != 2:
-				return self.error(f"bad number of arguments for {command}")
-
-			name, value = words
-			value = value.lower()
-			if value in ('true', '1'):
-				value = True
-			elif value in ('false', '0'):
-				value = False
+	class Command(object):
+		def __init__(self, name, minArgs, keywords = [], call = None, types = None):
+			self.name = name
+			if type(minArgs) is int:
+				maxArgs = None
 			else:
-				return self.error(f"Invalid truth value in conditional {name}={value}")
+				minArgs, maxArgs = minArgs
+			self.minArgs = minArgs
+			self.maxArgs = maxArgs
+			self.keywords = keywords
+			self.types = types
+			self.call = call
 
-			self.hints.addConditional(name, value)
-		elif command == 'pre-transform':
-			# arguments:
-			#	fromString toString [conditions...]
-			# where conditions take the form:
-			#	context=rpmName
-			#		only apply this transformation if the requiring rpm is "rpmName"
-			if len(words) < 2:
-				return self.error(f"bad number of arguments for {command}")
+		def __str__(self):
+			return self.name
 
-			self.hints.addDependencyTransform(*words)
-		elif command == 'accept-missing':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
+		def __call__(self, *args, **kwargs):
+			return self.call(*args, **kwargs)
 
-			for name in words:
-				self.hints.addKnownMissing(name)
-		elif command == 'accept-ambiguity':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
+		def convertArgument(self, words, pos, targetType):
+			value = words[pos]
+			if targetType == 'bool':
+				if value in ('true', '1'):
+					words[pos] = True
+					return True
+				if value in ('false', '0'):
+					words[pos] = False
+					return True
+			return False
 
-			self.hints.acceptAmbiguity(words)
-		elif command == 'build-skip-version-check':
-			if len(words) == 0:
-				return self.error(f"missing arguments for {command}")
+	class StarCommand(Command):
+		def __call__(self, hints, words, **kwargs):
+			return super().__call__(hints, *words, **kwargs)
 
-			self.hints.skipVersionChecks(words)
-		elif command == 'transform-ambiguity':
-			if 'into' not in words:
-				return errormsg(f"{command}: lacking 'into' keyword")
+	class VariableCommand(Command):
+		def __call__(self, hints, words, **kwargs):
+			name = words.pop(0)
+			return super().__call__(hints, name, words, **kwargs)
 
-			i = words.index('into')
+	class InfixCommand(Command):
+		def __init__(self, *args, splitWord = None, **kwargs):
+			super().__init__(*args, **kwargs)
+			assert(splitWord is not None)
+			self.splitWord = splitWord
+
+		def __call__(self, hints, words, **kwargs):
+			if self.splitWord not in words:
+				errormsg(f"{self}: lacking {self.splitWord} keyword")
+				return False
+
+			i = words.index(self.splitWord)
 			if i == 0 or i == len(words) - 1:
-				return errormsg(f"{command}: 'into' keyword must not be the first or last argument")
+				errormsg(f"{self}: {self.splitWord} keyword must not be the first or last argument")
+				return False
 
 			fromValues = words[:i]
 			toValues = words[i+1:]
-			self.hints.transformAmbiguity(fromValues, toValues)
-		elif command == 'prefer':
-			if 'over' not in words:
-				return errormsg(f"{command}: lacking 'over' keyword")
+			return super().__call__(hints, fromValues, toValues, **kwargs)
 
-			i = words.index('over')
-			if i == 0 or i == len(words) - 1:
-				return errormsg(f"{command}: 'over' keyword must not be the first or last argument")
-
-			toValues = words[:i]
-			fromValues = words[i+1:] + toValues
-			self.hints.transformAmbiguity(fromValues, toValues)
-		elif command == 'variable':
-			if len(words) == 0:
-				return self.error(f"bad number of arguments for {command}")
-
-			name = words.pop(0)
-			self.hints.createScenarioVariable(name, words)
-		elif command == 'scenario':
-			if len(words) < 3:
-				return self.error(f"bad number of arguments for {command}")
-
+	class ScenarioCommand(Command):
+		def __call__(self, hints, words, **kwargs):
 			spec = words.pop(0).split('/')
 			if len(spec) != 2:
-				return self.error(f"{command}: expected \"scenario/key\" argument")
+				errormsg(f"{self}: expected \"scenario/key\" argument")
+				return False
 				
-			scenarioName, key = spec
-			if not self.hints.hasScenarioVariable(scenarioName):
+			scenarioName, abstractPackage = spec
+			if not hints.hasScenarioVariable(scenarioName):
 				return self.error(f"{command}: unknown scenario \"{scenarioName}\"")
 
-			d = self.processDict(words)
-			if d is None:
-				return self.error(f"{command}: body of command is not a valid dict")
+			while words:
+				key = words.pop(0)
+				if not key.endswith(':'):
+					return False
 
-			self.hints.addScenarioChoice(key, scenarioName, d)
-		elif command == 'nowarn':
-			if len(words) < 3:
-				return self.error(f"bad number of arguments for {command}")
+				key = key.rstrip(':')
 
-			if not self.hints.suppressWarnings(*words):
-				return self.error(f"{command}: invalid argument(s): {' '.join(words)}")
+				rpmNames = set()
+				while words and not words[0].endswith(':'):
+					rpmNames.add(words.pop(0))
+
+				hints.defineConcreteScenario(scenarioName, abstractPackage, key, rpmNames)
+
+	COMMAND_LIST = [
+	Command('ignore',			1,	call = PreprocessorHints.addIgnoredDependencies),
+	Command('ignore-suffix',		1,	call = PreprocessorHints.addIgnoredSuffixes),
+	Command('ignore-rpm',			1,	call = PreprocessorHints.addIgnoredRpms),
+	Command('ignore-build',			1,	call = PreprocessorHints.addIgnoredBuilds),
+	Command('synthetic',			1,	call = PreprocessorHints.addSyntheticNames),
+	Command('always-prefer',		1,	call = PreprocessorHints.addPreferredNames),
+	Command('accept-missing',		1,	call = PreprocessorHints.addKnownMissing),
+	Command('accept-ambiguity',		1,	call = PreprocessorHints.defineAcceptableAmbiguity),
+	Command('build-skip-version-check',
+						1,	call = PreprocessorHints.skipVersionChecks),
+	ScenarioCommand('scenario',		3,	),
+	StarCommand('variable',			1,	call = PreprocessorHints.createScenarioVariable,
+							keywords = ('pattern', )),
+	StarCommand('pre-transform',		[2, 2],	call = PreprocessorHints.addDependencyTransform,
+							keywords = 'context'),
+	StarCommand('conditional',		[2, 2],	call = PreprocessorHints.addConditional,
+							types = [None, 'bool']),
+#	StarCommand('accept-unknown-ambiguities',
+#						[1, 1],	call = PreprocessorHints.setAcceptUnknownAmbiguities,
+#							types = ['bool']),
+	StarCommand('nowarn',			1,	call = PreprocessorHints.suppressWarnings),
+	InfixCommand('transform-ambiguity',	2,	call = PreprocessorHints.defineAmbiguityTransform,
+							splitWord = 'into'),
+	InfixCommand('prefer',			2,	call = PreprocessorHints.definePreference,
+							splitWord = 'over'),
+	]
+	COMMANDS = {}
+
+	def handleCommand(self, cmd, words):
+		args = []
+		kwargs = {}
+		for w in words:
+			if '=' not in w:
+				args.append(w)
+			else:
+				key, value = w.split('=')
+				if key not in cmd.keywords:
+					return self.error(f"{cmd} does not accept argument {w}")
+				kwargs[key] = value
+
+		if cmd.minArgs == cmd.maxArgs:
+			if len(args) != cmd.minArgs:
+				return self.error(f"{cmd} expects exactly {cmd.minArgs} argument(s) ({len(args)} were given)")
 		else:
-			return self.error(f"unsupported command {command}")
+			if len(args) < cmd.minArgs:
+				return self.error(f"not enough arguments for {cmd}")
+			if cmd.maxArgs is not None and len(args) > cmd.maxArgs:
+				return self.error(f"too many arguments for {cmd}")
+
+		if cmd.types is not None:
+			for i in range(len(cmd.types)):
+				targetType = cmd.types[i]
+				if targetType is None:
+					pass
+				elif not cmd.convertArgument(args, i, targetType):
+					return self.error(f"{cmd}: invalid type for argument #{i}: not a valid {targetType}")
+
+		if cmd(self.hints, args, **kwargs) is False:
+			return self.error(f"{cmd.name}: invalid argument(s): {' '.join(args)}")
 
 		return True
+
+	def initCommands(self):
+		if self.COMMANDS:
+			return
+		self.COMMANDS = {}
+		for cmd in self.COMMAND_LIST:
+			self.COMMANDS[cmd.name] = cmd
+
+	def processCommandWords(self, words):
+		command = words.pop(0)
+
+		self.initCommands()
+
+		handler = self.COMMANDS.get(command)
+		if handler is not None:
+			return self.handleCommand(handler, words)
+
+		return self.error(f"unsupported command {command}")
 
 	def processDict(self, words):
 		d = {}

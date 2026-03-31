@@ -473,37 +473,17 @@ class ArchSolver(object):
 				if rpm.trace:
 					infomsg(f"   requires {dep}")
 
-				dep = self.maybeTransformDependency(dep, rpm.shortname)
-
-				if rpm.trace and dep is not None:
-					infomsg(f"   transformed into {dep}")
-
-				if self.maybeIgnoreDependency(rpm, dep):
+				choices = self.dependencyToSelection(rpm, dep)
+				if choices is None:
+					if rpm.trace:
+						infomsg(f"      ignored")
 					continue
 
-				choices = set()
-				isSystemDependency = False
-
-				for solvable in self.pool.whatprovides(dep.id):
-					# ignore dependencies related to the rpm format or version
-					if solvable.name.startswith('system:'):
-						isSystemDependency = True
-						continue
-
-					choices.add(solvable)
-
-				if self.repoCount > 1:
-					choices = self.disambiguateStaging(choices)
-
-				choices = self.solvableSetToRpms(choices)
-
 				if not choices:
-					if not isSystemDependency:
-						result.addResolved(dep, self.unresolvableRpm)
-						result.isResolvable = False
-
 					if rpm.trace:
 						infomsg(f"      resolved to nothing")
+					result.addResolved(dep, self.unresolvableRpm)
+					result.isResolvable = False
 					continue
 
 				if rpm in choices:
@@ -615,6 +595,33 @@ class ArchSolver(object):
 
 		return result
 
+	def dependencyToSelection(self, rpm, dep):
+		# transform the dependency string if there is a rule for it
+		newString = self.hints.transformDependency(str(dep), rpm.shortname)
+		if newString is not None:
+			if rpm.trace:
+				infomsg(f"   transformed into {newString}")
+			dep = self.pool.Dep(newString, 1)
+			assert(dep is not None)
+
+		# Handle conditional dependencies. We evaluate the expression
+		# (using the variable settings defined in the hints file).
+		# May return None if that fails; in this case we treat it as "true".
+		depString = str(dep)
+		if ' if ' in depString:
+			condition = self.dependencyOracle.evalConditional(rpm, depString)
+			if condition == False:
+				return None
+
+		choices = set(self.pool.whatprovides(dep.id))
+		if choices and all(solvable.name.startswith('system:') for solvable in choices):
+			return None
+
+		if self.repoCount > 1:
+			choices = self.disambiguateStaging(choices)
+
+		return self.solvableSetToRpms(choices)
+
 	# When using the packages from a staging project on top of the existing build project,
 	# we constantly encounter two rpms with the same name.
 	# Disambiguate by doing a name lookup. This will return the last rpm with that name to be
@@ -627,25 +634,6 @@ class ArchSolver(object):
 			result.add(rpm.solvable)
 
 		return result
-
-	def maybeIgnoreDependency(self, rpm, dep):
-		depString = str(dep)
-		if ' if ' not in depString:
-			return False
-		return self.dependencyOracle.evalConditional(rpm, depString) == False
-
-	def maybeTransformDependency(self, dep, requringRpmName):
-		if self.hints is None:
-			return dep
-
-		newString = self.hints.transformDependency(str(dep), requringRpmName)
-		if newString is None:
-			return dep
-
-		newDep = self.pool.Dep(newString, 1)
-		assert(newDep is not None)
-
-		return newDep
 
 	class InstallationRequest(object):
 		def __init__(self, pool, installRpm, scenarioVersion = None, useRecommends = False):

@@ -348,7 +348,7 @@ class Composer(object):
 				for s in requiredScenarios:
 					if '|' in s:
 						check = set(s.split('|'))
-					elif '+' in s:
+					else:
 						# keep this around for a few weeks in case some people still
 						# use the 'old' mode (which breaks when libstdc++ will be covered
 						# by a scenario)

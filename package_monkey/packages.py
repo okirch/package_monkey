@@ -1,0 +1,179 @@
+#
+# package and product handling classes
+#
+
+import xml.etree.ElementTree as ET
+import urllib.parse
+import os.path
+import os
+from .util import loggingFacade, debugmsg, infomsg, warnmsg, errormsg
+from .arch import ArchRegistry
+from .newdb import RpmBase, RpmInfo
+from .filter import Classification
+
+class ProductMediator(object):
+	def __init__(self, productCodebase, packageCollection):
+		self.productCodebase = productCodebase
+		self.packageCollection = packageCollection
+
+	# Generate all synthetic builds and packages
+	def generateSyntheticBuilds(self, db):
+		collection = self.packageCollection
+
+		for rpm in db.rpms:
+			if not rpm.isSynthetic:
+				continue
+
+			build = db.createBuild(rpm.name)
+			build.isSynthetic = True
+			build.addRpm(rpm)
+			collection.addBuild(build)
+
+	def loadAndVerifyPackages(self, store):
+		collection = self.packageCollection
+		for build in store.builds:
+			collection.addBuild(build)
+
+		return True
+
+	def generatePromise(self, name, db):
+		rpm = db.createRpm(f"promise:{name}", type = RpmBase.TYPE_PROMISE)
+
+		if rpm.new_build is not None:
+			assert(rpm.new_build in self.packageCollection.builds)
+			return
+
+		build = db.createBuild(rpm.name)
+		build.isSynthetic = True
+		build.addRpm(rpm)
+
+		self.packageCollection.addBuild(build)
+		return rpm
+
+# FIXME: should this move to newdb.py?
+class PackageCollection(object):
+	def __init__(self):
+		self._packages = set()
+		self._builds = []
+		self._sources = set()
+		self._packageDict = {}
+		self._archDict = {}
+
+	def copy(self):
+		result = self.__class__()
+
+		result._packages = self._packages.copy()
+		result._builds = self._builds.copy()
+		result._sources = self._sources.copy()
+		result._packageDict = self._packageDict.copy()
+		result._archDict = self._archDict.copy()
+
+		return result
+
+	def __len__(self):
+		return len(self._packageDict)
+
+	def __iter__(self):
+		return iter(self.packages)
+
+	def rpmsWithArch(self):
+		for rpm in self:
+			yield rpm, self._archDict.get(rpm.name)
+
+	def get(self, name):
+		return self._packageDict.get(name)
+
+	def getArch(self, arg):
+		if type(arg) is not str:
+			arg = str(arg)
+		return self._archDict.get(arg)
+
+	# Add an RPM to the collection.
+	# If the package is already present, update its arch set
+	def add(self, rpm, archSet = None, overwriteArch = False):
+		self._packages.add(rpm)
+		self._packageDict[rpm.name] = rpm
+
+		if archSet is not None:
+			if not archSet.issubset(rpm.architectures):
+				raise Exception(f"Invalid arch set {archSet} for {rpm}: rpm does not support {archSet.difference(rpm.architectures)}")
+
+			if overwriteArch or rpm.name not in self._archDict:
+				self._archDict[rpm.name] = archSet.copy()
+			else:
+				self._archDict[rpm.name].update(archSet)
+
+	def discard(self, rpm, archSet = None):
+		if rpm not in self._packages:
+			return
+
+		resultingArchSet = None
+		if archSet is not None:
+			existingArchSet = self._archDict.get(rpm.name)
+			if existingArchSet is None:
+				existingArchSet = rpm.architectures
+			resultingArchSet = existingArchSet.difference(archSet)
+
+		if resultingArchSet:
+			self._archDict[rpm.name] = resultingArchSet
+		else:
+			self._packages.discard(rpm)
+			del self._packageDict[rpm.name]
+			try:
+				del self._archDict[rpm.name]
+			except: pass
+
+	def addBuild(self, build):
+		self._builds.append(build)
+		for rpm in build.binaries:
+			if rpm.name.endswith('-debuginfo') or rpm.name.endswith('-debugsource'):
+				continue
+			if not rpm.isSourcePackage:
+				self.add(rpm)
+			else:
+				self._sources.add(rpm)
+
+	@property
+	def builds(self):
+		return iter(self._builds)
+
+	@property
+	def packages(self):
+		return iter(self._packages.union(self._sources))
+
+	# set operations
+	def update(self, other):
+		assert(isinstance(other, self.__class__))
+
+		for rpm, archSet in other.rpmsWithArch():
+			if archSet is None:
+				archSet = rpm.architectures
+			self.add(rpm, archSet)
+
+	def difference_update(self, other):
+		assert(isinstance(other, self.__class__))
+		for rpm, archSet in other.rpmsWithArch():
+			self.discard(rpm, archSet)
+
+	def union(self, other):
+		ret = self.copy()
+		ret.update(other)
+		return ret
+
+	def difference(self, other):
+		ret = self.copy()
+		ret.difference_update(other)
+		return ret
+
+	def enablePackageTracing(self, traceMatcher):
+		for rpm in self.packages:
+			if rpm.isSourcePackage:
+				continue
+			if traceMatcher.match(rpm.name):
+				infomsg(f"Tracing rpm {rpm}")
+				rpm.trace = True
+
+		for build in self.builds:
+			if traceMatcher.match(build.name):
+				infomsg(f"Tracing build {build}")
+				build.trace = True

@@ -1,0 +1,188 @@
+#!/usr/bin/python3
+#
+# This utility converts a set of CSV files holding use case information to a single yaml file.
+# The input is expected to match the setup of the one used by the SLES16.0 Packaging Workshop.
+#
+
+import sys
+import time
+
+from package_monkey.util import loggingFacade, errormsg, warnmsg, infomsg
+from package_monkey.csvio import CSVReader
+from package_monkey.options import Application
+from package_monkey.usecase import *
+
+class UseCaseImporter(object):
+	class Processor(object):
+		def __init__(self, path, map):
+			self.path = path
+			self.map = map
+			self.nerrors = 0
+
+			self.csv = CSVReader(path)
+
+		def __iter__(self):
+			return iter(self.csv)
+
+		def warn(self, msg):
+			warnmsg(f"{self.path}: {msg}")
+
+		def error(self, msg):
+			errormsg(f"{self.path}: {msg}")
+			self.nerrors += 1
+
+		def processEntry(self, entry):
+			if not entry.slug:
+				self.warn(f"Empty slug in {entry}")
+				return None
+
+			if entry.slug in self.map:
+				self.error(f"Duplicate {entry}")
+				return None
+
+			self.map[entry.slug] = entry
+			return entry
+
+	def __init__(self):
+		self.catalog = UseCaseCatalog()
+
+	def loadUseCases(self, path):
+		print(f"Loading use case catalog from {path}")
+
+		processor = self.Processor(path, self.catalog._usecases)
+		for row in processor:
+			processor.processEntry(UseCase(row.Slug, row.Name))
+
+		processor.processEntry(UseCase('unknown', 'Unknown use case'))
+
+		if processor.nerrors:
+			errormsg(f"Encountered {processor.nerrors} errors. Proceeding anyway.")
+
+	def loadUseCaseImplementations(self, path):
+		print(f"Loading use case implementation catalog from {path}")
+
+		processor = self.Processor(path, self.catalog._implementations)
+		for row in processor:
+			uci = processor.processEntry(UseCaseImpl(row.Slug, row.Name, row.Use_Case))
+			if uci is None:
+				continue
+
+			if uci.usecase is None:
+				warnmsg(f"{path}: {uci} does not refer back to a use case")
+				continue
+
+			uc = self.catalog.getUsecase(uci.usecase)
+			if uc is None:
+				processor.error(f"{uci} refers to unknown use case {uci.usecase}")
+				continue
+
+			uc.addImplementation(uci)
+
+		processor.processEntry(UseCaseImpl('unknown', 'Unknown use case implementation', 'unknown'))
+
+		if processor.nerrors:
+			errormsg(f"Encountered {processor.nerrors} errors. Proceeding anyway.")
+
+	def loadPackages(self, path):
+		print(f"Loading package catalog from {path}")
+
+		csv = CSVReader(path)
+
+		errors = 0
+		for row in csv:
+			pkgName = row.name
+
+			useCaseName = row.use_case.replace(',', ' ').strip()
+			if useCaseName == 'to drop':
+				continue
+
+			names = useCaseName.split()
+
+			if not names:
+				# infomsg(f"{path}: {pkgName} does not specify a use case")
+				names = ['unknown']
+
+			for slug in names:
+				uci = self.catalog.getUsecaseImplementation(slug)
+
+				# If we're given a use case implementation slug such as
+				# desktop-environment-gtk-gnome-to-review, check if we have a use case 
+				# like desktop-environment-gtk-gnome or desktop-environment.
+				if uci is None:
+					stems = slug.split('-')
+					while uci is None and stems:
+						stems.pop()
+						potentialBaseSlug = '-'.join(stems)
+						uc = self.catalog.getUsecase(potentialBaseSlug)
+
+						if uc is not None:
+							uci = UseCaseImpl(slug, slug, potentialBaseSlug)
+							self.catalog.addUsecaseImplementation(uci)
+
+							warnmsg(f"{pkgName} specifies invalid use case {slug}")
+							infomsg(f"Adding {uci} to {uc} on the fly")
+							uc.addImplementation(uci)
+							break
+
+				if uci is None:
+					errormsg(f"{pkgName} specifies invalid use case {slug}")
+					uci = self.catalog.getUsecaseImplementation('unknown')
+
+				uci.addPackage(pkgName)
+
+		if errors:
+			# fail?
+			pass
+
+
+	def writeYaml(self, path):
+		infomsg(f"Writing usecase information to {path}")
+		with open(path, "w") as f:
+			self.writeYamlWork(lambda msg = "": print(msg, file = f))
+
+	def writeYamlWork(self, print):
+		print(f"# Automatically generated - do not edit #")
+		print(f"# Produced on {time.ctime()}")
+
+		for uc in self.catalog.usecases:
+			print(f"{uc.slug}:")
+			print(f"   name: \"{uc.name}\"")
+			print(f"   implementations:")
+			for uci in uc.implementations:
+				print(f"      {uci.slug}:")
+				print(f"         name: \"{uci.name}\"")
+				print(f"         packages:")
+				for pkg in sorted(uci.packages):
+					print(f"          - {pkg}")
+				print()
+
+			if not uc.implementations:
+				print()
+
+
+def processArgs():
+	if len(sys.argv) != 4:
+		raise Exception(f"usage: {sys.argv[0]} usecases.csv usecaseimpls.csv packages.csv")
+
+application = Application('import-usecases')
+application.addArgument('--release', default = 'sle16.0', help = 'name of product(s) to compose')
+application.addArgument(dest = 'usecase_csv', metavar = 'USECASES.CSV', help = 'CSV file containing catalog of use cases')
+application.addArgument(dest = 'usecase_impl_csv', metavar = 'USECASEIMPLGS.CSV', help = 'CSV file containing catalog of use case implementations')
+application.addArgument(dest = 'packages_csv', metavar = 'PACKAGES.CSV', help = 'CSV file containing catalog of packages')
+
+application.parseArguments()
+
+loggingFacade.disableTimestamps()
+
+opts = application.opts
+
+importer = UseCaseImporter()
+importer.loadUseCases(opts.usecase_csv)
+importer.loadUseCaseImplementations(opts.usecase_impl_csv)
+importer.loadPackages(opts.packages_csv)
+
+importer.writeYaml(application.productUsecasePath)
+
+# Check if we can read what we just wrote
+if True:
+	catalog = application.loadUsecaseCatalog()

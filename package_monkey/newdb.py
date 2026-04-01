@@ -1,0 +1,966 @@
+import functools
+import os
+
+from .arch import *
+from .filter import Classification
+from .util import DictOfSets
+
+__names__ = ['RpmInfo', 'GenericRpm', 'GenericBuild', 'NewDB', 'UniquePackageInfoFactory', 'ExtraDB']
+
+class RpmInfo(object):
+	def __init__(self, name, epoch, version, release, arch, buildArch = None):
+		self.name = name
+		self.epoch = epoch
+		self.version = version
+		self.release = release
+		self.arch = arch
+		self.buildArch = buildArch
+
+		self.isSourcePackage = arch in ('src', 'nosrc')
+
+	def __str__(self):
+		return f"{self.name}.{self.arch}"
+
+	@classmethod
+	def parsePackageName(klass, pkgName, **kwargs):
+		assert(pkgName.endswith('.rpm'))
+
+		try:
+			(n, arch, suffix) = pkgName.rsplit(".", maxsplit = 2)
+			(name, version, release) = n.rsplit("-", maxsplit = 2)
+		except:
+			raise ValueError(f"Unable to parse RPM package name {pkgName}")
+
+		return RpmInfo(name, None, version, release, arch, **kwargs)
+
+class UniquePackageInfoFactory(object):
+	def __init__(self, buildArch):
+		self.buildArch = buildArch
+		self._map = dict()
+
+	def __call__(self, name, version, release, arch):
+		key = f"{name}-{version}-{release}.{arch}"
+		pinfo = self._map.get(key)
+		if pinfo is None:
+			pinfo = RpmInfo(name = name, version = version, release = release, arch = arch, epoch = None, buildArch = self.buildArch)
+			self._map[key] = pinfo
+		return pinfo
+
+class NewDB(object):
+	def __init__(self, traceMatcher = None):
+		self.traceMatcher = traceMatcher
+
+		self._rpms = {}
+		self._sources = {}
+		self._builds = {}
+		self._promises = {}
+
+		self.architectures = ArchSet()
+
+		self.userVersion = None
+
+		self._rpmToBuildCache = None
+		self._reverseDependencyCache = None
+		self._promiseCache = None
+
+	def addArchitecture(self, arch):
+		self.architectures.add(arch)
+
+	def lookupRpm(self, name):
+		return self._rpms.get(name)
+
+	def createRpm(self, name, type = None):
+		rpm = self._rpms.get(name)
+		if rpm is None:
+			rpm = GenericRpm(name, type)
+			if self.traceMatcher is not None and self.traceMatcher.match(name):
+				rpm.trace = True
+			self._rpms[name] = rpm
+		elif type and rpm.type != type:
+			raise Exception(f"{rpm}: cannot change type from {rpm.type} to {type}")
+
+		return rpm
+
+	def createSourceRpm(self, name):
+		rpm = self._sources.get(name)
+		if rpm is None:
+			rpm = GenericSourceRpm(name)
+			self._sources[name] = rpm
+		return rpm
+
+	def createRpmFromInfo(self, rpmInfo):
+		if not rpmInfo.isSourcePackage:
+			rpm = self.createRpm(rpmInfo.name)
+		else:
+			rpm = self.createSourceRpm(rpmInfo.name)
+
+		# ignore buildArch and all of that
+		return rpm
+
+	@property
+	def rpms(self):
+		return iter(self._rpms.values())
+
+	def lookupBuild(self, name):
+		return self._builds.get(name)
+
+	def createBuild(self, name):
+		build = self._builds.get(name)
+		if build is None:
+			build = GenericBuild(name)
+			if self.traceMatcher is not None and self.traceMatcher.match(name):
+				build.trace = True
+			self._builds[name] = build
+		return build
+
+	@property
+	def builds(self):
+		return iter(self._builds.values())
+
+	def createPromise(self, rpm, arch = None):
+		if arch is not None:
+			name = f"promise:{arch}:{rpm}"
+		else:
+			name = f"promise:{rpm}"
+
+		promise = self.createRpm(name, RpmBase.TYPE_PROMISE)
+		self._promises[promise] = rpm
+		return promise
+
+	def lookupPromise(self, rpm):
+		promise = self.lookupRpm(f"promise:{rpm}")
+		if promise is not None:
+			assert(promise.type == RpmBase.TYPE_PROMISE)
+		return promise
+
+	@property
+	def promises(self):
+		return iter(self._promises.keys())
+
+	def promisedItems(self):
+		return self._promises.items()
+
+	def lookupBuildForRpm(self, rpm):
+		if self._rpmToBuildCache is None:
+			self._rpmToBuildCache = {}
+			for build in self.builds:
+				for tmpRpm in build.rpms:
+					if tmpRpm in self._rpmToBuildCache:
+						errormsg(f"{tmpRpm} belongs to several builds: {self._rpmToBuildCache[tmpRpm]} and {build}")
+						continue
+
+					self._rpmToBuildCache[tmpRpm] = build
+
+		return self._rpmToBuildCache.get(rpm)
+
+	def lookupRequiredBy(self, rpm):
+		if self._reverseDependencyCache is None:
+			self._reverseDependencyCache = {}
+			for tmpRpm in self.rpms:
+				for dep in tmpRpm.enumerateRequiredRpms():
+					provSet = self._reverseDependencyCache.get(dep)
+					if provSet is None:
+						provSet = set()
+						self._reverseDependencyCache[dep] = provSet
+					provSet.add(tmpRpm)
+
+		return self._reverseDependencyCache.get(rpm) or set()
+
+	class ParsedPromise(object):
+		def __init__(self, name, rpm = None):
+			assert(name.startswith('promise:'))
+			name = name[8:]
+			if ':' in name:
+				arch, rest = name.split(':', maxsplit = 1)
+				if archRegistry.isValidArchitecture(arch):
+					name = rest
+			else:
+				arch = None
+			self.name = name
+			self.arch = arch
+			self.rpm = rpm
+
+		def __str__(self):
+			if self.arch:
+				return f"promise:{self.arch}:{self.name}"
+			return f"promise:{self.name}"
+
+		def __hash__(self):
+			return hash(self.name)
+
+		def __eq__(self, other):
+			return self.name == other.name and self.arch == other.arch
+
+	def lookupPromisedTo(self, rpm):
+		if self._promiseCache is None:
+			self.buildPromiseCache()
+
+		result = []
+
+		pset = self._promiseCache.get(rpm)
+		for promise in pset or []:
+			promiseRequiredBy = self.lookupRequiredBy(promise.rpm)
+			if promiseRequiredBy:
+				result.append((promise, promiseRequiredBy))
+
+		return result
+
+	def buildPromiseCache(self):
+		self._promiseCache = {}
+		for rpm in self.rpms:
+			if rpm.type != RpmBase.TYPE_PROMISE:
+				continue
+
+			promise = self.ParsedPromise(rpm.name, rpm)
+			realRpm = self.lookupRpm(promise.name)
+			assert(realRpm is not None)
+
+			try:
+				self._promiseCache[realRpm].add(promise)
+			except:
+				self._promiseCache[realRpm] = set((promise, ))
+
+	def save(self, path):
+		def write(msg):
+			print(msg, file = dbf)
+
+		def writeDictOfSets(pfx, dos, archSet):
+			common = dos.common
+			if common:
+				write(f"  {pfx} common {' '.join(sorted(map(str, common)))}")
+
+			for arch in sorted(archSet):
+				values = dos.get(arch)
+				if not values:
+					continue
+				delta = values.difference(common)
+				if delta:
+					write(f"  {pfx} {arch} {' '.join(sorted(map(str, delta)))}")
+
+		with open(path + ".tmp", "w") as dbf:
+			write(f"arch {' '.join(sorted(self.architectures))}")
+
+			syntheticTypes = set(RpmBase.VALID_TYPES)
+			syntheticTypes.discard(RpmBase.TYPE_REGULAR)
+			for type in sorted(syntheticTypes):
+				rpms = filter(lambda r: r.type is type, self.rpms)
+				for genericRpm in sorted(rpms, key = str):
+					write(f"pkg {genericRpm.name} {genericRpm.type}")
+
+			rpms = filter(lambda r: r.type is RpmBase.TYPE_REGULAR, self.rpms)
+			for genericRpm in sorted(rpms, key = str):
+				write(f"pkg {genericRpm.name} {genericRpm.type} {genericRpm.architectures}")
+				writeDictOfSets('mem', genericRpm.controllingScenarios, genericRpm.architectures)
+				writeDictOfSets('req', genericRpm.solutions, genericRpm.architectures)
+				writeDictOfSets('scn', genericRpm.validScenarios, genericRpm.architectures)
+				writeDictOfSets('ver', genericRpm.versions, genericRpm.architectures)
+
+				unrDict = genericRpm.unresolvables
+				common = unrDict.common
+				for dep in sorted(map(str, common)):
+					write(f"  unr common {dep}")
+
+				for arch in genericRpm.architectures:
+					values = unrDict.get(arch)
+					if not values:
+						continue
+					for dep in sorted(map(str, values.difference(common))):
+						write(f"  unr {arch} {dep}")
+
+			for build in self.builds:
+				write(f"build {build.name}")
+				for arch, status in build._buildStatus.items():
+					if status != 'succeeded':
+						write(f" status {arch} {status}")
+				for rpm in sorted(map(str, build.rpms)):
+					write(f" rpm {rpm}")
+
+		os.rename(path + ".tmp", path)
+		infomsg(f"Updated {path}")
+
+	def load(self, path):
+		nerrors = 0
+
+		with open(path, 'r') as dbf:
+			currentRpm = None
+			currentBuild = None
+
+			for line in dbf.readlines():
+				w = line.split()
+				cmd = w.pop(0)
+				if cmd == 'arch':
+					self.architectures.update(ArchSet(w))
+				elif cmd == 'pkg':
+					name = w.pop(0)
+					type = None
+					if w:
+						type = w.pop(0)
+
+					# Workaround, until we've cleaned up the prepare stage:
+					# ignore promise:foo:arch style promises.
+					if name.startswith("promise:") and name.count(":") > 1:
+						continue
+
+					rpm = self.createRpm(name, type)
+					if w:
+						rpm.architectures = ArchSet(w)
+
+					for arch in rpm.architectures:
+						rpm.addDependencies(None, arch, set())
+
+					currentRpm = rpm
+					currentBuild = None
+				elif cmd == 'req':
+					assert(currentRpm)
+
+					key = w.pop(0)
+
+					# Workaround, until we've cleaned up the prepare stage:
+					# ignore promise:foo:arch style promises.
+					saneNames = []
+					for name in w:
+						if name.startswith("promise:") and name.count(":") > 1:
+							continue
+						saneNames.append(name)
+					w = saneNames
+
+					rpms = set(map(self.createRpm, w))
+					if key == 'common':
+						currentRpm.solutions.common.update(rpms)
+					else:
+						currentRpm.solutions.update(key, rpms.union(currentRpm.solutions.common))
+				elif cmd == 'mem':
+					assert(currentRpm)
+
+					key = w.pop(0)
+					if key == 'common':
+						currentRpm.controllingScenarios.updateCommon(w)
+						assert(set(w) == currentRpm.controllingScenarios.common)
+					else:
+						currentRpm.controllingScenarios.update(key, set(w))
+				elif cmd == 'scn':
+					assert(currentRpm)
+
+					key = w.pop(0)
+					if key == 'common':
+						currentRpm.validScenarios.updateCommon(w)
+						assert(set(w) == currentRpm.validScenarios.common)
+					else:
+						currentRpm.validScenarios.update(key, set(w))
+				elif cmd == 'ver':
+					assert(currentRpm)
+
+					key = w.pop(0)
+					if key == 'common':
+						currentRpm.versions.updateCommon(w)
+						assert(set(w) == currentRpm.versions.common)
+					else:
+						currentRpm.versions.update(key, set(w))
+				elif cmd == 'unr':
+					arch = w.pop(0)
+					dep = ' '.join(w)
+					if key == 'common':
+						currentRpm.unresolvables.addCommon(dep)
+					else:
+						currentRpm.unresolvables.add(key, dep)
+				elif cmd == 'build':
+					name = w.pop(0)
+
+					# Workaround, until we've cleaned up the prepare stage:
+					# ignore promise:foo:arch style promises.
+					if name.startswith("promise:") and name.count(":") > 1:
+						continue
+
+					currentBuild = self.createBuild(name)
+					currentRpm = None
+				elif cmd == 'status':
+					assert(currentBuild)
+
+					arch, status = w
+					currentBuild.setArchBuildStatus(arch, status)
+				elif cmd == 'rpm':
+					assert(currentBuild)
+					name = w.pop(0)
+
+					rpm = self.lookupRpm(name)
+					if rpm is None:
+						errormsg(f"DB {path}: build {currentBuild} references unknown rpm {name}")
+						nerrors += 1
+						continue
+					currentBuild.addRpm(rpm)
+				else:
+					errormsg(f"DB {path}: command {cmd} not supported")
+					nerrors += 1
+
+		if nerrors:
+			raise Exception(f"DB {path}: encountered {nerrors} errors")
+
+		for rpm in self.rpms:
+			if rpm.new_build is None and not rpm.isSynthetic:
+				raise Exception(f"After loading DB: {rpm} w/o associated build")
+
+		infomsg(f"DB {path}: loaded {len(self._builds)} builds and {len(self._rpms)} rpms")
+		self.userVersion = int(os.stat(path).st_mtime)
+
+class RpmBase(object):
+	TYPE_REGULAR	= 'rpm'
+	TYPE_SYNTHETIC	= 'synthetic'
+	TYPE_MISSING	= 'missing'
+	TYPE_SCENARIO	= 'scenario'
+	TYPE_PROMISE	= 'promise'
+	TYPE_METAPKG	= 'meta'
+
+	VALID_TYPES	= (TYPE_REGULAR, TYPE_SYNTHETIC, TYPE_MISSING, TYPE_SCENARIO, TYPE_PROMISE, TYPE_METAPKG)
+
+	def __init__(self, name, type = None):
+		self.name = name
+
+		self._type = type or self.TYPE_REGULAR
+		self.isSynthetic = (self._type != self.TYPE_REGULAR)
+		self.isMissing = (self._type == self.TYPE_MISSING)
+		self.isExternal = False
+
+	@property
+	def type(self):
+		return self._type
+
+	def __str__(self):
+		if self.isSourcePackage:
+			return f"{self.name}.src"
+		return self.name
+
+
+class GenericSourceRpm(RpmBase):
+	isSourcePackage = True
+
+	def __init__(self, name, type = None):
+		super().__init__(name, type)
+
+		self.new_build = None
+		self.new_override_epic = None
+
+class GenericRpm(RpmBase):
+	isSourcePackage = False
+
+	class DictOfSetsWithCommonTracking(DictOfSets):
+		def __init__(self):
+			super().__init__()
+			self._common = None
+			self._configuredCommon = None
+
+		def __bool__(self):
+			return bool(self.common) or super().__bool__()
+
+		def get(self, key):
+			result = super().get(key)
+
+			if self._configuredCommon:
+				result = result.union(self._configuredCommon)
+			return result
+
+		def raw_get(self, key):
+			return super().get(key)
+
+		def values(self):
+			result = list(super().values())
+			if self._configuredCommon:
+				result = list(map(lambda s: s.union(self._configuredCommon), result))
+			return result
+
+		def addCommon(self, value):
+			if self._configuredCommon is None:
+				self._configuredCommon = set()
+			self._configuredCommon.add(value)
+
+		def updateCommon(self, values):
+			# why the heck are we making this weird distinction?
+			if self._common is None:
+				self._configuredCommon = set(values)
+			else:
+				self._configuredCommon.update(values)
+
+		@property
+		def common(self):
+			if self._common is None:
+				if self._dict:
+					self._common = functools.reduce(set.intersection, self.values())
+					if self._configuredCommon is not None:
+						self._common.update(self._configuredCommon)
+				elif self._configuredCommon:
+					self._common = self._configuredCommon
+				else:
+					self._common = set()
+			return self._common
+
+		def allIdentical(self):
+			common = self.common
+			return all((s == common) for s in self.values())
+
+		def discardCommon(self, value):
+			if self._configuredCommon is not None:
+				self._configuredCommon.discard(value)
+			if self._common is not None:
+				self._common.discard(value)
+			for memberSet in self.values():
+				memberSet.discard(value)
+
+		def discard(self, key, value):
+			if self._configuredCommon is not None and value in self._configuredCommon:
+				# cryptic error for sth that should never happen
+				raise Exception(f"BUG: cannot remove value {value} for key {key} - value is in common set");
+
+			if self._common is not None and value in self._common:
+				self._common = None
+
+			super().discard(key, value)
+
+	def __init__(self, name, type = None):
+		super().__init__(name, type)
+
+		self.architectures = ArchSet()
+		self.missingArchitectures = ArchSet()
+		self.solutions = self.DictOfSetsWithCommonTracking()
+		self.validScenarios = self.DictOfSetsWithCommonTracking()
+		self.controllingScenarios = self.DictOfSetsWithCommonTracking()
+		self.unresolvables = self.DictOfSetsWithCommonTracking()
+		self.versions = self.DictOfSetsWithCommonTracking()
+
+		# used by the 3rd stage only
+		self.labelHints = None
+		self.trace = False
+
+		# backward compat
+		self.fullname = self.name
+
+		self.new_build = None
+		self.new_class = None
+		self.new_override_epic = None
+
+		self.isUnresolvable = False
+		if name == '__unresolved__':
+			self.isUnresolvable = True
+
+	def __str__(self):
+		return self.name
+
+	def addDependencies(self, dep, arch, rpmNames, unresolvable = False):
+		self.architectures.add(arch)
+		self.solutions.update(arch, rpmNames)
+
+		if unresolvable:
+			self.unresolvables.add(arch, str(dep))
+
+	def getDependencies(self, arch):
+		return self.solutions.get(arch)
+
+	def addScenarios(self, arch, scenarioChoices):
+		self.validScenarios.update(arch, scenarioChoices)
+
+	def getScenarios(self, arch):
+		return self.validScenarios.get(arch)
+
+	def addControllingScenarios(self, arch, scenarioChoices):
+		self.controllingScenarios.update(arch, scenarioChoices)
+
+	def getControllingScenarios(self, arch):
+		return self.controllingScenarios.get(arch)
+
+	@property
+	def resolvedRequires(self):
+		return self.solutions.common
+
+	def addVersion(self, arch, version):
+		self.versions.add(arch, version)
+
+	def levelOfPerfection(self, allArchSet):
+		result = 0
+
+		if self.architectures == allArchSet:
+			result |= 1
+
+		if self.solutions.allIdentical():
+			result |= 2
+
+		if self.controllingScenarios.allIdentical():
+			result |= 4
+
+		if self.validScenarios.allIdentical():
+			result |= 8
+
+		return result
+
+	@property
+	def isIgnored(self):
+		if self.labelHints is None:
+			return False
+		return self.labelHints.isIgnored
+
+	def supportsExpectedArchitectures(self, archSet):
+		if self.type != self.TYPE_REGULAR:
+			return True
+		return archSet.issubset(self.architectures)
+
+	def setLabelHints(self, labelHints):
+		if labelHints is None:
+			return
+
+		# Do not label promises and the like with roles or class labels:
+		if self.type != self.TYPE_REGULAR:
+			if labelHints.epic is None:
+				return
+
+		if self.trace:
+			infomsg(f"{self}: setting label hints to {labelHints}. my arch set={self.architectures}")
+			if labelHints.epic and labelHints.epic.architectures:
+				infomsg(f"   arch set={labelHints.epic.architectures}")
+
+			if labelHints.overrideArch is not None:
+				infomsg(f"   override arch {labelHints.overrideArch}")
+			else:
+				if labelHints.includeArch is not None:
+					infomsg(f"   add arch {labelHints.includeArch}")
+				if labelHints.excludeArch is not None:
+					infomsg(f"   drop arch {labelHints.excludeArch}")
+
+			if labelHints is not None:
+				infomsg(f"   label hints {labelHints}")
+
+		self.labelHints = labelHints
+		if labelHints is not None:
+			if self.new_class is not None and labelHints.klass is not self.new_class:
+				errormsg(f"XXX: {self}: my klass={self.new_class}; cannot overwrite with {labelHints.klass}")
+			if self.new_class is None and labelHints.klass is not None:
+				self.new_class = labelHints.klass
+
+			epic = labelHints.epic
+			build = self.new_build
+			if build is not None and epic is not None:
+				if build.new_epic is None:
+					# This is still happening for promise:* rpms, as we often place the
+					# promises via class contexts:
+					# warnmsg(f"{self}: need to overwrite build {build} epic {build.new_epic} with {epic}")
+					self.new_build.new_epic = epic
+					self.new_build.layer = epic.layer
+				if build.new_epic is not epic:
+					self.new_override_epic = epic
+
+			if labelHints.overrideArch is not None:
+				self.architectures = labelHints.overrideArch
+			else:
+				if labelHints.includeArch is not None:
+					self.architectures.update(labelHints.includeArch)
+				if labelHints.excludeArch is not None:
+					self.architectures.difference_update(labelHints.excludeArch)
+
+	def unshareLabelHints(self):
+		if self.labelHints is not None:
+			self.labelHints = self.labelHints.unshare()
+		return self.labelHints
+
+	# hack
+	@property
+	def label(self):
+		raise Exception(f"rpm.label no longer supported")
+
+	# backwards compatibility
+	def enumerateRequiredRpms(self):
+		for rpm in self.solutions.common:
+			yield rpm
+
+	def enumerateUnresolvedDependencies(self):
+		for dep in self.unresolvables.common:
+			yield dep
+
+	@property
+	def validForScenarios(self):
+		return self.validScenarios.common.copy()
+
+	def getValidScenarios(self, archSet = None):
+		if archSet is None:
+			return self.validScenarios.common.copy()
+
+		result = None
+		for arch in archSet:
+			archScenarios = self.validScenarios.get(arch)
+			if archScenarios is None:
+				result = set()
+			elif result is None:
+				result = archScenarios
+			else:
+				result = result.intersection(archScenarios)
+		return result
+
+	def replaceDependency(self, oldReq, newReq, arch = None):
+		if arch is None:
+			self.solutions.discardCommon(oldReq)
+			self.solutions.addCommon(newReq)
+		else:
+			self.solutions.discard(arch, oldReq)
+			self.solutions.add(arch, newReq)
+
+class GenericBuild(object):
+	def __init__(self, name):
+		self.name = name
+		self.rpms = set()
+		self.source = None
+
+		self._buildStatus = {}
+
+		# used by the 3rd stage only
+		self.isSynthetic = False
+		self.labelHints = None
+		self.trace = False
+
+		self.new_epic = None
+		self.new_layer = None
+
+	def __str__(self):
+		return self.name
+
+	def setArchBuildStatus(self, arch, status):
+		self._buildStatus[arch] = status
+
+	def getArchBuildStatus(self, arch):
+		return self._buildStatus.get(arch, 'excluded')
+
+	@property
+	def binaries(self):
+		return self.rpms
+
+	@property
+	def sourceRpm(self):
+		return self.source
+
+	@property
+	def layer(self):
+		return self.new_layer
+
+	@layer.setter
+	def layer(self, layer):
+		if self.new_layer is not None and self.new_layer is not layer:
+			raise Exception(f"build {self}: conflicting layer information {self.new_layer} vs {layer}")
+		self.new_layer = layer
+
+	@property
+	def epic(self):
+		return self.new_epic
+
+	@epic.setter
+	def epic(self, epic):
+		if self.new_epic is not None and self.new_epic is not epic:
+			raise Exception(f"build {self}: conflicting epic information {self.new_epic} vs {epic}")
+		self.new_epic = epic
+		self.layer = epic.layer
+
+	def addRpm(self, rpm):
+		if rpm.new_build is None:
+			rpm.new_build = self
+		elif rpm.new_build is not self:
+			errormsg(f"Conflicting builds for {rpm.isSourcePackage and 'source' or 'binary'} rpm {rpm}: {self} vs {rpm.new_build}")
+
+		if rpm.isSourcePackage:
+			if self.source is not None and self.source is not rpm:
+				raise Exception(f"{self}: conflicting source packages {self.source} vs {rpm}")
+			self.source = rpm
+		else:
+			self.rpms.add(rpm)
+
+	def setLabelHints(self, labelHints):
+		if labelHints is None or labelHints.epic is None:
+			raise Exception(f"Cannot assign build {self} to epic: label hints={labelHints}")
+
+		epic = labelHints.epic
+		self.new_epic = epic
+		self.layer = epic.layer
+		self.labelHints = labelHints
+
+		if labelHints.overrideArch or \
+		   labelHints.includeArch or \
+		   labelHints.excludeArch:
+			warnmsg(f"{self} ignoring architecture overrides from label hints")
+
+	@property
+	def uniformArchitectures(self):
+		archSet = archRegistry.fullset
+		inspected = []
+		for rpm in self.binaries:
+			# We should probably do this much earlier
+			if rpm.name.endswith('-debugsource') or \
+			   rpm.name.endswith('-debuginfo'):
+				continue
+
+			if rpm.type != rpm.TYPE_REGULAR:
+				continue
+
+			archSet = archSet.intersection(rpm.architectures)
+			inspected.append(rpm)
+
+		if archSet != archRegistry.fullset:
+			if self.trace:
+				infomsg(f"{self} not available on all architectures: {archSet}")
+				for rpm in inspected:
+					infomsg(f"  {rpm} {rpm.architectures}")
+
+			good = all((rpm.architectures == archSet) for rpm in inspected)
+			if not good:
+				return None
+
+		return archSet
+
+	@property
+	def buildIssues(self):
+		for arch, status in self._buildStatus.items():
+			if status != 'succeeded':
+				yield arch, status
+
+	@property
+	def successful(self):
+		return not any(self.buildFailures)
+
+	@property
+	def buildFailures(self):
+		for arch, status in self._buildStatus.items():
+			if status not in ('succeeded', 'excluded'):
+				yield arch, status
+
+class GenericScenarioClass(object):
+	def __init__(self, name, values, partiallyPresent = None):
+		self.name = name
+		self.values = set(values)
+		self.partiallyPresent = set()
+
+		if partiallyPresent:
+			self.values.update(partiallyPresent)
+			self.partiallyPresent.update(partiallyPresent)
+
+
+	def markPartiallySupported(self, values):
+		self.partiallyPresent.update(self.values.intersection(values))
+
+##################################################################
+# We store additional rpm information such as summary and
+# descriptions in a separate DB.
+#
+# FIXME: the data representation could be way more compact.
+##################################################################
+class ExtraDB(object):
+	def __init__(self):
+		self._rpms = {}
+		self._foundNames = set()
+
+	@staticmethod
+	def makekey(name, buildArch):
+		return f"{name}.{buildArch}"
+
+	def lookupRpm(self, name, buildArch, create = False):
+		key = self.makekey(name, buildArch)
+		rpm = self._rpms.get(key)
+		if rpm is None:
+			rpm = RpmAuxInfo(name, buildArch)
+			self._rpms[key] = rpm
+
+		return rpm
+
+	def maybeUpdate(self, rpmName, buildArch, hash):
+		self._foundNames.add(self.makekey(rpmName, buildArch))
+
+		rpmInfo = self.lookupRpm(rpmName, buildArch, create = True)
+		if rpmInfo.hash == hash:
+			# no need to update
+			return None
+
+		return rpmInfo
+
+	def removeStaleEntries(self):
+		removed = set(self._rpms.keys()).difference(self._foundNames)
+
+		if removed:
+			infomsg(f"Removing {len(removed)} stale entries")
+
+		for key in removed:
+			infomsg(f"delete {key}")
+			del self._rpms[key]
+
+	def save(self, path):
+		with open(path, "w") as dbf:
+			def write(msg):
+				print(msg, file = dbf)
+
+			for key, rpmInfo in sorted(self._rpms.items()):
+				write(f"rpm {rpmInfo.name} {rpmInfo.arch} {rpmInfo.hash}")
+				for attr in 'version', 'release', 'summary', 'buildtime', 'description':
+					value = getattr(rpmInfo, attr, None)
+					if not value:
+						continue
+
+					if type(value) is str and '\n' in value:
+						lines = value.strip().split('\n')
+						if not lines:
+							continue
+						write(f"   {attr} |")
+						for l in lines:
+							write(f"   |{l}")
+					else:
+						write(f"   {attr} {value}")
+
+	def load(self, path):
+		continuation = None
+		continuationAttr = None
+		currentRpm = None
+
+		with open(path) as dbf:
+			for line in dbf.readlines():
+				line = line.strip()
+
+				if continuation is not None:
+					if line.startswith('|'):
+						continuation.append(line[1:].lstrip())
+						continue
+					setattr(currentRpm, continuationAttr, '\n'.join(continuation))
+					continuation = None
+
+				cmd, data = line.split(maxsplit = 1)
+				if cmd == 'rpm':
+					name, arch, hash = data.split()
+					currentRpm = self.lookupRpm(name, arch, create = True)
+					currentRpm.hash = hash
+				elif cmd in ('buildtime',):
+					setattr(currentRpm, cmd, int(data))
+				elif cmd in ('version', 'release', 'summary', 'buildtime', 'description'):
+					if data != '|':
+						setattr(currentRpm, cmd, data)
+					else:
+						continuationAttr = cmd
+						continuation = []
+				else:
+					raise Exception(f"{path}: unknown keyword {cmd}")
+
+class RpmAuxInfo(object):
+	def __init__(self, name, arch, hash = None):
+		self.name = name
+		self.arch = arch
+		self.hash = hash
+
+		self.version = None
+		self.release = None
+		self.summary = None
+		self.description = None
+		self.buildTime = 0
+
+	def __str__(self):
+		return f"{self.name}.{self.arch}"
+
+	def check(self, hash):
+		return self.hash == hash
+
+	def update(self, d, hash):
+		assert(self.name == d['name'])
+
+		for attr, value in d.items():
+			if attr in ('name', 'arch'):
+				continue
+
+			setattr(self, attr, value)
+
+		self.hash = hash
+

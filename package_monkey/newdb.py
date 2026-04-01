@@ -187,7 +187,7 @@ class NewDB(object):
 		for dep in sorted(map(str, common)):
 			write(f"  unr common {dep}")
 
-		for arch in genericRpm.architectures:
+		for arch in sorted(genericRpm.architectures):
 			values = unrDict.get(arch)
 			if not values:
 				continue

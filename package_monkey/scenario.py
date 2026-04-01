@@ -79,6 +79,10 @@ class ScenarioTuple(object):
 	def symbolicRpmName(self):
 		return f"{self.variable}/{self.abstractPackage}"
 
+	@property
+	def isComplete(self):
+		return self.variable and self.value and self.abstractPackage
+
 	# other can be a ScenarioTuple or a NewScenarioVersion
 	def conflicts(self, other):
 		return self.variable == other.variable and self.value != other.value

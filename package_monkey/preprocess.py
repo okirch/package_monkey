@@ -78,9 +78,8 @@ class RpmWrapper(RpmBase):
 	def addControllingScenarioNew(self, concreteScenario):
 		self.initControllingScenario()
 		self.newControllingScenarios.add(concreteScenario)
-		assert(concreteScenario.control.variable)
-		assert(concreteScenario.control.value)
-		assert(concreteScenario.control.abstractPackage)
+		if not concreteScenario.control.isComplete:
+			raise Exception(f"{self}: trying to add invalid controlling scenario {concreteScenario}")
 
 	# Helper function for the scenario manager
 	def extractVersion(self, versionFormat = '{major}'):

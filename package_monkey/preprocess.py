@@ -2219,8 +2219,11 @@ class PreprocessorHintsLoader(object):
 				elif not cmd.convertArgument(args, i, targetType):
 					return self.error(f"{cmd}: invalid type for argument #{i}: not a valid {targetType}")
 
-		if cmd(self.hints, args, **kwargs) is False:
-			return self.error(f"{cmd.name}: invalid argument(s): {' '.join(args)}")
+		try:
+			if cmd(self.hints, args, **kwargs) is False:
+				return self.error(f"{cmd.name}: invalid argument(s): {' '.join(args)}")
+		except Exception as e:
+			return self.error(f"{cmd.name} {' '.join(args)}: caught exception {e}")
 
 		return True
 

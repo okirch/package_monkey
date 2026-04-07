@@ -52,6 +52,10 @@ class PackageMonkey(object):
 					help = 'Specify where to find the model definition (default: $MONKEY_MODEL_PATH or "../SLFO")')
 		self.args.add_argument('--codebase', default = None,
 					help = 'Name of the codebase to inspect (default: $MONKEY_CODEBASE or "slfo")')
+		self.args.add_argument('--extra-build-project',
+				action = 'append',
+				default = [],
+				help = 'Download packages from the specified build project too (can be specified multiple times)')
 		self.args.add_argument('--statedir', default = '~/.local/package_monkey',
 					help = 'Specify where to store generated data')
 		self.args.add_argument('--cache', default = '~/.cache/package_monkey',

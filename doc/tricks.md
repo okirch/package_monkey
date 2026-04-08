@@ -57,3 +57,18 @@ to make vim parse them.
 
 If you're using a different editor, which requires a different way of ensuring the equivalent effect,
 feel free to send me patches.
+
+## Working with staging projects
+
+If you need to work with staging projects, you can specify additional OBS projects that package monkey
+should use:
+
+```
+$ monkey download --extra-build-project $STAGING_PROJECT
+$ monkey prepare --extra-build-project $STAGING_PROJECT
+$ monkey label
+$ monkey pdiff
+... (any other regular monkey commands)
+```
+
+This will download additional packages from the staging project, and use them as part of the prep stage.

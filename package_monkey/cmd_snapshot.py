@@ -70,6 +70,9 @@ class PublishApplication(ApplicationBase):
 		elif scope == 'lifecycle':
 			infomsg(f"Publishing lifecycle from {source} to {path}")
 			self.publishLifecycle(data, path)
+		elif scope == 'compose':
+			infomsg(f"Publishing compose files from {source} to {path}")
+			self.publishCompose(data, path)
 		else:
 			raise Exception(f"Cannot publish {scope}: not implemented")
 
@@ -84,6 +87,15 @@ class PublishApplication(ApplicationBase):
 			raise Exception(f"Unknown snapshot {slug}")
 
 		return data
+
+	def publishCompose(self, data, destDir):
+		release = self.modelDescription.releaseID
+
+		productData = data.getProduct(release)
+		sourceDir = productData.path
+
+		self.copyFiles(sourceDir, destDir,
+					onlyPatterns = ("default.productcompose",))
 
 	def publishLifecycle(self, data, destDir):
 		release = self.modelDescription.releaseID

@@ -30,6 +30,7 @@ class SolverDownloadApplication(ApplicationBase):
 			apiURL = self.productCodebase.apiURL
 		if apiURL is None:
 			infomsg(f"No api url given for this codebase, using {OBSClient.DEFAULT_API_URL}")
+			apiURL = OBSClient.DEFAULT_API_URL
 
 		obs = OBSClient(apiURL)
 		obs.setCachePath(self.defaultHttpPath)

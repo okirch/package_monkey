@@ -158,6 +158,7 @@ class ModelDescription(object):
 		self.path = path
 
 		self._codebaseID = opts.codebase
+		self._codebaseExtraBuildProjects = opts.extra_build_project
 		# Not all commands support the --release option
 		self._releaseID = getattr(opts, 'release', None)
 
@@ -179,6 +180,8 @@ class ModelDescription(object):
 				raise Exception("Cannot determine codebase, please specify --codebase option")
 
 			codebase = ProductCodebase.load(name, self.getPath(f"{name}.yaml"))
+			for project in self._codebaseExtraBuildProjects:
+				codebase.buildProjects.append(project)
 			self._codebaseModel = codebase
 
 		return self._codebaseModel

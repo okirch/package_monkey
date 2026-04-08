@@ -323,6 +323,8 @@ class PublishCommand(GenericSubcommand):
 					help = 'Publish all generated data (default)')
 		args.add_argument('--lifecycle', dest = 'scope', action = 'store_const', const = 'lifecycle',
 					help = 'Publish life cycle data')
+		args.add_argument('--compose', dest = 'scope', action = 'store_const', const = 'compose',
+					help = 'Publish product-compose data')
 		args.add_argument(dest = 'path', metavar = 'PATH',
 					help = 'Directory to which to publish generated files to')
 		args.add_argument(dest = 'slug', metavar = 'SLUG', nargs = '?',

@@ -78,9 +78,8 @@ class RpmWrapper(RpmBase):
 	def addControllingScenarioNew(self, concreteScenario):
 		self.initControllingScenario()
 		self.newControllingScenarios.add(concreteScenario)
-		assert(concreteScenario.control.variable)
-		assert(concreteScenario.control.value)
-		assert(concreteScenario.control.abstractPackage)
+		if not concreteScenario.control.isComplete:
+			raise Exception(f"{self}: trying to add invalid controlling scenario {concreteScenario}")
 
 	# Helper function for the scenario manager
 	def extractVersion(self, versionFormat = '{major}'):
@@ -2220,8 +2219,11 @@ class PreprocessorHintsLoader(object):
 				elif not cmd.convertArgument(args, i, targetType):
 					return self.error(f"{cmd}: invalid type for argument #{i}: not a valid {targetType}")
 
-		if cmd(self.hints, args, **kwargs) is False:
-			return self.error(f"{cmd.name}: invalid argument(s): {' '.join(args)}")
+		try:
+			if cmd(self.hints, args, **kwargs) is False:
+				return self.error(f"{cmd.name}: invalid argument(s): {' '.join(args)}")
+		except Exception as e:
+			return self.error(f"{cmd.name} {' '.join(args)}: caught exception {e}")
 
 		return True
 

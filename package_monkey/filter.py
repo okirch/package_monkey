@@ -1401,7 +1401,7 @@ class LabelTreeValidator(object):
 		for buildOption in classificationScheme.allBuildOptions:
 			if buildOption.epic is None:
 				errormsg(f"Build option {buildOption} not associated with any epic")
-				labelsMissingAnEpic.add(topic)
+				labelsMissingAnEpic.add(buildOption)
 
 			autoFlavor = classificationScheme.autoFlavorForBuildOptions(set((buildOption, )))
 			if autoFlavor is None:

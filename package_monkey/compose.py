@@ -302,6 +302,10 @@ class Composer(object):
 
 			product.rpms.update(product.releaseRpms)
 
+			for rpm in product.rpms:
+				if rpm.new_class and rpm.new_class.isIgnored:
+					report.add(f"{product} includes rpm {rpm}, which must not be shipped (class={rpm.new_class})")
+
 		# This is not exceptionally useful yet because we cannot say "ignore this build failure for now"
 		# self.verifyBuilds(report)
 

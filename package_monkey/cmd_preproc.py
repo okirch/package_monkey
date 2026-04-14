@@ -133,6 +133,7 @@ class PreprocessApplicationBase(ApplicationBase):
 
 		for arch in codebaseModel.architectures:
 			archSolver = self.createArchSolver(arch)
+			archSolver.applyBuildNames(db)
 
 			rpmsToSolve = []
 			for rpm in unresolvables:
@@ -211,7 +212,8 @@ class SolverApplication(PreprocessApplicationBase):
 			repository.loadBuilds(db)
 
 		for archSolver in archSolvers:
-			archSolver.solve(progressMeter, db = db)
+			archSolver.applyBuildNames(db)
+			archSolver.solve(progressMeter)
 
 		for archSolver in archSolvers:
 			self.extractResolution(archSolver, db)

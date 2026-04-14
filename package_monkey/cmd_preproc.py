@@ -134,6 +134,7 @@ class PreprocessApplicationBase(ApplicationBase):
 		for arch in codebaseModel.architectures:
 			archSolver = self.createArchSolver(arch)
 			archSolver.applyBuildNames(db)
+			archSolver.applyScenarioPatterns(db)
 
 			rpmsToSolve = []
 			for rpm in unresolvables:
@@ -213,6 +214,7 @@ class SolverApplication(PreprocessApplicationBase):
 
 		for archSolver in archSolvers:
 			archSolver.applyBuildNames(db)
+			archSolver.applyScenarioPatterns(db)
 			archSolver.solve(progressMeter)
 
 		for archSolver in archSolvers:

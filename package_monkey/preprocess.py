@@ -17,7 +17,7 @@ import re
 import functools
 
 from .util import debugmsg, infomsg, warnmsg, errormsg, loggingFacade
-from .util import ThatsProgress
+from .util import OptionalCaption
 from .arch import *
 from .newdb import *
 from .libsolv import *
@@ -39,6 +39,9 @@ def debugSolverProblem(msg, *args, prefix = None, **kwargs):
         if prefix:
                 msg = f"[{prefix}] {msg}"
         problemLogger.debug(msg, *args, **kwargs)
+
+onlyScenarioPlacement = loggingFacade.isDebugEnabled('scenario-placement')
+enableRegexDebugging = loggingFacade.isDebugEnabled('scenario-regexp')
 
 class RpmWrapper(RpmBase):
 	isSourcePackage = False
@@ -340,6 +343,23 @@ class ArchSolver(object):
 			genericRpm = db.lookupRpm(rpm.shortname)
 			if genericRpm is not None and genericRpm.new_build is not None:
 				rpm.buildName = genericRpm.new_build.name
+
+	def applyScenarioPatterns(self, db):
+		self.hints.resetScenarioMembership()
+
+		# We iterate over builds in order of descending name length so that
+		# we visit multibuilds before their base builds (ie vtk:openmpi4 before vtk)
+		for build in sorted(db.builds, key = lambda b: len(b.name), reverse = True):
+			self.hints.matchBuild(build.name)
+
+		for rpm in sorted(self._rpms, key = lambda r: (r.buildName or '', r.shortname)):
+			self.hints.matchRpm(rpm)
+
+		self.hints.finalizeScenarioMembership()
+
+		if onlyScenarioPlacement:
+			infomsg(f"Done with scenario placement, stop here")
+			exit(17)
 
 	# solve some or all rpms in a set of repositories.
 	def solve(self, progressMeter, rpms = None, **kwargs):
@@ -1587,6 +1607,244 @@ class AbiManager(object):
 	def getAbi(self, solvable):
 		return self._abi.get(solvable.id)
 
+class ScenarioMatcher(object):
+	class Pattern(object):
+		def __init__(self, scenarioName, pattern, mapping, subGroup = None):
+			self.scenarioName = scenarioName
+			self.mapping = mapping
+			self.pattern = pattern
+			self.subGroup = subGroup
+			self.error = None
+
+			if '{' in pattern:
+				# compile at match time
+				self.regex = None
+			else:
+				try:
+					self.regex = re.compile(pattern)
+				except Exception as e:
+					raise Exception(f"scenario {scenarioName}: failed to compile regex {pattern}")
+
+		def __str__(self):
+			return self.pattern
+
+		def match(self, objectName, context):
+			if self.regex is not None:
+				m = self.regex.fullmatch(objectName)
+			else:
+				# escape the context values
+				econtext = dict(
+						(key, value.replace('+', '\\+').replace('.', '\\.')) for key, value in context.items()
+					)
+				# both the .format() and .match() calls may cause an exception
+				pattern = self.pattern.format(**econtext)
+				m = re.fullmatch(pattern, objectName)
+
+			if not m:
+				return None
+
+			groups = m.groups()
+			values = {}
+			for name, value in self.mapping.items():
+				for i, s in zip(range(len(groups)), groups):
+					value = value.replace(f"${i+1}", s or '')
+				value = value.replace("$0", m.string)
+				values[name] = value
+
+			attrs = ScenarioMatcher.PackageAttributes(self.scenarioName, values)
+			attrs.pattern = self.pattern
+			attrs.matchGroup = self.subGroup
+
+			if context:
+				if attrs.conflicts(context):
+					return None
+				attrs.update(context)
+
+			return attrs
+
+	class MatchGroup(object):
+		def __init__(self, name):
+			self.name = name
+			self.condition = None
+			self.patterns = []
+			self.definedBuilds = set()
+			self.badPatterns = []
+
+		def add(self, pattern):
+			self.patterns.append(pattern)
+
+		def match(self, name, constraints = None, debug = None):
+			for pattern in self.patterns:
+				if pattern.error:
+					continue
+
+				try:
+					attrs = pattern.match(name, constraints)
+				except Exception as e:
+					pattern.error = f"Bad pattern {pattern} in match group {self.name} with context {constraints} (Exception: {e})"
+					continue
+
+				if attrs is not None:
+					if debug is not None:
+						debug(f"   {self.name:20} {name:30} {attrs}")
+					return attrs
+
+		def reportErrors(self):
+			report = OptionalCaption(f"Bad pattern(s) in match group {self.name}:", msgfunc = errormsg)
+			nerrors = 0
+			for pattern in self.patterns:
+				if pattern.error:
+					report(pattern.error)
+					nerrors += 1
+			return nerrors
+
+	class PackageAttributes(dict):
+		def __init__(self, variable, values = {}):
+			super().__init__(values)
+			self.variable = variable
+
+		def __str__(self):
+			return f"{self.variable} with {' '.join(f'{k}={v}' for (k, v) in self.items())}"
+
+		def conflicts(self, other):
+			if self.variable != other.variable:
+				return True
+
+			for key, value in self.items():
+				if key in other and other[key] != value:
+					return True
+
+			return False
+
+		def update(self, d):
+			for key, value in d.items():
+				if key in self and self[key] != value:
+					return False
+				self[key] = value
+			return True
+
+	def __init__(self):
+		self._buildMatchGroup = self.MatchGroup('__main__')
+		self._conditionalGroups = []
+		self._groups = {}
+		self._builds = {}
+
+		self.debugLastBuild = None
+		self.debugMsg = None
+
+		if enableRegexDebugging:
+			self.debugMsg = OptionalCaption("Match builds")
+
+	def reportErrors(self):
+		nerrors = 0
+		nerrors += self._buildMatchGroup.reportErrors()
+
+		for name, matchGroup in sorted(self._groups.items()):
+			nerrors += matchGroup.reportErrors()
+		return nerrors
+
+	def createAnonMatchGroup(self, stem = 'group', condition = None):
+		for n in range(1000):
+			groupID = f"{stem}{n}"
+			if groupID not in self._groups:
+				matchGroup = self.createMatchGroup(groupID)
+				if condition:
+					matchGroup.condition = condition
+					self._conditionalGroups.append(matchGroup)
+				return matchGroup
+		bug()
+
+	def createMatchGroup(self, name):
+		matchGroup = self._groups.get(name)
+		if matchGroup is None:
+			matchGroup = self.MatchGroup(name)
+			self._groups[name] = matchGroup
+		return matchGroup
+
+	def defineBuildMatch(self, scenarioName, pattern, mapping, matchGroup = None):
+		if matchGroup is None:
+			matchGroup = self.createMatchGroup(scenarioName)
+
+		pattern = self.Pattern(scenarioName, pattern, mapping, subGroup = matchGroup)
+		self._buildMatchGroup.add(pattern)
+		return matchGroup
+
+	def defineRpmMatch(self, scenarioName, pattern, mapping, matchGroup = None, variable = None):
+		if matchGroup is None:
+			matchGroup = self.createMatchGroup(scenarioName)
+		matchGroup.add(self.Pattern(scenarioName, pattern, mapping))
+
+	def matchBuild(self, buildName):
+		if buildName is None:
+			return None
+
+		# we need to distinguish between a negative cache entry (name does not match: None)
+		# from a missing cache entry (name never tried: False)
+		attrs = self._builds.get(buildName, False)
+		if attrs is False:
+			attrs = self._buildMatchGroup.match(buildName, debug = self.debugMsg)
+
+			# Tag the resulting attrs with the build name, to allow
+			# rpm matches to use build=blah to constrain the pattern to a specifc build
+			if attrs is not None:
+				attrs['build'] = buildName
+			self._builds[buildName] = attrs
+
+		return attrs
+
+	def matchConditional(self, rpmName):
+		for matchGroup in self._conditionalGroups:
+			if matchGroup.condition.check(rpmName):
+				attrs = matchGroup.match(rpmName, debug = self.debugMsg)
+				if attrs is not None:
+					attrs.matchGroup = matchGroup
+					return attrs
+		return None
+
+	def matchRpm(self, rpmName, buildName, trace, verbose = True):
+		if enableRegexDebugging and buildName != self.debugLastBuild:
+			self.debugMsg = OptionalCaption(f"build {buildName}")
+			self.debugLastBuild = buildName
+
+		buildAttrs = self.matchBuild(buildName)
+
+		if trace or (buildAttrs and onlyScenarioPlacement):
+			infomsg(f"{buildName}/{rpmName}: match {buildAttrs}")
+
+		if buildAttrs is not None:
+			matchGroup = buildAttrs.matchGroup
+		else:
+			# There is no build pattern that matches this build
+			# However, there can be special 'default' patterns that provide a
+			# reference to a list of patterns to test against; for instance,
+			#     match-group product require_substring=-branding-
+			# tells us that we should match any rpm that has "-branding-" in its
+			# name against a list of 'product' patterns
+			buildAttrs = self.matchConditional(rpmName)
+			if buildAttrs is None:
+				return None
+
+			matchGroup = buildAttrs.matchGroup
+
+		assert(matchGroup is not None)
+		rpmAttrs = matchGroup.match(rpmName, constraints = buildAttrs, debug = self.debugMsg)
+
+		if trace or (rpmAttrs and onlyScenarioPlacement):
+			infomsg(f"rpm {rpmName}: match {rpmAttrs}")
+
+		if rpmAttrs is None:
+			return
+
+		if buildAttrs is not None:
+			assert(not rpmAttrs.conflicts(buildAttrs))
+			rpmAttrs.update(buildAttrs)
+
+		if rpmAttrs.get('action') == 'stop':
+			infomsg(f"mis-matched {rpmName} (pattern {rpmAttrs.pattern})")
+			return None
+
+		return rpmAttrs
+
 class PreprocessorHints(object):
 	class AcceptableRpmSet(object):
 		def __init__(self, nameList):
@@ -1875,6 +2133,7 @@ class PreprocessorHints(object):
 		self.dependencyTransforms = {}
 		self.acceptUnknownAmbiguities = False
 
+		self._scenarioMatcher = ScenarioMatcher()
 		self._nameFilter = OBSNameFilter()
 
 		self._newScenarioManager = NewScenarioManager()
@@ -1920,11 +2179,6 @@ class PreprocessorHints(object):
 			obj.rebind(rpmFactory)
 		for obj in self.ambiguityTransforms:
 			obj.rebind(rpmFactory)
-#		for abstractPackage in self.abstractScenarios:
-#			abstractPackage.rebind(rpmFactory)
-
-		allRpms = rpmFactory.getAllByType(RpmWrapper.TYPE_REGULAR)
-		self._newScenarioManager.rebind(allRpms)
 
 	def addPreferredNames(self, args):
 		self.preferredNames += args
@@ -2110,6 +2364,119 @@ class PreprocessorHints(object):
 			errormsg(f"cannot define fallback for {name}/{key}: unknown value for this variable")
 			return False
 		var.setFallback(key, values)
+
+	class RpmNameCondition(object):
+		def __init__(self, prefix = None, infix = None, suffix = None):
+			self.prefix = prefix
+			self.infix = infix
+			self.suffix = suffix
+
+		def check(self, name):
+			if self.prefix and not name.startswith(self.prefix):
+				return False
+			if self.suffix and not name.endswith(self.suffix):
+				return False
+			if self.infix and not (self.infix in name):
+				return False
+			return True
+
+	def defineMatchGroup(self, variable, id = None, require_substring = None, require_prefix = None, require_suffix = None, context = None):
+		assert(context is not None)
+
+		# verify that we reference a valid scenario variable
+		if self._newScenarioManager.getScenarioVariable(variable) is None:
+			errormsg(f"invalid scenario variable {variable}")
+			return False
+
+		condition = None
+		if require_substring or require_prefix or require_suffix:
+			condition = self.RpmNameCondition(prefix = require_prefix, suffix = require_suffix, infix = require_substring)
+
+		if id and condition is not None:
+			errormsg(f"keywords id= and require_*= are mutually exclusive")
+			return -1;
+
+		if id is None:
+			context.matchGroup = self._scenarioMatcher.createAnonMatchGroup(stem = variable.upper(),
+								condition = condition)
+		else:
+			context.matchGroup = self._scenarioMatcher.createMatchGroup(id)
+
+		context.scenarioName = variable
+		context.valid = True
+
+	def defineBuildMatch(self, pattern, context = None, **kwargs):
+		assert(context is not None and context.valid)
+		self._scenarioMatcher.defineBuildMatch(context.scenarioName, pattern, kwargs, matchGroup = context.matchGroup)
+
+	def defineRpmMatch(self, pattern, context = None, **kwargs):
+		assert(context is not None and context.valid)
+		self._scenarioMatcher.defineRpmMatch(context.scenarioName, pattern, kwargs, matchGroup = context.matchGroup)
+
+	def resetScenarioMembership(self):
+		self._newScenarioManager.resetScenarioMembership()
+
+	def finalizeScenarioMembership(self):
+		if self._scenarioMatcher.reportErrors():
+			raise Exception(f"Errors in scenario definitions")
+
+		self._newScenarioManager.applyScenarioFallbacks()
+
+	def matchBuild(self, buildName):
+		return self._scenarioMatcher.matchBuild(buildName)
+
+	def matchRpm(self, rpm):
+		attrs = self._scenarioMatcher.matchRpm(rpm.shortname, rpm.buildName, rpm.trace, verbose = onlyScenarioPlacement)
+		if rpm.trace:
+			if attrs is None:
+				infomsg(f"{rpm} is not part of any scenario")
+			else:
+				infomsg(f"{rpm} is a scenario package for {attrs}")
+
+		if not attrs:
+			return
+
+		version = attrs.get('version')
+		package = attrs.get('package')
+		if version and version.startswith('rpm:'):
+			versionString = rpm.version
+
+			pieces = versionString.split('.')
+			if version == 'rpm:major':
+				version = pieces[0]
+			elif version == 'rpm:minor':
+				version = '.'.join(pieces[:2])
+			elif version == 'rpm:patch':
+				version = '.'.join(pieces[:3])
+			elif version == 'rpm:full':
+				version = versionString
+			else:
+				raise Exception(f"To be implemented: {rpm} with version={version}")
+			attrs['version'] = version
+
+		scenarioManager = self._newScenarioManager
+		if 'scenario' not in attrs:
+			if not version or not package:
+				errormsg(f"{rpm}: incomplete scenario attributes {attrs}")
+				return
+
+			scenarioManager.mapRpm(rpm, attrs.variable, version, package)
+		else:
+
+			attrs['variable'] = attrs.variable
+			for s in attrs['scenario'].split(','):
+				try:
+					scenario = s.format(**attrs)
+				except:
+					errormsg(f"{rpm}: unable to expand {s} given {attrs}")
+					continue
+
+				words = scenario.split('/')
+				if len(words) != 3:
+					errormsg(f"{rpm}: pattern {s} expands to invalid scenario ID {scenario}")
+					continue
+
+				scenarioManager.mapRpm(rpm, *words)
 
 	# For a scenario like "jdk" add a group of equivalent rpms, e.g. "java-headless".
 	# The objective is to detect packages that depend on "any headless jdk" and
@@ -2368,6 +2735,15 @@ class PreprocessorHintsLoader(object):
 							splitWord = 'over'),
 	InfixCommand('match-prefer',		2,	call = PreprocessorHints.defineWildcardPreference,
 							splitWord = 'over'),
+
+	# Grouped commands must be last in the list
+	CommandGroup('match-group'),
+	StarCommand('match-group',		[1, 1],	call = PreprocessorHints.defineMatchGroup,
+							keywords = ('id', 'require_substring', )),
+	StarCommand('match-build',		[1, 1],	call = PreprocessorHints.defineBuildMatch,
+							keywords = '*'),
+	StarCommand('match-rpm',		[1, 1],	call = PreprocessorHints.defineRpmMatch,
+							keywords = '*'),
 	]
 	COMMANDS = {}
 
@@ -2379,7 +2755,7 @@ class PreprocessorHintsLoader(object):
 				args.append(w)
 			else:
 				key, value = w.split('=')
-				if key not in cmd.keywords:
+				if cmd.keywords != '*' and key not in cmd.keywords:
 					return self.error(f"{cmd} does not accept argument {w}")
 				kwargs[key] = value
 

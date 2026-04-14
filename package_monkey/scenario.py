@@ -212,6 +212,23 @@ class NewScenarioManager(object):
 
 		return concreteScenario
 
+	def mapRpm(self, rpm, variable, version, package):
+		if not (variable and version and package):
+			errormsg(f"{rpm.shortname}: incomplete scenario attributes {variable} {version} {package}")
+			return
+
+		concreteScenario = self.createConcreteScenario(variable, version, package)
+
+		if rpm.trace:
+			infomsg(f"{rpm.shortname}: {concreteScenario}")
+		self.attachRpm(rpm, concreteScenario)
+		self.mapConcreteScenarioSingle(concreteScenario, rpm.shortname)
+
+	def mapConcreteScenarioSingle(self, concreteScenario, rpmName):
+		if rpmName not in self._byRpm:
+			self._byRpm[rpmName] = set()
+		self._byRpm[rpmName].add(concreteScenario)
+
 	def mapConcreteScenario(self, concreteScenario, rpmNames):
 		assert(concreteScenario.control.value != '%')
 
@@ -251,6 +268,10 @@ class NewScenarioManager(object):
 
 			concreteScenario = self.createConcreteScenario(variable, version, abstractPackage)
 			yield concreteScenario
+
+	def resetScenarioMembership(self):
+		for concreteScenario in self._byId.values():
+			concreteScenario.rpms = set()
 
 	def applyScenarioFallbacks(self):
 		allScenarios = list(self._byId.values())

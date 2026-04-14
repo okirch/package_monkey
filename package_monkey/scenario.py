@@ -297,8 +297,7 @@ class NewScenarioManager(object):
 	def attachRpm(self, rpm, concreteScenario):
 		sct = concreteScenario.control
 		if sct.value == '__auto__':
-			version = rpm.extractVersion()
-			concreteScenario = self.createConcreteScenario(sct.variable, version, sct.abstractPackage)
+			concreteScenario = self.createConcreteScenario(sct.variable, rpm.majorVersion, sct.abstractPackage)
 			
 		if rpm.trace:
 			infomsg(f"   {rpm} is part of {concreteScenario}")

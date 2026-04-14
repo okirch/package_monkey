@@ -81,19 +81,14 @@ class RpmWrapper(RpmBase):
 		if not concreteScenario.control.isComplete:
 			raise Exception(f"{self}: trying to add invalid controlling scenario {concreteScenario}")
 
-	# Helper function for the scenario manager
-	def extractVersion(self, versionFormat = '{major}'):
-		assert(versionFormat == '{major}')
+	# Helper functions for the scenario manager
+	@property
+	def version(self):
+		return self.solvable.evr.split('-')[0]
 
-		# For now, we always extract the major from the EVR string.
-		# If we ever need anything more flexible (eg major.minor for python),
-		# the hints.conf syntax needs to be extended.
-		version = self.solvable.evr.split('-')[0]
-		version = version.split('.')
-		major = version[0]
-
-		return major
-
+	@property
+	def majorVersion(self):
+		return self.version.split('.')[0]
 
 class RpmFactory(object):
 	def __init__(self, buildArch):

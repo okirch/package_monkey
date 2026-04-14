@@ -350,13 +350,7 @@ class Composer(object):
 
 				supportedScenarios = set()
 				for s in requiredScenarios:
-					if '|' in s:
-						check = set(s.split('|'))
-					else:
-						# keep this around for a few weeks in case some people still
-						# use the 'old' mode (which breaks when libstdc++ will be covered
-						# by a scenario)
-						check = set(s.split('+'))
+					check = set(s.split('|'))
 
 					if check.issubset(validator._allSupportedScenarios):
 						supportedScenarios.add(s)

@@ -785,6 +785,28 @@ class ArchSolver(object):
 			ambiguousResult.failedAlternatives = disambiguation.failedAlternatives
 			return None
 
+		commonVersion = validFor.commonVersion
+		if commonVersion:
+			if trace:
+				infomsg(f"{rpm}: unique disambiguation using version {commonVersion}")
+
+			for rd in ambiguousResult:
+				if not rd.requiresDisambiguation:
+					continue
+
+				rpms = set()
+				for solution in validFor:
+					rpms.update(solution.selectedRpms)
+				rpms.intersection_update(rd.alternatives)
+				assert(rpms)
+
+				if trace:
+					infomsg(f"  {rd}: replace with {' '.join(map(str, rpms))}")
+
+				rd.solutions = rpms
+				rd.acceptableAmbiguity = True
+			return ambiguousResult
+
 		# replace ambiguous resolutions with symbolic rpms and
 		# record valid choices
 		for rd in ambiguousResult:

@@ -358,6 +358,9 @@ class ScenarioSalad(object):
 		def __iter__(self):
 			return iter(self._solutions)
 
+		def __len__(self):
+			return len(self._solutions)
+
 		def __str__(self):
 			return f"{' '.join(map(str, self._solutions))}"
 
@@ -366,6 +369,15 @@ class ScenarioSalad(object):
 
 		def createEmptySubset(self):
 			return self.__class__(self.id, self._symbolicRpms)
+
+		@property
+		def commonVersion(self):
+			versions = set()
+			for solution in self._solutions:
+				versions.update(solution.selectedVersions)
+			if len(versions) != 1:
+				return None
+			return next(iter(versions))
 
 	def __init__(self, id, controllingScenarios = None, trace = False):
 		self.id = id

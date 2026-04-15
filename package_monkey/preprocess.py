@@ -801,14 +801,14 @@ class ArchSolver(object):
 			rd.solutions = rpms
 			rd.acceptableAmbiguity = True
 
-		ambiguousResult.validScenarioChoices = validFor
+		ambiguousResult.validScenarioChoices = set(map(str, validFor))
 		ambiguousResult.controllingScenarioChoices = rpm.controllingScenarios
 		return ambiguousResult
 
 	def disambiguateOnePackage(self, installRpm, disambiguation):
 		trace = self.traceDisambiguation or installRpm.trace
 
-		verifiedScenarios = set()
+		verifiedScenarios = disambiguation.createEmptySubset()
 		for solution in disambiguation:
 			installRequest = self.InstallationRequest(self.pool, installRpm, scenarioVersion = solution.selectedVersions)
 
@@ -848,7 +848,7 @@ class ArchSolver(object):
 
 			if trace:
 				infomsg(f"  ok: successfully disambiguated {solution}")
-			verifiedScenarios.add(str(solution))
+			verifiedScenarios.add(solution)
 
 		return verifiedScenarios
 

@@ -364,6 +364,9 @@ class ScenarioSalad(object):
 		def getSymbolicRpms(self, key):
 			return self._symbolicRpms[key]
 
+		def createEmptySubset(self):
+			return self.__class__(self.id, self._symbolicRpms)
+
 	def __init__(self, id, controllingScenarios = None, trace = False):
 		self.id = id
 		self.controllingScenarios = controllingScenarios

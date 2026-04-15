@@ -334,6 +334,9 @@ class ArchSolver(object):
 
 		return rpm
 
+	def createScenarioRpm(self, name):
+		return self.createDummyRpm(name, RpmWrapper.TYPE_SCENARIO)
+
 	# solve some or all rpms in a set of repositories.
 	def solve(self, progressMeter, rpms = None, db = None, **kwargs):
 		self.applyHints()
@@ -789,19 +792,8 @@ class ArchSolver(object):
 				continue
 
 			symbolicRpmNames = disambiguation.getSymbolicRpms(rd)
-
-			if trace:
-				infomsg(f"{rd} => {' '.join(symbolicRpmNames)}")
-
-			rpms = set()
-			for rpmName in disambiguation.getSymbolicRpms(rd):
-				symbolicRpm = self.createDummyRpm(rpmName, type = RpmWrapper.TYPE_SCENARIO)
-				rpms.add(symbolicRpm)
-				assert(symbolicRpm)
-
-			# This warning no longer makes sense; the new code handles multiple scenarios just fine.
-#			if len(rpms) > 1:
-#				warnmsg(f"{rpm}: dependency {rd} resolves to multiple scenario packages: {' '.join(map(str, rpms))}")
+			rpms = set(map(self.createScenarioRpm, symbolicRpmNames))
+			assert(all(rpms))
 
 			if trace:
 				infomsg(f"  {rd}: replace with {' '.join(map(str, rpms))}, {' '.join(map(str, validFor))}")

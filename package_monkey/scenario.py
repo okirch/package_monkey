@@ -154,7 +154,7 @@ class ConcreteScenario(object):
 
 	def addRpm(self, rpm):
 		self.rpms.add(rpm)
-		rpm.addControllingScenarioNew(self)
+		rpm.addControllingScenario(self)
 
 class ConcreteScenarioSet(set):
 	def __str__(self):

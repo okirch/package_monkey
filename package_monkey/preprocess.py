@@ -72,13 +72,7 @@ class RpmWrapper(RpmBase):
 			self.controllingScenarioVariables = set()
 			self.newControllingScenarios = ConcreteScenarioSet()
 
-	def addControllingScenario(self, abstractPackage, scenarioVersion):
-		self.initControllingScenario()
-		self.abstractPackages.add(abstractPackage)
-		self.controllingScenarios.add(scenarioVersion)
-		self.controllingScenarioVariables.add(abstractPackage.scenarioVar)
-
-	def addControllingScenarioNew(self, concreteScenario):
+	def addControllingScenario(self, concreteScenario):
 		self.initControllingScenario()
 		self.newControllingScenarios.add(concreteScenario)
 		if not concreteScenario.control.isComplete:

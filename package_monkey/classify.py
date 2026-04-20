@@ -593,10 +593,6 @@ class NewResult(object):
 				if rpm.isUnresolvable:
 					unresolvables.append(rpmControl)
 
-				if rpm.new_class is not None and rpm.new_class.isIgnored:
-					# This rpm has been tagged as "noship"
-					continue
-
 				for req, arch in self.getRequiredWork(rpm, rpm.architectures):
 					reqControl = self.membershipForRpm(req)
 					if reqControl is None:
@@ -657,9 +653,7 @@ class NewResult(object):
 			elif rpm.type in (rpm.TYPE_MISSING, ):
 				continue
 			elif rpm.type == rpm.TYPE_REGULAR:
-				if rpm.new_class is not None and rpm.new_class.isIgnored:
-					# This rpm has been tagged as "noship"
-					continue
+				pass
 			else:
 				infomsg(f"Ignore {rpm} {rpm.type} (build {build}, epic={build.new_epic})")
 				continue
@@ -693,10 +687,6 @@ class NewResult(object):
 				labelHints = rpm.labelHints
 				if labelHints is None and rpm.trace:
 					infomsg(f"{rpm}: no label hints")
-
-				if rpm.new_class is not None and rpm.new_class.isIgnored:
-					# This rpm has been tagged as "noship"
-					continue
 
 				if rpm.new_class is None:
 					rpm.new_class = classificationScheme.defaultClass

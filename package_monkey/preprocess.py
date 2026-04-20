@@ -1845,6 +1845,9 @@ class PreprocessorHints(object):
 			self.nameList = nameList
 			self.rpms = None
 
+		def __str__(self):
+			return f"accept-ambiguity rpm {', '.join(sorted(self.nameList))}"
+
 		def rebind(self, rpmFactory):
 			self.rpms = set(filter(bool, map(rpmFactory.getByName, self.nameList)))
 
@@ -1857,6 +1860,9 @@ class PreprocessorHints(object):
 	class AcceptableBuildSet(object):
 		def __init__(self, nameList):
 			self.nameList = nameList
+
+		def __str__(self):
+			return f"accept-ambiguity build {', '.join(sorted(self.nameList))}"
 
 		def rebind(self, rpmFactory):
 			pass
@@ -2126,6 +2132,7 @@ class PreprocessorHints(object):
 		self.ambiguityTransforms = []
 		self.dependencyTransforms = {}
 		self.acceptUnknownAmbiguities = False
+		self.ambiguityRulesMatched = set()
 
 		self._scenarioMatcher = ScenarioMatcher()
 		self._nameFilter = OBSNameFilter()
@@ -2200,6 +2207,12 @@ class PreprocessorHints(object):
 	def addSyntheticNames(self, args):
 		self.syntheticNames += args
 
+	def reportUnusedRules(self):
+		report = OptionalCaption("Unused accept-ambiguity rules")
+		for rule in self.acceptableAmbiguities:
+			if rule not in self.ambiguityRulesMatched:
+				report(f"  {rule}")
+
 	def defineAcceptableAmbiguity(self, nameList, type = 'rpm'):
 		if type == 'rpm':
 			self.acceptableAmbiguities.append(self.AcceptableRpmSet(nameList))
@@ -2213,6 +2226,7 @@ class PreprocessorHints(object):
 		# First check all accept-ambiguity rules defined in the hints file
 		for ambig in self.acceptableAmbiguities:
 			if ambig.check(choices):
+				self.ambiguityRulesMatched.add(ambig)
 				return 1
 
 		# As a fallback, check for accept-unknown-ambiguities.

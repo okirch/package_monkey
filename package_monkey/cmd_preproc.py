@@ -223,6 +223,8 @@ class SolverApplication(PreprocessApplicationBase):
 		self.displayUnresolved(db)
 		self.collapseResults(db)
 
+		self.hints.reportUnusedRules()
+
 		info = self.codebaseData.loadDownloadInfo()
 		db.downloadTimestamp = info.timestamp
 

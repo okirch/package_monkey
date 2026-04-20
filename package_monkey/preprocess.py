@@ -2374,7 +2374,7 @@ class PreprocessorHints(object):
 				return False
 			return True
 
-	def defineMatchGroup(self, variable, id = None, require_substring = None, require_prefix = None, require_suffix = None, context = None):
+	def defineScenario(self, variable, id = None, require_substring = None, require_prefix = None, require_suffix = None, context = None):
 		assert(context is not None)
 
 		# verify that we reference a valid scenario variable
@@ -2671,8 +2671,8 @@ class PreprocessorHintsLoader(object):
 							splitWord = 'over'),
 
 	# Grouped commands must be last in the list
-	CommandGroup('match-group'),
-	StarCommand('match-group',		[1, 1],	call = PreprocessorHints.defineMatchGroup,
+	CommandGroup('scenario'),
+	StarCommand('scenario',			[1, 1],	call = PreprocessorHints.defineScenario,
 							keywords = ('id', 'require_substring', )),
 	StarCommand('match-build',		[1, 1],	call = PreprocessorHints.defineBuildMatch,
 							keywords = '*'),

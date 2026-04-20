@@ -1108,7 +1108,7 @@ class ArchSolver(object):
 			if len(types) == 1:
 				type = types.pop()
 			else:
-				infomsg(f"    Cannot handle rule that mixes different ruleinfo types")
+				debugSolverProblem(f"    Cannot handle rule that mixes different ruleinfo types")
 				type = None
 
 			if type == solv.Solver.SOLVER_RULE_PKG_REQUIRES:

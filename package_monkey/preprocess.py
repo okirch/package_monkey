@@ -2349,12 +2349,6 @@ class PreprocessorHints(object):
 
 		return selection.rpms
 
-	def hasScenarioVariable(self, *args, **kwargs):
-		return self._newScenarioManager.hasVariable(*args, **kwargs)
-
-	def getScenarioVariableValues(self, *args, **kwargs):
-		return self._newScenarioManager.getPredefinedVariablesValues(*args, **kwargs)
-
 	def createScenarioVariable(self, name, *values, **kwargs):
 		self._newScenarioManager.createVariable(name, values, **kwargs)
 
@@ -2478,43 +2472,6 @@ class PreprocessorHints(object):
 
 				scenarioManager.mapRpm(rpm, *words)
 
-	# For a scenario like "jdk" add a group of equivalent rpms, e.g. "java-headless".
-	# The objective is to detect packages that depend on "any headless jdk" and
-	# resolve this ambiguity by replacing it with a synthetic rpm named
-	# "jdk/java-headless"
-	def defineConcreteScenario(self, scenarioSpec, key, rpmNames):
-		try:
-			scenarioName, abstractPackageName = scenarioSpec.split('/')
-		except:
-			errormsg(f"expected \"scenario/key\" argument")
-			return False
-
-		if not self.hasScenarioVariable(scenarioName):
-			errormsg(f"unknown scenario \"{scenarioName}\"")
-			return False
-
-		var = self._newScenarioManager.getScenarioVariable(scenarioName)
-
-		if key != '%':
-			# Simple case: the scenario definition defines an rpm list for a specific version
-			concreteScenario = self._newScenarioManager.createConcreteScenario(scenarioName, key, abstractPackageName)
-			self._newScenarioManager.mapConcreteScenario(concreteScenario, rpmNames)
-			return
-
-		for name in rpmNames:
-			pattern = name.replace('%', '([0-9._]+|[a-z_]*)') + '$'
-			self._newScenarioManager.addConcreteScenarioPattern(scenarioName, abstractPackageName, pattern)
-
-		# for each known variable value, instantiate the corresponding name->scenario link
-		# We need to do this because the wildcard pattern is limited in what it matches
-		for value in self._newScenarioManager.getPredefinedVariablesValues(scenarioName):
-			concreteScenario = self._newScenarioManager.createConcreteScenario(scenarioName, value, abstractPackageName)
-			mappedNames = list(name.replace('%', value) for name in rpmNames)
-			self._newScenarioManager.mapConcreteScenario(concreteScenario, mappedNames)
-
-	def checkForUnhandledScenarios(self, rpms, **kwargs):
-		return self._scenarioManager.checkForUnhandledScenarios(rpms, **kwargs)
-
 	def suppressWarnings(self, kind, *args):
 		if kind == 'requiring':
 			self._nowarnRequired.requiring.update(args)
@@ -2563,12 +2520,6 @@ class PreprocessorHintsLoader(object):
 
 		return self.hints
 
-	def validate(self, hints):
-		hints._scenarioManager.validate()
-
-	def expandDefaultRules(self, hints):
-		hints._scenarioManager.expandDefaultRules()
-
 	def error(self, msg):
 		lineno = self.error_line
 		if lineno is None:
@@ -2592,25 +2543,10 @@ class PreprocessorHintsLoader(object):
 	def processMultilineCommand(self, cmd):
 		words = cmd.words
 		if len(words) >= 5 and words[0] == 'with':
-			if words[1] != 'scenario':
-				errormsg(f"{self}: 'with' keyword must be followed by 'scenario'")
-				return False
+			errormsg(f"with-commands no longer supported: {' '.join(words)}")
+			return False
 
-			name = words[2]
-
-			variableValues = self.hints.getScenarioVariableValues(name)
-			if not variableValues:
-				errormsg(f"{self}: unknown scenario {name}")
-				return False
-
-			for version in variableValues:
-				versionWords = []
-				for s in words[3:]:
-					versionWords.append(s.replace('%', version))
-				if not self.processCommandWords(versionWords):
-					return False
-		else:
-			return self.processCommandWords(words)
+		return self.processCommandWords(words)
 
 	class Command(object):
 		def __init__(self, name, minArgs, keywords = [], call = None, types = None):
@@ -2715,8 +2651,6 @@ class PreprocessorHintsLoader(object):
 							keywords = ('type', )),
 	Command('build-skip-version-check',
 						1,	call = PreprocessorHints.skipVersionChecks),
-	MappingCommand('scenario',		3,	call = PreprocessorHints.defineConcreteScenario,
-							keywords = None),
 	StarCommand('variable',			1,	call = PreprocessorHints.createScenarioVariable,
 							keywords = ('pattern', )),
 	MappingCommand('fallback',		2,	call = PreprocessorHints.defineVariableFallback),

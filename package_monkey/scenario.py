@@ -154,6 +154,7 @@ class ConcreteScenario(object):
 
 	def addRpm(self, rpm):
 		self.rpms.add(rpm)
+		rpm.addControllingScenarioNew(self)
 
 class ConcreteScenarioSet(set):
 	def __str__(self):
@@ -179,10 +180,6 @@ class ScenarioVariable(object):
 class NewScenarioManager(object):
 	def __init__(self):
 		self._byId = {}
-		self._byRpm = {}
-
-		self._patterns = []
-
 		self._variables = {}
 
 	def createVariable(self, name, values):
@@ -194,12 +191,6 @@ class NewScenarioManager(object):
 
 	def getScenarioVariable(self, name):
 		return self._variables.get(name)
-
-	def getPredefinedVariablesValues(self, name):
-		var = self._variables.get(name)
-		if var is None:
-			return []
-		return var.values
 
 	def createConcreteScenario(self, variable, value, abstractPackage):
 		sct = ScenarioTuple(variable, value, abstractPackage)
@@ -221,53 +212,7 @@ class NewScenarioManager(object):
 
 		if rpm.trace:
 			infomsg(f"{rpm.shortname}: {concreteScenario}")
-		self.attachRpm(rpm, concreteScenario)
-		self.mapConcreteScenarioSingle(concreteScenario, rpm.shortname)
-
-	def mapConcreteScenarioSingle(self, concreteScenario, rpmName):
-		if rpmName not in self._byRpm:
-			self._byRpm[rpmName] = set()
-		self._byRpm[rpmName].add(concreteScenario)
-
-	def mapConcreteScenario(self, concreteScenario, rpmNames):
-		assert(concreteScenario.control.value != '%')
-
-		for rpm in rpmNames:
-			if rpm not in self._byRpm:
-				self._byRpm[rpm] = set()
-			self._byRpm[rpm].add(concreteScenario)
-
-	def addConcreteScenarioPattern(self, variable, abstractPackage, pattern):
-		regex = re.compile(pattern)
-		self._patterns.append((regex, variable, abstractPackage))
-
-	def rebind(self, rpms):
-		for concreteScenario in self._byId.values():
-			concreteScenario.rpms = set()
-
-		for rpm in rpms:
-			name = rpm.shortname
-
-			for concreteScenario in self._byRpm.get(name) or []:
-				self.attachRpm(rpm, concreteScenario)
-
-			for concreteScenario in self.matchPattern(name):
-				self.attachRpm(rpm, concreteScenario)
-
-		self.applyScenarioFallbacks()
-
-	def matchPattern(self, name):
-		for regex, variable, abstractPackage in self._patterns:
-			m = regex.fullmatch(name)
-			if not m:
-				continue
-
-			version = m.group(1)
-			if not version:
-				continue
-
-			concreteScenario = self.createConcreteScenario(variable, version, abstractPackage)
-			yield concreteScenario
+		concreteScenario.addRpm(rpm)
 
 	def resetScenarioMembership(self):
 		for concreteScenario in self._byId.values():
@@ -308,28 +253,12 @@ class NewScenarioManager(object):
 							fallbacks += var.getFallbacks(version)
 							continue
 
-						if False:
-							infomsg(f"  {concreteScenario}: fall back to {found}")
 						defined[targetVersion] = found
 						for rpm in found.rpms:
-							self.attachRpm(rpm, concreteScenario)
+							if rpm.trace:
+								infomsg(f"  {concreteScenario}: fall back to {rpm}")
+							concreteScenario.addRpm(rpm)
 						break
-
-	def attachRpm(self, rpm, concreteScenario):
-		sct = concreteScenario.control
-		if sct.value == '__auto__':
-			concreteScenario = self.createConcreteScenario(sct.variable, rpm.majorVersion, sct.abstractPackage)
-			
-		if rpm.trace:
-			infomsg(f"   {rpm} is part of {concreteScenario}")
-		concreteScenario.addRpm(rpm)
-		rpm.addControllingScenarioNew(concreteScenario)
-
-	def lookupByRpm(self, rpm):
-		return self._byRpm.get(rpm)
-
-	def lookupByScenario(self, sct):
-		return self._byId.get(str(sct))
 
 class ScenarioSalad(object):
 	class Bucket(object):
@@ -429,7 +358,8 @@ class ScenarioSalad(object):
 		# libc++abi1 rpm from the same version.
 		for rpm in alternatives:
 			for concreteScenario in rpm.newControllingScenarios:
-				assert(rpm in concreteScenario.rpms)
+				if rpm not in concreteScenario.rpms:
+					raise Exception(f"{self}: {key}: {rpm} controlled by {concreteScenario}; but the scenario doesn't know about the rpm")
 
 				if self.controllingScenarios and \
 				   self.controllingScenarios.conflicts(concreteScenario.control):

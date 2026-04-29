@@ -1230,6 +1230,11 @@ class ResolvedDependency(object):
 	def closure(self):
 		return self.alternatives.union(self.solutions)
 
+class ConditionalDependency(object):
+	def __init__(self, dep, parsed):
+		self.dep = dep
+		self.parsed = parsed
+
 class PackageDependencies(object):
 	unresolvableRpm = None
 
@@ -1237,6 +1242,7 @@ class PackageDependencies(object):
 		self.key = key
 		self.requiringPkg = requiringPkg
 		self._resolved = []
+		self.conditionals = []
 
 		self.validScenarioChoices = []
 		self.controllingScenarios = requiringPkg.newControllingScenarios
@@ -1263,6 +1269,14 @@ class PackageDependencies(object):
 	def addAmbiguousSolution(self, dep, rpms, acceptable = False):
 		rd = self.addResolved(dep)
 		rd.addAlternatives(rpms, acceptable)
+		return rd
+
+	def addConditional(self, dep, parsed):
+		# strip out any white space; this will allow NewDB.load() to split the
+		# line just using str.split()
+		parsed = parsed.replace(' ', '')
+		rd = ConditionalDependency(dep, parsed)
+		self.conditionals.append(rd)
 		return rd
 
 	def __str__(self):

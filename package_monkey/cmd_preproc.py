@@ -88,6 +88,9 @@ class PreprocessApplicationBase(ApplicationBase):
 			genericRpm.addDependencies(str(archSpecificDep.dep), arch, required,
 						unresolvable = (unresolvedRpm in required))
 
+		for cond in result.conditionals:
+			genericRpm.addConditional(arch, cond)
+
 		if result.validScenarioChoices is not None:
 			genericRpm.addScenarios(arch, set(map(str, result.validScenarioChoices)))
 

@@ -273,7 +273,7 @@ class ArchSolver(object):
 
 		self._dummyRepo.internalize()
 
-		self.dependencyOracle = DependencyOracle(hints, trace = self.traceDisambiguation)
+		self.dependencyOracle = DependencyOracleNew(hints, self.pool)
 		hints.rebind(self.rpmFactory)
 
 		# This needs to be configurable via hints:
@@ -486,6 +486,12 @@ class ArchSolver(object):
 				if rpm.trace:
 					infomsg(f"   requires {dep}")
 
+				conditionals = self.tryProcessConditional(rpm, dep)
+				if conditionals is not None:
+					for node in conditionals:
+						result.addConditional(dep, str(node))
+					continue
+
 				choices = self.dependencyToSelection(rpm, dep)
 				if choices is None:
 					if rpm.trace:
@@ -612,6 +618,32 @@ class ArchSolver(object):
 
 		return result
 
+	def tryProcessConditional(self, rpm, dep):
+		depString = str(dep)
+		if ' if ' not in depString and ' unless ' not in depString:
+			return None
+
+		try:
+			node = BooleanDependency.parse(depString, self.dependencyOracle)
+		except Exception as e:
+			errormsg(f"{rpm}: could not parse conditional dependency \"{depString}\" (exception {e})")
+			return None
+
+		implications = list(node.implications())
+
+		if rpm.trace:
+			infomsg(f"      compiled as {node}")
+			if len(implications) == 1 and str(implications[0]) == str(node):
+				pass
+			elif not implications:
+				infomsg(f"      never expands to any requirements (within this codebase); ignore it")
+			else:
+				infomsg(f"      transformed to the following requirement(s):")
+				for k in implications:
+					infomsg(f"         -> {k}")
+
+		return implications
+
 	def dependencyToSelection(self, rpm, dep):
 		# transform the dependency string if there is a rule for it
 		newString = self.hints.transformDependency(str(dep), rpm.shortname)
@@ -620,15 +652,6 @@ class ArchSolver(object):
 				infomsg(f"   transformed into {newString}")
 			dep = self.pool.Dep(newString, 1)
 			assert(dep is not None)
-
-		# Handle conditional dependencies. We evaluate the expression
-		# (using the variable settings defined in the hints file).
-		# May return None if that fails; in this case we treat it as "true".
-		depString = str(dep)
-		if ' if ' in depString:
-			condition = self.dependencyOracle.evalConditional(rpm, depString)
-			if condition == False:
-				return None
 
 		choices = set(self.pool.whatprovides(dep.id))
 		if choices and all(solvable.name.startswith('system:') for solvable in choices):
@@ -1459,6 +1482,50 @@ class ResolverLog(object):
 			for issue in problem:
 				nest = nest.nest()
 				nest.print(f"{issue}")
+
+##################################################################
+# This is used to deal with boolean dependencies.
+# Most of the heavy lifting occurs in DependencyParser, but we
+# need to resolve package names and "name >= 1.7" type of
+# expressions.
+class DependencyOracleNew(object):
+	solvOPER = {
+		'=':	solv.REL_EQ,
+		'<':	solv.REL_LT,
+		'>':	solv.REL_GT,
+		'<=':	solv.REL_LT | solv.REL_EQ,
+		'>=':	solv.REL_GT | solv.REL_EQ,
+		'!=':	solv.REL_GT | solv.REL_LT,
+	}
+
+	def __init__(self, hints, pool):
+		self.hints = hints
+		self.pool = pool
+
+	# check for 'magic' macro names that we should not try to expand,
+	# such as:
+	#	product-update()
+	# for now, this is hard-coded but will receive a command in hints.conf
+	def isMacroInvocation(self, name):
+		i = name.find('(')
+		if i < 0:
+			return False
+		# infomsg(f"inspecting invocation of {name}")
+		funcName = name[:i]
+		return funcName in ('product-update', )
+
+	def whatprovides(self, name, flags = None, evr = None):
+		nameId = self.pool.str2id(name)
+
+		if flags is None:
+			depId = nameId
+		else:
+			evrId = self.pool.str2id(evr)
+			oper = self.solvOPER[flags]
+			depId = self.pool.rel2id(nameId, evrId, oper)
+
+		choices = set(self.pool.whatprovides(depId))
+		return choices
 
 ##################################################################
 # This is used to guess what we should be doing with boolean

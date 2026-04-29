@@ -273,7 +273,7 @@ class ArchSolver(object):
 
 		self._dummyRepo.internalize()
 
-		self.dependencyOracle = DependencyOracleNew(hints, self.pool)
+		self.dependencyOracle = DependencyOracle(hints, self.pool)
 		hints.rebind(self.rpmFactory)
 
 		# This needs to be configurable via hints:
@@ -1488,7 +1488,7 @@ class ResolverLog(object):
 # Most of the heavy lifting occurs in DependencyParser, but we
 # need to resolve package names and "name >= 1.7" type of
 # expressions.
-class DependencyOracleNew(object):
+class DependencyOracle(object):
 	solvOPER = {
 		'=':	solv.REL_EQ,
 		'<':	solv.REL_LT,
@@ -1526,60 +1526,6 @@ class DependencyOracleNew(object):
 
 		choices = set(self.pool.whatprovides(depId))
 		return choices
-
-##################################################################
-# This is used to guess what we should be doing with boolean
-# dependencies. For instance, some packages have
-#  Requires: blah if systemd
-# If we want to build a product w/o systemd, then we want to ignore
-# this dependency. If we build a product w/ systemd, then we
-# better pay attention.
-# This is not a concise implementation; it's a heuristic.
-##################################################################
-class DependencyOracle(object):
-	def __init__(self, hints, trace = False):
-		self.hints = hints
-		self.trace = trace
-
-	# Callback from term.eval:
-	def evalFileDependency(self, path):
-		return False
-
-	# Callback from term.eval:
-	def evalUnversionedDependency(self, name):
-		return self.hints.getConditional(name)
-
-	# Callback from term.eval:
-	def evalVersionedDependency(self, name, op, version):
-		return False
-
-	CONDITIONAL_DEP_RE = re.compile('\((.*) if (.*)\)')
-
-	# return True or False if we could evaluate the condition; None otherwise
-	def evalConditional(self, rpm, depString):
-		m = self.CONDITIONAL_DEP_RE.match(depString)
-		if m is None:
-			return None
-
-		what, condition = m.groups()
-
-		try:
-			term = BooleanDependency.parse(condition)
-		except Exception as e:
-			errormsg(f"{rpm}: cannot parse conditional {condition} - assuming it evaluates to False")
-			return None
-
-		status = term.eval(self)
-
-		if status is None:
-			if self.trace:
-				infomsg(f"{rpm}: conditional {condition} -> {what}: undefined condition; assuming False")
-			return False
-
-		if self.trace and not status:
-			infomsg(f"{rpm}: ignoring conditional dependency {depString}")
-
-		return status
 
 class AbiManager(object):
 	class ABI(object):
@@ -1931,7 +1877,6 @@ class PreprocessorHints(object):
 		self.acceptableAmbiguities = []
 		self.ambiguityTransforms = []
 		self.dependencyTransforms = {}
-		self.conditionals = {}
 		self.acceptUnknownAmbiguities = False
 
 		self._nameFilter = OBSNameFilter()
@@ -1992,10 +1937,7 @@ class PreprocessorHints(object):
 			self.ambiguityTransforms.insert(0, self._alwaysPreferTransform)
 
 	def addConditional(self, name, value):
-		self.conditionals[name] = value
-
-	def getConditional(self, name):
-		return self.conditionals.get(name)
+		pass
 
 	def addDependencyTransform(self, fromString, toString, **kwargs):
 		xfrm = self.PreTransform(fromString, toString, **kwargs)

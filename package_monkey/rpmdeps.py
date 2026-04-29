@@ -38,33 +38,6 @@ class BooleanDependency(object):
 			raise Exception(f"parser did not consume entire string; remainder \"{parser.lexer.remainder}\"")
 		return node
 
-	@staticmethod
-	def test():
-		infomsg(f"Testing")
-		p = DependencyParser("(foobar == 1.0 if kernel)")
-		while True:
-			type, value = p.nextToken()
-			if type is DependencyParser.Lexer.EOL:
-				break
-
-		inputs = (
-			"(foobar == 1.0 if kernel)",
-			"(foo or alternative(foo))",
-			"((foo or bar))",
-			"salt-transactional-update = 3006.0-150500.4.12.2 if read-only-root-fs",
-			"(systemd >= 238 if systemd)",
-		)
-
-		for s in inputs:
-			infomsg(f"Processing {s}")
-			p = DependencyParser(s)
-			tree = p.process()
-			infomsg(f" => {tree}")
-
-			dep = tree.build()
-			infomsg(f" => {dep}")
-			infomsg("")
-
 ##################################################################
 # Assertions represent a specific combination of included/excluded
 # packages, resulting in a requirement
@@ -559,93 +532,6 @@ class NodeParser(object):
 			expr = f"{identifier}({', '.join(map(str, args))})"
 			return FunctionCallNode(expr)
 		raise Exception(f"Don't know how to represent call {identifier}({', '.join(map(str, args))})")
-
-class SingleStringDependency(object):
-	def __init__(self, name):
-		self.name = name
-
-	def __str__(self):
-		return self.name
-
-class FileDependency(SingleStringDependency):
-	def eval(self, oracle):
-		return oracle.evalFileDependency(self.name)
-
-class UnversionedPackageDependency(SingleStringDependency):
-	def eval(self, oracle):
-		return oracle.evalUnversionedDependency(self.name)
-
-class FailingDependency(SingleStringDependency):
-	def eval(self, oracle):
-		return False
-
-class VersionedPackageDependency(object):
-	compare = {
-		"EQ" : lambda a, b: (int(a) == int(b)),
-		"NE" : lambda a, b: (int(a) != int(b)),
-		"LE" : lambda a, b: (a <= b),
-		"GE" : lambda a, b: (a >= b),
-		"LT" : lambda a, b: (a < b),
-		"GT" : lambda a, b: (a > b),
-	}
-
-	def __init__(self, name,  flags = None, ver = None):
-		self.name = name
-		self.flags = flags
-		self.op = self.compare[flags]
-		self.ver = ver
-
-	def __str__(self):
-		return f"{self.name} {self.flags} {self.ver}"
-
-	def eval(self, oracle):
-		return oracle.evalVersionedDependency(self.name, self.flags, self.ver)
-
-class ConditionalDependency(object):
-	def __init__(self, condition, inner):
-		self.condition = condition
-		self.inner = inner
-
-	def __str__(self):
-		return f"({self.inner} if {self.condition})";
-
-	@property
-	def name(self):
-		return str(self)
-
-class OrDependency(object):
-	def __init__(self, children):
-		self.children = children
-
-	def __str__(self):
-		return "(" + " or ".join(str(_) for _ in self.children) + ")"
-
-	@property
-	def name(self):
-		return str(self)
-
-	def eval(self, oracle):
-		for child in self.children:
-			if child.eval(oracle) == True:
-				return True
-		return False
-
-class AndDependency(object):
-	def __init__(self, children):
-		self.children = children
-
-	def __str__(self):
-		return "(" + " with ".join(str(_) for _ in self.children) + ")"
-
-	@property
-	def name(self):
-		return str(self)
-
-	def eval(self, oracle):
-		for child in self.children:
-			if child.eval(oracle) is not True:
-				return False
-		return True
 
 ##################################################################
 class DependencyParser(object):

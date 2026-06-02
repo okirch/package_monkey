@@ -1055,8 +1055,7 @@ class CompositionRules(object):
 				continue
 
 			if req.decision == COMPOSE_EXCLUDE:
-				infomsg(f"{rpmControl} depends on {req}, which has been excluded")
-				return None
+				raise Exception(f"{rpmControl}: wanted to include this rpm but failed. It depends on {req}, which has been excluded")
 
 			# FIXME: we should not stop descending if this would enable
 			# additional architectures.
@@ -1155,8 +1154,7 @@ class CompositionRules(object):
 
 		# chase package dependencies and include them
 		closure = self.collectRequiredPackages(classificationResult, rpmControl, constraints.validArchitectures)
-		if closure is None:
-			raise Exception(f"{rpmControl}: wanted to include this rpm but failed")
+		assert(closure is not None)
 
 		if rpmControl.setDecision(COMPOSE_INCLUDE, reason):
 			rpmControl.propagateConstraints(constraints)

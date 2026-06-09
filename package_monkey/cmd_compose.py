@@ -64,6 +64,9 @@ class ComposerApplication(ApplicationBase):
 		outputPath = self.getComposeOutputPath("supportstatus-%id.txt")
 		composer.writeSupportStatus(outputPath)
 
+		outputPath = self.getComposeOutputPath("pkgmap.csv")
+		composer.writePackageMap(outputPath)
+
 class ErklaerBaerApplication(ComposerApplication):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)

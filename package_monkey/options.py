@@ -110,9 +110,9 @@ class ApplicationBase(object):
 			self._cache = CacheLocation(self.opts.cache)
 		return self._cache
 
-	def loadDBForSnapshot(self, slug = None):
+	def loadDBForSnapshot(self, slug = None, **kwargs):
 		codebaseData = self.getCodebaseForSnapshot(slug)
-		return codebaseData.loadDB(traceMatcher = self.traceMatcher)
+		return codebaseData.loadDB(traceMatcher = self.traceMatcher, **kwargs)
 
 	def loadNewDB(self, **kwargs):
 		return self.codebaseData.loadDB(traceMatcher = self.traceMatcher, **kwargs)

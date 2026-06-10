@@ -45,7 +45,7 @@ class QueryContext(object):
 		except:
 			pass
 
-		self.db = application.loadDBForSnapshot()
+		self.db = application.loadDBForSnapshot(strictChecks = False)
 
 		gadget = ClassificationGadget(self.db, application.modelDescription)
 		self.classification = gadget.solve(application.productCodebase)

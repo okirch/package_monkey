@@ -19,7 +19,10 @@ class CommonInfoApplication(ApplicationBase):
 			exit(1)
 
 		codebaseData = self.getCodebaseForSnapshot(None)
-		self.db = codebaseData.loadDB()
+
+		# Load the database, but do not apply strict checks. This helps with
+		# diagnostics if something goes wrong...
+		self.db = codebaseData.loadDB(strictChecks = False)
 
 		self.db.enableProvidesLookups()
 

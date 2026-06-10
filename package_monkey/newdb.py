@@ -47,8 +47,9 @@ class UniquePackageInfoFactory(object):
 		return pinfo
 
 class NewDB(object):
-	def __init__(self, traceMatcher = None):
+	def __init__(self, traceMatcher = None, strictChecks = True):
 		self.traceMatcher = traceMatcher
+		self.strictChecks = strictChecks
 
 		self._rpms = {}
 		self._sources = {}
@@ -377,9 +378,10 @@ class NewDB(object):
 		if nerrors:
 			raise Exception(f"DB {path}: encountered {nerrors} errors")
 
-		for rpm in self.rpms:
-			if rpm.new_build is None and not rpm.isSynthetic:
-				raise Exception(f"After loading DB: {rpm} w/o associated build")
+		if self.strictChecks:
+			for rpm in self.rpms:
+				if rpm.new_build is None and not rpm.isSynthetic:
+					raise Exception(f"After loading DB: {rpm} w/o associated build")
 
 		return nrpms, nbuilds
 

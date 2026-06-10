@@ -811,20 +811,6 @@ class GenericBuild(object):
 			return None
 		return next(iter(versions))
 
-class GenericScenarioClass(object):
-	def __init__(self, name, values, partiallyPresent = None):
-		self.name = name
-		self.values = set(values)
-		self.partiallyPresent = set()
-
-		if partiallyPresent:
-			self.values.update(partiallyPresent)
-			self.partiallyPresent.update(partiallyPresent)
-
-
-	def markPartiallySupported(self, values):
-		self.partiallyPresent.update(self.values.intersection(values))
-
 ##################################################################
 # We store additional rpm information such as summary and
 # descriptions in a separate DB.

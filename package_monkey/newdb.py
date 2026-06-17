@@ -47,8 +47,9 @@ class UniquePackageInfoFactory(object):
 		return pinfo
 
 class NewDB(object):
-	def __init__(self, traceMatcher = None):
+	def __init__(self, traceMatcher = None, strictChecks = True):
 		self.traceMatcher = traceMatcher
+		self.strictChecks = strictChecks
 
 		self._rpms = {}
 		self._sources = {}
@@ -377,9 +378,10 @@ class NewDB(object):
 		if nerrors:
 			raise Exception(f"DB {path}: encountered {nerrors} errors")
 
-		for rpm in self.rpms:
-			if rpm.new_build is None and not rpm.isSynthetic:
-				raise Exception(f"After loading DB: {rpm} w/o associated build")
+		if self.strictChecks:
+			for rpm in self.rpms:
+				if rpm.new_build is None and not rpm.isSynthetic:
+					raise Exception(f"After loading DB: {rpm} w/o associated build")
 
 		return nrpms, nbuilds
 
@@ -808,20 +810,6 @@ class GenericBuild(object):
 		if len(versions) != 1:
 			return None
 		return next(iter(versions))
-
-class GenericScenarioClass(object):
-	def __init__(self, name, values, partiallyPresent = None):
-		self.name = name
-		self.values = set(values)
-		self.partiallyPresent = set()
-
-		if partiallyPresent:
-			self.values.update(partiallyPresent)
-			self.partiallyPresent.update(partiallyPresent)
-
-
-	def markPartiallySupported(self, values):
-		self.partiallyPresent.update(self.values.intersection(values))
 
 ##################################################################
 # We store additional rpm information such as summary and

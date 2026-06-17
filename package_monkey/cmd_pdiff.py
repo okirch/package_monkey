@@ -332,7 +332,7 @@ class PackageDiffApplication(ApplicationBase):
 		super().__init__(*args, **kwargs)
 
 	def load(self, arg):
-		db = self.loadDBForSnapshot(arg)
+		db = self.loadDBForSnapshot(arg, strictChecks = False)
 		labelFacade = self.loadClassificationForSnapshot(arg)
 
 		for build in db.builds:

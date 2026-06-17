@@ -279,6 +279,11 @@ class Composer(object):
 		producer.produce(self)
 		producer.write(outputPath)
 
+	def writePackageMap(self, outputPath):
+		producer = PackageMapProducer()
+		producer.produce(self)
+		producer.write(outputPath)
+
 	def composePackages(self, report, classificationResult):
 		fullArchSet = archRegistry.fullset
 
@@ -616,6 +621,7 @@ class YamlComponentsProducer(YamlDictProducerBase):
 
 		data = root.createDict(epic.name)
 
+		data.createScalar('layer', str(epic.layer))
 		if epic.description:
 			data.createScalar('description', epic.description)
 
@@ -1048,6 +1054,36 @@ class SupportStatusProducer(object):
 				for rpm, level in sorted(map.items(), key = lambda pair: str(pair[0])):
 					if level is not self.defaultLevel:
 						print(f"{rpm:30} {level}", file = f)
+
+class PackageMapProducer(object):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.view = None
+
+	def produce(self, composer):
+		self.view = EpicCentricView(composer)
+
+	def write(self, outputPath):
+		if self.view is None:
+			return
+
+		seen = set()
+
+		csv = CSVWriter(outputPath, ['layer', 'epic', 'package'])
+		for epic in self.view:
+			for build in sorted(self.view.epicPackages[epic], key = str):
+				buildName = build.name
+				if buildName.startswith('promise:'):
+					continue
+				if not build.rpms:
+					continue
+				if ':' in buildName:
+					buildName = buildName.split(':')[0]
+					if buildName in seen:
+						continue
+					seen.add(buildName)
+				csv.writerow([str(epic.layer), str(epic), buildName])
+		csv.close()
 
 ##################################################################
 # Helper class to provide an epic centric view of all products
